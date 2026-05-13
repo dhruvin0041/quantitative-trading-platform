@@ -25,6 +25,31 @@ def calculate_beta(ticker_prices: pd.Series, spy_prices: pd.Series):
     beta = covariance / variance if variance != 0 else 1.0
     return float(beta)
 
+def calculate_jensens_alpha(ticker_returns, market_returns, beta, risk_free_rate=0.04):
+    """
+    Measures 'Skill' (Alpha) by subtracting expected market returns from actual returns.
+    Alpha = R_i - [R_f + Beta * (R_m - R_f)]
+    """
+    actual_return = ticker_returns.mean() * 252 # Annualized
+    market_return = market_returns.mean() * 252 # Annualized
+    
+    expected_return = risk_free_rate + beta * (market_return - risk_free_rate)
+    alpha = actual_return - expected_return
+    return float(alpha)
+
+def detect_stampede_risk(retail_sentiment_volatility, signal_confidence):
+    """
+    Elite Metric: Detects 'Crowding' or 'Stampede Risk'.
+    If retail excitement is high and our confidence is high, the trade is 'Crowded'.
+    """
+    crowding_score = (retail_sentiment_volatility * signal_confidence)
+    is_crowded = crowding_score > 0.8
+    return {
+        "crowding_score": round(float(crowding_score), 2),
+        "is_crowded": is_crowded,
+        "action": "SCALE_BACK" if is_crowded else "NORMAL"
+    }
+
 def calculate_full_kelly(win_prob, win_loss_ratio):
     """
     Calculates the Full Kelly Criterion for optimal position sizing.

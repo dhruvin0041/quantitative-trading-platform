@@ -18,3 +18,9 @@ statsmodels
 psutil
 python-dotenv
 google-generativeai
+networkx
+shap
+numba
+requests
+beautifulsoup4
+lxml

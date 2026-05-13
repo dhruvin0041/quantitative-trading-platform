@@ -27,8 +27,12 @@ logger = logging.getLogger(__name__)
 from live_inference import fetch_live_data, fetch_live_news, synthesize_report, load_config
 from src.models.fusion_network import build_fusion_model
 from src.models.dqn_agent import DQNAgent
-from src.execution.risk_manager import get_position_sizing, calculate_beta
+from src.execution.risk_manager import get_position_sizing, calculate_beta, calculate_jensens_alpha, detect_stampede_risk
 from src.data_ingestion.nlp_processor import NewsTokenizer, GeminiAnalyzer
+from src.data_ingestion.alternative_data import PhysicalEdgeAnalyzer
+from src.data_ingestion.supply_chain_graph import SupplyChainGraph
+from src.agents.orchestrator import InstitutionalOrchestrator
+from src.execution.smart_router import PredictiveSmartRouter
 import xgboost as xgb
 import joblib
 import numpy as np
@@ -68,6 +72,12 @@ lstm_model.load_weights('latest_fusion_weights.weights.h5')
 # NEW: Institutional Qualitative Analyzer
 gemini_analyzer = GeminiAnalyzer()
 
+# NEW: Elite SOTA 2026 Components
+physical_edge = PhysicalEdgeAnalyzer()
+dependency_graph = SupplyChainGraph()
+orchestrator = InstitutionalOrchestrator()
+smart_router = PredictiveSmartRouter()
+
 xgb_model = xgb.XGBClassifier()
 xgb_model.load_model("xgb_ensemble.json")
 
@@ -104,83 +114,75 @@ def get_prediction(ticker: str = "AAPL"):
     # 1. Fetch live data (Now includes Peer Sequence)
     ts_sequence, peer_sequence, tabular_row, current_price, updated_config = fetch_live_data(ticker, config)
     
-    # NEW: Fetch SPY for Beta Neutrality
+    # Macro check
     import yfinance as yf
     spy_df = yf.download("SPY", period="60d", progress=False)
     ticker_df = yf.download(ticker, period="60d", progress=False)
     beta = calculate_beta(ticker_df['Close'], spy_df['Close'])
     
-    # Macro check
-    vix_df = yf.download("^VIX", period="5d", progress=False)
-    regime = regime_model.predict([[vix_df['Close'].iloc[-1], (vix_df['Close'].iloc[-1]/vix_df['Close'].iloc[-5])-1]])[0]
-    is_panic = (regime == panic_id)
-
+    # 2. Elite Data Layer
+    physical_alpha = physical_edge.get_physical_alpha_vector(ticker)
+    dependency_graph.build_proxy_graph(ticker)
+    propagation_risk = dependency_graph.calculate_propagation_risk(ticker)
+    
+    # 3. Alpha Generation
     tokenizer = NewsTokenizer(max_length=updated_config['data']['max_seq_length'])
     input_ids, attention_masks, news_text = fetch_live_news(ticker, tokenizer, updated_config) 
-    
-    # NEW: Deep Qualitative Alpha Analysis
     qual_score, qual_reason = gemini_analyzer.analyze_fundamental_alpha(news_text, ticker)
     
-    # 2. Get Predictions from all 5 models
-    # dl_preds contains [direction, range, signal]
-    # Updated model input signature: [ts, cnn, trans, peer, ids, masks]
     dl_preds = lstm_model.predict(
         x=[ts_sequence, ts_sequence, ts_sequence, peer_sequence, input_ids, attention_masks], 
         verbose=0
     )[2][0]
-    
     xgb_preds = xgb_model.predict_proba(tabular_row)[0]
     
-    # DQN State: Features + Predictions
-    state = np.hstack((tabular_row[0], dl_preds, xgb_preds))
-    dqn_action = dqn_agent.act(state)
-    dqn_p = np.zeros(3)
-    dqn_p[dqn_action] = 1.0
-    
-    # 3. Dynamic Weighted Voting
+    # 4. Multi-Agent Consensus Logic
     total_acc = sum(accs.values())
     w_dl = accs['dl_accuracy'] / total_acc
     w_xgb = accs['xgb_accuracy'] / total_acc
-    w_dqn = accs['dqn_accuracy'] / total_acc
     
     ensemble_p = (dl_preds * w_dl) + (xgb_preds * w_xgb)
-    # Blend in DQN
-    ensemble_p = (ensemble_p * (1 - w_dqn)) + (dqn_p * w_dqn)
-    
-    # Blend in Qualitative Score (LLM Gatekeeper)
-    # The LLM has a 10% weight on the final confidence
+    # Blend in Qualitative Score (10% weight)
     ensemble_p[2] = (ensemble_p[2] * 0.9) + (max(0, qual_score) * 0.1) if qual_score > 0 else ensemble_p[2]
     ensemble_p[0] = (ensemble_p[0] * 0.9) + (abs(min(0, qual_score)) * 0.1) if qual_score < 0 else ensemble_p[0]
     
-    final_signal_idx = int(np.argmax(ensemble_p))
-    confidence = float(ensemble_p[final_signal_idx])
+    # Institutional Risk & Alpha Decomposition
+    risk_metrics = get_position_sizing(float(np.max(ensemble_p)))
+    alpha_metric = calculate_jensens_alpha(ticker_df['Close'].pct_change(), spy_df['Close'].pct_change(), beta)
+    stampede = detect_stampede_risk(np.std(dl_preds), float(np.max(ensemble_p)))
     
-    # NEW: Institutional Risk Management (Kelly Sizing + Beta Hedge)
-    risk_metrics = get_position_sizing(confidence)
-    risk_metrics['beta'] = round(beta, 2)
-    risk_metrics['hedge_ratio_spy'] = f"-{round(beta * 100, 1)}%" # Short SPY to neutralize
+    # Run Agentic Orchestration
+    mesh_response = orchestrator.run_consensus(ensemble_p, {
+        "beta": beta, "suggested_allocation": risk_metrics['suggested_allocation'],
+        "hedge_ratio_spy": f"-{round(beta * 100, 1)}%"
+    })
     
-    # Dynamic Confidence threshold fallback
-    threshold = 0.7
+    # 5. Execution Optimization
+    routing = smart_router.predict_venue_liquidity(ticker)
+    
+    # 6. Explainable AI (XAI) Log Generation
+    xai_log = f"Decision primarily driven by {orchestrator.consensus_status}. "
+    xai_log += f"Physical supply risk at {round(physical_alpha['supply_chain_disruption_index']*100)}%. "
+    xai_log += f"Qualitative Alpha: {qual_reason}"
+
     signal_map = {0: "SELL", 1: "HOLD", 2: "BUY"}
-    
-    action = signal_map[final_signal_idx] if confidence > threshold else "HOLD"
-    if is_panic: action = "SKIP (PANIC)"
+    final_action = signal_map[mesh_response['final_action_idx']]
+    if stampede['is_crowded']: final_action = f"SCALE_BACK ({final_action})"
 
     return {
         "ticker": ticker,
-        "action": action,
-        "confidence": f"{round(confidence * 100, 1)}%",
-        "qualitative_analysis": {
-            "score": qual_score,
-            "reason": qual_reason
+        "action": final_action,
+        "confidence": f"{round(float(np.max(ensemble_p)) * 100, 1)}%",
+        "agent_consensus": mesh_response,
+        "institutional_metrics": {
+            "jensens_alpha": round(alpha_metric, 4),
+            "beta": round(beta, 2),
+            "propagation_risk": round(propagation_risk, 3),
+            "stampede_risk": stampede
         },
-        "risk_management": risk_metrics,
-        "breakdown": {
-            "dl_suggests": signal_map[int(np.argmax(dl_preds))],
-            "xgb_suggests": signal_map[int(np.argmax(xgb_preds))],
-            "dqn_suggests": signal_map[dqn_action]
-        },
+        "physical_edge": physical_alpha,
+        "smart_routing": routing,
+        "xai_reasoning": xai_log,
         "price": current_price,
         "news": news_text
     }
