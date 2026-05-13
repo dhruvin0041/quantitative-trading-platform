@@ -3,6 +3,53 @@ from transformers import BertTokenizer
 import numpy as np
 import requests
 import xml.etree.ElementTree as ET
+import os
+import google.generativeai as genai
+
+class GeminiAnalyzer:
+    def __init__(self, api_key=None):
+        api_key = api_key or os.getenv("GOOGLE_API_KEY")
+        if api_key:
+            genai.configure(api_key=api_key)
+            self.model = genai.GenerativeModel('gemini-1.5-flash')
+            self.active = True
+        else:
+            self.active = False
+
+    def analyze_fundamental_alpha(self, news_context: str, ticker: str):
+        """
+        Uses Gemini to perform qualitative alpha extraction.
+        Specifically looks for 'moving targets' (performance metric shifts).
+        """
+        if not self.active:
+            return 0.0, "Gemini API Key missing. Skipping qualitative analysis."
+
+        prompt = f"""
+        Act as an institutional quantitative analyst. Analyze the following news and SEC filing context for {ticker}:
+        
+        '{news_context}'
+        
+        Task:
+        1. Identify any 'moving targets' (Is the company shifting focus from one metric to another?).
+        2. Identify hidden litigious risks or uncertainty language.
+        3. Rate the 'Qualitative Alpha' from -1.0 (Strong Negative Narrative) to 1.0 (Strong Positive Narrative).
+        
+        Return ONLY a JSON object with:
+        {{"score": float, "reasoning": "string (max 15 words)"}}
+        """
+        try:
+            response = self.model.generate_content(prompt)
+            # Simple extraction from JSON string
+            text = response.text
+            import json
+            import re
+            match = re.search(r'\{.*\}', text, re.DOTALL)
+            if match:
+                data = json.loads(match.group())
+                return float(data.get("score", 0.0)), data.get("reasoning", "Analysis complete.")
+            return 0.0, "Could not parse LLM response."
+        except Exception as e:
+            return 0.0, f"Gemini Error: {str(e)}"
 
 class NewsTokenizer:
     def __init__(self, max_length=128):

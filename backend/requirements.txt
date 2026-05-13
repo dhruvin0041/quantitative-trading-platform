@@ -17,3 +17,4 @@ seaborn
 statsmodels
 psutil
 python-dotenv
+google-generativeai

@@ -1,22 +1,49 @@
-# 🐉 Hydra Terminal: AI-Powered Stock Trading System
+# 🐉 Hydra Terminal: SOTA 2025 AI-Powered Trading System
 
-![Hydra Terminal](https://img.shields.io/badge/Status-Active-brightgreen) ![Python](https://img.shields.io/badge/Python-3.10-blue) ![Next.js](https://img.shields.io/badge/Next.js-16.2-black) ![TensorFlow](https://img.shields.io/badge/TensorFlow-2.x-orange) ![PyTorch](https://img.shields.io/badge/PyTorch-2.x-red)
+![Hydra Terminal](https://img.shields.io/badge/Status-Elite-brightgreen) ![Python](https://img.shields.io/badge/Python-3.10-blue) ![Next.js](https://img.shields.io/badge/Next.js-16.2-black) ![Google Gemini](https://img.shields.io/badge/LLM-Gemini_1.5_Flash-purple) ![TensorFlow](https://img.shields.io/badge/TensorFlow-2.x-orange)
 
-Hydra Terminal is an institutional-grade, AI-driven stock analysis and prediction system. It utilizes a **5-Model Hybrid Ensemble** (Deep Learning, Tree-based, and Reinforcement Learning) to analyze historical data, technical indicators, and live market regimes to generate highly accurate **BUY**, **SELL**, and **HOLD** signals.
+Hydra Terminal is a State-of-the-Art (SOTA 2025) institutional-grade trading system. It moves beyond simple numeric prediction by employing a **Multi-Modal Agentic Architecture** that combines numeric deep learning with qualitative economic reasoning.
+
+---
+
+## 🚀 Tier 2 Institutional Upgrades (SOTA 2025)
+
+The system has been upgraded to match elite hedge fund standards with three primary new capabilities:
+
+### 1. Qualitative LLM Gatekeeper (Google Gemini)
+The system now integrates **Google Gemini 1.5 Flash** to act as a qualitative qualitative analyst. It parses real-time **SEC EDGAR filings (8-K/10-Q)** and news to detect:
+* **Moving Targets:** Shifts in corporate performance metrics.
+* **Litigious Risk:** Hidden uncertainty in regulatory language.
+* **Economic Reasoning:** Blending narrative alpha with numeric signals.
+
+### 2. Cross-Asset Lead-Lag (Contextual Alpha)
+The model no longer treats stocks as islands. It dynamically identifies a **High-Correlation Sector Peer** (e.g., MSFT for AAPL) and feeds its real-time behavior into a dedicated **Context Branch**, allowing the model to learn sector-wide trends before they manifest in a single ticker.
+
+### 3. Beta-Neutral Risk Management (Institutional Hedging)
+Hydra Terminal now calculates the rolling **Beta** of every asset relative to the S&P 500 (SPY).
+* **Full Kelly Sizing:** Growth-optimized position sizing based on historical edge.
+* **Beta-Neutral Hedge:** The API outputs a suggested **Short SPY ratio** to neutralize market risk, ensuring the portfolio is "Market Neutral."
 
 ---
 
-## 🧠 The 5-Model Ensemble Architecture
+## 🧠 The Hybrid Ensemble Architecture
 
-The system's core intelligence relies on five independent neural architectures, dynamically weighted based on their recent predictive accuracy.
+The system's intelligence relies on a multi-modal fusion of six independent neural and agentic architectures:
 
-1. **XGBoost (Tree-Based Classifier):** Analyzes the latest technical indicators and tabular data to classify the current market state.
-2. **LSTM (Time Series Memory):** A dual-layer Long Short-Term Memory network that processes 60-day sequence windows to understand temporal price momentum.
-3. **CNN (Pattern Recognition):** Treats the last 60 days of OHLCV and indicator data as a 1D "image" to recognize visual chart patterns (e.g., head and shoulders, flags).
-4. **Transformer (Advanced Sequence Attention):** Uses Multi-Head Attention to assign weight to specific historical days that have the most mathematical impact on the current price.
-5. **DQN (Reinforcement Learning):** A PyTorch-based Deep Q-Network that takes the predictions of the other 4 models as its "State" and learns to optimize for maximum portfolio profit, penalizing drawdowns.
+1. **Qualitative Gatekeeper (Gemini LLM):** Economic reasoning and fundamental alpha extraction.
+2. **Transformer (Attention):** Assigns mathematical weight to critical historical events.
+3. **LSTM (Memory):** Captures temporal price momentum and sequence dependencies.
+4. **CNN (Visual):** Recognizes chart patterns via price/indicator matrix analysis.
+5. **XGBoost (Tabular):** Optimizes for technical indicator feature importance.
+6. **DQN (Reinforcement Learning):** Learns optimal entry/exit policies through self-correction.
 
 ---
+
+## 🛡️ Verification: Walk-Forward Analysis (WFA)
+
+To ensure institutional robustness, Hydra Terminal uses **Walk-Forward Analysis** instead of standard backtests.
+* **Sliding Windows:** Iteratively trains on 1-year windows and tests on 90-day "unseen" periods.
+* **Regime Agnostic:** Ensures the model remains profitable across Bull, Bear, and Sideways markets, preventing the common "overfitting" trap of retail bots.
 
 ## ⚙️ Feature Engineering & Technical Indicators
 

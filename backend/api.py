@@ -1,6 +1,8 @@
 # api.py
 import os
 os.environ["TF_USE_LEGACY_KERAS"] = "1"
+from dotenv import load_dotenv
+load_dotenv()
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import json
@@ -25,6 +27,8 @@ logger = logging.getLogger(__name__)
 from live_inference import fetch_live_data, fetch_live_news, synthesize_report, load_config
 from src.models.fusion_network import build_fusion_model
 from src.models.dqn_agent import DQNAgent
+from src.execution.risk_manager import get_position_sizing, calculate_beta
+from src.data_ingestion.nlp_processor import NewsTokenizer, GeminiAnalyzer
 import xgboost as xgb
 import joblib
 import numpy as np
@@ -60,6 +64,9 @@ logger.info(f"Initializing 5-Model Ensemble with {actual_num_features} features.
 # Load Models
 lstm_model = build_fusion_model(config)
 lstm_model.load_weights('latest_fusion_weights.weights.h5')
+
+# NEW: Institutional Qualitative Analyzer
+gemini_analyzer = GeminiAnalyzer()
 
 xgb_model = xgb.XGBClassifier()
 xgb_model.load_model("xgb_ensemble.json")
@@ -97,15 +104,22 @@ def get_prediction(ticker: str = "AAPL"):
     # 1. Fetch live data (Now includes Peer Sequence)
     ts_sequence, peer_sequence, tabular_row, current_price, updated_config = fetch_live_data(ticker, config)
     
-    # Macro check
+    # NEW: Fetch SPY for Beta Neutrality
     import yfinance as yf
+    spy_df = yf.download("SPY", period="60d", progress=False)
+    ticker_df = yf.download(ticker, period="60d", progress=False)
+    beta = calculate_beta(ticker_df['Close'], spy_df['Close'])
+    
+    # Macro check
     vix_df = yf.download("^VIX", period="5d", progress=False)
     regime = regime_model.predict([[vix_df['Close'].iloc[-1], (vix_df['Close'].iloc[-1]/vix_df['Close'].iloc[-5])-1]])[0]
     is_panic = (regime == panic_id)
 
-    from src.data_ingestion.nlp_processor import NewsTokenizer
     tokenizer = NewsTokenizer(max_length=updated_config['data']['max_seq_length'])
     input_ids, attention_masks, news_text = fetch_live_news(ticker, tokenizer, updated_config) 
+    
+    # NEW: Deep Qualitative Alpha Analysis
+    qual_score, qual_reason = gemini_analyzer.analyze_fundamental_alpha(news_text, ticker)
     
     # 2. Get Predictions from all 5 models
     # dl_preds contains [direction, range, signal]
@@ -133,11 +147,18 @@ def get_prediction(ticker: str = "AAPL"):
     # Blend in DQN
     ensemble_p = (ensemble_p * (1 - w_dqn)) + (dqn_p * w_dqn)
     
+    # Blend in Qualitative Score (LLM Gatekeeper)
+    # The LLM has a 10% weight on the final confidence
+    ensemble_p[2] = (ensemble_p[2] * 0.9) + (max(0, qual_score) * 0.1) if qual_score > 0 else ensemble_p[2]
+    ensemble_p[0] = (ensemble_p[0] * 0.9) + (abs(min(0, qual_score)) * 0.1) if qual_score < 0 else ensemble_p[0]
+    
     final_signal_idx = int(np.argmax(ensemble_p))
     confidence = float(ensemble_p[final_signal_idx])
     
-    # NEW: Institutional Risk Management (Kelly Sizing)
+    # NEW: Institutional Risk Management (Kelly Sizing + Beta Hedge)
     risk_metrics = get_position_sizing(confidence)
+    risk_metrics['beta'] = round(beta, 2)
+    risk_metrics['hedge_ratio_spy'] = f"-{round(beta * 100, 1)}%" # Short SPY to neutralize
     
     # Dynamic Confidence threshold fallback
     threshold = 0.7
@@ -150,6 +171,10 @@ def get_prediction(ticker: str = "AAPL"):
         "ticker": ticker,
         "action": action,
         "confidence": f"{round(confidence * 100, 1)}%",
+        "qualitative_analysis": {
+            "score": qual_score,
+            "reason": qual_reason
+        },
         "risk_management": risk_metrics,
         "breakdown": {
             "dl_suggests": signal_map[int(np.argmax(dl_preds))],

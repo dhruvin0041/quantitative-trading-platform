@@ -1,4 +1,29 @@
 import numpy as np
+import pandas as pd
+
+def calculate_beta(ticker_prices: pd.Series, spy_prices: pd.Series):
+    """
+    Calculates the Beta of a ticker relative to SPY.
+    Beta > 1: More volatile than market.
+    Beta < 1: Less volatile than market.
+    """
+    # Calculate returns
+    ticker_returns = ticker_prices.pct_change().dropna()
+    spy_returns = spy_prices.pct_change().dropna()
+    
+    # Align indices
+    common_idx = ticker_returns.index.intersection(spy_returns.index)
+    ticker_returns = ticker_returns.loc[common_idx]
+    spy_returns = spy_returns.loc[common_idx]
+    
+    if len(spy_returns) < 2:
+        return 1.0
+        
+    covariance = np.cov(ticker_returns, spy_returns)[0][1]
+    variance = np.var(spy_returns)
+    
+    beta = covariance / variance if variance != 0 else 1.0
+    return float(beta)
 
 def calculate_full_kelly(win_prob, win_loss_ratio):
     """
