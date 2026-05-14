@@ -1,10 +1,19 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { createChart, ColorType, CandlestickSeries, createSeriesMarkers } from 'lightweight-charts';
+import { createChart, ColorType, CandlestickSeries, createSeriesMarkers, SeriesMarker, Time } from 'lightweight-charts';
+
+interface AIReport {
+    Current_Price: number;
+    Final_Execution: { Action: string };
+    Risk_Management: {
+        Meta_Model_Status: string;
+        Dynamic_10_Day_Range: { Low: number; High: number };
+    };
+}
 
 export default function TradingChart() {
     const chartContainerRef = useRef<HTMLDivElement>(null);
-    const [report, setReport] = useState<any>(null);
+    const [report, setReport] = useState<AIReport | null>(null);
 
     useEffect(() => {
         if (!chartContainerRef.current) return;
@@ -46,12 +55,12 @@ export default function TradingChart() {
                 candlestickSeries.setData(data.candles);
 
                 // 3. Draw All AI Markers (Historical + Live)
-                const markers: any[] = [];
+                const markers: SeriesMarker<Time>[] = [];
                 const lastCandle = data.candles[data.candles.length - 1];
 
                 // Plot Historical Backtest Signals
                 if (data.historical_markers) {
-                    data.historical_markers.forEach((marker: any) => {
+                    data.historical_markers.forEach((marker: { time: string; action: string; probability: number }) => {
                         // Prevent drawing a historical marker on today's live candle
                         if (marker.time !== lastCandle.time) {
                             markers.push({

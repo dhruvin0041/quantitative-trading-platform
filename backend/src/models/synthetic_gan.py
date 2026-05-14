@@ -2,11 +2,13 @@ import tensorflow as tf
 from tensorflow.keras import layers
 import numpy as np
 
+
 class MarketTimeGAN:
     """
     SOTA 2026 Generative Adversarial Network for synthetic market simulation.
     Captures 'fat tails' and 'volatility clustering' for stress testing.
     """
+
     def __init__(self, seq_len=60, n_features=20):
         self.seq_len = seq_len
         self.n_features = n_features
@@ -14,20 +16,26 @@ class MarketTimeGAN:
         self.discriminator = self._build_discriminator()
 
     def _build_generator(self):
-        model = tf.keras.Sequential([
-            layers.Input(shape=(self.seq_len, self.n_features)),
-            layers.LSTM(64, return_sequences=True),
-            layers.LSTM(64, return_sequences=True),
-            layers.Dense(self.n_features, activation='tanh')
-        ], name="Generator")
+        model = tf.keras.Sequential(
+            [
+                layers.Input(shape=(self.seq_len, self.n_features)),
+                layers.LSTM(64, return_sequences=True),
+                layers.LSTM(64, return_sequences=True),
+                layers.Dense(self.n_features, activation="tanh"),
+            ],
+            name="Generator",
+        )
         return model
 
     def _build_discriminator(self):
-        model = tf.keras.Sequential([
-            layers.Input(shape=(self.seq_len, self.n_features)),
-            layers.LSTM(64),
-            layers.Dense(1, activation='sigmoid')
-        ], name="Discriminator")
+        model = tf.keras.Sequential(
+            [
+                layers.Input(shape=(self.seq_len, self.n_features)),
+                layers.LSTM(64),
+                layers.Dense(1, activation="sigmoid"),
+            ],
+            name="Discriminator",
+        )
         return model
 
     def generate_synthetic_crisis(self, n_samples=100):
@@ -47,10 +55,10 @@ class MarketTimeGAN:
         results = []
         for path in synthetic_paths:
             # institutional logic: Check if agent survives extreme volatility
-            drawdown = np.random.uniform(0.05, 0.40) # Simulated response
+            drawdown = np.random.uniform(0.05, 0.40)  # Simulated response
             results.append(drawdown)
-        
+
         return {
-            "synthetic_max_drawdown": f"{round(max(results)*100, 1)}%",
-            "survival_probability": f"{round(len([r for r in results if r < 0.25])/n_paths*100, 1)}%"
+            "synthetic_max_drawdown": f"{round(max(results) * 100, 1)}%",
+            "survival_probability": f"{round(len([r for r in results if r < 0.25]) / n_paths * 100, 1)}%",
         }

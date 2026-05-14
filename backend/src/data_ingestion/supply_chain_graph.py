@@ -1,7 +1,6 @@
 import networkx as nx
-import pandas as pd
 import yfinance as yf
-from typing import List
+
 
 class SupplyChainGraph:
     """
@@ -9,9 +8,10 @@ class SupplyChainGraph:
     - Maps Suppliers and Customers.
     - Calculates 'Propagation Risk' (If A fails, how does it affect B?).
     """
+
     def __init__(self):
         self.graph = nx.DiGraph()
-        
+
     def add_relationship(self, source: str, target: str, rel_type: str = "supplier"):
         """
         rel_type can be 'supplier' or 'customer'.
@@ -29,18 +29,17 @@ class SupplyChainGraph:
             # We fetch related tickers and treat them as a connected 'Cluster'
             ticker = yf.Ticker(main_ticker)
             # This is a proxy for actual supply chain data since Bloomber SPLC is paywalled
-            recommendations = ticker.recommendations
             # Simplified: Connect the ticker to its sector leader
-            sector = ticker.info.get('sector', 'Technology')
+            sector = ticker.info.get("sector", "Technology")
             leaders = {
                 "Technology": "MSFT",
                 "Consumer Cyclical": "AMZN",
-                "Financial Services": "JPM"
+                "Financial Services": "JPM",
             }
             leader = leaders.get(sector, "SPY")
             self.add_relationship(leader, main_ticker, "dependency")
             return f"Built relationship between {leader} and {main_ticker}"
-        except:
+        except Exception:
             return "Could not build dependency graph."
 
     def calculate_propagation_risk(self, target_ticker: str):
@@ -51,16 +50,17 @@ class SupplyChainGraph:
         try:
             if target_ticker not in self.graph:
                 return 0.5
-            
+
             # Simple PageRank to find node importance
             pagerank = nx.pagerank(self.graph)
             return float(pagerank.get(target_ticker, 0.5))
-        except:
+        except Exception:
             return 0.5
-            
+
     def get_tier_n_dependencies(self, ticker: str, n=2):
         """
         Returns all dependencies up to N-tiers deep.
         """
-        if ticker not in self.graph: return []
+        if ticker not in self.graph:
+            return []
         return list(nx.descendants(self.graph, ticker))

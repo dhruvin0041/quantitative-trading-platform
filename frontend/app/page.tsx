@@ -1,17 +1,40 @@
 "use client";
 
 import React, { useState, useEffect, useRef, ChangeEvent } from 'react';
-import { createChart, ColorType, CrosshairMode, CandlestickSeries, createSeriesMarkers } from 'lightweight-charts';
+import { createChart, ColorType, CrosshairMode, CandlestickSeries, createSeriesMarkers, LineSeries, SeriesMarker, Time } from 'lightweight-charts';
 
 interface UniverseStock {
   ticker: string;
   name: string;
 }
 
+interface AIReport {
+  Models: {
+    Primary_Deep_Learning: {
+      Suggested_Action: string;
+      Confidence: string;
+    };
+    Secondary_XGBoost: {
+      Suggested_Action: string;
+      Confidence: string;
+    };
+  };
+  Risk_Management: {
+    Meta_Model_Status: string;
+    Dynamic_10_Day_Range: {
+      Low: number;
+      High: number;
+    };
+  };
+  Context: {
+    Top_Headline_Processed: string;
+  };
+}
+
 interface ChartData {
   candles: { time: string; open: number; high: number; low: number; close: number }[];
   clouds: { time: string; ribbon_upper: number; ribbon_lower: number; bb_upper: number; bb_lower: number }[];
-  ai_report: Record<string, any>;
+  ai_report: AIReport;
   historical_markers: { time: string; action: string; probability: number; label?: string }[];
 }
 
@@ -79,15 +102,15 @@ export default function HydraDashboard() {
     // --- NEW: Add the Trend Ribbon (The Cloud) and Bollinger Bands ---
     if (chartData.clouds && chartData.clouds.length > 0) {
       // 1. BB Outer Bands (The blue dashed lines)
-      const bbUpperSeries = chart.addLineSeries({ color: '#3b82f6', lineWidth: 1, lineStyle: 2 });
-      const bbLowerSeries = chart.addLineSeries({ color: '#3b82f6', lineWidth: 1, lineStyle: 2 });
+      const bbUpperSeries = chart.addSeries(LineSeries, { color: '#3b82f6', lineWidth: 1, lineStyle: 2 });
+      const bbLowerSeries = chart.addSeries(LineSeries, { color: '#3b82f6', lineWidth: 1, lineStyle: 2 });
       
       bbUpperSeries.setData(chartData.clouds.map(c => ({ time: c.time, value: c.bb_upper })));
       bbLowerSeries.setData(chartData.clouds.map(c => ({ time: c.time, value: c.bb_lower })));
 
       // 2. The Ribbon (Fast/Slow EMA)
-      const ribbonUpperSeries = chart.addLineSeries({ color: '#10b981', lineWidth: 1 });
-      const ribbonLowerSeries = chart.addLineSeries({ color: '#ef4444', lineWidth: 1 });
+      const ribbonUpperSeries = chart.addSeries(LineSeries, { color: '#10b981', lineWidth: 1 });
+      const ribbonLowerSeries = chart.addSeries(LineSeries, { color: '#ef4444', lineWidth: 1 });
       
       ribbonUpperSeries.setData(chartData.clouds.map(c => ({ time: c.time, value: c.ribbon_upper })));
       ribbonLowerSeries.setData(chartData.clouds.map(c => ({ time: c.time, value: c.ribbon_lower })));
@@ -98,7 +121,7 @@ export default function HydraDashboard() {
 
     // Map AI Signals to Chart Markers (Arrow Style with Labels)
     if (chartData.historical_markers && chartData.historical_markers.length > 0) {
-      const markers = chartData.historical_markers.map((marker: any) => ({
+      const markers = chartData.historical_markers.map((marker) => ({
         time: marker.time,
         position: marker.action === 'BUY' ? 'belowBar' : 'aboveBar',
         color: marker.action === 'BUY' ? '#10b981' : '#ef4444',
@@ -108,7 +131,7 @@ export default function HydraDashboard() {
       
       // TradingView requires markers to be sorted by time chronologically
       markers.sort((a, b) => new Date(a.time as string).getTime() - new Date(b.time as string).getTime());
-      createSeriesMarkers(candlestickSeries, markers as any);
+      createSeriesMarkers(candlestickSeries, markers as SeriesMarker<Time>[]);
     }
 
     chart.timeScale().fitContent();
@@ -181,20 +204,20 @@ export default function HydraDashboard() {
               <div className="p-3 bg-slate-900 rounded border border-slate-700">
                 <p className="text-xs text-gray-500 uppercase font-bold mb-1">Primary LSTM</p>
                 <div className="flex justify-between items-center">
-                  <span className={`text-lg font-bold ${(chartData.ai_report.Models as any).Primary_Deep_Learning.Suggested_Action === 'BUY' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {(chartData.ai_report.Models as any).Primary_Deep_Learning.Suggested_Action}
+                  <span className={`text-lg font-bold ${chartData.ai_report.Models.Primary_Deep_Learning.Suggested_Action === 'BUY' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {chartData.ai_report.Models.Primary_Deep_Learning.Suggested_Action}
                   </span>
-                  <span className="text-cyan-500 font-mono">{(chartData.ai_report.Models as any).Primary_Deep_Learning.Confidence}</span>
+                  <span className="text-cyan-500 font-mono">{chartData.ai_report.Models.Primary_Deep_Learning.Confidence}</span>
                 </div>
               </div>
 
               <div className="p-3 bg-slate-900 rounded border border-slate-700">
                 <p className="text-xs text-gray-500 uppercase font-bold mb-1">XGBoost Ensemble</p>
                 <div className="flex justify-between items-center">
-                  <span className={`text-lg font-bold ${(chartData.ai_report.Models as any).Secondary_XGBoost.Suggested_Action === 'BUY' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {(chartData.ai_report.Models as any).Secondary_XGBoost.Suggested_Action}
+                  <span className={`text-lg font-bold ${chartData.ai_report.Models.Secondary_XGBoost.Suggested_Action === 'BUY' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {chartData.ai_report.Models.Secondary_XGBoost.Suggested_Action}
                   </span>
-                  <span className="text-cyan-500 font-mono">{(chartData.ai_report.Models as any).Secondary_XGBoost.Confidence}</span>
+                  <span className="text-cyan-500 font-mono">{chartData.ai_report.Models.Secondary_XGBoost.Confidence}</span>
                 </div>
               </div>
             </div>
@@ -206,13 +229,13 @@ export default function HydraDashboard() {
               <span className="mr-2">🛡️</span> RISK STATUS
             </h3>
             <p className="text-sm text-gray-300 leading-relaxed italic mb-4">
-              {(chartData.ai_report.Risk_Management as any).Meta_Model_Status}
+              {chartData.ai_report.Risk_Management.Meta_Model_Status}
             </p>
             <div className="p-3 bg-slate-900 rounded border border-slate-700">
               <p className="text-xs text-gray-500 uppercase font-bold mb-2">10-Day Forecast Range</p>
               <div className="flex justify-between text-sm">
-                <span>Low: <span className="text-rose-400 font-bold">${(chartData.ai_report.Risk_Management as any).Dynamic_10_Day_Range.Low}</span></span>
-                <span>High: <span className="text-emerald-400 font-bold">${(chartData.ai_report.Risk_Management as any).Dynamic_10_Day_Range.High}</span></span>
+                <span>Low: <span className="text-rose-400 font-bold">${chartData.ai_report.Risk_Management.Dynamic_10_Day_Range.Low}</span></span>
+                <span>High: <span className="text-emerald-400 font-bold">${chartData.ai_report.Risk_Management.Dynamic_10_Day_Range.High}</span></span>
               </div>
             </div>
           </div>
@@ -223,7 +246,7 @@ export default function HydraDashboard() {
               <span className="mr-2">📰</span> NEWS SENTIMENT
             </h3>
             <div className="h-[120px] overflow-y-auto pr-2 custom-scrollbar text-sm text-gray-400 leading-relaxed">
-              {(chartData.ai_report.Context as any).Top_Headline_Processed}
+              {chartData.ai_report.Context.Top_Headline_Processed}
             </div>
           </div>
 

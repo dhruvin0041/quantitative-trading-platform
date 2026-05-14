@@ -19,11 +19,13 @@ Institutions in 2026 track the physical world, not just the tape. Hydra uses fre
 ### 2. Architectural Layer: Agentic Mesh
 Shift from monolithic fusion to a **Collaborative Collaborative Intelligence Mesh**:
 *   **Specialized Agents:** Independent **Alpha**, **Risk**, and **Execution** agents negotiate every trade. The Risk Agent holds absolute **Veto Power** over high-volatility or crowded signals.
+*   **Modular Reporting Service:** Decoupled reporting engine (`src/execution/reporting.py`) that handles high-fidelity historical pivot detection and multi-modal chart data packaging.
 *   **Market TimeGAN:** A Generative Adversarial Network that creates 10,000 "Plausible Synthetic Crises" for Monte Carlo stress testing of reinforcement learning policies.
 
 ### 3. Risk & Governance: Intelligent Determinism
 *   **Alpha/Beta Decomposition:** Real-time calculation of **Jensen's Alpha**, ensuring profit is driven by model skill rather than market beta.
 *   **Stampede Risk (Crowding):** Detects "Crowded Trades" by comparing signal confidence with retail sentiment volatility proxies.
+*   **Zero-Defect Stability:** Strictly enforced PEP 8 (Ruff) and TypeScript (Strict Mode) standards across the entire stack.
 *   **Explainable AI (XAI):** Human-readable reasoning logs provided for every prediction to ensure institutional and regulatory auditability.
 
 ### 4. Execution Layer: Physics-First Trading
