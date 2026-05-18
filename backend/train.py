@@ -52,11 +52,16 @@ def prepare_data(ticker, config):
         for col in df.columns
         if not col.startswith("target_") and not col.startswith("future_")
     ]
-    df_deflated = feature_deflation(df[numerical_cols])
-    kept_cols = df_deflated.columns.tolist()
+    # Calculate feature deflation only on the training set to prevent data leakage
+    train_size = int(len(df) * 0.8)
+    df_train_only = df.iloc[:train_size]
+    df_deflated_train = feature_deflation(df_train_only[numerical_cols])
+    kept_cols = df_deflated_train.columns.tolist()
+
+    df_deflated = df[kept_cols]
 
     # Reindex peer_df to match kept_cols
-    peer_filtered = peer_df.reindex(columns=kept_cols).ffill().bfill()
+    peer_filtered = peer_df.reindex(columns=kept_cols).ffill().fillna(0)
 
     # Align indices
     common_idx = df_deflated.index.intersection(peer_filtered.index)
@@ -92,8 +97,8 @@ def prepare_data(ticker, config):
         pd.concat([peer_ready, df_ready[["target_direction"]]], axis=1), time_steps
     )
 
-    aligned_input_ids = np.array(input_ids_list[time_steps:])
-    aligned_attention_masks = np.array(attention_masks_list[time_steps:])
+    aligned_input_ids = np.array(input_ids_list[time_steps - 1:])
+    aligned_attention_masks = np.array(attention_masks_list[time_steps - 1:])
 
     scaler = StandardScaler()
     num_samples, steps, features = ts_sequences.shape
@@ -279,4 +284,6 @@ def main():
 
 
 if __name__ == "__main__":
+    main()
+in__":
     main()

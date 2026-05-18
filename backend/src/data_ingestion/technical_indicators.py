@@ -50,7 +50,7 @@ def add_advanced_features(
 
     # Assign using index alignment and fill gaps
     df["VIX"] = vix_df["Close"]
-    df["VIX"] = df["VIX"].ffill().bfill()  # Fill gaps and edge cases
+    df["VIX"] = df["VIX"].ffill().fillna(0)  # Fill gaps and edge cases without lookahead bias
 
     # --- ALTERNATIVE DATA: Institutional Volume Metrics ---
     # VWAP (Volume Weighted Average Price) - The institutional baseline

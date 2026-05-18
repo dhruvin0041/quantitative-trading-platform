@@ -83,10 +83,10 @@ def run_backtest(ticker="AAPL", start_date="2023-01-01", end_date=None):
     w_xgb = accs["xgb_accuracy"] / total_acc
     w_dqn = accs["dqn_accuracy"] / total_acc
 
-    for i in range(time_steps, len(df_filtered)):
-        # Prep inputs
-        recent_data = df_filtered.iloc[i - time_steps : i].values
-        peer_recent = peer_filtered.iloc[i - time_steps : i].values
+    for i in range(time_steps - 1, len(df_filtered)):
+        # Prep inputs using data up to the current day (i)
+        recent_data = df_filtered.iloc[i - time_steps + 1 : i + 1].values
+        peer_recent = peer_filtered.iloc[i - time_steps + 1 : i + 1].values
 
         scaled_data = scaler.transform(recent_data)
         peer_scaled = scaler.transform(peer_recent)
@@ -121,6 +121,18 @@ def run_backtest(ticker="AAPL", start_date="2023-01-01", end_date=None):
         confidence = ensemble_p[final_signal]
         current_price = df_filtered.iloc[i]["Close"]
 
+        # Institutional Risk Management: Drawdown Circuit Breaker
+        current_equity = capital + (shares * current_price)
+        peak_equity = max(max(equity_curve) if equity_curve else capital, capital)
+        if current_equity < peak_equity * 0.80 and shares > 0:
+            print(f"[{df_filtered.index[i]}] Circuit Breaker Triggered! 20% Drawdown reached. Liquidating.")
+            final_signal = 0
+            confidence = 1.0
+
+        # Institutional assumptions: Slippage and Commission
+        slippage = 0.001  # 0.1%
+        commission_per_share = 0.005
+
         # INSTITUTIONAL UPGRADE: Kelly Sizing
         kelly_fraction = calculate_full_kelly(0.55, 1.2)  # Defaults from risk_manager
         position_size_pct = kelly_fraction * confidence
@@ -128,18 +140,20 @@ def run_backtest(ticker="AAPL", start_date="2023-01-01", end_date=None):
         if final_signal == 2 and confidence > 0.7:
             # BUY using Kelly
             max_spend = capital * position_size_pct
-            buy_shares = int(max_spend / current_price)
+            buy_price = current_price * (1 + slippage)
+            buy_shares = int(max_spend / buy_price)
             if buy_shares > 0:
                 shares += buy_shares
-                capital -= buy_shares * current_price
+                capital -= (buy_shares * buy_price) + (buy_shares * commission_per_share)
         elif final_signal == 0 and confidence > 0.7 and shares > 0:
             # SELL All
-            capital += shares * current_price
+            sell_price = current_price * (1 - slippage)
+            capital += (shares * sell_price) - (shares * commission_per_share)
             shares = 0
 
         equity_curve.append(capital + (shares * current_price))
 
-    return equity_curve, df_filtered.index[time_steps:]
+    return equity_curve, df_filtered.index[time_steps - 1:]
 
 
 def run_walk_forward(ticker="AAPL", windows=4):

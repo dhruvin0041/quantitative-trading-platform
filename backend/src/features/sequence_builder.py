@@ -21,16 +21,15 @@ def create_time_series_sequences(data_df, time_steps):
 
     data_array = data_df[feature_columns].values
 
-    for i in range(len(data_array) - time_steps):
+    for i in range(len(data_array) - time_steps + 1):
         # Create rolling window of features
         seq = data_array[i : (i + time_steps)]
         sequences.append(seq)
 
-        # Extract targets for the (t+1) step
-        # 1 if next close > current close, else 0
-        targets_direction.append(data_df["target_direction"].iloc[i + time_steps])
-        targets_range_min.append(data_df["target_min"].iloc[i + time_steps])
-        targets_range_max.append(data_df["target_max"].iloc[i + time_steps])
+        # Extract targets for the current step (last element in the sequence)
+        targets_direction.append(data_df["target_direction"].iloc[i + time_steps - 1])
+        targets_range_min.append(data_df["target_min"].iloc[i + time_steps - 1])
+        targets_range_max.append(data_df["target_max"].iloc[i + time_steps - 1])
 
     return (
         np.array(sequences),
