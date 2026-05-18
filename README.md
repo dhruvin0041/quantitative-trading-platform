@@ -1,297 +1,229 @@
-# Hydra Terminal: Institutional-Grade Quantitative Trading & Signal Intelligence
+# Hydra Terminal
+### Institutional-Grade Quantitative Trading Research and Signal Intelligence Platform
 
-## Executive Summary
-Hydra Terminal is a high-performance quantitative research and systematic trading platform designed for institutional-grade signal generation. The system moves beyond traditional technical analysis by employing a **Decentralized Multi-Agent Mesh** that fuses deep learning, reinforcement learning, and alternative data streams. By integrating physical intelligence—including global supply chain mapping via Graph Neural Networks (GNN) and weather-proxy risk assessment—Hydra provides a comprehensive Alpha research environment and production-ready signal engine.
+Hydra Terminal is a high-performance framework designed for systematic alpha research and production-grade trading signal generation. It integrates decentralized multi-agent orchestration with multi-modal deep learning and physical supply chain intelligence.
 
-The platform is engineered with a "Zero-State" protocol to ensure maximum quantitative rigor, eliminating look-ahead bias and data leakage through strict temporal alignment and non-repainting signal logic.
-
----
-
-## Key Features
-- **Multi-Agent Consensus Engine:** Decentralized orchestration where Alpha, Risk, and Execution agents negotiate trades.
-- **Advanced Model Fusion:** Hybrid architecture combining CNN, LSTM, Transformers, and XGBoost for robust feature extraction.
-- **Physical Intelligence Layer:** Supply chain disruption detection via N-tier corporate dependency mapping and weather coordinates.
-- **Generative Stress Testing:** Market TimeGAN module for simulating 10,000+ non-historical black swan scenarios.
-- **Non-Repainting Signal Logic:** Mathematically guaranteed signal stability with zero look-ahead bias.
-- **Institutional Risk Management:** Full Kelly Criterion sizing, Beta-neutral hedging, and Stampede (Crowding) risk detection.
-- **Explainable AI (XAI):** Integration of SHAP for full transparency into the mathematical reasoning behind every decision.
-- **Next.js Command Center:** Institutional monitoring hub for real-time agent consensus and supply chain risk visualization.
+[![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
+[![CI Status](https://github.com/dhruvin0041/stock-indicator-buy-sell/actions/workflows/ci.yml/badge.svg)](https://github.com/dhruvin0041/stock-indicator-buy-sell/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code Style: Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Docker Support](https://img.shields.io/badge/Docker-Supported-blue.svg)](https://www.docker.com/)
 
 ---
 
-## Trading Strategy Overview
-Hydra Terminal operates on a multi-modal hypothesis that alpha is found at the intersection of technical momentum, cross-asset lead-lag relationships, and qualitative supply chain health.
+## 1. Executive Summary
+Hydra Terminal is engineered to provide a robust environment for developing, testing, and deploying quantitative trading strategies. Unlike conventional platforms, Hydra employs a **Decentralized Multi-Agent Mesh** where specialized Alpha, Risk, and Execution agents collaborate to validate anomalies. The system leverages Graph Neural Networks (GNN) to map N-tier corporate dependencies and weather-based physical risks, ensuring that signals are grounded in both statistical and physical reality. The platform is architected with a strict "Zero-State" protocol, mathematically eliminating look-ahead bias and ensuring all research is reproducible and production-ready.
 
-- **Market Hypothesis:** Price action is a lagging indicator of physical supply chain shifts and retail sentiment trends.
-- **Indicator Framework:** A composite of technical (OHLCV), fundamental (SEC EDGAR), and alternative (Google Trends, Weather) data.
-- **Entry Logic:** Multi-agent consensus requiring Alpha Agent probability thresholds and Risk Agent volatility-adjusted validation.
-- **Exit Logic:** Dynamic Triple Barrier labeling adjusted by ATR-based volatility regimes.
+## 2. Key Features
+- **Signal Generation:** High-fidelity BUY/SELL signals derived from multi-modal fusion.
+- **Non-Repainting Logic:** Guaranteed signal stability through strict temporal anchoring.
+- **Look-ahead Bias Prevention:** Point-in-time data ingestion and audited feature engineering.
+- **Multi-Agent Orchestration:** Decentralized consensus engine for trade validation and risk oversight.
+- **Institutional Risk Engine:** Dynamic Kelly sizing, Beta-neutral hedging, and VaR-based veto logic.
+- **Advanced Backtesting:** Walk-forward analysis (WFA) with realistic slippage and liquidity modeling.
+- **Generative Stress Testing:** Market TimeGAN for simulating non-historical black swan scenarios.
+- **Explainable AI (XAI):** Integrated SHAP analysis for transparent mathematical reasoning.
+- **Production Architecture:** FastAPI-powered backend with a Next.js 16.2 institutional command center.
 
----
+## 3. Trading Strategy Overview
+The core strategy operates on the hypothesis that alpha resides at the confluence of technical momentum, cross-asset lead-lag effects, and supply chain health.
+- **Market Hypothesis:** Price action is a lagging indicator of structural supply chain disruptions and retail sentiment shifts.
+- **Indicator Categories:** Technical (OHLCV), Fundamental (SEC EDGAR), and Alternative (Weather, Google Trends, GNN Centrality).
+- **Signal Confirmation:** Requires consensus between the Alpha Agent (directional probability) and the Risk Agent (regime-adjusted safety).
+- **Entry/Exit Criteria:** Dynamic Triple Barrier method adjusted by ATR-based volatility regimes.
 
-## Signal Generation Methodology
-Signals are generated through a rigorous pipeline designed to capture transient market anomalies:
-1. **Data Ingestion:** Parallel fetching of financial and physical data layers.
-2. **Feature Engineering:** Vectorized computation of technical indicators and GNN-based centrality scores.
-3. **Model Fusion:** Simultaneous evaluation across CNN (spatial), LSTM (temporal), and Transformer (attention-based) branches.
-4. **Agentic Negotiation:** The Alpha Agent proposes a trade; the Risk Agent performs a "Veto" check against VaR and crowding metrics.
+## 4. Signal Generation Methodology
+The signal pipeline is a four-stage process designed for institutional precision:
+1. **Multi-Modal Ingestion:** Parallelized fetching of financial and physical data layers.
+2. **Feature Propagation:** Vectorized computation of indicators and GNN-based dependency scores.
+3. **Fusion Inference:** Simultaneous evaluation across CNN, LSTM, and Transformer branches.
+4. **Agentic Negotiation:** The Execution Agent optimizes entry/exit timing only after the Risk Agent clears the trade for VaR compliance.
 
----
+## 5. Non-Repainting and Anti-Lookahead Design
+Quantitative integrity is maintained through:
+- **Temporal Alignment:** Features at time *t* are strictly computed using information available prior to the close of candle *t*.
+- **Locked Signals:** Once a signal is generated at a candle close, it is immutable and non-repainting.
+- **Audited Pipelines:** Systematic checks prevent "future-leakage" during rolling correlation and normalization steps.
 
-## Non-Repainting and Anti-Lookahead Design
-To ensure the integrity of quantitative research, Hydra Terminal enforces strict architectural boundaries:
-- **Point-in-Time Data:** All features are computed using only information available at time *t*.
-- **Temporal Anchoring:** Backtesting execution logic mirrors real-world fills, ensuring that signals are locked at the close of the candle.
-- **Data Leakage Audits:** Automated checks prevent future data from influencing historical model training.
-
----
-
-## Risk Management Framework
-Risk is not an afterthought; it is the core arbiter of the system:
-- **Risk Agent Veto:** Absolute authority to block signals failing safety guardrails.
-- **Position Sizing:** Scaled Full Kelly formula based on empirical win rates and model confidence.
-- **Drawdown Protection:** Fully vectorized circuit breakers and daily loss limits.
-- **Hedging:** Beta-neutral logic with automated short SPY correlation balancing.
+## 6. Risk Management Framework
+Hydra treats risk as the primary constraint on capital allocation:
+- **Stop-Loss/Take-Profit:** Volatility-adjusted barriers derived from rolling ATR.
+- **Position Sizing:** Scaled Full Kelly Criterion based on empirical win-rates and model confidence scores.
+- **Risk Per Trade:** Hard-coded maximum exposure limits per ticker and asset class.
+- **Drawdown Protection:** Fully vectorized circuit breakers and real-time Beta-neutral hedging (Short SPY).
 - **Crowding Detection:** Monitoring for "Stampede Risk" to avoid over-crowded trade entries.
 
----
+## 7. Backtesting Methodology
+The backtesting engine simulates realistic market conditions:
+- **Data Assumptions:** Survival-bias-free data pipelines with point-in-time adjustments.
+- **Execution Logic:** End-of-day (EOD) or Next-Bar-Open (NBO) fill simulation.
+- **Slippage & Commission:** Configurable basis-point (bps) costs and liquidity-based slippage models.
+- **Accounting:** Full margin and interest rate modeling for leveraged positions.
 
-## Backtesting Methodology
-Our backtesting engine provides a realistic simulation of institutional execution:
-- **Slippage & Commission Modeling:** Precise accounting for transaction costs and liquidity constraints.
-- **Execution Latency:** Simulated delays to model real-world fill prices.
-- **Equity Curve Analysis:** Detailed reporting on drawdown, recovery factors, and underwater periods.
+## 8. Walk-Forward and Robustness Testing
+Robustness is verified through iterative validation:
+- **Walk-Forward Analysis (WFA):** Sliding window retraining to ensure model adaptability across regimes.
+- **Monte Carlo Simulations:** 10,000+ synthetic paths generated via TimeGAN to test survival during tail-risk events.
+- **Expectancy Analysis:** Rigorous evaluation of the system's mathematical edge (Profit Factor vs. Win Rate).
 
----
+## 9. Supported Markets and Timeframes
+- **Asset Classes:** Global Equities (Primary), with cross-asset correlation support.
+- **Resolutions:** M15, H1, D1.
+- **Data Integration:** YFinance, SEC EDGAR (8-K/10-Q), Weather Proxies, Google Trends.
 
-## Walk-Forward and Robustness Testing
-Hydra utilizes Walk-Forward Analysis (WFA) to ensure out-of-sample validity:
-- **Sliding Window Optimization:** Models are periodically retrained to adapt to changing market regimes.
-- **Monte Carlo Simulations:** 10,000 synthetic paths generated via TimeGAN to test survival during non-historical events.
-- **Jensen’s Alpha:** Continuous measurement of skill-based returns versus market beta.
+## 10. System Architecture
+Hydra Terminal utilizes a decoupled micro-service architecture:
+- **Data Layer:** Parallel ingestion and GNN mapping service.
+- **Model Layer:** Multi-branch fusion network (CNN/LSTM/Transformer).
+- **Agent Layer:** Decentralized orchestrator for Alpha, Risk, and Execution.
+- **Interface Layer:** Next.js institutional monitoring hub.
 
----
+## 11. Technology Stack
+- **Backend:** Python 3.10+, FastAPI, Numba, Vectorized Pandas/NumPy.
+- **Machine Learning:** TensorFlow, PyTorch, XGBoost, Optuna, SHAP.
+- **Frontend:** Next.js 16.2, TypeScript, Tailwind CSS, Lightweight-Charts v5+.
+- **DevOps:** GitHub Actions (CI), Docker Compose, Ruff, MyPy.
 
-## Supported Markets and Timeframes
-The system is ticker-agnostic and designed for flexibility:
-- **Asset Classes:** Equities (Primary), with support for cross-asset peer analysis.
-- **Timeframes:** Configurable from Intraday (M15/H1) to Daily (D1) resolutions.
-- **Data Sources:** YFinance, SEC EDGAR, Google Trends, and custom weather/port proxies.
-
----
-
-## System Architecture
-Hydra Terminal follows a decoupled, micro-agent architecture:
-- **Backend (Python 3.10+):** FastAPI-powered ML framework.
-- **Frontend (Next.js 16.2):** Institutional monitoring command center.
-- **Agents:** Decentralized nodes (Alpha, Risk, Execution) communicating via an internal orchestration mesh.
-- **Data Layer:** Multi-modal ingestion pipelines with GNN dependency mapping.
-
----
-
-## Technology Stack
-- **Languages:** Python (ML/Backend), TypeScript (Frontend).
-- **ML Frameworks:** TensorFlow/PyTorch (Deep Learning), XGBoost (Gradient Boosting), Optuna (Optimization).
-- **Performance:** Numba (JIT compilation), Vectorized Pandas/NumPy operations.
-- **API/Web:** FastAPI, Uvicorn, Next.js, Tailwind CSS.
-- **Visualization:** TradingView Lightweight-Charts v5+.
-- **Monitoring:** SHAP (XAI), Structured Logging.
-
----
-
-## Repository Structure
+## 12. Repository Structure
 ```text
 .
 ├── backend/
 │   ├── src/
-│   │   ├── agents/          # Multi-Agent Mesh (Orchestrator, Risk, Alpha)
-│   │   ├── data_ingestion/  # Market & Alternative data pipelines
+│   │   ├── agents/          # Multi-Agent Mesh (Alpha, Risk, Execution)
+│   │   ├── data_ingestion/  # Physical & Financial data pipelines
 │   │   ├── execution/       # Signal generation & Smart routing
-│   │   ├── features/        # Sequence builders & TA-Lib integration
-│   │   └── models/          # DL Branches (CNN, LSTM, Transformer, GAN)
-│   ├── configs/             # Hyperparameters & Model definitions
-│   ├── tests/               # Unit and integration tests
+│   │   ├── features/        # Non-leaking sequence builders
+│   │   └── models/          # Deep Learning fusion branches
+│   ├── configs/             # Hyperparameters & Regime definitions
+│   ├── tests/               # Quantitative validation suite
 │   ├── train.py             # Ensemble training pipeline
 │   └── backtester.py        # Institutional WFA engine
 ├── frontend/
-│   ├── app/                 # Next.js 16.2 App Router
-│   ├── components/          # Institutional chart components
-│   └── public/              # Static assets
-└── .github/workflows/       # CI/CD pipelines
+│   ├── app/                 # Next.js institutional dashboard
+│   ├── components/          # TradingView integration
+│   └── public/              # Analytics assets
+└── .github/workflows/       # CI/CD pipelines (Lint, Test, Docker)
 ```
 
----
+## 13. Installation
+### Prerequisites
+- Python 3.10+
+- Node.js 18+
+- Docker (Optional)
 
-## Installation
-
-### Backend Setup
+### Environment Setup
 1. Clone the repository:
    ```bash
    git clone https://github.com/dhruvin0041/stock-indicator-buy-sell.git
-   cd stock-indicator-buy-sell/backend
+   cd stock-indicator-buy-sell
    ```
-2. Create and activate a virtual environment:
+2. Backend installation:
    ```bash
+   cd backend
    python -m venv venv
    source venv/bin/activate  # Windows: venv\Scripts\activate
-   ```
-3. Install dependencies:
-   ```bash
    pip install -r requirements.txt
    ```
-4. Configure environment variables:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your API keys (e.g., GOOGLE_API_KEY for NLP)
-   ```
-
-### Frontend Setup
-1. Navigate to the frontend directory:
+3. Frontend installation:
    ```bash
    cd ../frontend
-   ```
-2. Install Node.js dependencies:
-   ```bash
    npm install
    ```
 
----
+## 14. Configuration
+System behavior is defined in `backend/configs/model_params.yaml`. Key parameters include:
+- `time_steps`: Length of input sequences for temporal models.
+- `risk_params`: Stop-loss thresholds, Kelly fraction, and Max Drawdown limits.
+- `tickers`: List of monitored assets and their GNN dependency nodes.
 
-## Configuration
-Hyperparameters are managed via `backend/configs/model_params.yaml`. This allows for granular control over:
-- Sequence lengths (`time_steps`)
-- Model architecture (layer counts, dropout rates)
-- Risk parameters (stop-loss, take-profit, Kelly fraction)
-- Ticker-specific overrides
-
----
-
-## Usage
-
-### 1. Alpha Research & Training
-Train the ensemble model (CNN/LSTM/Transformer/XGBoost/DQN) on a specific ticker:
+## 15. Usage
+### Training
+Execute the multi-modal training pipeline:
 ```bash
-python train.py --ticker AAPL
+python train.py --ticker TSLA --mode ensemble
 ```
-
-### 2. Institutional Backtesting
-Run a rigorous backtest with realistic slippage and transaction costs:
+### Backtesting
+Run a walk-forward analysis with transaction costs:
 ```bash
-python backtester.py --ticker AAPL --mode walk-forward
+python backtester.py --ticker TSLA --start 2020-01-01 --wfa
 ```
-
-### 3. Real-Time Inference (Simulation)
-Start the live inference agent for real-time signal monitoring:
+### Live Monitoring
+Launch the institutional command center:
 ```bash
-python live_inference.py
-```
-
-### 4. Launch Command Center
-Start the Next.js dashboard:
-```bash
+# Terminal 1
+python api.py
+# Terminal 2 (frontend directory)
 npm run dev
 ```
 
----
+## 16. Example Workflow
+1. **Ingestion:** Fetch OHLCV, Weather, and Sentiment data.
+2. **Analysis:** Generate GNN-based corporate dependency map.
+3. **Training:** Optimize Alpha Agent on non-leaking sequences.
+4. **Validation:** Perform TimeGAN stress test and WFA backtest.
+5. **Execution:** Monitor real-time agent consensus via the Dashboard.
 
-## Example Workflow
-1. **Clean Slate:** Run `python clean_artifacts.py` to reset the neural pathway for a new ticker.
-2. **Ingestion:** Fetch multi-modal data including weather and Google Trends.
-3. **Training:** Execute `train.py` to optimize the ensemble on historical sequences.
-4. **Validation:** Run `backtester.py` to confirm out-of-sample robustness.
-5. **Monitoring:** Open `http://localhost:3000` to track agent consensus and risk levels.
+## 17. Performance Metrics Explained
+- **CAGR:** Compound Annual Growth Rate.
+- **Sharpe Ratio:** Risk-adjusted return (Excess Return / Volatility).
+- **Sortino Ratio:** Downside-risk-adjusted return.
+- **Calmar Ratio:** CAGR / Maximum Drawdown.
+- **Profit Factor:** Gross Profit / Gross Loss.
+- **Expectancy:** Average profit per trade in dollar or percentage terms.
 
----
+## 18. Security Considerations
+- **API Protection:** Use `.env` for all sensitive credentials.
+- **Input Validation:** Strict schema enforcement for all alternative data streams.
+- **Process Isolation:** Agents run in isolated threads to prevent resource starvation.
 
-## Performance Metrics Explained
-The system evaluates performance using institutional-grade metrics:
-- **Sharpe Ratio:** Risk-adjusted return relative to volatility.
-- **Sortino Ratio:** Risk-adjusted return focusing on downside volatility.
-- **Calmar Ratio:** CAGR divided by Maximum Drawdown.
-- **Maximum Drawdown (MDD):** The largest peak-to-trough decline.
-- **Profit Factor:** Gross profit divided by gross loss.
-- **Jensen’s Alpha:** Excess return generated above the market benchmark (Beta).
+## 19. Limitations and Risk Disclosures
+- **Black Swans:** Models are trained on historical and synthetic data; unforeseen market regime shifts can lead to significant drawdowns.
+- **Liquidity:** Signals assume sufficient liquidity; execution in illiquid assets may result in worse-than-modeled slippage.
+- **Slippage:** Real-world slippage can vary significantly during high-volatility events.
 
----
+## 20. Testing
+Hydra maintains a comprehensive test suite:
+- **Unit Tests:** `pytest backend/tests/`
+- **Typing:** `mypy backend/src/`
+- **Linting:** `ruff check .`
 
-## Security Considerations
-- **Credential Management:** Use `.env` files for all API keys. Never commit sensitive credentials.
-- **Data Integrity:** All ingestion pipelines use checksums and validation schemas to prevent data corruption.
-- **Process Isolation:** Backend agents run in isolated threads to prevent cascading failures.
+## 21. CI/CD Pipeline
+Automated workflows ensure code quality:
+- **Linting:** Enforces PEP 8 and Ruff standards.
+- **Testing:** Runs mathematical validation on every pull request.
+- **Docker:** Automated image builds for backend and frontend services.
 
----
-
-## Limitations and Risk Disclosures
-- **Black Swan Events:** While TimeGAN models extreme scenarios, unforeseen market dislocations can exceed model parameters.
-- **Liquidity Assumptions:** Backtesting assumes a level of liquidity that may not be available during market stress.
-- **Hardware Requirements:** Training complex ensemble models requires significant CPU/GPU resources.
-
----
-
-## Testing
-Hydra Terminal maintains a rigorous testing suite:
-- **Unit Tests:** Located in `backend/tests/`, covering indicator accuracy and model logic.
-- **Integration Tests:** Validating the multi-agent mesh communication.
-- **Frontend Linting:** Enforced via ESLint and TypeScript type-checking.
-
----
-
-## CI/CD Pipeline
-Automated workflows are defined in `.github/workflows/ci.yml`:
-- **Python Linting:** `ruff check .` for PEP 8 compliance.
-- **Next.js Validation:** `npm run lint` and `tsc --noEmit`.
-- **Automated Testing:** Execution of core mathematical unit tests on every push.
-
----
-
-## Docker Usage
-Deploy the entire stack using Docker Compose:
+## 22. Docker Usage
+Orchestrate the full stack:
 ```bash
 docker-compose up --build
 ```
-This orchestrates the FastAPI backend, Next.js frontend, and necessary proxies.
 
----
+## 23. Infrastructure and Deployment
+- **Local:** Optimized for high-thread CPU and NVIDIA GPU acceleration.
+- **Cloud:** Ready for deployment via Kubernetes (EKS/GKE) for agent scaling.
 
-## Infrastructure and Deployment
-- **Local Dev:** FastAPI (8000) and Next.js (3000).
-- **Production:** Recommended deployment via Kubernetes for agent scaling and GPU-accelerated inference nodes.
-- **Data Storage:** Artifacts and models are stored locally with support for S3-compatible cloud storage.
+## 24. Monitoring and Observability
+- **Logging:** Structured JSON logs for all agentic decisions.
+- **Metrics:** Real-time tracking of agent latency and inference confidence.
+- **Health Checks:** Automated service-level monitoring for API nodes.
 
----
-
-## Monitoring and Observability
-- **Structured Logging:** All agent decisions and risk vetos are logged with mathematical justification.
-- **XAI Integration:** SHAP values are computed for every signal to provide human-readable reasoning.
-- **Health Checks:** Real-time monitoring of agent latency and API connectivity.
-
----
-
-## Development Workflow
+## 25. Development Workflow
 1. Feature branch creation.
-2. Implementation with strict PEP 8 and TypeScript typing.
-3. Unit test addition.
-4. `ruff` and `npm run lint` validation.
-5. Pull request with documentation update.
+2. Implementation with type-safety and docstrings.
+3. Unit testing and regression validation.
+4. CI-passed PR for review and merge.
 
----
+## 26. Roadmap
+- [ ] Integration with Interactive Brokers TWS API.
+- [ ] Multi-asset class expansion (FX, Futures).
+- [ ] Real-time sentiment analysis via LLM-based news scrapers.
 
-## Roadmap
-- [ ] **Interactive Brokers Integration:** Full bridge for live paper-trading execution.
-- [ ] **Advanced Options Hedging:** Automated delta-neutral SPY hedging within the Execution Agent.
-- [ ] **Global Macro Expansion:** Integration of interest rate and inflation (CPI/PCE) data streams.
+## 27. Contributing
+Contributions from quantitative researchers and engineers are welcome. Please refer to `CONTRIBUTING.md` for coding standards and PR protocols.
 
----
+## 28. License
+This project is licensed under the MIT License - see the `LICENSE` file for details.
 
-## Contributing
-We welcome contributions from quantitative researchers and engineers. Please ensure all pull requests follow the rigorous testing and linting standards of the repository.
-
----
-
-## License
-Distributed under the MIT License. See `LICENSE` for more information.
-
----
-
-## Disclaimer
-**Trading financial instruments involves significant risk.** This software is for educational and research purposes only. The authors assume no responsibility for financial losses incurred through the use of this system. Always perform your own due diligence and consult with a certified financial advisor before trading.
+## 29. Disclaimer
+Trading financial markets involves significant risk of loss. This software is provided for research and educational purposes only. Past performance is not indicative of future results. The authors assume no liability for financial losses incurred through the use of this system. Always perform your own due diligence.
