@@ -53,3 +53,8 @@ backend/models/
 backend/scalers/
 backend/charts/
 backend/backtest_results.png
+
+# Local-Only Institutional Assets
+graphify-out/
+GEMINI.md
+
