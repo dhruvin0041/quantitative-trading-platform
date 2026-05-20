@@ -22,8 +22,10 @@ class ExperimentTracker:
         return []
 
     def _save(self):
-        with open(self.db_path, "w") as f:
+        temp_path = f"{self.db_path}.tmp"
+        with open(temp_path, "w") as f:
             json.dump(self.experiments, f, indent=4)
+        os.replace(temp_path, self.db_path)
 
     def log_experiment(self, run_name: str, config: dict, metrics: dict, artifacts: list = None):
         exp = {

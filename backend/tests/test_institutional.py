@@ -8,6 +8,7 @@ from src.execution.portfolio_optimizer import PortfolioOptimizer
 from src.models.drift_monitor import DriftMonitor
 from src.models.calibration import ModelCalibrator
 from src.execution.factor_model import FactorModel
+from src.execution.alerts import AlertSystem
 
 class TestInstitutionalExcellence(unittest.TestCase):
     
@@ -61,6 +62,21 @@ class TestInstitutionalExcellence(unittest.TestCase):
         ticker_returns = returns.iloc[:, 0]
         idio_risk = fm.calculate_idiosyncratic_risk("T1", ticker_returns, factor_returns)
         self.assertTrue(idio_risk > 0)
+
+    def test_alert_system(self):
+        alert_system = AlertSystem()
+        perf = {"max_drawdown": -20.0, "sharpe": 0.2, "win_rate": 30.0}
+        alerts = alert_system.check_performance(perf)
+        self.assertEqual(len(alerts), 3)
+        self.assertEqual(alerts[0]["type"], "PERFORMANCE_DEGRADATION")
+
+    def test_atomic_writes(self):
+        tracker = ExperimentTracker(db_path="logs/atomic_test.json")
+        tracker.log_experiment("Atomic", {}, {})
+        self.assertTrue(os.path.exists("logs/atomic_test.json"))
+        # Check that temp file is cleaned up
+        self.assertFalse(os.path.exists("logs/atomic_test.json.tmp"))
+        os.remove("logs/atomic_test.json")
 
 if __name__ == '__main__':
     unittest.main()

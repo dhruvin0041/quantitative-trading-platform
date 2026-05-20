@@ -27,13 +27,15 @@ class PaperTradingEngine:
                 pass
 
     def _save(self):
-        with open(self.db_path, "w") as f:
+        temp_path = f"{self.db_path}.tmp"
+        with open(temp_path, "w") as f:
             json.dump({
                 "capital": self.capital,
                 "positions": self.positions,
                 "history": self.history,
                 "portfolio_snapshots": self.portfolio_snapshots
             }, f, indent=2)
+        os.replace(temp_path, self.db_path)
 
     def execute_trade(self, ticker, action, price, confidence_fraction, regime="NORMAL", sector="Unknown"):
         if action == "HOLD" or "SCALE_BACK" in action:

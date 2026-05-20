@@ -134,10 +134,13 @@ async def metrics():
 class SimpleCache:
     def __init__(self):
         self._cache = {}
-    def set(self, key, value):
-        self._cache[key] = value
-    def get(self, key):
-        return self._cache.get(key)
+        self._lock = asyncio.Lock()
+    async def set(self, key, value):
+        async with self._lock:
+            self._cache[key] = value
+    async def get(self, key):
+        async with self._lock:
+            return self._cache.get(key)
 
 api_cache = SimpleCache()
 paper_engine = PaperTradingEngine()
@@ -156,6 +159,24 @@ def sanitize_ticker(ticker: str) -> str:
     if not re.match(r"^[A-Z0-9-]{1,5}$", ticker.upper()):
         raise HTTPException(status_code=400, detail="Invalid Ticker Format")
     return ticker.upper()
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"GLOBAL ERROR: {str(exc)}", exc_info=True)
+    return Response(
+        content=json.dumps({"detail": "Internal Institutional Error", "type": type(exc).__name__}),
+        status_code=500,
+        media_type="application/json"
+    )
+
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "HEALTHY",
+        "models_loaded": lstm_model is not None and xgb_model is not None,
+        "regime_model_ready": regime_model is not None,
+        "timestamp": datetime.now().isoformat()
+    }
 
 # --- System Initialization ---
 logger.info("Loading System Architectures into RAM...")
@@ -233,24 +254,22 @@ async def get_stock_universe():
 @app.get("/predict", dependencies=[Depends(verify_api_key)], response_model=PredictResponse)
 async def get_prediction(ticker: str = "AAPL"):
     ticker = sanitize_ticker(ticker)
-    def run_inference():
+    
+    async def run_inference():
         logger.info(f"Running inference for {ticker}")
         
         # Check cache
-        cached = api_cache.get(f"predict_{ticker}")
+        cached = await api_cache.get(f"predict_{ticker}")
         if cached:
-            # return cached
-            pass
+            return cached
 
         # 1. Fetch live data
-        ts_sequence, peer_sequence, tabular_row, current_price, updated_config = (
-            fetch_live_data(ticker, config)
-        )
+        ts_sequence, peer_sequence, tabular_row, current_price, updated_config = await asyncio.to_thread(fetch_live_data, ticker, config)
 
         # Macro check
         import yfinance as yf
-        spy_df = yf.download("SPY", period="60d", progress=False)
-        ticker_df = yf.download(ticker, period="60d", progress=False)
+        spy_df = await asyncio.to_thread(yf.download, "SPY", period="60d", progress=False)
+        ticker_df = await asyncio.to_thread(yf.download, ticker, period="60d", progress=False)
         beta = calculate_beta(ticker_df["Close"], spy_df["Close"])
 
         # 2. Elite Data Layer
@@ -266,7 +285,7 @@ async def get_prediction(ticker: str = "AAPL"):
             drift_results = {"is_drifting": False}
 
         # Check Market Regime
-        current_vix = yf.download("^VIX", period="5d", progress=False)
+        current_vix = await asyncio.to_thread(yf.download, "^VIX", period="5d", progress=False)
         if not current_vix.empty and len(current_vix) >= 5:
             current_vix["VIX_ROC"] = current_vix["Close"].pct_change(periods=4)
             vix_features = current_vix[["Close", "VIX_ROC"]].iloc[-1].values.reshape(1, -1)
@@ -282,12 +301,8 @@ async def get_prediction(ticker: str = "AAPL"):
 
         # 3. Alpha Generation
         tokenizer = NewsTokenizer(max_length=updated_config["data"]["max_seq_length"])
-        input_ids, attention_masks, news_text = fetch_live_news(
-            ticker, tokenizer, updated_config
-        )
-        qual_score, qual_reason = gemini_analyzer.analyze_fundamental_alpha(
-            news_text, ticker
-        )
+        input_ids, attention_masks, news_text = fetch_live_news(ticker, tokenizer, updated_config)
+        qual_score, qual_reason = gemini_analyzer.analyze_fundamental_alpha(news_text, ticker)
 
         dl_outputs = lstm_model.predict(
             x=[ts_sequence, ts_sequence, ts_sequence, peer_sequence, input_ids, attention_masks],
@@ -416,11 +431,11 @@ async def get_prediction(ticker: str = "AAPL"):
         current_prices = {ticker: current_price}
         result_dict["portfolio"] = paper_engine.get_portfolio_summary(current_prices)
 
-        api_cache.set(f"predict_{ticker}", result_dict)
+        await api_cache.set(f"predict_{ticker}", result_dict)
         logger.info(f"Inference complete for {ticker}")
         return result_dict
 
-    return await asyncio.to_thread(run_inference)
+    return await run_inference()
 
 # ==========================================
 # 3. PERFORMANCE & ALERTS ENDPOINTS
