@@ -45,7 +45,9 @@ def detect_stampede_risk(retail_sentiment_volatility, signal_confidence):
     Elite Metric: Detects 'Crowding' or 'Stampede Risk'.
     If retail excitement is high and our confidence is high, the trade is 'Crowded'.
     """
-    crowding_score = retail_sentiment_volatility * signal_confidence
+    # Softmax standard deviation maxes out at ~0.471. We normalize it to a 0-1 scale.
+    normalized_volatility = min(1.0, retail_sentiment_volatility / 0.471)
+    crowding_score = normalized_volatility * signal_confidence
     is_crowded = crowding_score > 0.8
     return {
         "crowding_score": round(float(crowding_score), 2),

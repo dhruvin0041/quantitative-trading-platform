@@ -46,7 +46,7 @@ class ReportGenerator:
                 })
         return markers, df_full
 
-    def package_chart_data(self, ticker, df_full, xai_log, historical_markers):
+    def package_chart_data(self, ticker, df_full, ai_report_dict, historical_markers):
         """
         Formats data for the Next.js institutional dashboard.
         """
@@ -73,6 +73,6 @@ class ReportGenerator:
         return {
             "candles": candles,
             "clouds": clouds,
-            "ai_report": xai_log,
+            "ai_report": ai_report_dict,
             "historical_markers": historical_markers
         }

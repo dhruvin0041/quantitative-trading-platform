@@ -36,6 +36,12 @@ interface ChartData {
   clouds: { time: string; ribbon_upper: number; ribbon_lower: number; bb_upper: number; bb_lower: number }[];
   ai_report: AIReport;
   historical_markers: { time: string; action: string; probability: number; label?: string }[];
+  portfolio?: {
+    cash: number;
+    equity: number;
+    return_pct: number;
+    positions: Record<string, {shares: number, avg_price: number}>;
+  };
 }
 
 export default function HydraDashboard() {
@@ -48,7 +54,9 @@ export default function HydraDashboard() {
 
   // --- 1. LOAD THE S&P 500 ---
   useEffect(() => {
-    fetch("http://localhost:8000/universe")
+    fetch("http://localhost:8000/universe", {
+      headers: { "X-API-Key": "dev-secret-key-1234" }
+    })
       .then(res => res.json())
       .then(data => {
         if (data.universe) setUniverse(data.universe);
@@ -58,7 +66,9 @@ export default function HydraDashboard() {
 
   // --- 2. FETCH AI PREDICTIONS ---
   useEffect(() => {
-    fetch(`http://localhost:8000/predict?ticker=${ticker}`)
+    fetch(`http://localhost:8000/predict?ticker=${ticker}`, {
+      headers: { "X-API-Key": "dev-secret-key-1234" }
+    })
       .then(res => res.json())
       .then(data => {
         setChartData(data);
@@ -250,6 +260,59 @@ export default function HydraDashboard() {
             </div>
           </div>
 
+        </div>
+      )}
+    </div>
+  );
+}span className="mr-2">💼</span> PAPER TRADING PORTFOLIO
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              <div className="p-4 bg-slate-900 rounded border border-slate-700 text-center">
+                <p className="text-xs text-gray-500 uppercase font-bold mb-1">Total Equity</p>
+                <p className="text-2xl font-bold text-white">${chartData.portfolio.equity.toLocaleString()}</p>
+              </div>
+              <div className="p-4 bg-slate-900 rounded border border-slate-700 text-center">
+                <p className="text-xs text-gray-500 uppercase font-bold mb-1">Available Cash</p>
+                <p className="text-2xl font-bold text-emerald-400">${chartData.portfolio.cash.toLocaleString()}</p>
+              </div>
+              <div className="p-4 bg-slate-900 rounded border border-slate-700 text-center">
+                <p className="text-xs text-gray-500 uppercase font-bold mb-1">Net Return</p>
+                <p className={`text-2xl font-bold ${chartData.portfolio.return_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {chartData.portfolio.return_pct > 0 ? '+' : ''}{chartData.portfolio.return_pct}%
+                </p>
+              </div>
+              <div className="p-4 bg-slate-900 rounded border border-slate-700 text-center">
+                <p className="text-xs text-gray-500 uppercase font-bold mb-1">Active Positions</p>
+                <p className="text-2xl font-bold text-cyan-400">
+                  {Object.values(chartData.portfolio.positions).filter(p => p.shares > 0).length}
+                </p>
+              </div>
+            </div>
+            
+            {Object.keys(chartData.portfolio.positions).length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm text-gray-400">
+                  <thead className="text-xs text-gray-500 uppercase bg-slate-900 border-b border-slate-700">
+                    <tr>
+                      <th className="px-4 py-3">Ticker</th>
+                      <th className="px-4 py-3 text-right">Shares</th>
+                      <th className="px-4 py-3 text-right">Avg Price</th>
+                      <th className="px-4 py-3 text-right">Cost Basis</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(chartData.portfolio.positions).filter(([_, pos]) => pos.shares > 0).map(([t, pos]) => (
+                      <tr key={t} className="border-b border-slate-700/50 hover:bg-slate-700/30">
+                        <td className="px-4 py-3 font-bold text-white">{t}</td>
+                        <td className="px-4 py-3 text-right">{pos.shares.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-right">${pos.avg_price.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right">${(pos.shares * pos.avg_price).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
         </div>
       )}
     </div>

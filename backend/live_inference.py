@@ -58,7 +58,11 @@ def fetch_live_data(ticker, config):
     peer_recent = peer_filtered.tail(time_steps).values
 
     scaled_data = scaler.transform(recent_data)
-    peer_scaled = scaler.transform(peer_recent)
+
+    # NEW: Properly scale peer data independently to avoid magnitude leakage
+    from sklearn.preprocessing import StandardScaler
+    peer_scaler = StandardScaler()
+    peer_scaled = peer_scaler.fit_transform(peer_filtered.values)[-time_steps:]
 
     ts_sequence = scaled_data.reshape(1, time_steps, -1)
     peer_sequence = peer_scaled.reshape(1, time_steps, -1)
@@ -81,7 +85,7 @@ def main():
     config = load_config()
 
     # 1. Fetch
-    ts_seq, tabular, price, config = fetch_live_data(ticker, config)
+    ts_seq, peer_seq, tabular, price, config = fetch_live_data(ticker, config)
     ids, masks, news = fetch_live_news(ticker, None, config)
 
     # 2. Load Models
@@ -102,7 +106,7 @@ def main():
         pass
 
     # 3. Predict
-    dl_p = dl_model.predict([ts_seq, ts_seq, ts_seq, ids, masks], verbose=0)[2][0]
+    dl_p = dl_model.predict([ts_seq, ts_seq, ts_seq, peer_seq, ids, masks], verbose=0)[2][0]
     xgb_p = xgb_model.predict_proba(tabular)[0]
 
     state = np.hstack((tabular[0], dl_p, xgb_p))
@@ -136,6 +140,15 @@ def main():
     print("-" * 20)
     print(f"DL Suggests: {signal_map[np.argmax(dl_p)]}")
     print(f"XGB Suggests: {signal_map[np.argmax(xgb_p)]}")
+    print(f"DQN Suggests: {signal_map[dqn_action]}")
+    print("=" * 40)
+
+
+if __name__ == "__main__":
+    main()
+
+    main()
+nt(f"XGB Suggests: {signal_map[np.argmax(xgb_p)]}")
     print(f"DQN Suggests: {signal_map[dqn_action]}")
     print("=" * 40)
 
