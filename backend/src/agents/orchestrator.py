@@ -24,11 +24,15 @@ class RiskAgent:
         veto_reason = None
 
         # institutional veto logic
-        if risk_metrics.get("beta", 1.0) > 2.0:
+        if alpha_signal["signal_idx"] in [0, 2] and risk_metrics.get("stampede_risk", {}).get("is_crowded", False):
+            is_safe = False
+            veto_reason = "Stampede Risk (Crowded Trade)"
+            
+        if risk_metrics.get("beta", 1.0) > 2.5:
             is_safe = False
             veto_reason = "Beta too high (Extreme Volatility)"
 
-        if alpha_signal["confidence"] < 0.75:
+        if alpha_signal["confidence"] < 0.65:
             is_safe = False
             veto_reason = "Low Confidence Alpha"
 

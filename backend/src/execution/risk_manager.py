@@ -73,14 +73,27 @@ def calculate_full_kelly(win_prob, win_loss_ratio):
     return float(np.clip(kelly, 0.0, 0.25))
 
 
-def get_position_sizing(model_confidence, historical_win_rate=0.55, avg_win_loss=1.2):
+def get_position_sizing(model_confidence, trade_history=None):
     """
     Determines the suggested capital allocation using a blend of confidence and Kelly.
+    Dynamically uses trade history if available.
     """
-    kelly_fraction = calculate_full_kelly(historical_win_rate, avg_win_loss)
+    if trade_history and len(trade_history) >= 10:
+        wins = [t for t in trade_history if t.get("pnl", 0) > 0]
+        losses = [t for t in trade_history if t.get("pnl", 0) < 0]
+        win_rate = len(wins) / len(trade_history)
+        
+        avg_win = np.mean([t["pnl"] for t in wins]) if wins else 0
+        avg_loss = abs(np.mean([t["pnl"] for t in losses])) if losses else 0
+        
+        avg_win_loss = (avg_win / avg_loss) if avg_loss > 0 else 1.2
+    else:
+        win_rate = 0.55
+        avg_win_loss = 1.2
+
+    kelly_fraction = calculate_full_kelly(win_rate, avg_win_loss)
 
     # Scale Kelly fraction by model confidence (0.0 to 1.0)
-    # If the model is only 70% sure, we only take 70% of the Kelly-suggested bet
     suggested_allocation = kelly_fraction * model_confidence
 
     return {

@@ -59,10 +59,8 @@ def fetch_live_data(ticker, config):
 
     scaled_data = scaler.transform(recent_data)
 
-    # NEW: Properly scale peer data independently to avoid magnitude leakage
-    from sklearn.preprocessing import StandardScaler
-    peer_scaler = StandardScaler()
-    peer_scaled = peer_scaler.fit_transform(peer_filtered.values)[-time_steps:]
+    # Properly scale peer data using the same scaler to avoid magnitude leakage
+    peer_scaled = scaler.transform(peer_filtered.values)[-time_steps:]
 
     ts_sequence = scaled_data.reshape(1, time_steps, -1)
     peer_sequence = peer_scaled.reshape(1, time_steps, -1)

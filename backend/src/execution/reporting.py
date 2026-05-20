@@ -13,13 +13,9 @@ class ReportGenerator:
 
     def generate_historical_markers(self, ticker, df_raw):
         """
-        Detects swing highs and lows over a 5-year period to provide context.
+        Detects swing highs and lows to provide context.
         """
-        # NEW: Fetch 5 years of data for historical context
-        start_date = (datetime.now() - timedelta(days=5 * 365)).strftime("%Y-%m-%d")
-        df_full = fetch_historical_data(
-            ticker, start_date=start_date, end_date=datetime.now().strftime("%Y-%m-%d")
-        )
+        df_full = df_raw.copy()
         
         # Detect Pivots
         prices = df_full["Close"].values

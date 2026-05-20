@@ -51,6 +51,12 @@ export default function HydraDashboard() {
   const [loading, setLoading] = useState<boolean>(true);
   
   const chartContainerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<any>(null);
+  const candlestickSeriesRef = useRef<any>(null);
+  const bbUpperSeriesRef = useRef<any>(null);
+  const bbLowerSeriesRef = useRef<any>(null);
+  const ribbonUpperSeriesRef = useRef<any>(null);
+  const ribbonLowerSeriesRef = useRef<any>(null);
 
   // --- 1. LOAD THE S&P 500 ---
   useEffect(() => {
@@ -80,15 +86,14 @@ export default function HydraDashboard() {
       });
   }, [ticker]); 
 
-  // --- 3. RENDER TRADINGVIEW CHART ---
+  // --- 3. INITIALIZE TRADINGVIEW CHART ONCE ---
   useEffect(() => {
-    if (!chartContainerRef.current || !chartData || !chartData.candles) return;
+    if (!chartContainerRef.current) return;
 
-    // Initialize Chart
     const chart = createChart(chartContainerRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: '#1e293b' }, // Tailwind slate-800
-        textColor: '#cbd5e1', // Tailwind slate-300
+        background: { type: ColorType.Solid, color: '#1e293b' },
+        textColor: '#cbd5e1',
       },
       grid: {
         vertLines: { color: '#334155' },
@@ -100,8 +105,9 @@ export default function HydraDashboard() {
       width: chartContainerRef.current.clientWidth,
       height: 400,
     });
+    chartRef.current = chart;
 
-    const candlestickSeries = chart.addSeries(CandlestickSeries, {
+    candlestickSeriesRef.current = chart.addSeries(CandlestickSeries, {
       upColor: '#10b981', 
       downColor: '#ef4444', 
       borderVisible: false,
@@ -109,46 +115,45 @@ export default function HydraDashboard() {
       wickDownColor: '#ef4444',
     });
 
-    // --- NEW: Add the Trend Ribbon (The Cloud) and Bollinger Bands ---
-    if (chartData.clouds && chartData.clouds.length > 0) {
-      // 1. BB Outer Bands (The blue dashed lines)
-      const bbUpperSeries = chart.addSeries(LineSeries, { color: '#3b82f6', lineWidth: 1, lineStyle: 2 });
-      const bbLowerSeries = chart.addSeries(LineSeries, { color: '#3b82f6', lineWidth: 1, lineStyle: 2 });
-      
-      bbUpperSeries.setData(chartData.clouds.map(c => ({ time: c.time, value: c.bb_upper })));
-      bbLowerSeries.setData(chartData.clouds.map(c => ({ time: c.time, value: c.bb_lower })));
+    bbUpperSeriesRef.current = chart.addSeries(LineSeries, { color: '#3b82f6', lineWidth: 1, lineStyle: 2 });
+    bbLowerSeriesRef.current = chart.addSeries(LineSeries, { color: '#3b82f6', lineWidth: 1, lineStyle: 2 });
+    ribbonUpperSeriesRef.current = chart.addSeries(LineSeries, { color: '#10b981', lineWidth: 1 });
+    ribbonLowerSeriesRef.current = chart.addSeries(LineSeries, { color: '#ef4444', lineWidth: 1 });
 
-      // 2. The Ribbon (Fast/Slow EMA)
-      const ribbonUpperSeries = chart.addSeries(LineSeries, { color: '#10b981', lineWidth: 1 });
-      const ribbonLowerSeries = chart.addSeries(LineSeries, { color: '#ef4444', lineWidth: 1 });
-      
-      ribbonUpperSeries.setData(chartData.clouds.map(c => ({ time: c.time, value: c.ribbon_upper })));
-      ribbonLowerSeries.setData(chartData.clouds.map(c => ({ time: c.time, value: c.ribbon_lower })));
+    return () => {
+      chart.remove();
+      chartRef.current = null;
+    };
+  }, []);
+
+  // --- 4. UPDATE DATA WHEN CHART DATA CHANGES ---
+  useEffect(() => {
+    if (!chartData || !chartData.candles || !chartRef.current) return;
+
+    candlestickSeriesRef.current.setData(chartData.candles);
+
+    if (chartData.clouds && chartData.clouds.length > 0) {
+      bbUpperSeriesRef.current.setData(chartData.clouds.map(c => ({ time: c.time, value: c.bb_upper })));
+      bbLowerSeriesRef.current.setData(chartData.clouds.map(c => ({ time: c.time, value: c.bb_lower })));
+      ribbonUpperSeriesRef.current.setData(chartData.clouds.map(c => ({ time: c.time, value: c.ribbon_upper })));
+      ribbonLowerSeriesRef.current.setData(chartData.clouds.map(c => ({ time: c.time, value: c.ribbon_lower })));
     }
 
-    // Set Price Data
-    candlestickSeries.setData(chartData.candles);
-
-    // Map AI Signals to Chart Markers (Arrow Style with Labels)
     if (chartData.historical_markers && chartData.historical_markers.length > 0) {
       const markers = chartData.historical_markers.map((marker) => ({
         time: marker.time,
         position: marker.action === 'BUY' ? 'belowBar' : 'aboveBar',
         color: marker.action === 'BUY' ? '#10b981' : '#ef4444',
         shape: marker.action === 'BUY' ? 'arrowUp' : 'arrowDown',
-        text: marker.action, // Just "BUY" or "SELL"
+        text: marker.action,
       }));
       
-      // TradingView requires markers to be sorted by time chronologically
       markers.sort((a, b) => new Date(a.time as string).getTime() - new Date(b.time as string).getTime());
-      createSeriesMarkers(candlestickSeries, markers as SeriesMarker<Time>[]);
+      createSeriesMarkers(candlestickSeriesRef.current, markers as SeriesMarker<Time>[]);
     }
 
-    chart.timeScale().fitContent();
-
-    // Cleanup chart on unmount or data refresh
-    return () => chart.remove();
-  }, [chartData]); // Re-draw chart whenever AI data changes
+    chartRef.current.timeScale().fitContent();
+  }, [chartData]);
 
   const handleTickerChange = (e: ChangeEvent<HTMLSelectElement>) => {
     setLoading(true);

@@ -48,15 +48,40 @@ class MarketTimeGAN:
 
     def stress_test_policy(self, dqn_agent, n_paths=1000):
         """
-        Runs the DQN agent through 10,000 synthetic paths to find Max Drawdown.
+        Runs the DQN agent through synthetic paths to find Max Drawdown.
         """
         print(f"Starting Monte Carlo Stress Test ({n_paths} paths)...")
         synthetic_paths = self.generate_synthetic_crisis(n_paths)
         results = []
         for path in synthetic_paths:
-            # institutional logic: Check if agent survives extreme volatility
-            drawdown = np.random.uniform(0.05, 0.40)  # Simulated response
-            results.append(drawdown)
+            capital = 100000.0
+            peak_capital = capital
+            max_dd = 0.0
+            shares = 0
+            
+            for t in range(path.shape[0]):
+                state = path[t]
+                if len(state) < dqn_agent.state_size:
+                    state = np.pad(state, (0, dqn_agent.state_size - len(state)))
+                
+                action = dqn_agent.act(state)
+                # Use first feature as synthetic price proxy
+                price = 100 * (1 + state[0])
+                if price <= 0: price = 1.0
+                    
+                if action == 2 and capital >= price: # BUY
+                    shares += 1
+                    capital -= price
+                elif action == 0 and shares > 0: # SELL
+                    capital += shares * price
+                    shares = 0
+                    
+                current_value = capital + (shares * price)
+                peak_capital = max(peak_capital, current_value)
+                dd = (peak_capital - current_value) / peak_capital
+                max_dd = max(max_dd, dd)
+                
+            results.append(max_dd)
 
         return {
             "synthetic_max_drawdown": f"{round(max(results) * 100, 1)}%",

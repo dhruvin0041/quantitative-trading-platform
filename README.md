@@ -1,113 +1,135 @@
-# 🐍 Hydra Terminal: Institutional-Grade Quantitative Trading System
+# Institutional Quant Platform: Project Hydra
 
-<div align="center">
-  <img src="https://img.shields.io/badge/Status-Production%20Ready-success" alt="Status" />
-  <img src="https://img.shields.io/badge/Python-3.11+-blue" alt="Python" />
-  <img src="https://img.shields.io/badge/Next.js-14+-black" alt="Next.js" />
-  <img src="https://img.shields.io/badge/FastAPI-0.109+-teal" alt="FastAPI" />
-  <img src="https://img.shields.io/badge/License-MIT-green" alt="License" />
-</div>
+Hydra is a state-of-the-art (SOTA) 2026 multi-modal, multi-agent hedge fund execution and research platform. It autonomously generates trading signals, assesses risk dynamically, and executes paper trades.
 
-## 📌 Executive Summary
+## Key Features
 
-**Hydra Terminal** is a State-of-the-Art (SOTA) multi-agent quantitative trading system. It leverages a multi-modal machine learning fusion network (CNN, LSTM, Transformer, FinBERT, XGBoost) and advanced alternative data (weather, supply chain dependency graphs) to generate non-repainting, highly calibrated trading signals.
+- **Multi-Modal Data Ingestion**: Processes technical (OHLCV), macro (VIX regimes), alternative (Supply chain maps, port weather), and sentiment (SEC EDGAR, News via BERT/Gemini).
+- **Hybrid Ensemble Models**: Fuses temporal signals from LSTMs, pattern recognition from CNNs, and long-range dependencies from Transformers with tabular XGBoost predictions.
+- **Multi-Agent Orchestration**: 
+  - *Alpha Agent*: Synthesizes ensemble predictions into buy/sell signals.
+  - *Risk Agent*: Validates trades against VaR, beta neutrality, and stampede/crowding risks with absolute veto power.
+  - *Execution Agent*: Optimizes venue routing through a simulated Smart Order Router (SOR).
+- **Institutional Risk Management**: Incorporates Full Kelly criterion sizing, dynamic drawdown circuit breakers, cross-sectional factor modeling, and **Mean-Variance Portfolio Optimization**.
+- **Institutional Validation**:
+  - **Walk-Forward Optimization (WFO)**: Rigorous out-of-sample testing with rolling parameter re-optimization.
+  - **Generative Stress Testing**: Monte Carlo simulations using GANs to estimate Max Drawdown boundaries.
+  - **Probability Calibration**: Isotonic Regression to ensure model confidence maps to empirical success rates.
+- **Production-Grade Infrastructure**:
+  - **Experiment Tracking**: Systematic logging of hyperparameters and results for strategy reproducibility.
+  - **Model Drift Monitoring**: Kolmogorov-Smirnov statistical tests to detect feature distribution shifts in real-time.
+  - **Market Regime Detection**: GMM-based macro kill-switch (Normal vs. Panic) to protect capital during volatility spikes.
+  - **Broker Interoperability**: Pluggable architecture supporting Alpaca, Interactive Brokers, and custom fix-adapters.
+- **Explainable AI (XAI)**: Generates human-readable rationales behind every signal.
 
-Built for hedge-fund operations, Hydra Terminal enforces strict risk controls, beta-neutral hedging logic, and stampede (crowding) risk detection. It includes a built-in Paper Trading engine for simulated execution, minimizing slippage via a predictive smart router.
+## Tech Stack
 
----
+- **Language**: Python 3.11+, TypeScript
+- **Framework**: FastAPI (Async Backend), Next.js 14+ (App Router)
+- **Machine Learning**: TensorFlow, Keras, XGBoost, Scikit-Learn
+- **Data Engineering**: Pandas, Numba, YFinance, Open-Meteo
+- **Orchestration**: Custom Agentic Mesh
+- **Frontend**: Lightweight Charts (TradingView), Tailwind CSS v4
+- **Observability**: Prometheus, Structured JSON Logging
+- **Deployment**: Docker, Uvicorn
 
-## 🏛️ System Architecture
+## Prerequisites
 
-### 1. Data Ingestion & Engineering
-- **Market Data:** Live OHLCV fetching via yfinance with dynamic feature scaling and technical indicator generation (Bollinger Bands, MACD, RSI, ATR).
-- **Alternative Data:**
-  - **Supply Chain Graph:** GNN-based propagation risk assessment across N-tier corporate relationships.
-  - **Physical Edge:** Weather and port congestion tracking for supply chain disruption forecasting.
-  - **NLP Sentiment:** FinBERT and Gemini-powered analysis of SEC EDGAR filings and real-time news headlines.
-
-### 2. Multi-Modal Fusion Network
-The brain of the system is a deeply ensembled neural network with 5 specialized branches:
-- **LSTM Branch:** Captures long-term sequential momentum.
-- **CNN Branch:** Extracts local spatial chart patterns.
-- **Transformer Branch:** Employs multi-head attention for regime shifting.
-- **Peer-Context Branch:** Lead-lag correlation analysis against sector peers.
-- **FinBERT Branch:** Analyzes unstructured sentiment data.
-*(Outputs are further ensembled with an XGBoost classifier and a DQN Reinforcement Learning agent).*
-
-### 3. Agentic Orchestration & Risk Management
-- **Institutional Orchestrator:** Resolves conflicting model signals using a strict consensus algorithm.
-- **Risk Manager:** Implements the Kelly Criterion for dynamic position sizing, Beta tracking against the SPY, and Jensen's Alpha scoring.
-- **Stampede Risk:** Detects retail crowding and enforces automatic position scale-backs.
-- **Paper Trading Engine:** Simulates real-world execution with configurable slippage, maintaining portfolio cash, equity, and position state.
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-- Docker & Docker Compose
 - Python 3.11+
 - Node.js 20+
-- Gemini API Key
+- pnpm or npm
+- API Keys: Set up a `.env` in `backend/` with `API_KEY=dev-secret-key-1234` and `FRONTEND_URL=http://localhost:3000`
 
-### Installation
+## Getting Started
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/dhruvin0041/stock-indicator-buy-sell.git
-   cd stock-indicator-buy-sell
-   ```
+### 1. Clone the Repository
+```bash
+git clone https://github.com/dhruvin0041/stock-indicator-buy-sell.git
+cd stock-indicator-buy-sell
+```
 
-2. **Environment Configuration**
-   Create a `.env` file in the `backend/` directory:
-   ```env
-   GEMINI_API_KEY=your_gemini_api_key
-   API_KEY=dev-secret-key-1234
-   FRONTEND_URL=http://localhost:3000
-   ```
-
-3. **Run via Docker Compose (Recommended)**
-   ```bash
-   docker-compose up --build -d
-   ```
-
-### Manual Local Development
-
-**Backend:**
+### 2. Backend Setup
 ```bash
 cd backend
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn api:app --reload --host 0.0.0.0 --port 8000
 ```
 
-**Frontend:**
+### 3. Frontend Setup
+```bash
+cd ../frontend
+npm install
+```
+
+### 4. Running the Platform
+
+**Start the Backend (FastAPI):**
+```bash
+cd backend
+python api.py
+```
+*API will run on http://localhost:8000*
+
+**Start the Frontend (Next.js):**
 ```bash
 cd frontend
-npm install
 npm run dev
 ```
+*Dashboard will run on http://localhost:3000*
 
----
+## Architecture
 
-## 🔒 Security & Observability
+### Directory Structure
 
-Hydra Terminal implements production-grade backend hardening:
-- **API Key Authentication:** All endpoints are protected by `X-API-Key` headers.
-- **Rate Limiting:** Protects against API abuse and DDoS attacks.
-- **CORS Restrictions:** Strictly bound to the frontend origin.
-- **Prometheus Metrics:** Available at `/metrics` for latency and request tracking.
-- **Structured JSON Logging:** Ready for Datadog or ELK stack ingestion.
+```
+├── backend/
+│   ├── api.py                   # Async FastAPI server & Rate Limiter
+│   ├── live_inference.py        # Scaler-aligned data pipeline
+│   ├── train.py                 # Out-of-sample DQN and Ensemble Training
+│   ├── src/
+│   │   ├── agents/              # Multi-Agent Orchestrator (Alpha, Risk, Exec)
+│   │   ├── data_ingestion/      # Market, Alt-data, and NLP ingestion
+│   │   ├── execution/           # Smart Routing, Kelly Sizing, Paper Trading
+│   │   ├── features/            # Sequence Builders
+│   │   └── models/              # Fusion Network, XGBoost, GANs, Calibrators
+├── frontend/
+│   ├── app/                     # Next.js App Router (Dashboard)
+│   ├── components/              # TradingView charts & UI
+│   └── public/
+```
 
----
+### Request Lifecycle
 
-## 🧪 Testing & Validation
+1. Client (Next.js) requests `/predict?ticker=AAPL` with `X-API-Key`.
+2. `api.py` checks rate limits and in-memory caches.
+3. `live_inference.py` pulls historical market data and applies dynamic triple-barrier labeling and feature deflation.
+4. `nlp_processor.py` tokenizes live news/SEC data using FinBERT.
+5. The 5-Model Ensemble generates predictions, which are calibrated and weighted by historical accuracy.
+6. The `InstitutionalOrchestrator` passes predictions through the Alpha, Risk, and Execution agents.
+7. The `RiskAgent` computes VaR, Kelly fraction, and stampede risk, applying a veto if conditions breach strict hedge fund parameters.
+8. The `PaperTradingEngine` logs the executed trade and updates the portfolio.
+9. A validated `PredictResponse` is returned to the frontend.
 
-The system relies on rigorous quantitative validation:
-- **Cross-Sectional Factor Modeling**
-- **Walk-Forward Validation** (WFA)
-- **Generative Stress Testing:** Uses TimeGAN to simulate non-historical market crashes.
+## Advanced Quant Components
 
----
+### Generative Stress Testing
+The `MarketTimeGAN` (`synthetic_gan.py`) simulates non-historical black swan events (fat tails, volatility clustering). The `DQNAgent` is stress-tested across these synthetic paths to estimate Maximum Drawdown limits under unprecedented market chaos.
 
-## 📄 License
-This project is licensed under the MIT License. Strictly intended for educational and research purposes. Do not use for live trading without thorough financial vetting.
+### Regime Detection
+`regime_detector.py` uses Gaussian Mixture Models on the VIX to separate the market into "Normal" and "Panic" clusters. If the market enters a Panic regime, aggressive scaling-back is triggered.
+
+### Cross-Sectional Factors
+`factor_model.py` uses PCA to extract statistical factors from the S&P 500, isolating systematic risk (beta) from idiosyncratic alpha.
+
+## Security & Observability
+
+- **API Hardening**: All API endpoints use Pydantic models (`src/schemas.py`) for strict contract enforcement.
+- **Authentication**: Custom API key header (`X-API-Key`) validation.
+- **Rate Limiting**: Custom token-bucket middleware (50 req / 60s).
+- **Metrics**: Prometheus instrumentation exposes `/metrics` with `api_requests_total` and `api_request_latency_seconds`.
+- **Structured Logging**: All backend logs are output as JSON for ingestion into Datadog/ELK.
+
+## Disclaimer
+
+This software is for research and educational purposes only. Do not use these signals for live financial trading without extensive paper-trading validation and legal compliance.

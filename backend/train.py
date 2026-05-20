@@ -1,4 +1,3 @@
-# train.py
 import os
 import json
 import joblib
@@ -133,12 +132,10 @@ def prepare_data(ticker, config):
 def train_dqn(X_dl, Y_dl, dl_model, xgb_model, scaler, kept_features):
     print("\n--- Training Reinforcement Learning Agent (DQN) ---")
     # State: Technical features + Predictions from other models
+    # We use X_dl which should be the TEST set to avoid training on overfitted predictions
     X_tabular = X_dl[0][:, -1, :]
 
-    # Updated model predict signature: [ts, cnn, trans, peer, ids, masks]
-    dl_preds = dl_model.predict(
-        [X_dl[0], X_dl[0], X_dl[0], X_dl[1], X_dl[2], X_dl[3]], verbose=0
-    )[2]
+    dl_preds = dl_model.predict(X_dl, verbose=0)[2]
     xgb_preds = xgb_model.predict_proba(X_tabular)
 
     state_matrix = np.hstack((X_tabular, dl_preds, xgb_preds))
@@ -154,7 +151,8 @@ def train_dqn(X_dl, Y_dl, dl_model, xgb_model, scaler, kept_features):
             action = agent.act(state)
             next_state = state_matrix[t + 1]
             reward = 0
-            # Simple reward: if BUY (2) and direction is UP (from target_signal)
+            
+            # Use t target for current action evaluation
             target_signal = Y_dl[0][t]
             if action == target_signal:
                 reward = 1
@@ -203,6 +201,11 @@ def apply_optimized_params(ticker, config):
             )
     return config
 
+
+from src.models.calibration import ModelCalibrator
+from src.models.experiment_tracker import ExperimentTracker
+
+# ...
 
 def main():
     ticker = "AAPL"
@@ -263,14 +266,20 @@ def main():
     xgb_model.save_model("xgb_ensemble.json")
 
     # 3. Train DQN
-    train_dqn((X_ts, X_peer, X_ids, X_masks), (Y_sig,), model, xgb_model, None, None)
+    train_dqn(X_test, (Y_sig[split:],), model, xgb_model, None, None)
 
-    # 4. Save validation accuracies for dynamic weighting
+    # 4. Save validation accuracies and calibrate
     dl_test_preds = model.predict(X_test, verbose=0)[2]
     dl_acc = accuracy_score(Y_test[2], np.argmax(dl_test_preds, axis=1))
 
-    xgb_test_preds = xgb_model.predict(X_xgb_test)
-    xgb_acc = accuracy_score(Y_test[2], xgb_test_preds)
+    xgb_test_preds = xgb_model.predict_proba(X_xgb_test)
+    xgb_acc = accuracy_score(Y_test[2], np.argmax(xgb_test_preds, axis=1))
+
+    # Calibration
+    calibrator = ModelCalibrator()
+    calibrator.fit("dl_model", Y_test[2], np.max(dl_test_preds, axis=1))
+    calibrator.fit("xgb_model", Y_test[2], np.max(xgb_test_preds, axis=1))
+    joblib.dump(calibrator, "calibrator.joblib")
 
     accuracies = {
         "dl_accuracy": float(dl_acc),
@@ -279,11 +288,18 @@ def main():
     }
     with open("configs/model_accuracies.json", "w") as f:
         json.dump(accuracies, f)
+        
+    # 5. Track Experiment
+    tracker = ExperimentTracker()
+    tracker.log_experiment(
+        run_name=f"Train_{ticker}_{datetime.now().strftime('%Y%m%d')}",
+        config=updated_config,
+        metrics=accuracies,
+        artifacts=["latest_fusion_weights.weights.h5", "xgb_ensemble.json", "dqn_model.pth", "calibrator.joblib"]
+    )
 
     print("\n>>> 5-MODEL ENSEMBLE TRAINING COMPLETE <<<")
 
 
 if __name__ == "__main__":
-    main()
-in__":
     main()
