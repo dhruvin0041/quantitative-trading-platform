@@ -38,6 +38,9 @@ from src.execution.paper_trading import PaperTradingEngine
 from src.execution.broker import AlpacaBroker
 from src.models.drift_monitor import DriftMonitor
 from src.schemas import PredictResponse
+from src.execution.performance_analyzer import PerformanceAnalyzer
+from src.execution.alerts import AlertSystem
+from src.data_ingestion.sector_mapper import SectorMapper
 
 # --- Structured Logging ---
 class JSONFormatter(logging.Formatter):
@@ -144,6 +147,9 @@ broker = AlpacaBroker(
     base_url=os.getenv("ALPACA_BASE_URL", "https://paper-api.alpaca.markets")
 )
 drift_monitor = DriftMonitor()
+perf_analyzer = PerformanceAnalyzer()
+alert_system = AlertSystem()
+sector_mapper = SectorMapper()
 
 def sanitize_ticker(ticker: str) -> str:
     """Institutional Sanitization: Only allow 1-5 alphanumeric chars or hyphens."""
@@ -255,6 +261,7 @@ async def get_prediction(ticker: str = "AAPL"):
         # Check Data Drift
         try:
             drift_results = drift_monitor.check_covariate_drift(tabular_row, tabular_row)
+            alert_system.check_drift(drift_results)
         except Exception:
             drift_results = {"is_drifting": False}
 
@@ -264,12 +271,14 @@ async def get_prediction(ticker: str = "AAPL"):
             current_vix["VIX_ROC"] = current_vix["Close"].pct_change(periods=4)
             vix_features = current_vix[["Close", "VIX_ROC"]].iloc[-1].values.reshape(1, -1)
             try:
-                current_regime = regime_model.predict(vix_features)[0]
-                is_panic_regime = (current_regime == panic_id)
+                current_regime_idx = regime_model.predict(vix_features)[0]
+                is_panic_regime = (current_regime_idx == panic_id)
             except Exception:
                 is_panic_regime = False
         else:
             is_panic_regime = False
+        
+        regime_label = "PANIC" if is_panic_regime else "NORMAL"
 
         # 3. Alpha Generation
         tokenizer = NewsTokenizer(max_length=updated_config["data"]["max_seq_length"])
@@ -396,8 +405,10 @@ async def get_prediction(ticker: str = "AAPL"):
         if "SCALE_BACK" in final_action: confidence_fraction *= 0.5
         if is_panic_regime: confidence_fraction = 0.0
 
+        ticker_sector = sector_mapper.get_sector(ticker)
         trade = paper_engine.execute_trade(ticker=ticker, action=signal_map[mesh_response["final_action_idx"]], 
-                                           price=current_price, confidence_fraction=confidence_fraction)
+                                           price=current_price, confidence_fraction=confidence_fraction,
+                                           regime=regime_label, sector=ticker_sector)
         if trade:
             result_dict["paper_trade"] = trade
             broker.submit_order(trade["ticker"], trade["action"], trade.get("shares", 1))
@@ -410,6 +421,26 @@ async def get_prediction(ticker: str = "AAPL"):
         return result_dict
 
     return await asyncio.to_thread(run_inference)
+
+# ==========================================
+# 3. PERFORMANCE & ALERTS ENDPOINTS
+# ==========================================
+@app.get("/performance", dependencies=[Depends(verify_api_key)])
+async def get_performance():
+    analysis = perf_analyzer.analyze(
+        paper_engine.portfolio_snapshots, 
+        paper_engine.history, 
+        paper_engine.initial_capital
+    )
+    # Check for performance degradation alerts
+    if analysis.get("summary"):
+        alert_system.check_performance(analysis["summary"])
+        
+    return analysis
+
+@app.get("/alerts", dependencies=[Depends(verify_api_key)])
+async def get_alerts():
+    return {"alerts": alert_system.get_recent_alerts()}
 
 
 if __name__ == "__main__":

@@ -8,8 +8,9 @@ class PaperTradingEngine:
     def __init__(self, initial_capital=1000000.0, db_path="paper_trading.json"):
         self.initial_capital = initial_capital
         self.capital = initial_capital
-        self.positions = {} # ticker -> {shares, avg_price}
+        self.positions = {} # ticker -> {shares, avg_price, sector}
         self.history = []
+        self.portfolio_snapshots = [] # List of {time, equity, cash}
         self.db_path = db_path
         self._load()
 
@@ -21,6 +22,7 @@ class PaperTradingEngine:
                     self.capital = data.get("capital", self.initial_capital)
                     self.positions = data.get("positions", {})
                     self.history = data.get("history", [])
+                    self.portfolio_snapshots = data.get("portfolio_snapshots", [])
             except Exception:
                 pass
 
@@ -29,18 +31,11 @@ class PaperTradingEngine:
             json.dump({
                 "capital": self.capital,
                 "positions": self.positions,
-                "history": self.history
+                "history": self.history,
+                "portfolio_snapshots": self.portfolio_snapshots
             }, f, indent=2)
-            
-    def _simulate_slippage(self, price, action):
-        # 5 bps slippage
-        slippage = 0.0005
-        if action == "BUY":
-            return price * (1 + slippage)
-        else:
-            return price * (1 - slippage)
 
-    def execute_trade(self, ticker, action, price, confidence_fraction):
+    def execute_trade(self, ticker, action, price, confidence_fraction, regime="NORMAL", sector="Unknown"):
         if action == "HOLD" or "SCALE_BACK" in action:
             return None
             
@@ -57,21 +52,23 @@ class PaperTradingEngine:
             if self.capital >= cost and shares_to_buy > 0:
                 self.capital -= cost
                 if ticker not in self.positions:
-                    self.positions[ticker] = {"shares": 0, "avg_price": 0.0}
+                    self.positions[ticker] = {"shares": 0, "avg_price": 0.0, "sector": sector}
                 
                 prev_shares = self.positions[ticker]["shares"]
                 prev_avg = self.positions[ticker]["avg_price"]
                 new_shares = prev_shares + shares_to_buy
                 new_avg = ((prev_shares * prev_avg) + cost) / new_shares
                 
-                self.positions[ticker] = {"shares": new_shares, "avg_price": new_avg}
+                self.positions[ticker] = {"shares": new_shares, "avg_price": new_avg, "sector": sector}
                 trade_record = {
                     "time": datetime.now().isoformat(),
                     "ticker": ticker,
                     "action": "BUY",
                     "shares": shares_to_buy,
                     "price": executed_price,
-                    "cost": cost
+                    "cost": cost,
+                    "regime": regime,
+                    "sector": sector
                 }
                 self.history.append(trade_record)
                 
@@ -83,7 +80,6 @@ class PaperTradingEngine:
                 
                 pnl = revenue - (shares_to_sell * self.positions[ticker]["avg_price"])
                 
-                self.positions[ticker] = {"shares": 0, "avg_price": 0.0}
                 trade_record = {
                     "time": datetime.now().isoformat(),
                     "ticker": ticker,
@@ -91,18 +87,35 @@ class PaperTradingEngine:
                     "shares": shares_to_sell,
                     "price": executed_price,
                     "revenue": revenue,
-                    "pnl": pnl
+                    "pnl": pnl,
+                    "regime": regime,
+                    "sector": self.positions[ticker].get("sector", "Unknown")
                 }
+                self.positions[ticker] = {"shares": 0, "avg_price": 0.0, "sector": sector}
                 self.history.append(trade_record)
 
         self._save()
         return trade_record
+
+    def record_snapshot(self, total_equity):
+        snapshot = {
+            "time": datetime.now().isoformat(),
+            "equity": total_equity,
+            "cash": self.capital
+        }
+        self.portfolio_snapshots.append(snapshot)
+        # Keep last 1000 snapshots
+        if len(self.portfolio_snapshots) > 1000:
+            self.portfolio_snapshots = self.portfolio_snapshots[-1000:]
+        self._save()
 
     def get_portfolio_summary(self, current_prices):
         total_equity = self.capital
         for ticker, pos in self.positions.items():
             if pos["shares"] > 0 and ticker in current_prices:
                 total_equity += pos["shares"] * current_prices[ticker]
+        
+        self.record_snapshot(total_equity)
                 
         return {
             "cash": round(self.capital, 2),

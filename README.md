@@ -21,6 +21,12 @@ Hydra is a state-of-the-art (SOTA) 2026 multi-modal, multi-agent hedge fund exec
   - **Market Regime Detection**: GMM-based macro kill-switch (Normal vs. Panic) to protect capital during volatility spikes.
   - **Broker Interoperability**: Pluggable architecture supporting Alpaca, Interactive Brokers, and custom fix-adapters.
 - **Explainable AI (XAI)**: Generates human-readable rationales behind every signal.
+- **Performance Validation & Reporting**:
+  - **Comprehensive Metrics**: Tracks Sharpe, Sortino, Calmar, Max Drawdown, and Profit Factor in real-time.
+  - **Performance Attribution**: Decomposes PnL by market regime (Normal vs. Panic) and GICS sector.
+  - **Automated Alerting**: Immediate notifications for performance degradation, high drawdowns, or model drift.
+  - **Institutional Dashboard**: Dedicated terminal for portfolio analytics and risk monitoring.
+  - **Markdown Reports**: Automated generation of periodic performance summaries.
 
 ## Tech Stack
 
