@@ -1,7 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { createChart, ColorType, CrosshairMode, CandlestickSeries, LineSeries, SeriesMarker, Time } from 'lightweight-charts';
+import { createChart, ColorType, CrosshairMode, CandlestickSeries, LineSeries, createSeriesMarkers, IChartApi, ISeriesApi } from 'lightweight-charts';
 import { ChartData } from '@/types';
-import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface PriceChartProps {
@@ -11,12 +10,12 @@ interface PriceChartProps {
 
 export function PriceChart({ data, loading }: PriceChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<any>(null);
-  const candlestickSeriesRef = useRef<any>(null);
-  const bbUpperSeriesRef = useRef<any>(null);
-  const bbLowerSeriesRef = useRef<any>(null);
-  const ribbonUpperSeriesRef = useRef<any>(null);
-  const ribbonLowerSeriesRef = useRef<any>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+  const candlestickSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const bbUpperSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const bbLowerSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const ribbonUpperSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const ribbonLowerSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
 
   useEffect(() => {
     if (!chartContainerRef.current) return;
@@ -25,18 +24,18 @@ export function PriceChart({ data, loading }: PriceChartProps) {
     const isDark = document.documentElement.classList.contains('dark');
     
     // Light theme defaults based on the new Design System
-    const bgColor = isDark ? '#0F172A' : '#FFFFFF';
-    const textColor = isDark ? '#64748B' : '#64748B';
-    const gridColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.05)';
+    const bgColor = isDark ? '#000000' : '#F8FAFC';
+    const textColor = isDark ? '#94A3B8' : '#64748B';
+    const gridColor = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(15,23,42,0.05)';
     const buyColor = '#10B981';
     const sellColor = '#F43F5E';
-    const bbColor = '#6366F1'; // Analytics Blue
+    const bbColor = '#3B82F6'; // Analytics Blue
 
     const chart = createChart(chartContainerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: bgColor },
         textColor: textColor,
-        fontFamily: 'var(--font-geist-mono), monospace',
+        fontFamily: "'Fira Code', monospace",
       },
       grid: {
         vertLines: { color: gridColor },
@@ -52,7 +51,7 @@ export function PriceChart({ data, loading }: PriceChartProps) {
         borderColor: gridColor,
       },
       width: chartContainerRef.current.clientWidth,
-      height: 400,
+      height: chartContainerRef.current.clientHeight,
     });
     
     chartRef.current = chart;
@@ -71,8 +70,11 @@ export function PriceChart({ data, loading }: PriceChartProps) {
     ribbonLowerSeriesRef.current = chart.addSeries(LineSeries, { color: sellColor, lineWidth: 1, crosshairMarkerVisible: false });
 
     const handleResize = () => {
-      if (chartContainerRef.current) {
-        chart.applyOptions({ width: chartContainerRef.current.clientWidth });
+      if (chartContainerRef.current && chartRef.current) {
+        chartRef.current.applyOptions({ 
+          width: chartContainerRef.current.clientWidth,
+          height: chartContainerRef.current.clientHeight 
+        });
       }
     };
     window.addEventListener('resize', handleResize);
@@ -85,11 +87,11 @@ export function PriceChart({ data, loading }: PriceChartProps) {
   }, []);
 
   useEffect(() => {
-    if (!data || !data.candles || !chartRef.current) return;
+    if (!data || !data.candles || !chartRef.current || !candlestickSeriesRef.current) return;
 
     candlestickSeriesRef.current.setData(data.candles);
 
-    if (data.clouds && data.clouds.length > 0) {
+    if (data.clouds && data.clouds.length > 0 && bbUpperSeriesRef.current && bbLowerSeriesRef.current && ribbonUpperSeriesRef.current && ribbonLowerSeriesRef.current) {
       bbUpperSeriesRef.current.setData(data.clouds.map(c => ({ time: c.time, value: c.bb_upper })));
       bbLowerSeriesRef.current.setData(data.clouds.map(c => ({ time: c.time, value: c.bb_lower })));
       ribbonUpperSeriesRef.current.setData(data.clouds.map(c => ({ time: c.time, value: c.ribbon_upper })));
@@ -99,37 +101,35 @@ export function PriceChart({ data, loading }: PriceChartProps) {
     if (data.historical_markers && data.historical_markers.length > 0) {
       const markers = data.historical_markers.map((marker) => ({
         time: marker.time,
-        position: marker.action === 'BUY' ? 'belowBar' : 'aboveBar',
+        position: (marker.action === 'BUY' ? 'belowBar' : 'aboveBar') as "belowBar" | "aboveBar",
         color: marker.action === 'BUY' ? '#10B981' : '#F43F5E',
-        shape: marker.action === 'BUY' ? 'arrowUp' : 'arrowDown',
+        shape: (marker.action === 'BUY' ? 'arrowUp' : 'arrowDown') as "arrowUp" | "arrowDown",
         text: marker.action,
         size: 1,
       }));
       
       markers.sort((a, b) => new Date(a.time as string).getTime() - new Date(b.time as string).getTime());
-      // lightweight-charts handles markers via createSeriesMarkers in vanilla, but since v4 it's setMarkers
-      candlestickSeriesRef.current.setMarkers(markers);
+      // lightweight-charts v5+ uses createSeriesMarkers standalone function
+      createSeriesMarkers(candlestickSeriesRef.current, markers);
     }
 
     chartRef.current.timeScale().fitContent();
   }, [data]);
 
   return (
-    <Card className="w-full relative shadow-sm border-border overflow-hidden" data-tour="chart">
-      <CardContent className="p-0 relative" aria-label="Interactive price chart with AI signals">
-        {/* Loading Overlay */}
-        {(loading && !data) && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/50 backdrop-blur-sm p-6">
-            <Skeleton className="w-full h-full rounded-md" />
-          </div>
-        )}
-        
-        {/* Chart Container */}
-        <div 
-          ref={chartContainerRef} 
-          className="w-full h-[400px]" 
-        />
-      </CardContent>
-    </Card>
+    <div className="w-full h-full relative" data-tour="chart">
+      {/* Loading Overlay */}
+      {(loading && !data) && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 backdrop-blur-md">
+          <Skeleton className="w-full h-full bg-white/5" />
+        </div>
+      )}
+      
+      {/* Chart Container */}
+      <div 
+        ref={chartContainerRef} 
+        className="w-full h-full absolute inset-0" 
+      />
+    </div>
   );
 }
