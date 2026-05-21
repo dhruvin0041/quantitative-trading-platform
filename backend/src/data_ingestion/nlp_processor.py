@@ -6,54 +6,63 @@ import os
 import google.generativeai as genai
 
 
+import time
+import json
+import re
+
 class GeminiAnalyzer:
     def __init__(self, api_key=None):
         api_key = api_key or os.getenv("GOOGLE_API_KEY")
         if api_key:
             genai.configure(api_key=api_key)
-            self.model = genai.GenerativeModel("gemini-1.5-flash")
+            # Use 2.0 Flash - free tier, fast, best choice
+            self.model = genai.GenerativeModel("gemini-2.0-flash")
             self.active = True
         else:
             self.active = False
 
     def analyze_fundamental_alpha(self, news_context: str, ticker: str):
         """
-        Uses Gemini to perform qualitative alpha extraction.
-        Specifically looks for 'moving targets' (performance metric shifts).
+        Uses Gemini to perform qualitative alpha extraction with retry logic for free tier.
         """
         if not self.active:
-            return 0.0, "Gemini API Key missing. Skipping qualitative analysis."
+            return 0.0, "Qualitative analysis unavailable"
 
         prompt = f"""
         Act as an institutional quantitative analyst. Analyze the following news and SEC filing context for {ticker}:
-        
+
         '{news_context}'
-        
+
         Task:
         1. Identify any 'moving targets' (Is the company shifting focus from one metric to another?).
         2. Identify hidden litigious risks or uncertainty language.
         3. Rate the 'Qualitative Alpha' from -1.0 (Strong Negative Narrative) to 1.0 (Strong Positive Narrative).
-        
+
         Return ONLY a JSON object with:
         {{"score": float, "reasoning": "string (max 15 words)"}}
         """
-        try:
-            response = self.model.generate_content(prompt)
-            # Simple extraction from JSON string
-            text = response.text
-            import json
-            import re
 
-            match = re.search(r"\{.*\}", text, re.DOTALL)
-            if match:
-                data = json.loads(match.group())
-                return float(data.get("score", 0.0)), data.get(
-                    "reasoning", "Analysis complete."
-                )
-            return 0.0, "Could not parse LLM response."
-        except Exception as e:
-            return 0.0, f"Gemini Error: {str(e)}"
+        max_retries = 2
+        for attempt in range(max_retries + 1):
+            try:
+                response = self.model.generate_content(prompt)
+                text = response.text
 
+                match = re.search(r"\{.*\}", text, re.DOTALL)
+                if match:
+                    data = json.loads(match.group())
+                    return float(data.get("score", 0.0)), data.get(
+                        "reasoning", "Analysis complete."
+                    )
+                return 0.0, "Qualitative analysis unavailable"
+            except Exception as e:
+                err_msg = str(e)
+                if "429" in err_msg and attempt < max_retries:
+                    time.sleep(5) # Wait 5 seconds as requested for rate limits
+                    continue
+                return 0.0, "Qualitative analysis unavailable"
+
+        return 0.0, "Qualitative analysis unavailable"
 
 class NewsTokenizer:
     def __init__(self, max_length=128):

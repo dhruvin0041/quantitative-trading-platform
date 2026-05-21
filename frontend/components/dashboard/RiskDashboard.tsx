@@ -12,18 +12,18 @@ export function RiskDashboard() {
   ];
 
   return (
-    <div className="glass-panel rounded-xl flex flex-col overflow-hidden group hover:border-[var(--signal-sell)]/30 transition-colors">
-      <div className="bg-black/40 border-b border-white/5 px-4 py-2 flex items-center justify-between">
+    <div className="glass-panel rounded-xl flex flex-col overflow-hidden group transition-all duration-300">
+      <div className="bg-secondary/50 dark:bg-black/40 border-b border-border px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <ShieldAlert className="w-3.5 h-3.5 text-[var(--signal-sell)]" />
+          <ShieldAlert className="w-3.5 h-3.5 text-primary" />
           <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Risk Management</h3>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="relative flex h-1.5 w-1.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--signal-sell)] opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[var(--signal-sell)]"></span>
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary"></span>
           </span>
-          <span className="text-[9px] font-mono opacity-50 uppercase tracking-widest">Armed</span>
+          <span className="text-[9px] font-mono font-bold opacity-60 uppercase tracking-widest text-primary dark:text-foreground">Armed</span>
         </div>
       </div>
       <div className="p-4 grid grid-cols-2 gap-3">
@@ -33,10 +33,10 @@ export function RiskDashboard() {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: i * 0.1, duration: 0.3 }}
-            className={`flex flex-col gap-1 p-2.5 bg-black/20 rounded-lg border border-white/5 hover:bg-black/40 transition-colors ${i === riskMetrics.length - 1 ? 'col-span-2 text-center items-center' : ''}`}
+            className={`flex flex-col gap-1 p-2.5 bg-muted/30 dark:bg-black/20 rounded-lg border border-border hover:bg-muted/50 dark:hover:bg-black/40 transition-colors ${i === riskMetrics.length - 1 ? 'col-span-2 text-center items-center' : ''}`}
           >
-            <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider">{metric.label}</span>
-            <span className={`text-base font-mono font-bold ${metric.isDanger ? 'text-[var(--signal-sell)]' : 'text-foreground'}`}>
+            <span className="text-[9px] text-muted-foreground uppercase font-black tracking-wider">{metric.label}</span>
+            <span className={`text-base font-mono font-black ${metric.isDanger ? 'text-[var(--signal-sell)]' : 'text-primary dark:text-foreground'}`}>
               {metric.value}
             </span>
           </motion.div>

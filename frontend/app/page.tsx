@@ -75,7 +75,6 @@ export default function HydraTerminal() {
     return universe.map((stock, i) => ({
       ...stock,
       // Use stable pseudo-random values based on ticker string/index for terminal feel
-      // Handle single-character tickers (like 'T') by using fallback character code
       isPositive: (stock.ticker.charCodeAt(0) + i) % 2 === 0,
       change: (((stock.ticker.charCodeAt(0) + (stock.ticker.length > 1 ? stock.ticker.charCodeAt(1) : 0)) % 20) / 10).toFixed(2)
     }));
@@ -92,9 +91,9 @@ export default function HydraTerminal() {
         <div className="flex items-center gap-4">
           <button 
             onClick={() => setSidebarOpen(!isSidebarOpen)}
-            className="p-1.5 hover:bg-white/5 rounded-md transition-colors"
+            className="p-1.5 hover:bg-secondary rounded-md transition-colors text-foreground"
           >
-            <Menu className="w-5 h-5 opacity-70" />
+            <Menu className="w-5 h-5" />
           </button>
           <div className="flex items-center gap-2">
             <Cpu className="w-5 h-5 text-primary" />
@@ -102,11 +101,11 @@ export default function HydraTerminal() {
           </div>
           
           <div 
-            className="hidden md:flex ml-6 h-8 bg-secondary/50 rounded-md border border-border/50 flex items-center px-3 gap-2 w-64 cursor-text hover:bg-secondary transition-colors" 
+            className="hidden md:flex ml-6 h-8 bg-secondary/50 rounded-md border border-border flex items-center px-3 gap-2 w-64 cursor-text hover:bg-secondary transition-colors" 
             onClick={() => window.dispatchEvent(new CustomEvent('hydra-open-command'))}
           >
-            <Search className="w-4 h-4 opacity-50 text-foreground" />
-            <span className="text-xs opacity-50 font-mono text-foreground">⌘K to search assets...</span>
+            <Search className="w-4 h-4 text-muted-foreground" />
+            <span className="text-xs font-mono text-muted-foreground">⌘K to search assets...</span>
           </div>
         </div>
 
@@ -117,9 +116,9 @@ export default function HydraTerminal() {
               <span className="text-[10px] font-mono uppercase tracking-widest font-bold">Processing</span>
             </div>
           ) : (
-            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-green-500">
-              <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]" />
-              <span className="text-[10px] font-mono uppercase tracking-widest font-bold">System Online</span>
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--secondary)] border border-[var(--signal-buy)]/30 text-[var(--signal-buy)] dark:bg-green-500/10 dark:border-green-500/20 dark:text-green-500 shadow-sm">
+              <div className="w-2 h-2 rounded-full bg-[var(--signal-buy)] shadow-[0_0_8px_rgba(29,122,58,0.5)] dark:bg-green-500 dark:shadow-[0_0_8px_rgba(34,197,94,0.8)]" />
+              <span className="text-[10px] font-mono uppercase tracking-widest font-black">System Online</span>
             </div>
           )}
           <CommandMenu />
@@ -128,8 +127,8 @@ export default function HydraTerminal() {
       </header>
 
       {/* LIVE TICKER TAPE */}
-      <div className="h-8 shrink-0 border-b border-border bg-card/40 flex items-center overflow-hidden relative">
-        <div className="flex gap-8 whitespace-nowrap animate-ticker text-[11px] font-mono font-medium opacity-80">
+      <div className="h-8 shrink-0 border-b border-border bg-secondary/30 flex items-center overflow-hidden relative">
+        <div className="flex gap-8 whitespace-nowrap animate-ticker text-[11px] font-mono font-medium opacity-90">
           {tickerData.map((stock, i) => (
             <span key={i} className="flex items-center gap-2">
               <span className="text-foreground font-bold">{stock.ticker}</span>
@@ -161,7 +160,7 @@ export default function HydraTerminal() {
         <motion.aside 
           initial={false}
           animate={{ width: isSidebarOpen ? 280 : 0, opacity: isSidebarOpen ? 1 : 0 }}
-          className="shrink-0 border-r border-white/5 bg-card/30 overflow-y-auto hide-scrollbar flex flex-col"
+          className="shrink-0 border-r border-border bg-background overflow-y-auto hide-scrollbar flex flex-col"
         >
           <div className="p-4 w-[280px]">
             <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4">Coverage Universe</h3>
@@ -173,8 +172,8 @@ export default function HydraTerminal() {
                   className={cn(
                     "flex items-center justify-between px-3 py-2 rounded-md text-sm transition-all border border-transparent",
                     ticker === stock.ticker 
-                      ? "bg-primary/10 border-primary/30 text-primary font-bold shadow-[inset_2px_0_0_var(--primary)]" 
-                      : "hover:bg-white/5 text-muted-foreground hover:text-foreground"
+                      ? "bg-primary border-primary text-primary-foreground font-bold shadow-lg dark:bg-primary/10 dark:text-primary dark:shadow-none" 
+                      : "hover:bg-secondary text-muted-foreground hover:text-foreground dark:hover:bg-white/5"
                   )}
                 >
                   <div className="flex flex-col items-start text-left">
@@ -188,14 +187,14 @@ export default function HydraTerminal() {
 
             <div className="mt-8">
                <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4">Macro Environment</h3>
-               <div className="p-3 rounded-lg border border-border/50 bg-black/20 flex flex-col gap-2">
+               <div className="p-3 rounded-lg border border-border bg-secondary/50 dark:bg-black/20 flex flex-col gap-2">
                  <div className="flex justify-between items-center">
                    <span className="text-xs text-muted-foreground">Regime</span>
-                   <span className="text-xs font-mono font-bold text-[var(--signal-buy)]">RISK-ON</span>
+                   <span className="text-xs font-mono font-bold text-[var(--signal-buy)] uppercase">Risk-On</span>
                  </div>
                  <div className="flex justify-between items-center">
-                   <span className="text-xs text-muted-foreground">VIX</span>
-                   <span className="text-xs font-mono font-bold">14.22</span>
+                   <span className="text-xs text-muted-foreground font-sans">VIX Index</span>
+                   <span className="text-xs font-mono font-bold text-foreground">14.22</span>
                  </div>
                </div>
             </div>
@@ -203,23 +202,23 @@ export default function HydraTerminal() {
         </motion.aside>
 
         {/* CENTER WORKSPACE - CHART & SIGNALS */}
-        <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-background">
+        <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-muted/20 dark:bg-background">
           
           {/* Header Status Strip */}
-          <div className="h-16 border-b border-border shrink-0 flex items-center justify-between px-6">
+          <div className="h-16 border-b border-border shrink-0 flex items-center justify-between px-6 bg-background">
             <div className="flex items-center gap-4 text-foreground">
-              <h2 className="text-3xl font-bold font-sans tracking-tight">{ticker}</h2>
+              <h2 className="text-3xl font-bold tracking-tight">{ticker}</h2>
               {chartData && !loading && (
                 <div className="flex items-center gap-2">
                   <span className={cn(
-                    "px-2 py-0.5 text-xs font-bold rounded-sm uppercase tracking-wider",
-                    primaryAction === 'BUY' ? "bg-[var(--signal-buy)]/20 text-[var(--signal-buy)]" :
-                    primaryAction === 'SELL' ? "bg-[var(--signal-sell)]/20 text-[var(--signal-sell)]" :
-                    "bg-[var(--signal-hold)]/20 text-[var(--signal-hold)]"
+                    "px-3 py-1 text-xs font-black rounded-full border-2 uppercase tracking-widest shadow-sm",
+                    primaryAction === 'BUY' ? "bg-[var(--signal-buy)] border-[var(--signal-buy)] text-white" :
+                    primaryAction === 'SELL' ? "bg-[var(--signal-sell)] border-[var(--signal-sell)] text-white" :
+                    "bg-[var(--signal-hold)] border-[var(--signal-hold)] text-white"
                   )}>
                     {primaryAction}
                   </span>
-                  <span className="font-mono text-sm opacity-70">{confidence} CONF</span>
+                  <span className="font-mono text-sm font-bold opacity-70">{confidence} CONF</span>
                 </div>
               )}
             </div>
@@ -236,7 +235,7 @@ export default function HydraTerminal() {
 
           {/* Chart Section */}
           <div className="flex-1 min-h-[400px] relative p-4 pb-0">
-            <div className="absolute inset-4 rounded-xl border border-white/5 overflow-hidden glass-surface shadow-2xl">
+            <div className="absolute inset-4 rounded-xl border border-border overflow-hidden bg-card shadow-2xl">
                <PriceChart data={chartData} loading={loading} />
             </div>
           </div>
@@ -249,7 +248,7 @@ export default function HydraTerminal() {
         </main>
 
         {/* RIGHT SIDEBAR - ANALYTICS */}
-        <aside className="w-[360px] shrink-0 border-l border-white/5 bg-card/30 overflow-y-auto hide-scrollbar flex flex-col p-4 gap-4">
+        <aside className="w-[360px] shrink-0 border-l border-border bg-background overflow-y-auto hide-scrollbar flex flex-col p-4 gap-4">
           <PortfolioAnalytics data={chartData} />
           <RiskDashboard />
           <PerformanceValidation />

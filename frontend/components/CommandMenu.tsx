@@ -61,11 +61,11 @@ export function CommandMenu() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 px-3 py-1.5 text-[10px] uppercase tracking-widest font-black text-muted-foreground bg-white/5 border border-white/10 rounded-md hover:bg-white/10 hover:text-foreground transition-all cursor-pointer"
+        className="flex items-center gap-2 px-3 py-1.5 text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer bg-primary text-white border border-primary/50 shadow-md hover:bg-[var(--accent-hover)] dark:bg-white/5 dark:text-muted-foreground dark:border-white/10 dark:shadow-none dark:hover:bg-white/10 dark:hover:text-foreground rounded-md"
       >
         <CommandIcon className="w-3 h-3" />
         <span className="hidden sm:inline">Terminal Command</span>
-        <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border border-white/10 bg-black/40 px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
+        <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border border-white/20 bg-black/20 px-1.5 font-mono text-[10px] font-medium text-white dark:text-muted-foreground opacity-100">
           <span className="text-xs">⌘</span>K
         </kbd>
       </button>

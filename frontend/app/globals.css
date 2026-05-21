@@ -1,5 +1,5 @@
 /* Technical Typography Import - MUST BE AT THE TOP */
-@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap');
 
 @import "tailwindcss";
 @import "tw-animate-css";
@@ -12,7 +12,7 @@
   --color-foreground: var(--foreground);
   --font-sans: "Fira Sans", var(--font-sans);
   --font-mono: "Fira Code", var(--font-geist-mono);
-  --font-heading: "Fira Sans", var(--font-sans);
+  --font-heading: var(--font-heading);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -52,49 +52,51 @@
 }
 
 :root {
-  --background: #ffffff;
-  --foreground: #000000; /* Absolute Black for max contrast */
-  --card: #ffffff;
-  --card-foreground: #000000;
-  --popover: #ffffff;
-  --popover-foreground: #000000;
-  --primary: #0047bb; /* High-Contrast Banking Blue */
-  --primary-foreground: #ffffff;
-  --secondary: #f3f4f6;
-  --secondary-foreground: #000000;
-  --muted: #f3f4f6;
-  --muted-foreground: #333333; /* Dark muted text */
-  --accent: #f3f4f6;
-  --accent-foreground: #000000;
-  --destructive: #cc0000;
-  --destructive-foreground: #ffffff;
-  --border: #d1d5db; /* High-contrast slate border for light mode */
-  --input: #d1d5db;
-  --ring: #0047bb;
-  --chart-1: #0047bb;
-  --chart-2: #007d32;
-  --chart-3: #9e6a00;
-  --chart-4: #cc0000;
-  --chart-5: #333333;
+  --background: #FDFAF5; /* Warm Off-White */
+  --foreground: #1A1208; /* Warm Near-Black */
+  --card: #FFFFFF;
+  --card-foreground: #1A1208;
+  --popover: #FFFFFF;
+  --popover-foreground: #1A1208;
+  --primary: #E8650A; /* Deep Orange */
+  --primary-foreground: #FFFFFF;
+  --secondary: #FFF4E6; /* Soft Cream */
+  --secondary-foreground: #1A1208;
+  --muted: #FFF9F0; /* Near White */
+  --muted-foreground: #5C3D1E; /* Warm Brown-Gray */
+  --accent: #FFF4E6;
+  --accent-foreground: #1A1208;
+  --destructive: #C0380A; /* Burnt Orange-Red */
+  --destructive-foreground: #FFFFFF;
+  --border: #F0D9BC; /* Warm Beige */
+  --input: #F0D9BC;
+  --ring: #E8650A;
+  --chart-1: #E8650A;
+  --chart-2: #1D7A3A; /* Forest Green */
+  --chart-3: #FF8C38; /* Vibrant Orange */
+  --chart-4: #C0380A;
+  --chart-5: #5C3D1E;
   --radius: 0.5rem;
-  --sidebar: #fafafa;
-  --sidebar-foreground: #000000;
-  --sidebar-primary: #0047bb;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f3f4f6;
-  --sidebar-accent-foreground: #000000;
-  --sidebar-border: #d1d5db;
-  --sidebar-ring: #0047bb;
+  --sidebar: #FDFAF5;
+  --sidebar-foreground: #1A1208;
+  --sidebar-primary: #E8650A;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #FFF4E6;
+  --sidebar-accent-foreground: #1A1208;
+  --sidebar-border: #F0D9BC;
+  --sidebar-ring: #E8650A;
   
-  --signal-buy: #007d32;
-  --signal-sell: #cc0000;
-  --signal-hold: #9e6a00;
-  --signal-info: #0047bb;
+  --signal-buy: #1D7A3A;
+  --signal-sell: #C0380A;
+  --signal-hold: #FF8C38;
+  --signal-info: #E8650A;
 
-  --shadow-institutional: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --glow-primary: 0 0 10px rgba(0, 71, 187, 0.1);
-  --glow-buy: 0 0 10px rgba(0, 125, 50, 0.1);
-  --glow-sell: 0 0 10px rgba(204, 0, 0, 0.1);
+  --font-heading: "Instrument Serif", serif;
+
+  --shadow-institutional: 0 2px 8px rgba(232, 101, 10, 0.08);
+  --glow-primary: 0 0 15px rgba(232, 101, 10, 0.15);
+  --glow-buy: 0 0 15px rgba(29, 122, 58, 0.15);
+  --glow-sell: 0 0 15px rgba(192, 56, 10, 0.15);
 }
 
 .dark {
@@ -136,6 +138,8 @@
   --signal-hold: #f59e0b;
   --signal-info: #3b82f6;
 
+  --font-heading: "Fira Sans", sans-serif;
+
   --shadow-institutional: 0 4px 20px -2px rgba(0, 0, 0, 0.8), 0 0 3px rgba(255, 255, 255, 0.05) inset;
   --glow-primary: 0 0 20px rgba(59, 130, 246, 0.3);
   --glow-buy: 0 0 20px rgba(16, 185, 129, 0.3);
@@ -144,10 +148,10 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring/50 transition-colors duration-200;
   }
   body {
-    @apply bg-background text-foreground relative antialiased overscroll-none;
+    @apply bg-background text-foreground relative antialiased overscroll-none transition-colors duration-200;
   }
   
   /* Institutional Grain Overlay */
@@ -158,7 +162,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    opacity: 0.02; /* Reduced for cleaner look */
+    opacity: 0.03;
     z-index: 100;
     pointer-events: none;
     background-image: url("https://grainy-gradients.vercel.app/noise.svg");
@@ -168,11 +172,15 @@
   html {
     @apply font-sans;
   }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading;
+  }
 }
 
 @layer utilities {
   .glass-panel {
-    @apply bg-card/70 backdrop-blur-xl border border-border shadow-[var(--shadow-institutional)];
+    @apply bg-card/70 backdrop-blur-xl border border-border shadow-[var(--shadow-institutional)] hover:border-[var(--chart-3)] transition-all duration-300;
   }
   .glass-header {
     @apply bg-background/90 backdrop-blur-2xl border-b border-border;
@@ -199,11 +207,11 @@
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-transparent;
+  @apply bg-secondary;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-foreground/20 rounded-full hover:bg-foreground/30 transition-colors;
+  @apply bg-primary/40 rounded-full hover:bg-primary transition-colors;
 }
 
 /* Ticker Animation */

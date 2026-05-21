@@ -24,12 +24,12 @@ export function PriceChart({ data, loading }: PriceChartProps) {
     const isDark = document.documentElement.classList.contains('dark');
     
     // Light theme defaults based on the new Design System
-    const bgColor = isDark ? '#000000' : '#F8FAFC';
-    const textColor = isDark ? '#94A3B8' : '#64748B';
-    const gridColor = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(15,23,42,0.05)';
-    const buyColor = '#10B981';
-    const sellColor = '#F43F5E';
-    const bbColor = '#3B82F6'; // Analytics Blue
+    const bgColor = isDark ? '#000000' : '#FFFFFF';
+    const textColor = isDark ? '#94A3B8' : '#5C3D1E';
+    const gridColor = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(240,217,188,0.2)';
+    const buyColor = isDark ? '#10B981' : '#1D7A3A';
+    const sellColor = isDark ? '#F43F5E' : '#C0380A';
+    const accentColor = isDark ? '#3B82F6' : '#E8650A';
 
     const chart = createChart(chartContainerRef.current, {
       layout: {
@@ -43,6 +43,8 @@ export function PriceChart({ data, loading }: PriceChartProps) {
       },
       crosshair: {
         mode: CrosshairMode.Normal,
+        vertLine: { color: accentColor, labelBackgroundColor: accentColor },
+        horzLine: { color: accentColor, labelBackgroundColor: accentColor },
       },
       timeScale: {
         borderColor: gridColor,
@@ -64,8 +66,8 @@ export function PriceChart({ data, loading }: PriceChartProps) {
       wickDownColor: sellColor,
     });
 
-    bbUpperSeriesRef.current = chart.addSeries(LineSeries, { color: bbColor, lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false });
-    bbLowerSeriesRef.current = chart.addSeries(LineSeries, { color: bbColor, lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false });
+    bbUpperSeriesRef.current = chart.addSeries(LineSeries, { color: accentColor, lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false });
+    bbLowerSeriesRef.current = chart.addSeries(LineSeries, { color: accentColor, lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false });
     ribbonUpperSeriesRef.current = chart.addSeries(LineSeries, { color: buyColor, lineWidth: 1, crosshairMarkerVisible: false });
     ribbonLowerSeriesRef.current = chart.addSeries(LineSeries, { color: sellColor, lineWidth: 1, crosshairMarkerVisible: false });
 
