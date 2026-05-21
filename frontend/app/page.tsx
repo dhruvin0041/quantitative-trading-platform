@@ -100,9 +100,12 @@ export default function HydraTerminal() {
             <span className="font-mono font-bold tracking-tight text-lg hidden sm:inline-block">HYDRA<span className="text-muted-foreground font-light">|TERMINAL</span></span>
           </div>
           
-          <div className="hidden md:flex ml-6 h-8 bg-secondary/50 rounded-md border border-border/50 flex items-center px-3 gap-2 w-64 cursor-text" onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}>
-            <Search className="w-4 h-4 opacity-50" />
-            <span className="text-xs opacity-50 font-mono">⌘K to search assets...</span>
+          <div 
+            className="hidden md:flex ml-6 h-8 bg-secondary/50 rounded-md border border-border/50 flex items-center px-3 gap-2 w-64 cursor-text hover:bg-secondary transition-colors" 
+            onClick={() => window.dispatchEvent(new CustomEvent('hydra-open-command'))}
+          >
+            <Search className="w-4 h-4 opacity-50 text-foreground" />
+            <span className="text-xs opacity-50 font-mono text-foreground">⌘K to search assets...</span>
           </div>
         </div>
 
@@ -124,11 +127,11 @@ export default function HydraTerminal() {
       </header>
 
       {/* LIVE TICKER TAPE */}
-      <div className="h-8 shrink-0 border-b border-white/5 bg-black/40 flex items-center overflow-hidden relative">
+      <div className="h-8 shrink-0 border-b border-border bg-card/40 flex items-center overflow-hidden relative">
         <div className="flex gap-8 whitespace-nowrap animate-ticker text-[11px] font-mono font-medium opacity-80">
           {tickerData.map((stock, i) => (
             <span key={i} className="flex items-center gap-2">
-              <span className="text-white">{stock.ticker}</span>
+              <span className="text-foreground font-bold">{stock.ticker}</span>
               <span className={stock.isPositive ? "text-[var(--signal-buy)]" : "text-[var(--signal-sell)]"}>
                 {stock.isPositive ? "+" : "-"}{stock.change}%
               </span>
@@ -138,7 +141,7 @@ export default function HydraTerminal() {
           {/* Duplicate for infinite scroll illusion */}
           {tickerData.map((stock, i) => (
             <span key={`dup-${i}`} className="flex items-center gap-2">
-              <span className="text-white">{stock.ticker}</span>
+              <span className="text-foreground font-bold">{stock.ticker}</span>
               <span className={stock.isPositive ? "text-[var(--signal-buy)]" : "text-[var(--signal-sell)]"}>
                 {stock.isPositive ? "+" : "-"}{stock.change}%
               </span>
@@ -146,8 +149,8 @@ export default function HydraTerminal() {
             </span>
           ))}
         </div>
-        <div className="absolute top-0 left-0 h-full w-24 bg-gradient-to-r from-background to-transparent z-10" />
-        <div className="absolute top-0 right-0 h-full w-24 bg-gradient-to-l from-background to-transparent z-10" />
+        <div className="absolute top-0 left-0 h-full w-24 bg-gradient-to-r from-background to-transparent z-10 pointer-events-none" />
+        <div className="absolute top-0 right-0 h-full w-24 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none" />
       </div>
 
       {/* MAIN WORKSPACE */}

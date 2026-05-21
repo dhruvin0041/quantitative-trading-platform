@@ -35,20 +35,33 @@ export function CommandMenu() {
       }
     }
 
+    const openCommand = () => setOpen(true)
+
     document.addEventListener("keydown", down)
-    return () => document.removeEventListener("keydown", down)
+    window.addEventListener("hydra-open-command", openCommand)
+    
+    return () => {
+      document.removeEventListener("keydown", down)
+      window.removeEventListener("hydra-open-command", openCommand)
+    }
   }, [])
 
   const runCommand = React.useCallback((command: () => void) => {
     setOpen(false)
-    command()
+    // Wrap in try-catch to prevent component crashes on bad command execution
+    try {
+      command()
+    } catch (err) {
+      console.error("Command execution failed", err)
+      toast.error("Failed to execute command.")
+    }
   }, [])
 
   return (
     <>
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 px-3 py-1.5 text-[10px] uppercase tracking-widest font-black text-muted-foreground bg-white/5 border border-white/10 rounded-md hover:bg-white/10 hover:text-foreground transition-all"
+        className="flex items-center gap-2 px-3 py-1.5 text-[10px] uppercase tracking-widest font-black text-muted-foreground bg-white/5 border border-white/10 rounded-md hover:bg-white/10 hover:text-foreground transition-all cursor-pointer"
       >
         <CommandIcon className="w-3 h-3" />
         <span className="hidden sm:inline">Terminal Command</span>
@@ -57,34 +70,34 @@ export function CommandMenu() {
         </kbd>
       </button>
       <CommandDialog open={open} onOpenChange={setOpen}>
-        <CommandInput placeholder="Execute command..." className="font-mono" />
-        <CommandList className="font-sans border-t border-white/5 bg-black/90 backdrop-blur-xl">
-          <CommandEmpty className="py-6 text-center text-xs font-mono opacity-50 uppercase tracking-widest">No matching command sequence.</CommandEmpty>
-          <CommandGroup heading="Intelligence Actions">
-            <CommandItem onSelect={() => runCommand(() => toast.info("Generating performance report..."))} className="py-3">
+        <CommandInput placeholder="Execute protocol..." className="font-mono" />
+        <CommandList className="font-sans border-t border-white/5 bg-black/95 backdrop-blur-xl">
+          <CommandEmpty className="py-6 text-center text-xs font-mono opacity-50 uppercase tracking-widest">Protocol not found.</CommandEmpty>
+          <CommandGroup heading="Intelligence & Data">
+            <CommandItem onSelect={() => runCommand(() => toast.info("Compiling analytics..."))} className="py-3">
               <Download className="mr-3 h-4 w-4 opacity-70" />
-              <span className="text-sm font-medium">Export Terminal State</span>
+              <span className="text-sm font-medium text-foreground">Export Environment Snapshot</span>
               <CommandShortcut className="font-mono text-[10px]">⌘E</CommandShortcut>
             </CommandItem>
-            <CommandItem onSelect={() => runCommand(() => toast.success("Terminal layout synchronized"))} className="py-3">
+            <CommandItem onSelect={() => runCommand(() => toast.success("Matrix synchronized"))} className="py-3">
               <LayoutTemplate className="mr-3 h-4 w-4 opacity-70" />
-              <span className="text-sm font-medium">Synchronize Layout</span>
+              <span className="text-sm font-medium text-foreground">Synchronize Display Matrix</span>
               <CommandShortcut className="font-mono text-[10px]">⌘S</CommandShortcut>
             </CommandItem>
           </CommandGroup>
           <CommandSeparator className="bg-white/5" />
-          <CommandGroup heading="System Protocols">
+          <CommandGroup heading="System Parameters">
             <CommandItem onSelect={() => runCommand(() => setTheme("light"))} className="py-3">
               <Sun className="mr-3 h-4 w-4 opacity-70" />
-              <span className="text-sm font-medium">Switch to Light Protocol</span>
+              <span className="text-sm font-medium text-foreground">Protocol: LIGHT</span>
             </CommandItem>
             <CommandItem onSelect={() => runCommand(() => setTheme("dark"))} className="py-3">
               <Moon className="mr-3 h-4 w-4 opacity-70" />
-              <span className="text-sm font-medium">Switch to Dark Protocol (OLED)</span>
+              <span className="text-sm font-medium text-foreground">Protocol: DARK (OLED)</span>
             </CommandItem>
             <CommandItem onSelect={() => runCommand(() => setTheme("system"))} className="py-3">
               <Laptop className="mr-3 h-4 w-4 opacity-70" />
-              <span className="text-sm font-medium">Follow System OS</span>
+              <span className="text-sm font-medium text-foreground">Protocol: SYSTEM</span>
             </CommandItem>
           </CommandGroup>
         </CommandList>
@@ -92,4 +105,5 @@ export function CommandMenu() {
     </>
   )
 }
+
 

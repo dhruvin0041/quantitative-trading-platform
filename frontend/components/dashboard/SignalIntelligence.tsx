@@ -4,6 +4,8 @@ import { Cpu, AlertTriangle, Newspaper } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
+import { Variants } from 'framer-motion';
+
 interface SignalIntelligenceProps {
   data: ChartData | null;
 }
@@ -23,7 +25,7 @@ export function SignalIntelligence({ data }: SignalIntelligenceProps) {
     return 'text-[var(--signal-hold)] border-[var(--signal-hold)]/30 bg-[var(--signal-hold)]/10';
   };
 
-  const container = {
+  const container: Variants = {
     hidden: { opacity: 0 },
     show: {
       opacity: 1,
@@ -31,9 +33,13 @@ export function SignalIntelligence({ data }: SignalIntelligenceProps) {
     }
   };
 
-  const item = {
+  const item: Variants = {
     hidden: { opacity: 0, y: 10 },
-    show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
+    show: { 
+      opacity: 1, 
+      y: 0, 
+      transition: { type: "spring", stiffness: 300, damping: 24 } 
+    }
   };
 
   return (

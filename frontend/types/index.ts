@@ -39,6 +39,8 @@ export interface Portfolio {
 }
 
 export interface ChartData {
+  ticker: string;
+  price: number;
   candles: { time: string; open: number; high: number; low: number; close: number }[];
   clouds: { time: string; ribbon_upper: number; ribbon_lower: number; bb_upper: number; bb_lower: number }[];
   ai_report: AIReport;
