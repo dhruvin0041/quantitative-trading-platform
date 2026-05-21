@@ -5,7 +5,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:is([data-theme="dark"] *));
 
 @theme inline {
   --color-background: var(--background);
@@ -51,7 +51,7 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-:root {
+:root, [data-theme="light"] {
   --background: #FDFAF5; /* Warm Off-White */
   --foreground: #1A1208; /* Warm Near-Black */
   --card: #FFFFFF;
@@ -99,7 +99,7 @@
   --glow-sell: 0 0 15px rgba(192, 56, 10, 0.15);
 }
 
-.dark {
+[data-theme="dark"] {
   --background: #000000; /* OLED Black */
   --foreground: #f8fafc;
   --card: #080808;

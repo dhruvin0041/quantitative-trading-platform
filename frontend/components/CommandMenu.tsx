@@ -57,6 +57,12 @@ export function CommandMenu() {
     }
   }, [])
 
+  const toggleTheme = (newTheme: string) => {
+    setTheme(newTheme)
+    document.documentElement.setAttribute('data-theme', newTheme)
+    localStorage.setItem('theme', newTheme)
+  }
+
   return (
     <>
       <button
@@ -87,15 +93,15 @@ export function CommandMenu() {
           </CommandGroup>
           <CommandSeparator className="bg-border" />
           <CommandGroup heading="System Parameters">
-            <CommandItem onSelect={() => runCommand(() => setTheme("light"))} className="py-3">
+            <CommandItem onSelect={() => runCommand(() => toggleTheme("light"))} className="py-3">
               <Sun className="mr-3 h-4 w-4 opacity-70" />
               <span className="text-sm font-medium text-foreground">Protocol: LIGHT</span>
             </CommandItem>
-            <CommandItem onSelect={() => runCommand(() => setTheme("dark"))} className="py-3">
+            <CommandItem onSelect={() => runCommand(() => toggleTheme("dark"))} className="py-3">
               <Moon className="mr-3 h-4 w-4 opacity-70" />
               <span className="text-sm font-medium text-foreground">Protocol: DARK (OLED)</span>
             </CommandItem>
-            <CommandItem onSelect={() => runCommand(() => setTheme("system"))} className="py-3">
+            <CommandItem onSelect={() => runCommand(() => toggleTheme("system"))} className="py-3">
               <Laptop className="mr-3 h-4 w-4 opacity-70" />
               <span className="text-sm font-medium text-foreground">Protocol: SYSTEM</span>
             </CommandItem>

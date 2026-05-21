@@ -127,11 +127,11 @@ export default function HydraTerminal() {
       </header>
 
       {/* LIVE TICKER TAPE */}
-      <div className="h-8 shrink-0 border-b border-border bg-secondary/30 flex items-center overflow-hidden relative">
-        <div className="flex gap-8 whitespace-nowrap animate-ticker text-[11px] font-mono font-medium opacity-90">
+      <div className="h-8 shrink-0 border-b border-border bg-secondary flex items-center overflow-hidden relative">
+        <div className="flex gap-8 whitespace-nowrap animate-ticker text-[11px] font-mono font-medium opacity-100">
           {tickerData.map((stock, i) => (
             <span key={i} className="flex items-center gap-2">
-              <span className="text-foreground font-bold">{stock.ticker}</span>
+              <span className="text-foreground font-bold tracking-tight">{stock.ticker}</span>
               <span className={stock.isPositive ? "text-[var(--signal-buy)]" : "text-[var(--signal-sell)]"}>
                 {stock.isPositive ? "+" : "-"}{stock.change}%
               </span>
@@ -141,7 +141,7 @@ export default function HydraTerminal() {
           {/* Duplicate for infinite scroll illusion */}
           {tickerData.map((stock, i) => (
             <span key={`dup-${i}`} className="flex items-center gap-2">
-              <span className="text-foreground font-bold">{stock.ticker}</span>
+              <span className="text-foreground font-bold tracking-tight">{stock.ticker}</span>
               <span className={stock.isPositive ? "text-[var(--signal-buy)]" : "text-[var(--signal-sell)]"}>
                 {stock.isPositive ? "+" : "-"}{stock.change}%
               </span>
@@ -149,8 +149,8 @@ export default function HydraTerminal() {
             </span>
           ))}
         </div>
-        <div className="absolute top-0 left-0 h-full w-24 bg-gradient-to-r from-background to-transparent z-10 pointer-events-none" />
-        <div className="absolute top-0 right-0 h-full w-24 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none" />
+        <div className="absolute top-0 left-0 h-full w-24 bg-gradient-to-r from-secondary to-transparent z-10 pointer-events-none" />
+        <div className="absolute top-0 right-0 h-full w-24 bg-gradient-to-l from-secondary to-transparent z-10 pointer-events-none" />
       </div>
 
       {/* MAIN WORKSPACE */}
@@ -160,7 +160,7 @@ export default function HydraTerminal() {
         <motion.aside 
           initial={false}
           animate={{ width: isSidebarOpen ? 280 : 0, opacity: isSidebarOpen ? 1 : 0 }}
-          className="shrink-0 border-r border-border bg-background overflow-y-auto hide-scrollbar flex flex-col"
+          className="shrink-0 border-r border-border bg-sidebar overflow-y-auto hide-scrollbar flex flex-col"
         >
           <div className="p-4 w-[280px]">
             <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4">Coverage Universe</h3>
@@ -172,13 +172,13 @@ export default function HydraTerminal() {
                   className={cn(
                     "flex items-center justify-between px-3 py-2 rounded-md text-sm transition-all border border-transparent",
                     ticker === stock.ticker 
-                      ? "bg-primary border-primary text-primary-foreground font-bold shadow-lg dark:bg-primary/10 dark:text-primary dark:shadow-none" 
+                      ? "bg-primary text-white font-bold shadow-md dark:bg-primary/10 dark:text-primary dark:shadow-none" 
                       : "hover:bg-secondary text-muted-foreground hover:text-foreground dark:hover:bg-white/5"
                   )}
                 >
                   <div className="flex flex-col items-start text-left">
                     <span className="font-mono">{stock.ticker}</span>
-                    <span className="text-[10px] opacity-70 truncate w-32">{stock.name}</span>
+                    <span className="text-[10px] font-medium opacity-70 truncate w-32">{stock.name}</span>
                   </div>
                   {ticker === stock.ticker && <ChevronRight className="w-4 h-4 opacity-50" />}
                 </button>

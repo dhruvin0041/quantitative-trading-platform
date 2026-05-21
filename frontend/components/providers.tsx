@@ -8,8 +8,8 @@ import { Toaster } from "@/components/ui/sonner"
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <NextThemesProvider
-      attribute="class"
-      defaultTheme="system"
+      attribute="data-theme"
+      defaultTheme="dark"
       enableSystem
       disableTransitionOnChange
     >
