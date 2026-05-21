@@ -60,16 +60,16 @@
   --popover-foreground: #000000;
   --primary: #0047bb; /* High-Contrast Banking Blue */
   --primary-foreground: #ffffff;
-  --secondary: #f0f2f5;
+  --secondary: #f3f4f6;
   --secondary-foreground: #000000;
-  --muted: #f0f2f5;
-  --muted-foreground: #1a1a1a; /* Dark muted text */
-  --accent: #f0f2f5;
+  --muted: #f3f4f6;
+  --muted-foreground: #333333; /* Dark muted text */
+  --accent: #f3f4f6;
   --accent-foreground: #000000;
   --destructive: #cc0000;
   --destructive-foreground: #ffffff;
-  --border: #cccccc; /* Very visible borders */
-  --input: #cccccc;
+  --border: #d1d5db; /* High-contrast slate border for light mode */
+  --input: #d1d5db;
   --ring: #0047bb;
   --chart-1: #0047bb;
   --chart-2: #007d32;
@@ -77,13 +77,13 @@
   --chart-4: #cc0000;
   --chart-5: #333333;
   --radius: 0.5rem;
-  --sidebar: #f8f9fa;
+  --sidebar: #fafafa;
   --sidebar-foreground: #000000;
   --sidebar-primary: #0047bb;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e9ecef;
+  --sidebar-accent: #f3f4f6;
   --sidebar-accent-foreground: #000000;
-  --sidebar-border: #cccccc;
+  --sidebar-border: #d1d5db;
   --sidebar-ring: #0047bb;
   
   --signal-buy: #007d32;
@@ -91,7 +91,7 @@
   --signal-hold: #9e6a00;
   --signal-info: #0047bb;
 
-  --shadow-institutional: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --shadow-institutional: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --glow-primary: 0 0 10px rgba(0, 71, 187, 0.1);
   --glow-buy: 0 0 10px rgba(0, 125, 50, 0.1);
   --glow-sell: 0 0 10px rgba(204, 0, 0, 0.1);
@@ -158,7 +158,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    opacity: 0.03;
+    opacity: 0.02; /* Reduced for cleaner look */
     z-index: 100;
     pointer-events: none;
     background-image: url("https://grainy-gradients.vercel.app/noise.svg");
@@ -172,10 +172,10 @@
 
 @layer utilities {
   .glass-panel {
-    @apply bg-card/60 backdrop-blur-xl border border-border shadow-[var(--shadow-institutional)];
+    @apply bg-card/70 backdrop-blur-xl border border-border shadow-[var(--shadow-institutional)];
   }
   .glass-header {
-    @apply bg-background/80 backdrop-blur-2xl border-b border-border;
+    @apply bg-background/90 backdrop-blur-2xl border-b border-border;
   }
   .hide-scrollbar {
     -ms-overflow-style: none;
@@ -212,7 +212,7 @@
   100% { transform: translateX(-50%); }
 }
 .animate-ticker {
-  animation: ticker 120s linear infinite; /* Ultra-slow for research focus */
+  animation: ticker 600s linear infinite; /* Ultra-crawl for absolute focus */
 }
 .animate-ticker:hover {
   animation-play-state: paused;

@@ -75,8 +75,9 @@ export default function HydraTerminal() {
     return universe.map((stock, i) => ({
       ...stock,
       // Use stable pseudo-random values based on ticker string/index for terminal feel
+      // Handle single-character tickers (like 'T') by using fallback character code
       isPositive: (stock.ticker.charCodeAt(0) + i) % 2 === 0,
-      change: ((stock.ticker.charCodeAt(1) % 20) / 10).toFixed(2)
+      change: (((stock.ticker.charCodeAt(0) + (stock.ticker.length > 1 ? stock.ticker.charCodeAt(1) : 0)) % 20) / 10).toFixed(2)
     }));
   }, [universe]);
 
@@ -202,11 +203,11 @@ export default function HydraTerminal() {
         </motion.aside>
 
         {/* CENTER WORKSPACE - CHART & SIGNALS */}
-        <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#020202]">
+        <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-background">
           
           {/* Header Status Strip */}
-          <div className="h-16 border-b border-white/5 shrink-0 flex items-center justify-between px-6">
-            <div className="flex items-center gap-4">
+          <div className="h-16 border-b border-border shrink-0 flex items-center justify-between px-6">
+            <div className="flex items-center gap-4 text-foreground">
               <h2 className="text-3xl font-bold font-sans tracking-tight">{ticker}</h2>
               {chartData && !loading && (
                 <div className="flex items-center gap-2">
@@ -222,7 +223,7 @@ export default function HydraTerminal() {
                 </div>
               )}
             </div>
-            <div className="text-right">
+            <div className="text-right text-foreground">
                <div className="font-mono text-2xl font-bold">${chartData?.price?.toFixed(2) || '0.00'}</div>
             </div>
           </div>
