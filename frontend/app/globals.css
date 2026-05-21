@@ -52,49 +52,49 @@
 }
 
 :root {
-  --background: #fdfdfd;
-  --foreground: #020617; /* Deepest Slate */
+  --background: #ffffff;
+  --foreground: #000000; /* Absolute Black for max contrast */
   --card: #ffffff;
-  --card-foreground: #020617;
+  --card-foreground: #000000;
   --popover: #ffffff;
-  --popover-foreground: #020617;
-  --primary: #2563eb; /* Institutional Blue */
+  --popover-foreground: #000000;
+  --primary: #0047bb; /* High-Contrast Banking Blue */
   --primary-foreground: #ffffff;
-  --secondary: #f1f5f9;
-  --secondary-foreground: #0f172a;
-  --muted: #f8fafc;
-  --muted-foreground: #475569; /* Darker slate for readability */
-  --accent: #f1f5f9;
-  --accent-foreground: #0f172a;
-  --destructive: #dc2626;
+  --secondary: #f0f2f5;
+  --secondary-foreground: #000000;
+  --muted: #f0f2f5;
+  --muted-foreground: #1a1a1a; /* Dark muted text */
+  --accent: #f0f2f5;
+  --accent-foreground: #000000;
+  --destructive: #cc0000;
   --destructive-foreground: #ffffff;
-  --border: #e2e8f0; /* Visible slate border */
-  --input: #e2e8f0;
-  --ring: #2563eb;
-  --chart-1: #2563eb;
-  --chart-2: #059669;
-  --chart-3: #d97706;
-  --chart-4: #dc2626;
-  --chart-5: #64748b;
+  --border: #cccccc; /* Very visible borders */
+  --input: #cccccc;
+  --ring: #0047bb;
+  --chart-1: #0047bb;
+  --chart-2: #007d32;
+  --chart-3: #9e6a00;
+  --chart-4: #cc0000;
+  --chart-5: #333333;
   --radius: 0.5rem;
-  --sidebar: #fdfdfd;
-  --sidebar-foreground: #020617;
-  --sidebar-primary: #2563eb;
+  --sidebar: #f8f9fa;
+  --sidebar-foreground: #000000;
+  --sidebar-primary: #0047bb;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f1f5f9;
-  --sidebar-accent-foreground: #0f172a;
-  --sidebar-border: #e2e8f0;
-  --sidebar-ring: #2563eb;
+  --sidebar-accent: #e9ecef;
+  --sidebar-accent-foreground: #000000;
+  --sidebar-border: #cccccc;
+  --sidebar-ring: #0047bb;
   
-  --signal-buy: #059669;
-  --signal-sell: #dc2626;
-  --signal-hold: #d97706;
-  --signal-info: #2563eb;
+  --signal-buy: #007d32;
+  --signal-sell: #cc0000;
+  --signal-hold: #9e6a00;
+  --signal-info: #0047bb;
 
-  --shadow-institutional: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-  --glow-primary: 0 0 15px rgba(37, 99, 235, 0.2);
-  --glow-buy: 0 0 15px rgba(5, 150, 105, 0.2);
-  --glow-sell: 0 0 15px rgba(220, 38, 38, 0.2);
+  --shadow-institutional: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --glow-primary: 0 0 10px rgba(0, 71, 187, 0.1);
+  --glow-buy: 0 0 10px rgba(0, 125, 50, 0.1);
+  --glow-sell: 0 0 10px rgba(204, 0, 0, 0.1);
 }
 
 .dark {
@@ -203,7 +203,7 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-foreground/10 rounded-full hover:bg-foreground/20 transition-colors;
+  @apply bg-foreground/20 rounded-full hover:bg-foreground/30 transition-colors;
 }
 
 /* Ticker Animation */
@@ -212,7 +212,7 @@
   100% { transform: translateX(-50%); }
 }
 .animate-ticker {
-  animation: ticker 60s linear infinite; /* Significantly slower */
+  animation: ticker 120s linear infinite; /* Ultra-slow for research focus */
 }
 .animate-ticker:hover {
   animation-play-state: paused;
