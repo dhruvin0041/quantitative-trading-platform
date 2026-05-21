@@ -71,7 +71,7 @@ export function CommandMenu() {
       </button>
       <CommandDialog open={open} onOpenChange={setOpen}>
         <CommandInput placeholder="Execute protocol..." className="font-mono" />
-        <CommandList className="font-sans border-t border-white/5 bg-black/95 backdrop-blur-xl">
+        <CommandList className="font-sans border-t border-border bg-popover/95 backdrop-blur-xl">
           <CommandEmpty className="py-6 text-center text-xs font-mono opacity-50 uppercase tracking-widest">Protocol not found.</CommandEmpty>
           <CommandGroup heading="Intelligence & Data">
             <CommandItem onSelect={() => runCommand(() => toast.info("Compiling analytics..."))} className="py-3">
@@ -85,7 +85,7 @@ export function CommandMenu() {
               <CommandShortcut className="font-mono text-[10px]">⌘S</CommandShortcut>
             </CommandItem>
           </CommandGroup>
-          <CommandSeparator className="bg-white/5" />
+          <CommandSeparator className="bg-border" />
           <CommandGroup heading="System Parameters">
             <CommandItem onSelect={() => runCommand(() => setTheme("light"))} className="py-3">
               <Sun className="mr-3 h-4 w-4 opacity-70" />
