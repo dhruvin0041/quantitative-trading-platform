@@ -6,6 +6,7 @@ import pandas as pd
 import xgboost as xgb
 import tensorflow as tf
 import yfinance as yf
+from lightgbm import LGBMClassifier
 from datetime import datetime
 from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import StandardScaler
@@ -127,7 +128,7 @@ def train_dqn(X_dl, Y_dl, dl_model, xgb_model, scaler, kept_features):
 
 
 def main():
-    ticker = "AAPL"
+    ticker = "MSFT"
     config = load_config()
     data, updated_config = prepare_data(ticker, config)
 
@@ -148,9 +149,14 @@ def main():
     xgb_model = xgb.XGBClassifier(objective="multi:softprob", num_class=3)
     xgb_model.fit(X_xgb_train, Y_sig[:split])
     xgb_model.save_model("xgb_ensemble.json")
+    
+    print("\n--- Training LightGBM Branch ---")
+    lgbm_model = LGBMClassifier(n_estimators=200, learning_rate=0.05, objective='multiclass', num_class=3, verbose=-1)
+    lgbm_model.fit(X_xgb_train, Y_sig[:split])
+    joblib.dump(lgbm_model, "lgbm_agent.joblib")
 
     train_dqn(X_test, (Y_sig[split:],), model, xgb_model, None, None)
-    print("\n>>> TRAINING COMPLETE <<<")
+    print("\n>>> UNIFIED 3-MODEL TRAINING COMPLETE <<<")
 
 
 if __name__ == "__main__":
