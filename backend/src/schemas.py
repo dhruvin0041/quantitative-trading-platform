@@ -1,29 +1,21 @@
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Any
 
-class ModelConfidence(BaseModel):
-    Suggested_Action: str
-    Confidence: str
+class ModelPrediction(BaseModel):
+    signal: str
+    probability: float
 
-class ModelsReport(BaseModel):
-    Primary_Deep_Learning: ModelConfidence
-    Secondary_XGBoost: ModelConfidence
+class Projections(BaseModel):
+    floor: float
+    ceiling: float
 
-class RangeReport(BaseModel):
-    Low: float
-    High: float
-
-class RiskManagementReport(BaseModel):
-    Meta_Model_Status: str
-    Dynamic_10_Day_Range: RangeReport
-
-class ContextReport(BaseModel):
-    Top_Headline_Processed: str
-
-class AIReport(BaseModel):
-    Models: ModelsReport
-    Risk_Management: RiskManagementReport
-    Context: ContextReport
+class TechnicalSnapshot(BaseModel):
+    RSI: float
+    MACD: float
+    ATR: float
+    BB_Position: float
+    ADX: float
+    Volume_Ratio: float
 
 class Position(BaseModel):
     shares: int
@@ -37,18 +29,22 @@ class PortfolioSummary(BaseModel):
 
 class PredictResponse(BaseModel):
     ticker: str
-    action: str
-    confidence: str
-    price: float
-    ai_report: AIReport
+    current_price: float
+    signal: str
+    confidence_score: float
+    signal_note: Optional[str] = None
+    market_regime: str
+    volatility_state: str
+    volume_ratio: float
+    models: Dict[str, ModelPrediction]
+    projections: Projections
+    technical_snapshot: TechnicalSnapshot
+    qualitative_alpha: Optional[str] = None
+    
+    # Keep some legacy fields for backward compatibility if needed, 
+    # but the instructions specify a strict new schema.
+    # I'll include the ones used by the current frontend if possible.
     portfolio: Optional[PortfolioSummary] = None
     historical_markers: Optional[List[Dict[str, Any]]] = None
     candles: Optional[List[Dict[str, Any]]] = None
     clouds: Optional[List[Dict[str, Any]]] = None
-    agent_consensus: Optional[Dict[str, Any]] = None
-    institutional_metrics: Optional[Dict[str, Any]] = None
-    physical_edge: Optional[Dict[str, Any]] = None
-    smart_routing: Optional[Dict[str, Any]] = None
-    xai_reasoning: Optional[str] = None
-    news: Optional[str] = None
-    paper_trade: Optional[Dict[str, Any]] = None

@@ -3,6 +3,20 @@ export interface UniverseStock {
   name: string;
 }
 
+export interface ModelPrediction {
+  signal: string;
+  probability: number;
+}
+
+export interface TechnicalSnapshot {
+  RSI: number;
+  MACD: number;
+  ATR: number;
+  BB_Position: number;
+  ADX: number;
+  Volume_Ratio: number;
+}
+
 export interface AIReport {
   Models: {
     Primary_Deep_Learning: {
@@ -40,10 +54,26 @@ export interface Portfolio {
 
 export interface ChartData {
   ticker: string;
-  price: number;
+  current_price: number;
+  price: number; // Legacy support
+  signal: string;
+  confidence_score: number;
+  signal_note?: string | null;
+  market_regime: string;
+  volatility_state: string;
+  volume_ratio: number;
+  models: Record<string, ModelPrediction>;
+  projections: {
+    floor: number;
+    ceiling: number;
+  };
+  technical_snapshot: TechnicalSnapshot;
+  qualitative_alpha?: string | null;
+  
+  // Chart related
   candles: { time: string; open: number; high: number; low: number; close: number }[];
   clouds: { time: string; ribbon_upper: number; ribbon_lower: number; bb_upper: number; bb_lower: number }[];
-  ai_report: AIReport;
+  ai_report: AIReport; // Keep for legacy component compatibility
   historical_markers: { time: string; action: string; probability: number; label?: string }[];
   portfolio?: Portfolio;
 }

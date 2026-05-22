@@ -37,6 +37,15 @@ class PaperTradingEngine:
             }, f, indent=2)
         os.replace(temp_path, self.db_path)
 
+    def _simulate_slippage(self, price, action):
+        """Institutional Slippage Simulation: 0.05% for Buy, -0.05% for Sell."""
+        slippage = 0.0005
+        if action == "BUY":
+            return price * (1 + slippage)
+        elif action == "SELL":
+            return price * (1 - slippage)
+        return price
+
     def execute_trade(self, ticker, action, price, confidence_fraction, regime="NORMAL", sector="Unknown"):
         if action == "HOLD" or "SCALE_BACK" in action:
             return None
