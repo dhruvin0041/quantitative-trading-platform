@@ -81,8 +81,8 @@ export default function HydraTerminal() {
     }));
   }, [universe]);
 
-  const primaryAction = chartData?.ai_report?.Models?.Primary_Deep_Learning?.Suggested_Action || "HOLD";
-  const confidence = chartData?.ai_report?.Models?.Primary_Deep_Learning?.Confidence || "0%";
+  const primaryAction = chartData?.signal || "HOLD";
+  const confidence = chartData?.confidence_score ? `${chartData.confidence_score.toFixed(1)}%` : "0%";
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-background text-foreground font-sans flex flex-col selection:bg-primary/20">
@@ -185,11 +185,25 @@ export default function HydraTerminal() {
                <div className="p-3 rounded-lg border border-border bg-secondary/50 dark:bg-black/20 flex flex-col gap-2">
                  <div className="flex justify-between items-center">
                    <span className="text-xs text-muted-foreground">Regime</span>
-                   <span className="text-xs font-mono font-bold text-[var(--signal-buy)] uppercase">Risk-On</span>
+                   <span className={cn(
+                     "text-[10px] font-mono font-bold uppercase px-1.5 py-0.5 rounded border",
+                     chartData?.market_regime === 'BULL' ? "bg-green-500/20 text-green-500 border-green-500/30" :
+                     chartData?.market_regime === 'BEAR' ? "bg-red-500/20 text-red-500 border-red-500/30" :
+                     "bg-zinc-500/20 text-zinc-400 border-zinc-500/30"
+                   )}>
+                     {chartData?.market_regime || "NEUTRAL"}
+                   </span>
                  </div>
                  <div className="flex justify-between items-center">
-                   <span className="text-xs text-muted-foreground font-sans">VIX Index</span>
-                   <span className="text-xs font-mono font-bold text-foreground">14.22</span>
+                   <span className="text-xs text-muted-foreground font-sans">Vol State</span>
+                   <span className={cn(
+                     "text-[10px] font-mono font-bold uppercase px-1.5 py-0.5 rounded border",
+                     chartData?.volatility_state === 'HIGH' ? "bg-orange-500/20 text-orange-500 border-orange-500/30" :
+                     chartData?.volatility_state === 'MEDIUM' ? "bg-yellow-500/20 text-yellow-500 border-yellow-500/30" :
+                     "bg-blue-500/20 text-blue-500 border-blue-500/30"
+                   )}>
+                     {chartData?.volatility_state || "LOW"}
+                   </span>
                  </div>
                </div>
             </div>
@@ -218,7 +232,7 @@ export default function HydraTerminal() {
               )}
             </div>
             <div className="text-right text-foreground">
-               <div className="font-mono text-2xl font-bold">${chartData?.price?.toFixed(2) || '0.00'}</div>
+               <div className="font-mono text-2xl font-bold">${chartData?.current_price?.toFixed(2) || '0.00'}</div>
             </div>
           </div>
 
