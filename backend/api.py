@@ -20,8 +20,8 @@ from fastapi.responses import Response
 
 # Import inference functions
 from src.execution.live_inference import fetch_live_data, fetch_live_news, load_config, is_near_earnings
-from src.models.fusion_network import build_fusion_model
-from src.models.dqn_agent import DQNAgent
+from src.models.neural.fusion_network import build_fusion_model
+from src.models.rl.dqn_agent import DQNAgent
 from src.execution.risk_manager import (
     get_position_sizing,
     calculate_beta,
@@ -36,7 +36,7 @@ from src.execution.smart_router import PredictiveSmartRouter
 from src.execution.reporting import ReportGenerator
 from src.execution.paper_trading import PaperTradingEngine
 from src.execution.broker import AlpacaBroker
-from src.models.drift_monitor import DriftMonitor
+from src.models.monitoring.drift_monitor import DriftMonitor
 from src.schemas import PredictResponse
 from src.execution.performance_analyzer import PerformanceAnalyzer
 from src.execution.alerts import AlertSystem

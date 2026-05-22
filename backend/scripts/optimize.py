@@ -19,7 +19,7 @@ from src.data_ingestion.technical_indicators import (
     add_advanced_features,
     feature_deflation,
 )
-from src.models.fusion_network import build_fusion_model
+from src.models.neural.fusion_network import build_fusion_model
 from src.features.sequence_builder import create_time_series_sequences
 from datetime import datetime
 

@@ -11,8 +11,8 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 import yfinance as yf
-from src.models.fusion_network import build_fusion_model
-from src.models.dqn_agent import DQNAgent
+from src.models.neural.fusion_network import build_fusion_model
+from src.models.rl.dqn_agent import DQNAgent
 from src.data_ingestion.market_data import fetch_historical_data, get_sector_peer
 
 

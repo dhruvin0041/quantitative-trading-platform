@@ -14,7 +14,7 @@ from src.data_ingestion.market_data import fetch_historical_data
 from src.data_ingestion.technical_indicators import add_advanced_features
 
 # Mock imports for models
-from src.models.fusion_network import build_fusion_model
+from src.models.neural.fusion_network import build_fusion_model
 import xgboost as xgb
 
 os.environ["TF_USE_LEGACY_KERAS"] = "1"

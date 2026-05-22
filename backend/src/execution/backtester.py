@@ -11,8 +11,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 import xgboost as xgb
-from src.models.fusion_network import build_fusion_model
-from src.models.dqn_agent import DQNAgent
+from src.models.neural.fusion_network import build_fusion_model
+from src.models.rl.dqn_agent import DQNAgent
 from src.data_ingestion.market_data import fetch_historical_data, get_sector_peer
 from src.data_ingestion.technical_indicators import add_advanced_features
 from src.data_ingestion.nlp_processor import NewsTokenizer

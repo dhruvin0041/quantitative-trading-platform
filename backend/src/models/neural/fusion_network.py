@@ -1,10 +1,10 @@
 import tensorflow as tf
 import keras
 from keras.layers import Concatenate, Dense, Dropout, BatchNormalization
-from src.models.lstm_branch import build_lstm_branch
-from src.models.cnn_branch import build_cnn_branch
-from src.models.transformer_branch import build_transformer_branch
-from src.models.finbert_branch import build_finbert_branch
+from src.models.neural.lstm_branch import build_lstm_branch
+from src.models.neural.cnn_branch import build_cnn_branch
+from src.models.neural.transformer_branch import build_transformer_branch
+from src.models.nlp.finbert_branch import build_finbert_branch
 
 
 def build_fusion_model(config):

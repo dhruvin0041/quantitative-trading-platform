@@ -11,7 +11,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier
 from src.execution.live_inference import add_upgraded_features, FEATURE_COLUMNS
 from src.data_ingestion.market_data import apply_dynamic_triple_barrier, fetch_historical_data
-from src.models.lgbm_agent import train_lgbm_agent
+from src.models.boosting.lgbm_agent import train_lgbm_agent
 
 
 # --- 1. CONFIGURATION LOADING ---
