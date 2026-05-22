@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 from sklearn.preprocessing import StandardScaler
-from live_inference import add_upgraded_features, FEATURE_COLUMNS
+from src.execution.live_inference import add_upgraded_features, FEATURE_COLUMNS
 from src.data_ingestion.market_data import fetch_historical_data
 
 def regenerate():
@@ -37,12 +37,12 @@ def regenerate():
     scaler = StandardScaler()
     scaler.fit(full_df)
     
-    joblib.dump(scaler, "latest_scaler.joblib")
+    joblib.dump(scaler, "artifacts/latest_scaler.joblib")
     
     with open("configs/kept_features.json", "w") as f:
         json.dump(FEATURE_COLUMNS, f)
     
-    print(f"Scaler fitted on {len(FEATURE_COLUMNS)} features. Saved to latest_scaler.joblib")
+    print(f"Scaler fitted on {len(FEATURE_COLUMNS)} features. Saved to artifacts/latest_scaler.joblib")
 
 if __name__ == "__main__":
     regenerate()

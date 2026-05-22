@@ -35,19 +35,19 @@ def run_backtest(ticker="AAPL", start_date="2023-01-01", end_date=None):
     with open("configs/model_accuracies.json", "r") as f:
         accs = json.load(f)
 
-    scaler = joblib.load("latest_scaler.joblib")
+    scaler = joblib.load("artifacts/latest_scaler.joblib")
 
     # Models
     config["data"]["num_features"] = len(kept_features)
     dl_model = build_fusion_model(config)
-    dl_model.load_weights("latest_fusion_weights.weights.h5")
+    dl_model.load_weights("artifacts/latest_fusion_weights.weights.h5")
 
     xgb_model = xgb.XGBClassifier()
-    xgb_model.load_model("xgb_ensemble.json")
+    xgb_model.load_model("artifacts/xgb_ensemble.json")
 
     dqn_agent = DQNAgent(len(kept_features) + 3 + 3)
     try:
-        dqn_agent.load("dqn_model.pth")
+        dqn_agent.load("artifacts/dqn_model.pth")
     except Exception:
         pass
 

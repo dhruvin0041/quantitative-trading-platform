@@ -178,7 +178,7 @@ def fetch_live_data(ticker, config):
     df_filtered = df_filtered.loc[common_idx]
     peer_filtered = peer_filtered.loc[common_idx]
 
-    scaler = joblib.load("latest_scaler.joblib")
+    scaler = joblib.load("artifacts/latest_scaler.joblib")
     time_steps = config["data"]["time_steps"]
 
     recent_data = df_filtered.tail(time_steps).values
@@ -228,12 +228,12 @@ def main():
     config["data"]["num_features"] = len(FEATURE_COLUMNS)
 
     dl_model = build_fusion_model(config)
-    dl_model.load_weights("latest_fusion_weights.weights.h5")
+    dl_model.load_weights("artifacts/latest_fusion_weights.weights.h5")
 
     xgb_model = xgb.XGBClassifier()
-    xgb_model.load_model("xgb_ensemble.json")
+    xgb_model.load_model("artifacts/xgb_ensemble.json")
     
-    lgbm_model = joblib.load("lgbm_agent.joblib")
+    lgbm_model = joblib.load("artifacts/lgbm_agent.joblib")
 
     dl_p = dl_model.predict([ts_seq, ts_seq, ts_seq, peer_seq], verbose=0)[2][0]
     xgb_p = xgb_model.predict_proba(tabular)[0]

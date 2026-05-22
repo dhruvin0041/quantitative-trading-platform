@@ -1,7 +1,7 @@
 import joblib
 from lightgbm import LGBMClassifier
 
-def train_lgbm_agent(X_train, y_train, save_path="lgbm_agent.joblib"):
+def train_lgbm_agent(X_train, y_train, save_path="artifacts/lgbm_agent.joblib"):
     """
     Trains a LightGBM Classifier on provided scaled data and saves the artifact.
     """

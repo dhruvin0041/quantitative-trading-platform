@@ -19,7 +19,7 @@ from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_
 from fastapi.responses import Response
 
 # Import inference functions
-from live_inference import fetch_live_data, fetch_live_news, load_config, is_near_earnings
+from src.execution.live_inference import fetch_live_data, fetch_live_news, load_config, is_near_earnings
 from src.models.fusion_network import build_fusion_model
 from src.models.dqn_agent import DQNAgent
 from src.execution.risk_manager import (
@@ -203,19 +203,19 @@ config["data"]["num_features"] = actual_num_features
 # Load Models
 lstm_model = build_fusion_model(config)
 try:
-    lstm_model.load_weights("latest_fusion_weights.weights.h5")
+    lstm_model.load_weights("artifacts/latest_fusion_weights.weights.h5")
 except Exception as e:
     logger.warning(f"Could not load LSTM weights: {e}")
 
 xgb_model = xgb.XGBClassifier()
 try:
-    xgb_model.load_model("xgb_ensemble.json")
+    xgb_model.load_model("artifacts/xgb_ensemble.json")
 except Exception as e:
     logger.warning(f"Could not load XGB ensemble: {e}")
 
 lgbm_model = None
 try:
-    lgbm_model = joblib.load("lgbm_agent.joblib")
+    lgbm_model = joblib.load("artifacts/lgbm_agent.joblib")
 except Exception as e:
     logger.warning(f"Could not load LightGBM agent: {e}")
 
@@ -227,7 +227,7 @@ smart_router = PredictiveSmartRouter()
 report_gen = ReportGenerator(kept_features_list)
 
 try:
-    calibrator = joblib.load("calibrator.joblib")
+    calibrator = joblib.load("artifacts/calibrator.joblib")
 except Exception:
     calibrator = None
 

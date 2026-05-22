@@ -9,7 +9,7 @@ import requests
 import os
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier
-from live_inference import add_upgraded_features, FEATURE_COLUMNS
+from src.execution.live_inference import add_upgraded_features, FEATURE_COLUMNS
 from src.data_ingestion.market_data import apply_dynamic_triple_barrier, fetch_historical_data
 from src.models.lgbm_agent import train_lgbm_agent
 
@@ -150,8 +150,8 @@ def train_universal_engine():
 
     # 5. Save the Universal Architecture
     print("Saving Universal Architecture...")
-    xgb_model.save_model("xgb_ensemble.json")
-    joblib.dump(scaler, "latest_scaler.joblib")
+    xgb_model.save_model("artifacts/xgb_ensemble.json")
+    joblib.dump(scaler, "artifacts/latest_scaler.joblib")
 
     # 6. Train Macro Regime Detector
     print("Calibrating Macro Kill-Switch (VIX Regimes)...")

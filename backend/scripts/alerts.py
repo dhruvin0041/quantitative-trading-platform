@@ -80,9 +80,9 @@ def generate_daily_signals(tickers):
     logger.info(f"Generating end-of-day signals for {len(tickers)} assets...")
 
     try:
-        scaler = joblib.load("latest_scaler.joblib")
+        scaler = joblib.load("artifacts/latest_scaler.joblib")
         xgb_model = xgb.XGBClassifier()
-        xgb_model.load_model("xgb_ensemble.json")
+        xgb_model.load_model("artifacts/xgb_ensemble.json")
         meta_model = joblib.load("meta_model.joblib")
         kill_switch_data = joblib.load("macro_kill_switch.joblib")
         regime_model = kill_switch_data["model"]

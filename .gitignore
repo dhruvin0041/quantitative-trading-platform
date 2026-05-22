@@ -62,16 +62,16 @@ GEMINI.md
 backend/venv/
 
 # ML Artifacts & Data
-backend/*.joblib
-backend/*.pth
-backend/*.h5
-backend/*.json
-backend/xgb_ensemble.json
+backend/artifacts/*.joblib
+backend/artifacts/*.pth
+backend/artifacts/*.h5
+backend/artifacts/*.json
+backend/data/*.db
 
-# Allow specific trained models for MSFT baseline
-!backend/lgbm_agent.joblib
-!backend/xgb_ensemble.json
-!backend/latest_fusion_weights.weights.h5
-!backend/latest_scaler.joblib
-!backend/dqn_model.pth
+# Allow specific trained models for institutional baseline
+!backend/artifacts/lgbm_agent.joblib
+!backend/artifacts/xgb_ensemble.json
+!backend/artifacts/latest_fusion_weights.weights.h5
+!backend/artifacts/latest_scaler.joblib
+!backend/artifacts/dqn_model.pth
 

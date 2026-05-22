@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 
 class PaperTradingEngine:
-    def __init__(self, initial_capital=1000000.0, db_path="paper_trading.json"):
+    def __init__(self, initial_capital=1000000.0, db_path="data/paper_trading.json"):
         self.initial_capital = initial_capital
         self.capital = initial_capital
         self.positions = {} # ticker -> {shares, avg_price, sector}

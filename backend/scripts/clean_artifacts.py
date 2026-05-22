@@ -20,13 +20,14 @@ def clean_cache():
 def clean_training_artifacts():
     """Deletes models and scalers but KEEPS optimized parameters."""
     files = [
-        "xgb_ensemble.json",
-        "meta_model.joblib",
-        "latest_scaler.joblib",
-        "latest_fusion_weights.weights.h5",
-        "best_fusion_weights.weights.h5",
-        "dqn_model.pth",
-        "macro_kill_switch.joblib",
+        "artifacts/xgb_ensemble.json",
+        "artifacts/meta_model.joblib",
+        "artifacts/latest_scaler.joblib",
+        "artifacts/latest_fusion_weights.weights.h5",
+        "artifacts/best_fusion_weights.weights.h5",
+        "artifacts/dqn_model.pth",
+        "artifacts/lgbm_agent.joblib",
+        "artifacts/macro_kill_switch.joblib",
     ]
     print("--- Cleaning Training Artifacts ---")
     for f in files:
@@ -44,11 +45,12 @@ def clean_optimization_artifacts(ticker=None, universal=False):
 
     # Generic artifacts
     files = [
-        "xgb_ensemble.json",
-        "latest_scaler.joblib",
-        "latest_fusion_weights.weights.h5",
-        "best_fusion_weights.weights.h5",
-        "dqn_model.pth",
+        "artifacts/xgb_ensemble.json",
+        "artifacts/latest_scaler.joblib",
+        "artifacts/latest_fusion_weights.weights.h5",
+        "artifacts/best_fusion_weights.weights.h5",
+        "artifacts/dqn_model.pth",
+        "artifacts/lgbm_agent.joblib",
     ]
 
     # Target specific ticker or universal files
@@ -74,3 +76,4 @@ if __name__ == "__main__":
     # Default behavior for manual execution
     clean_training_artifacts()
     print("\n>>> System artifacts cleaned. <<<")
+cts cleaned. <<<")

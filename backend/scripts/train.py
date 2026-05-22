@@ -9,7 +9,7 @@ import yfinance as yf
 from datetime import datetime
 from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import StandardScaler
-from live_inference import load_config, add_upgraded_features, FEATURE_COLUMNS
+from src.execution.live_inference import load_config, add_upgraded_features, FEATURE_COLUMNS
 
 from src.models.fusion_network import build_fusion_model
 from src.models.dqn_agent import DQNAgent
@@ -81,7 +81,7 @@ def prepare_data(ticker, config):
 
     split_idx = int(num_samples * 0.8)
     scaler.fit(ts_sequences_reshaped[: split_idx * steps])
-    joblib.dump(scaler, "latest_scaler.joblib")
+    joblib.dump(scaler, "artifacts/latest_scaler.joblib")
 
     ts_sequences_scaled = scaler.transform(ts_sequences_reshaped).reshape(
         num_samples, steps, features
@@ -124,7 +124,7 @@ def train_dqn(X_dl, Y_dl, dl_model, xgb_model, scaler, kept_features):
             state = next_state
             if len(agent.memory) > 32: agent.replay(32)
         print(f"DQN Episode {e+1} complete")
-    agent.save("dqn_model.pth")
+    agent.save("artifacts/dqn_model.pth")
 
 
 def main():
@@ -142,13 +142,13 @@ def main():
     print("\n--- Training Deep Learning Ensemble ---")
     model = build_fusion_model(updated_config)
     model.fit(x=X_train, y=Y_train, epochs=5, validation_split=0.1, verbose=1)
-    model.save_weights("latest_fusion_weights.weights.h5")
+    model.save_weights("artifacts/latest_fusion_weights.weights.h5")
 
     print("\n--- Training XGBoost Branch ---")
     X_xgb_train = X_ts[:split, -1, :]
     xgb_model = xgb.XGBClassifier(objective="multi:softprob", num_class=3)
     xgb_model.fit(X_xgb_train, Y_sig[:split])
-    xgb_model.save_model("xgb_ensemble.json")
+    xgb_model.save_model("artifacts/xgb_ensemble.json")
     
     print("\n--- Training LightGBM Branch ---")
     train_lgbm_agent(X_xgb_train, Y_sig[:split])

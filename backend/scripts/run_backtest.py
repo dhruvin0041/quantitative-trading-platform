@@ -25,7 +25,7 @@ class AutomatedBacktester:
         self.tickers = tickers or ["AAPL", "MSFT", "GOOGL"]
         self.initial_capital = initial_capital
         self.analytics = PortfolioAnalytics()
-        self.logger = TradeLogger(db_path="reports/backtest_log.db")
+        self.logger = TradeLogger(db_path="data/backtest_log.db")
         os.makedirs("reports", exist_ok=True)
 
     def run_pipeline(self, start_date="2020-01-01", end_date=None):
