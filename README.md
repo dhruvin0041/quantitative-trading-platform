@@ -20,12 +20,12 @@
 <table align="center">
   <tr>
     <td align="center">
-      <img src="file:///C:/Users/heer0/OneDrive/Pictures/Screenshots/Screenshot%202026-05-22%20124158.png" width="100%" alt="Light Mode" />
+      <img src="screenshots/light_mode.png" width="100%" alt="Light Mode" />
       <br />
       <em>Light Mode</em>
     </td>
     <td align="center">
-      <img src="file:///C:/Users/heer0/OneDrive/Pictures/Screenshots/Screenshot%202026-05-22%20125555.png" width="100%" alt="Dark Mode" />
+      <img src="screenshots/dark_mode.png" width="100%" alt="Dark Mode" />
       <br />
       <em>Dark Mode</em>
     </td>
