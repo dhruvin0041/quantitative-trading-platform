@@ -9,9 +9,10 @@ import { PerformanceValidation } from '@/components/dashboard/PerformanceValidat
 import { ChartData, UniverseStock } from '@/types';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { Activity, Cpu, Search, Menu, ChevronRight } from 'lucide-react';
+import { Activity, Cpu, Menu, ChevronRight } from 'lucide-react';
 import { CommandMenu } from '@/components/CommandMenu';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { StockSearch } from '@/components/StockSearch';
 
 export default function HydraTerminal() {
   const [ticker, setTicker] = useState<string>("AAPL"); 
@@ -100,13 +101,7 @@ export default function HydraTerminal() {
             <span className="font-mono font-bold tracking-tight text-lg hidden sm:inline-block">HYDRA<span className="text-muted-foreground font-light">|TERMINAL</span></span>
           </div>
           
-          <div 
-            className="hidden md:flex ml-6 h-8 bg-secondary/50 rounded-md border border-border flex items-center px-3 gap-2 w-64 cursor-text hover:bg-secondary transition-colors" 
-            onClick={() => window.dispatchEvent(new CustomEvent('hydra-open-command'))}
-          >
-            <Search className="w-4 h-4 text-muted-foreground" />
-            <span className="text-xs font-mono text-muted-foreground">⌘K to search assets...</span>
-          </div>
+          <StockSearch universe={universe} onSelect={setTicker} />
         </div>
 
         <div className="flex items-center gap-4">

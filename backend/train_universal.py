@@ -116,6 +116,11 @@ def train_universal_engine():
     print("Fitting Global Scaler on Training Data...")
     scaler = StandardScaler()
 
+    # Data Cleaning: Handle infinity or large values
+    master_df = master_df.replace([np.inf, -np.inf], np.nan).dropna(subset=kept_features + ["target_signal"])
+    X = master_df[kept_features]
+    y = master_df["target_signal"]
+
     # Temporal split is better: Split by index since concat preserved order per ticker
     split_idx = int(len(X) * 0.8)
     X_train_raw, X_test_raw = X.iloc[:split_idx], X.iloc[split_idx:]

@@ -115,15 +115,17 @@ def objective(trial):
         X_train,
         X_train,
         X_train,
-        np.zeros((len(X_train), 128)),
-        np.zeros((len(X_train), 128)),
+        # np.zeros((len(X_train), 128)),
+        # np.zeros((len(X_train), 128)),
+        np.zeros((len(X_train), 60, X_total.shape[2])), # Dummy peer data
     ]
     X_test_dl = [
         X_test,
         X_test,
         X_test,
-        np.zeros((len(X_test), 128)),
-        np.zeros((len(X_test), 128)),
+        # np.zeros((len(X_test), 128)),
+        # np.zeros((len(X_test), 128)),
+        np.zeros((len(X_test), 60, X_total.shape[2])), # Dummy peer data
     ]
 
     dl_config["data"]["num_features"] = X_total.shape[2]

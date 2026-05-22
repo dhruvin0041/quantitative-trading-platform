@@ -1,4 +1,4 @@
-from tensorflow.keras.layers import (
+from keras.layers import (
     Input,
     Conv1D,
     MaxPooling1D,

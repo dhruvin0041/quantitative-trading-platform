@@ -21,9 +21,9 @@ class DriftMonitor:
             if p_value < self.p_value_threshold:
                 drifted_features.append(i)
                 
-        is_drifting = len(drifted_features) > (train_features.shape[1] * 0.2) # Alert if >20% features drift
+        is_drifting = bool(len(drifted_features) > (train_features.shape[1] * 0.2)) # Alert if >20% features drift
         return {
             "is_drifting": is_drifting,
-            "drifted_feature_indices": drifted_features,
-            "drift_ratio": len(drifted_features) / train_features.shape[1]
+            "drifted_feature_indices": [int(i) for i in drifted_features],
+            "drift_ratio": float(len(drifted_features) / train_features.shape[1])
         }

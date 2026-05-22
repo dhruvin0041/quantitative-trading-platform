@@ -65,7 +65,10 @@ def fetch_live_data(ticker, config):
     ts_sequence = scaled_data.reshape(1, time_steps, -1)
     peer_sequence = peer_scaled.reshape(1, time_steps, -1)
     tabular_row = scaled_data[-1].reshape(1, -1)
-    current_price = df["Close"].iloc[-1]
+    
+    # Ensure current_price is a scalar float (yfinance v0.2.40+ returns DataFrames for single tickers)
+    price_series = df["Close"].squeeze()
+    current_price = float(price_series.iloc[-1])
 
     return ts_sequence, peer_sequence, tabular_row, current_price, config
 
@@ -104,7 +107,7 @@ def main():
         pass
 
     # 3. Predict
-    dl_p = dl_model.predict([ts_seq, ts_seq, ts_seq, peer_seq, ids, masks], verbose=0)[2][0]
+    dl_p = dl_model.predict([ts_seq, ts_seq, ts_seq, peer_seq], verbose=0)[2][0]
     xgb_p = xgb_model.predict_proba(tabular)[0]
 
     state = np.hstack((tabular[0], dl_p, xgb_p))
@@ -143,15 +146,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
-
-    main()
-nt(f"XGB Suggests: {signal_map[np.argmax(xgb_p)]}")
-    print(f"DQN Suggests: {signal_map[dqn_action]}")
-    print("=" * 40)
-
-
-if __name__ == "__main__":
-    main()
-
     main()

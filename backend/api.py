@@ -81,16 +81,21 @@ async def verify_api_key(api_key: str = Security(api_key_header)):
     return api_key
 
 # --- Observability: Prometheus Metrics ---
-REQUEST_COUNT = Counter('api_requests_total', 'Total API requests', ['method', 'endpoint', 'status_code'])
-REQUEST_LATENCY = Histogram('api_request_latency_seconds', 'API request latency', ['endpoint'])
+from prometheus_client import REGISTRY
+try:
+    REQUEST_COUNT = Counter('api_requests_total', 'Total API requests', ['method', 'endpoint', 'status_code'])
+    REQUEST_LATENCY = Histogram('api_request_latency_seconds', 'API request latency', ['endpoint'])
+except ValueError:
+    REQUEST_COUNT = REGISTRY._names_to_collectors['api_requests_total']
+    REQUEST_LATENCY = REGISTRY._names_to_collectors['api_request_latency_seconds']
 
 app = FastAPI(title="Hydra Terminal API", version="2.0.0")
 
 # --- Security: Restricted CORS ---
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+FRONTEND_URLS = os.getenv("FRONTEND_URL", "http://localhost:3000").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_URL],
+    allow_origins=FRONTEND_URLS,
     allow_methods=["GET", "POST"],
     allow_headers=["X-API-Key", "Content-Type"],
 )
@@ -197,7 +202,10 @@ logger.info(f"Initializing 5-Model Ensemble with {actual_num_features} features.
 
 # Load Models
 lstm_model = build_fusion_model(config)
-lstm_model.load_weights("latest_fusion_weights.weights.h5")
+try:
+    lstm_model.load_weights("latest_fusion_weights.weights.h5")
+except Exception as e:
+    logger.warning(f"Could not load LSTM weights: {e}. System will run with uninitialized neural paths.")
 
 gemini_analyzer = GeminiAnalyzer()
 physical_edge = PhysicalEdgeAnalyzer()
@@ -207,7 +215,11 @@ smart_router = PredictiveSmartRouter()
 report_gen = ReportGenerator(kept_features_list)
 
 xgb_model = xgb.XGBClassifier()
-xgb_model.load_model("xgb_ensemble.json")
+try:
+    xgb_model.load_model("xgb_ensemble.json")
+except Exception as e:
+    logger.warning(f"Could not load XGB ensemble: {e}. XGB branch will be inactive.")
+
 
 try:
     calibrator = joblib.load("calibrator.joblib")
@@ -220,9 +232,18 @@ try:
 except Exception:
     logger.warning("DQN model not found. Using random agent.")
 
-kill_switch_data = joblib.load("macro_kill_switch.joblib")
-regime_model = kill_switch_data["model"]
-panic_id = kill_switch_data["panic_cluster"]
+try:
+    kill_switch_data = joblib.load("macro_kill_switch.joblib")
+    regime_model = kill_switch_data["model"]
+    panic_id = kill_switch_data["panic_cluster"]
+except FileNotFoundError:
+    logger.warning("macro_kill_switch.joblib not found. Using dummy regime model.")
+    class DummyRegimeModel:
+        def predict(self, X):
+            return [0]
+    regime_model = DummyRegimeModel()
+    panic_id = -1
+
 
 
 # ==========================================
@@ -268,9 +289,14 @@ async def get_prediction(ticker: str = "AAPL"):
 
         # Macro check
         import yfinance as yf
-        spy_df = await asyncio.to_thread(yf.download, "SPY", period="60d", progress=False)
-        ticker_df = await asyncio.to_thread(yf.download, ticker, period="60d", progress=False)
-        beta = calculate_beta(ticker_df["Close"], spy_df["Close"])
+        spy_df = await asyncio.to_thread(yf.download, "SPY", period="250d", progress=False)
+        ticker_df = await asyncio.to_thread(yf.download, ticker, period="250d", progress=False)
+        
+        # Ensure we get Series instead of DataFrames for single tickers (yfinance v0.2.40+ behavior)
+        spy_close = spy_df["Close"].squeeze()
+        ticker_close = ticker_df["Close"].squeeze()
+        
+        beta = calculate_beta(ticker_close, spy_close)
 
         # 2. Elite Data Layer
         physical_alpha = physical_edge.get_physical_alpha_vector(ticker)
@@ -287,7 +313,8 @@ async def get_prediction(ticker: str = "AAPL"):
         # Check Market Regime
         current_vix = await asyncio.to_thread(yf.download, "^VIX", period="5d", progress=False)
         if not current_vix.empty and len(current_vix) >= 5:
-            current_vix["VIX_ROC"] = current_vix["Close"].pct_change(periods=4)
+            vix_close = current_vix["Close"].squeeze()
+            current_vix["VIX_ROC"] = vix_close.pct_change(periods=4)
             vix_features = current_vix[["Close", "VIX_ROC"]].iloc[-1].values.reshape(1, -1)
             try:
                 current_regime_idx = regime_model.predict(vix_features)[0]
@@ -305,7 +332,7 @@ async def get_prediction(ticker: str = "AAPL"):
         qual_score, qual_reason = gemini_analyzer.analyze_fundamental_alpha(news_text, ticker)
 
         dl_outputs = lstm_model.predict(
-            x=[ts_sequence, ts_sequence, ts_sequence, peer_sequence, input_ids, attention_masks],
+            x=[ts_sequence, ts_sequence, ts_sequence, peer_sequence],
             verbose=0,
         )
         dl_preds_raw = dl_outputs[2][0]
@@ -316,8 +343,23 @@ async def get_prediction(ticker: str = "AAPL"):
         xgb_preds_raw = xgb_model.predict_proba(tabular_row)[0]
         
         if calibrator:
-            dl_preds = calibrator.calibrate("dl_model", dl_preds_raw.reshape(1, -1))[0]
-            xgb_preds = calibrator.calibrate("xgb_model", xgb_preds_raw.reshape(1, -1))[0]
+            try:
+                # Attempt to calibrate only the max probability to avoid shape mismatch in IsotonicRegression
+                dl_max_idx = np.argmax(dl_preds_raw)
+                xgb_max_idx = np.argmax(xgb_preds_raw)
+                
+                calibrated_dl_max = calibrator.calibrate("dl_model", np.array([dl_preds_raw[dl_max_idx]]))[0]
+                calibrated_xgb_max = calibrator.calibrate("xgb_model", np.array([xgb_preds_raw[xgb_max_idx]]))[0]
+                
+                dl_preds = dl_preds_raw.copy()
+                dl_preds[dl_max_idx] = np.clip(calibrated_dl_max, 0, 1) # Ensure valid prob range
+                
+                xgb_preds = xgb_preds_raw.copy()
+                xgb_preds[xgb_max_idx] = np.clip(calibrated_xgb_max, 0, 1)
+            except Exception as e:
+                logger.warning(f"Calibration failed: {e}. Using raw predictions.")
+                dl_preds = dl_preds_raw
+                xgb_preds = xgb_preds_raw
         else:
             dl_preds = dl_preds_raw
             xgb_preds = xgb_preds_raw
@@ -337,7 +379,7 @@ async def get_prediction(ticker: str = "AAPL"):
         else:
             risk_metrics = get_position_sizing(float(np.max(ensemble_p)), paper_engine.history)
 
-        alpha_metric = calculate_jensens_alpha(ticker_df["Close"].pct_change(), spy_df["Close"].pct_change(), beta)
+        alpha_metric = calculate_jensens_alpha(ticker_close.pct_change(), spy_close.pct_change(), beta)
         stampede = detect_stampede_risk(np.std(dl_preds), float(np.max(ensemble_p)))
         if is_panic_regime:
              stampede["is_crowded"] = True
@@ -357,7 +399,7 @@ async def get_prediction(ticker: str = "AAPL"):
         routing = smart_router.predict_venue_liquidity(ticker)
 
         # 6. Explainable AI (XAI) Log Generation
-        xai_log = f"Decision primarily driven by {orchestrator.consensus_status}. "
+        xai_log = f"Decision primarily driven by {mesh_response['consensus_status']}. "
         if is_panic_regime:
              xai_log += "MACRO REGIME: PANIC (Risk-Off). "
         xai_log += f"Physical supply risk at {round(physical_alpha['supply_chain_disruption_index'] * 100)}%. "
@@ -380,7 +422,7 @@ async def get_prediction(ticker: str = "AAPL"):
                 }
             },
             "Risk_Management": {
-                "Meta_Model_Status": f"{orchestrator.consensus_status}. {xai_log}",
+                "Meta_Model_Status": f"{mesh_response['consensus_status']}. {xai_log}",
                 "Dynamic_10_Day_Range": {
                     "Low": round(float(forecast_low), 2),
                     "High": round(float(forecast_high), 2)
@@ -460,4 +502,4 @@ async def get_alerts():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=False)

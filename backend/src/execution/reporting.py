@@ -1,7 +1,6 @@
 import numpy as np
 from datetime import datetime, timedelta
-from src.data_ingestion.market_data import fetch_historical_data
-from src.data_ingestion.technical_indicators import add_advanced_features
+from src.data_ingestion.technical_indicators import add_advanced_features, clean_multiindex_columns
 
 class ReportGenerator:
     """
@@ -15,7 +14,7 @@ class ReportGenerator:
         """
         Detects swing highs and lows to provide context.
         """
-        df_full = df_raw.copy()
+        df_full = clean_multiindex_columns(df_raw.copy())
         
         # Detect Pivots
         prices = df_full["Close"].values
@@ -46,7 +45,9 @@ class ReportGenerator:
         """
         Formats data for the Next.js institutional dashboard.
         """
+        df_full = clean_multiindex_columns(df_full)
         df_features = add_advanced_features(df_full.copy())
+        df_features = clean_multiindex_columns(df_features)
         
         # Data Alignment
         df_full['ribbon_upper'] = df_features['Ribbon_Fast']

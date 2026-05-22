@@ -1,6 +1,6 @@
 # src/models/finbert_branch.py
 import tensorflow as tf
-from tensorflow.keras.layers import Input, Dense, Lambda
+from keras.layers import Input, Dense, Lambda
 from transformers import TFBertModel
 
 # Load pre-trained FinBERT ONCE at module level to save memory and speed up optimization
@@ -11,7 +11,7 @@ def get_finbert():
     global _finbert_model
     if _finbert_model is None:
         print("Loading FinBERT into memory...")
-        _finbert_model = TFBertModel.from_pretrained("ProsusAI/finbert")
+        _finbert_model = TFBertModel.from_pretrained("ProsusAI/finbert", from_pt=True)
         _finbert_model.trainable = False
     return _finbert_model
 

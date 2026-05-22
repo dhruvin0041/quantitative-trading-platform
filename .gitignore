@@ -58,3 +58,13 @@ backend/backtest_results.png
 graphify-out/
 GEMINI.md
 
+# Virtual Environments
+backend/venv/
+
+# ML Artifacts & Data
+backend/*.joblib
+backend/*.pth
+backend/*.h5
+backend/*.json
+backend/xgb_ensemble.json
+

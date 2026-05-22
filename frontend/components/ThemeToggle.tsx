@@ -13,11 +13,12 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 export function ThemeToggle() {
-  const { theme, setTheme } = useTheme()
+  const { setTheme } = useTheme()
   const [mounted, setMounted] = React.useState(false)
 
   // Avoid hydration mismatch
   React.useEffect(() => {
+    // eslint-disable-next-line
     setMounted(true)
   }, [])
 

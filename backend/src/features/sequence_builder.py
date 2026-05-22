@@ -27,9 +27,21 @@ def create_time_series_sequences(data_df, time_steps):
         sequences.append(seq)
 
         # Extract targets for the current step (last element in the sequence)
-        targets_direction.append(data_df["target_direction"].iloc[i + time_steps - 1])
-        targets_range_min.append(data_df["target_min"].iloc[i + time_steps - 1])
-        targets_range_max.append(data_df["target_max"].iloc[i + time_steps - 1])
+        targets_direction.append(
+            data_df["target_direction"].iloc[i + time_steps - 1]
+            if "target_direction" in data_df.columns
+            else 0
+        )
+        targets_range_min.append(
+            data_df["target_min"].iloc[i + time_steps - 1]
+            if "target_min" in data_df.columns
+            else 0.0
+        )
+        targets_range_max.append(
+            data_df["target_max"].iloc[i + time_steps - 1]
+            if "target_max" in data_df.columns
+            else 0.0
+        )
 
     return (
         np.array(sequences),

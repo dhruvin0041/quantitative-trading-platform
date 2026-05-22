@@ -78,7 +78,12 @@ def prepare_data(ticker, config):
     with open("configs/kept_features.json", "w") as f:
         json.dump(kept_cols, f)
 
-    tokenizer = NewsTokenizer(max_length=config["data"]["max_seq_length"])
+    # Mock tokenizer to avoid slow downloads
+    class MockTokenizer:
+        def tokenize_daily_news(self, text, ticker=None):
+            return np.zeros(config["data"]["max_seq_length"]), np.zeros(config["data"]["max_seq_length"]), text
+            
+    tokenizer = MockTokenizer()
     input_ids_list = []
     attention_masks_list = []
     for _ in range(len(df_ready)):
@@ -114,7 +119,7 @@ def prepare_data(ticker, config):
         peer_sequences.reshape(-1, features)
     ).reshape(num_samples, steps, features)
 
-    y_signal = df_ready["target_signal"].values[time_steps:]
+    y_signal = df_ready["target_signal"].values[time_steps-1:]
     y_range = np.column_stack((y_min, y_max))
 
     config["data"]["num_features"] = features
@@ -208,7 +213,7 @@ from src.models.experiment_tracker import ExperimentTracker
 # ...
 
 def main():
-    ticker = "AAPL"
+    ticker = "AMZN"
     config = load_config()
     data, updated_config = prepare_data(ticker, config)
 
@@ -219,14 +224,12 @@ def main():
 
     # split data
     split = int(len(X_ts) * 0.8)
-    # Model inputs: [ts, cnn, trans, peer, ids, masks]
+    # Model inputs: [ts, cnn, trans, peer]
     X_train = [
         X_ts[:split],
         X_ts[:split],
         X_ts[:split],
         X_peer[:split],
-        X_ids[:split],
-        X_masks[:split],
     ]
     Y_train = [Y_dir[:split], Y_range[:split], Y_sig[:split]]
 
@@ -235,8 +238,6 @@ def main():
         X_ts[split:],
         X_ts[split:],
         X_peer[split:],
-        X_ids[split:],
-        X_masks[split:],
     ]
     Y_test = [Y_dir[split:], Y_range[split:], Y_sig[split:]]
 

@@ -1,6 +1,6 @@
-# src/models/fusion_network.py
 import tensorflow as tf
-from tensorflow.keras.layers import Concatenate, Dense, Dropout, BatchNormalization
+import keras
+from keras.layers import Concatenate, Dense, Dropout, BatchNormalization
 from src.models.lstm_branch import build_lstm_branch
 from src.models.cnn_branch import build_cnn_branch
 from src.models.transformer_branch import build_transformer_branch
@@ -46,11 +46,14 @@ def build_fusion_model(config):
         units_2=32,
         dropout_1=0.1,
         dropout_2=0.1,
+        name="peer_context_data",
+        out_name="peer_features"
     )
 
-    text_input_ids, text_attention_mask, sentiment_features = build_finbert_branch(
-        max_seq_length=config["data"]["max_seq_length"]
-    )
+    # text_input_ids, text_attention_mask, sentiment_features = build_finbert_branch(
+    #     max_seq_length=config["data"]["max_seq_length"]
+    # )
+    sentiment_features = Dense(64, activation="relu", name="dummy_sentiment")(lstm_features) # Placeholder
 
     # 2. Fuse Features from ALL branches
     combined = Concatenate()(
@@ -76,25 +79,25 @@ def build_fusion_model(config):
     out_signal = Dense(3, activation="softmax", name="signal_output")(combined)
 
     # 4. Compile Model
-    model = tf.keras.Model(
+    model = keras.Model(
         inputs=[
             ts_input,
             cnn_input,
             transformer_input,
             peer_input,
-            text_input_ids,
-            text_attention_mask,
+            # text_input_ids,
+            # text_attention_mask,
         ],
         outputs=[out_direction, out_range, out_signal],
     )
 
     model.compile(
-        optimizer=tf.keras.optimizers.Adam(
+        optimizer=keras.optimizers.Adam(
             learning_rate=config["model"]["learning_rate"]
         ),
         loss={
             "direction_output": "binary_crossentropy",
-            "range_output": "huber_loss",
+            "range_output": "huber",
             "signal_output": "sparse_categorical_crossentropy",
         },
         loss_weights={
@@ -105,3 +108,4 @@ def build_fusion_model(config):
         metrics={"direction_output": "accuracy", "signal_output": "accuracy"},
     )
     return model
+
