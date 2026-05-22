@@ -1,0 +1,32 @@
+name: Automated Backtest Pipeline
+
+on:
+  schedule:
+    - cron: '0 0 * * 0' # Run weekly on Sunday
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        pip install -r backend/requirements.txt
+        
+    - name: Run Walk-Forward Optimization
+      run: |
+        cd backend
+        python run_backtest.py
+        
+    - name: Upload Report Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: backtest-reports
+        path: backend/reports/
