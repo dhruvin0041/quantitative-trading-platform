@@ -21,7 +21,7 @@ def calculate_beta(ticker_prices: pd.Series, spy_prices: pd.Series):
         return 1.0
 
     covariance = np.cov(ticker_returns, spy_returns)[0][1]
-    variance = np.var(spy_returns)
+    variance = np.var(spy_returns, ddof=1)
 
     beta = covariance / variance if variance != 0 else 1.0
     return float(beta)

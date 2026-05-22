@@ -109,11 +109,14 @@ def add_upgraded_features(df, spy_df, vix_df):
 
     plus_DM = df['High'].diff()
     minus_DM = -df['Low'].diff()
-    plus_DM[plus_DM < 0] = 0
-    minus_DM[minus_DM < 0] = 0
+    
+    # Correct ADX directional movement
+    plus_DM_true = np.where((plus_DM > minus_DM) & (plus_DM > 0), plus_DM, 0)
+    minus_DM_true = np.where((minus_DM > plus_DM) & (minus_DM > 0), minus_DM, 0)
+    
     TR14 = df['TR'].rolling(14).sum()
-    plus_DI = 100 * (plus_DM.rolling(14).sum() / (TR14 + 1e-9))
-    minus_DI = 100 * (minus_DM.rolling(14).sum() / (TR14 + 1e-9))
+    plus_DI = 100 * (pd.Series(plus_DM_true, index=df.index).rolling(14).sum() / (TR14 + 1e-9))
+    minus_DI = 100 * (pd.Series(minus_DM_true, index=df.index).rolling(14).sum() / (TR14 + 1e-9))
     DX = 100 * (abs(plus_DI - minus_DI) / (plus_DI + minus_DI + 1e-9))
     df['ADX'] = DX.rolling(14).mean()
 

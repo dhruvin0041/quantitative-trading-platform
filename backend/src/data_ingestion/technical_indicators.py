@@ -103,11 +103,7 @@ def add_advanced_features(
     )
 
     # Fast RSI (Makes the AI highly sensitive to sudden 3-day drops/spikes)
-    delta = df["Close"].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=3).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=3).mean()
-    rs = gain / loss
-    df["RSI_Fast_3"] = 100 - (100 / (1 + rs))
+    df["RSI_Fast_3"] = ta.momentum.RSIIndicator(close=df["Close"], window=3).rsi()
 
     # ==========================================
     # SWIFT ALGO / MOMENTUM FEATURES

@@ -61,7 +61,9 @@ def apply_dynamic_triple_barrier(
 
     # Default everything to 1 (Hold/Skip)
     signals = np.ones(len(df))
-    prices = df["Close"].values
+    closes = df["Close"].values
+    highs = df["High"].values
+    lows = df["Low"].values
 
     # Ensure ATR exists before proceeding
     if "ATR" not in df.columns:
@@ -72,8 +74,8 @@ def apply_dynamic_triple_barrier(
     atrs = df["ATR"].values
 
     # We must stop the loop before the end of the dataset to have room to "look forward"
-    for i in range(len(prices) - horizon):
-        current_price = prices[i]
+    for i in range(len(closes) - horizon):
+        current_price = closes[i]
         current_atr = atrs[i]
 
         # Dynamic barrier thresholds (Absolute Price Levels)
@@ -81,11 +83,12 @@ def apply_dynamic_triple_barrier(
         lower_barrier_price = current_price - (current_atr * sl_atr_multiplier)
 
         # Extract the future price path for the next 'horizon' days
-        future_path = prices[i + 1 : i + 1 + horizon]
+        future_highs = highs[i + 1 : i + 1 + horizon]
+        future_lows = lows[i + 1 : i + 1 + horizon]
 
         # Find the exact indices where the barriers are breached
-        upper_hits = np.where(future_path >= upper_barrier_price)[0]
-        lower_hits = np.where(future_path <= lower_barrier_price)[0]
+        upper_hits = np.where(future_highs >= upper_barrier_price)[0]
+        lower_hits = np.where(future_lows <= lower_barrier_price)[0]
 
         # Scenario 1: Both barriers are hit within the 10 days
         if len(upper_hits) > 0 and len(lower_hits) > 0:
