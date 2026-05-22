@@ -68,3 +68,10 @@ backend/*.h5
 backend/*.json
 backend/xgb_ensemble.json
 
+# Allow specific trained models for MSFT baseline
+!backend/lgbm_agent.joblib
+!backend/xgb_ensemble.json
+!backend/latest_fusion_weights.weights.h5
+!backend/latest_scaler.joblib
+!backend/dqn_model.pth
+
