@@ -11,7 +11,6 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 import yfinance as yf
-from lightgbm import LGBMClassifier
 from src.models.fusion_network import build_fusion_model
 from src.models.dqn_agent import DQNAgent
 from src.data_ingestion.market_data import fetch_historical_data, get_sector_peer
@@ -149,20 +148,18 @@ def fetch_live_data(ticker, config):
     print(f"Fetching live market data for {ticker}...")
     df = fetch_historical_data(
         ticker,
-        start_date="2022-01-01", # Extended range for technicals
+        start_date="2022-01-01",
         end_date=pd.Timestamp.now().strftime("%Y-%m-%d"),
     )
     
     spy_df = yf.download('SPY', period='2y', interval='1d', progress=False)
     vix_df = yf.download('^VIX', period='2y', interval='1d', progress=False)
     
-    # Handle MultiIndex if present
     if isinstance(spy_df.columns, pd.MultiIndex): spy_df.columns = spy_df.columns.droplevel(1)
     if isinstance(vix_df.columns, pd.MultiIndex): vix_df.columns = vix_df.columns.droplevel(1)
 
     df = add_upgraded_features(df, spy_df, vix_df)
 
-    # NEW: Lead-Lag Peer Context Data
     peer_ticker = get_sector_peer(ticker)
     peer_df = fetch_historical_data(
         peer_ticker,
@@ -174,13 +171,11 @@ def fetch_live_data(ticker, config):
     df_filtered = df.reindex(columns=FEATURE_COLUMNS).dropna()
     peer_filtered = peer_df.reindex(columns=FEATURE_COLUMNS).dropna()
 
-    # Align indices
     common_idx = df_filtered.index.intersection(peer_filtered.index)
     df_filtered = df_filtered.loc[common_idx]
     peer_filtered = peer_filtered.loc[common_idx]
 
     scaler = joblib.load("latest_scaler.joblib")
-
     time_steps = config["data"]["time_steps"]
 
     recent_data = df_filtered.tail(time_steps).values
@@ -196,15 +191,12 @@ def fetch_live_data(ticker, config):
     price_series = df["Close"].squeeze()
     current_price = float(price_series.iloc[-1])
 
-    # Market Regime Detection
     regime, req_conf = detect_regime(spy_df)
 
-    # Volume Confirmation Gate
     current_volume = df['Volume'].iloc[-1]
     avg_volume_20d = df['Volume'].rolling(20).mean().iloc[-1]
     vol_ratio = current_volume / (avg_volume_20d + 1e-9)
 
-    # Technical Snapshot
     tech_snapshot = {
         "RSI": round(float(df['RSI'].iloc[-1]), 2),
         "MACD": round(float(df['MACD'].iloc[-1]), 2),
@@ -225,13 +217,11 @@ def fetch_live_news(ticker, tokenizer, config):
 
 
 def main():
-    ticker = "AAPL"
+    ticker = "MSFT"
     config = load_config()
 
-    # 1. Fetch
     ts_seq, peer_seq, tabular, price, config, regime, req_conf, vol_ratio, tech = fetch_live_data(ticker, config)
 
-    # 2. Load Models
     config["data"]["num_features"] = len(FEATURE_COLUMNS)
 
     dl_model = build_fusion_model(config)
@@ -242,12 +232,10 @@ def main():
     
     lgbm_model = joblib.load("lgbm_agent.joblib")
 
-    # 3. Predict
     dl_p = dl_model.predict([ts_seq, ts_seq, ts_seq, peer_seq], verbose=0)[2][0]
     xgb_p = xgb_model.predict_proba(tabular)[0]
     lgbm_p = lgbm_model.predict_proba(tabular)[0]
 
-    # Voting Logic
     votes = []
     def get_vote(p):
         if p[2] > req_conf: return 'BUY'
@@ -261,16 +249,12 @@ def main():
     buy_votes = votes.count('BUY')
     sell_votes = votes.count('SELL')
 
-    if buy_votes >= 2:
-        final_signal = 'BUY'
-    elif sell_votes >= 2:
-        final_signal = 'SELL'
-    else:
-        final_signal = 'VETOED'
+    if buy_votes >= 2: final_signal = 'BUY'
+    elif sell_votes >= 2: final_signal = 'SELL'
+    else: final_signal = 'VETOED'
 
     confidence = (sum([dl_p[2], xgb_p[2], lgbm_p[2]]) / 3) * 100
     
-    # Filters
     signal_note = None
     if is_near_earnings(ticker):
         final_signal = 'HOLD'

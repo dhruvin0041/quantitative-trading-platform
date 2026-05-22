@@ -9,8 +9,9 @@ import requests
 import os
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier
-from src.data_ingestion.technical_indicators import add_advanced_features
-from src.data_ingestion.market_data import apply_dynamic_triple_barrier
+from live_inference import add_upgraded_features, FEATURE_COLUMNS
+from src.data_ingestion.market_data import apply_dynamic_triple_barrier, fetch_historical_data
+from src.models.lgbm_agent import train_lgbm_agent
 
 
 # --- 1. CONFIGURATION LOADING ---
@@ -38,7 +39,7 @@ def load_universal_params():
 
 
 # --- 2. THE DATA INGESTOR ---
-def get_sp500_tickers(limit=50):
+def get_sp500_tickers(limit=15): # Further reduced for universal speed verification
     """Scrapes the S&P 500 and returns a subset."""
     print(f"Fetching Top {limit} S&P 500 Tickers...")
     url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
@@ -50,41 +51,33 @@ def get_sp500_tickers(limit=50):
         return tickers[:limit]
     except Exception as e:
         print(f"Failed to scrape S&P 500: {e}")
-        return ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA"]
+        return ["MSFT", "AAPL", "GOOGL", "AMZN", "META", "TSLA", "NVDA"]
 
 
 def build_panel_dataset(tickers, opt_params, start="2018-01-01", end=None):
     if end is None:
         from datetime import datetime
-
         end = datetime.now().strftime("%Y-%m-%d")
 
     print(f"Building Universal Panel Dataset for {len(tickers)} assets...")
-    all_data = []
+    
+    spy_df = yf.download('SPY', start=start, end=end, progress=False)
+    vix_df = yf.download('^VIX', start=start, end=end, progress=False)
+    if isinstance(spy_df.columns, pd.MultiIndex): spy_df.columns = spy_df.columns.droplevel(1)
+    if isinstance(vix_df.columns, pd.MultiIndex): vix_df.columns = vix_df.columns.droplevel(1)
 
+    all_data = []
     for i, ticker in enumerate(tickers):
         print(f"[{i + 1}/{len(tickers)}] Processing {ticker}...")
         try:
-            # 1. Download
-            df = yf.download(ticker, start=start, end=end, progress=False)
-            if df.empty or len(df) < 500:
-                continue
-
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.get_level_values(0)
-
-            # 2. Add Features
-            df = add_advanced_features(df.copy())
-
-            # 3. Dynamic Triple Barrier Labeling (Using Universal Params)
+            df = fetch_historical_data(ticker, start_date=start, end_date=end)
+            df = add_upgraded_features(df, spy_df, vix_df)
             df = apply_dynamic_triple_barrier(
                 df,
                 tp_atr_multiplier=opt_params["tp_atr_multiplier"],
                 sl_atr_multiplier=opt_params["sl_atr_multiplier"],
                 horizon=opt_params["horizon"],
             )
-
-            # 4. Add Ticker label and store
             df["Ticker"] = ticker
             all_data.append(df)
         except Exception as e:
@@ -94,7 +87,7 @@ def build_panel_dataset(tickers, opt_params, start="2018-01-01", end=None):
         raise ValueError("No data collected for any tickers.")
 
     master_df = pd.concat(all_data)
-    print(f"Panel Dataset Complete! Total Rows: {len(master_df)}")
+    print(f"Panel Dataset Complete! Total Rows: {master_df.shape[0]}")
     return master_df
 
 
@@ -102,43 +95,37 @@ def build_panel_dataset(tickers, opt_params, start="2018-01-01", end=None):
 def train_universal_engine():
     # 1. Load Params and Build Data
     opt_params = load_universal_params()
-    tickers = get_sp500_tickers(limit=50)
+    tickers = get_sp500_tickers(limit=15)
     master_df = build_panel_dataset(tickers, opt_params)
 
     # Load golden features
-    with open("configs/kept_features.json", "r") as f:
-        kept_features = json.load(f)
+    kept_features = FEATURE_COLUMNS
+    with open("configs/kept_features.json", "w") as f:
+        json.dump(kept_features, f)
 
-    X = master_df[kept_features]
-    y = master_df["target_signal"]
-
-    # 2. Global Scaling (Data Leakage Fix)
+    # 2. Global Scaling
     print("Fitting Global Scaler on Training Data...")
     scaler = StandardScaler()
 
-    # Data Cleaning: Handle infinity or large values
+    # Data Cleaning
     master_df = master_df.replace([np.inf, -np.inf], np.nan).dropna(subset=kept_features + ["target_signal"])
     X = master_df[kept_features]
-    y = master_df["target_signal"]
+    y = master_df["target_signal"].astype(int)
 
-    # Temporal split is better: Split by index since concat preserved order per ticker
     split_idx = int(len(X) * 0.8)
     X_train_raw, X_test_raw = X.iloc[:split_idx], X.iloc[split_idx:]
-    y_train, y_test = y.iloc[:split_idx].astype(int), y.iloc[split_idx:].astype(int)
+    y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
 
-    # Fit scaler ONLY on training data to prevent future data leakage
     X_train = scaler.fit_transform(X_train_raw)
     X_test = scaler.transform(X_test_raw)
 
-    # 3. Train Universal XGBoost with AI-optimized params
+    # 3. Train Universal XGBoost
     print("Calculating Class Weights for Balance...")
     from sklearn.utils.class_weight import compute_class_weight
-
     classes = np.unique(y_train)
     weights = compute_class_weight(class_weight="balanced", classes=classes, y=y_train)
     class_weight_dict = dict(zip(classes, weights))
-    sample_weights = np.array([class_weight_dict[y] for y in y_train])
-    print(f"Weights Applied: {class_weight_dict}")
+    sample_weights = np.array([class_weight_dict[yi] for yi in y_train])
 
     print("Training Universal Technical Brain (XGBoost)...")
     xgb_model = xgb.XGBClassifier(
@@ -155,34 +142,20 @@ def train_universal_engine():
     )
     xgb_model.fit(X_train, y_train, sample_weight=sample_weights)
 
-    print(
-        f"XGBoost Accuracy -> Train: {xgb_model.score(X_train, y_train) * 100:.1f}% | Test: {xgb_model.score(X_test, y_test) * 100:.1f}%"
-    )
+    print(f"XGBoost Accuracy -> Train: {xgb_model.score(X_train, y_train) * 100:.1f}% | Test: {xgb_model.score(X_test, y_test) * 100:.1f}%")
 
-    # 4. Train Universal Meta-Learner
-    print("Training Universal Meta-Learner (Risk Desk)...")
-    train_probs = xgb_model.predict_proba(X_train)
-    X_meta_train = np.hstack((X_train, train_probs))
-
-    # Meta-Target: Did XGBoost get it right?
-    xgb_train_preds = xgb_model.predict(X_train)
-    meta_targets = (xgb_train_preds == y_train).astype(int)
-
-    meta_model = RandomForestClassifier(
-        n_estimators=100, max_depth=4, n_jobs=-1, class_weight="balanced"
-    )
-    meta_model.fit(X_meta_train, meta_targets)
+    # 4. Train Universal LightGBM
+    print("Training Universal Technical Brain (LightGBM)...")
+    train_lgbm_agent(X_train, y_train)
 
     # 5. Save the Universal Architecture
     print("Saving Universal Architecture...")
     xgb_model.save_model("xgb_ensemble.json")
-    joblib.dump(meta_model, "meta_model.joblib")
     joblib.dump(scaler, "latest_scaler.joblib")
 
-    # 6. Train Macro Regime Detector (Kill-Switch)
+    # 6. Train Macro Regime Detector
     print("Calibrating Macro Kill-Switch (VIX Regimes)...")
     from src.models.regime_detector import train_macro_regime_model
-
     train_macro_regime_model()
 
     print("Project Hydra: Universal Brain Deployment Complete.")
