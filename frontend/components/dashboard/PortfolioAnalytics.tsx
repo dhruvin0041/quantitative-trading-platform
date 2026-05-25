@@ -1,6 +1,6 @@
 import React from 'react';
 import { ChartData } from '@/types';
-import { Briefcase, Wallet, Percent, LayoutList, Activity } from 'lucide-react';
+import { Briefcase, Wallet, Percent, Activity } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 

@@ -2,9 +2,11 @@ from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 
+
 class ModelPrediction(BaseModel):
     signal: str
     probability: float
+
 
 class TechnicalSnapshot(BaseModel):
     RSI: float
@@ -14,16 +16,19 @@ class TechnicalSnapshot(BaseModel):
     ADX: float
     Volume_Ratio: float
 
+
 class Position(BaseModel):
     shares: int
     avg_price: float
     currency: str = "USD"
     market: str = "USA"
 
+
 class FXRate(BaseModel):
     pair: str
     rate: float
     timestamp: str
+
 
 class PortfolioSummary(BaseModel):
     cash: float
@@ -39,19 +44,23 @@ class PortfolioSummary(BaseModel):
     positions: Dict[str, Position]
     fx_rates: Dict[str, float] = {}
 
+
 class XAIDriver(BaseModel):
     feature: str
     impact: float
     direction: str
 
+
 class XAIBlock(BaseModel):
     top_drivers: List[XAIDriver]
     explanation: str
+
 
 class Projections(BaseModel):
     floor: float
     median: float
     ceiling: float
+
 
 class RiskMetrics(BaseModel):
     var_95: float
@@ -60,6 +69,7 @@ class RiskMetrics(BaseModel):
     kelly_fraction: float
     target_size: float
     max_drawdown: float
+
 
 class PredictResponse(BaseModel):
     ticker: str
@@ -78,19 +88,20 @@ class PredictResponse(BaseModel):
     xai: Optional[XAIBlock] = None
     sentiment_score: Optional[float] = None
     risk: Optional[RiskMetrics] = None
-    
+
     # Transparency fields
     timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
     model_agreement: float = 0.0
     bullish_models: int = 0
     bearish_models: int = 0
     neutral_models: int = 0
-    
+
     # Chart & Portfolio
     portfolio: Optional[PortfolioSummary] = None
     historical_markers: Optional[List[Dict[str, Any]]] = None
     candles: Optional[List[Dict[str, Any]]] = None
     clouds: Optional[List[Dict[str, Any]]] = None
+
 
 class AssetMetadata(BaseModel):
     ticker: str
@@ -98,6 +109,7 @@ class AssetMetadata(BaseModel):
     exchange: str
     currency: str
     timezone: str
+
 
 class UniverseStockItem(BaseModel):
     ticker: str
@@ -107,8 +119,10 @@ class UniverseStockItem(BaseModel):
     market: str
     metadata: Optional[AssetMetadata] = None
 
+
 class UniverseResponse(BaseModel):
     universe: List[UniverseStockItem]
+
 
 class BacktestSignal(BaseModel):
     date: str
@@ -116,6 +130,7 @@ class BacktestSignal(BaseModel):
     signal: str
     confidence: float
     actual_return: float
+
 
 class BacktestSummary(BaseModel):
     ticker: str
@@ -129,4 +144,3 @@ class BacktestSummary(BaseModel):
     best_signal: Optional[BacktestSignal] = None
     worst_signal: Optional[BacktestSignal] = None
     monthly_win_rates: List[Dict[str, Any]] = []
-

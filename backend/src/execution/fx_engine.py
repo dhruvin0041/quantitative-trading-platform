@@ -8,6 +8,7 @@ from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
+
 class FXEngine:
     def __init__(self):
         self.rates: Dict[str, float] = {"USD": 1.0}
@@ -18,7 +19,7 @@ class FXEngine:
             "GBP": "GBPUSD=X",
             "JPY": "USDJPY=X",
             "CAD": "USDCAD=X",
-            "AUD": "AUDUSD=X"
+            "AUD": "AUDUSD=X",
         }
         # Invert logic: yfinance gives USDINR=X as 1 USD = X INR
         # For EURUSD=X it gives 1 EUR = X USD
@@ -28,30 +29,38 @@ class FXEngine:
             "GBP": False,
             "JPY": True,
             "CAD": True,
-            "AUD": False
+            "AUD": False,
         }
 
     async def update_rates(self):
         """Fetch latest FX rates from Yahoo Finance."""
         try:
             tickers = list(self.pairs_map.values())
-            data = await asyncio.to_thread(yf.download, tickers, period="1d", interval="1m", progress=False)
-            
+            data = await asyncio.to_thread(
+                yf.download, tickers, period="1d", interval="1m", progress=False
+            )
+
             if data.empty:
-                logger.warning("FX Engine: No data returned from yfinance. Using cached rates.")
+                logger.warning(
+                    "FX Engine: No data returned from yfinance. Using cached rates."
+                )
                 return
 
             if isinstance(data.columns, pd.MultiIndex):
-                close_data = data['Close']
+                close_data = data["Close"]
             else:
-                close_data = data[['Close']]
+                close_data = data[["Close"]]
 
             new_rates = {"USD": 1.0}
             for currency, ticker in self.pairs_map.items():
                 try:
                     if ticker in close_data.columns:
-                        raw_rate = float(close_data[ticker].dropna().iloc[-1])
-                        
+                        series = close_data[ticker].dropna()
+                        if not series.empty:
+                            raw_rate = float(series.iloc[-1])
+                        else:
+                            raw_rate = self.rates.get(currency, 1.0)
+
                         if self.is_base_usd[currency]:
                             # 1 USD = raw_rate Currency
                             # We want normalized value in USD: Val_USD = Val_Curr / raw_rate
@@ -70,7 +79,7 @@ class FXEngine:
             self.rates = new_rates
             self.last_updated = datetime.now()
             logger.info(f"FX Engine: Rates updated at {self.last_updated.isoformat()}")
-            
+
         except Exception as e:
             logger.error(f"FX Engine Critical Failure: {e}")
 
@@ -78,7 +87,9 @@ class FXEngine:
         """Returns the rate for the given currency relative to USD."""
         return self.rates.get(currency.upper(), 1.0)
 
-    def convert_to_base(self, amount: float, from_currency: str, base_currency: str = "USD") -> float:
+    def convert_to_base(
+        self, amount: float, from_currency: str, base_currency: str = "USD"
+    ) -> float:
         """Normalizes an amount into the base currency."""
         if from_currency == base_currency:
             return amount
@@ -86,7 +97,7 @@ class FXEngine:
         # First convert from_currency to USD
         usd_val = 0.0
         rate_from = self.get_rate(from_currency)
-        
+
         if from_currency == "USD":
             usd_val = amount
         elif self.is_base_usd.get(from_currency, True):
@@ -111,6 +122,8 @@ class FXEngine:
     def get_summary(self) -> Dict:
         return {
             "rates": self.rates,
-            "last_updated": self.last_updated.isoformat() if self.last_updated else None,
-            "status": "LIVE" if self.last_updated else "INITIALIZING"
+            "last_updated": self.last_updated.isoformat()
+            if self.last_updated
+            else None,
+            "status": "LIVE" if self.last_updated else "INITIALIZING",
         }

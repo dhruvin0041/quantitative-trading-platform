@@ -9,7 +9,10 @@ import requests
 import os
 from sklearn.preprocessing import StandardScaler
 from src.execution.live_inference import add_upgraded_features, FEATURE_COLUMNS
-from src.data_ingestion.market_data import apply_dynamic_triple_barrier, fetch_historical_data
+from src.data_ingestion.market_data import (
+    apply_dynamic_triple_barrier,
+    fetch_historical_data,
+)
 from src.models.boosting.lgbm_agent import train_lgbm_agent
 
 
@@ -38,7 +41,7 @@ def load_universal_params():
 
 
 # --- 2. THE DATA INGESTOR ---
-def get_sp500_tickers(limit=15): # Further reduced for universal speed verification
+def get_sp500_tickers(limit=15):  # Further reduced for universal speed verification
     """Scrapes the S&P 500 and returns a subset."""
     print(f"Fetching Top {limit} S&P 500 Tickers...")
     url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
@@ -56,14 +59,17 @@ def get_sp500_tickers(limit=15): # Further reduced for universal speed verificat
 def build_panel_dataset(tickers, opt_params, start="2018-01-01", end=None):
     if end is None:
         from datetime import datetime
+
         end = datetime.now().strftime("%Y-%m-%d")
 
     print(f"Building Universal Panel Dataset for {len(tickers)} assets...")
-    
-    spy_df = yf.download('SPY', start=start, end=end, progress=False)
-    vix_df = yf.download('^VIX', start=start, end=end, progress=False)
-    if isinstance(spy_df.columns, pd.MultiIndex): spy_df.columns = spy_df.columns.droplevel(1)
-    if isinstance(vix_df.columns, pd.MultiIndex): vix_df.columns = vix_df.columns.droplevel(1)
+
+    spy_df = yf.download("SPY", start=start, end=end, progress=False)
+    vix_df = yf.download("^VIX", start=start, end=end, progress=False)
+    if isinstance(spy_df.columns, pd.MultiIndex):
+        spy_df.columns = spy_df.columns.droplevel(1)
+    if isinstance(vix_df.columns, pd.MultiIndex):
+        vix_df.columns = vix_df.columns.droplevel(1)
 
     all_data = []
     for i, ticker in enumerate(tickers):
@@ -107,7 +113,9 @@ def train_universal_engine():
     scaler = StandardScaler()
 
     # Data Cleaning
-    master_df = master_df.replace([np.inf, -np.inf], np.nan).dropna(subset=kept_features + ["target_signal"])
+    master_df = master_df.replace([np.inf, -np.inf], np.nan).dropna(
+        subset=kept_features + ["target_signal"]
+    )
     X = master_df[kept_features]
     y = master_df["target_signal"].astype(int)
 
@@ -121,6 +129,7 @@ def train_universal_engine():
     # 3. Train Universal XGBoost
     print("Calculating Class Weights for Balance...")
     from sklearn.utils.class_weight import compute_class_weight
+
     classes = np.unique(y_train)
     weights = compute_class_weight(class_weight="balanced", classes=classes, y=y_train)
     class_weight_dict = dict(zip(classes, weights))
@@ -141,7 +150,9 @@ def train_universal_engine():
     )
     xgb_model.fit(X_train, y_train, sample_weight=sample_weights)
 
-    print(f"XGBoost Accuracy -> Train: {xgb_model.score(X_train, y_train) * 100:.1f}% | Test: {xgb_model.score(X_test, y_test) * 100:.1f}%")
+    print(
+        f"XGBoost Accuracy -> Train: {xgb_model.score(X_train, y_train) * 100:.1f}% | Test: {xgb_model.score(X_test, y_test) * 100:.1f}%"
+    )
 
     # 4. Train Universal LightGBM
     print("Training Universal Technical Brain (LightGBM)...")
@@ -155,7 +166,8 @@ def train_universal_engine():
     # 6. Train Macro Regime Detector
     print("Calibrating Macro Kill-Switch (VIX Regimes)...")
     from src.models.regime_detector import RegimeDetector
-    regime_model = RegimeDetector(n_regimes=3, method='hmm')
+
+    regime_model = RegimeDetector(n_regimes=3, method="hmm")
     regime_model.fit(master_df)
     regime_model.save()
 

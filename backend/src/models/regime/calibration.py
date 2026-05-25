@@ -1,10 +1,12 @@
 import numpy as np
 from sklearn.calibration import IsotonicRegression
 
+
 class ModelCalibrator:
     """
     Calibrates model output probabilities to reflect true confidence using Isotonic Regression.
     """
+
     def __init__(self):
         self.calibrators = {}
 

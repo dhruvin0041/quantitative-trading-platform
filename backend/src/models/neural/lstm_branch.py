@@ -3,7 +3,14 @@ from keras.layers import Input, LSTM, Dropout, BatchNormalization
 
 
 def build_lstm_branch(
-    time_steps, num_features, units_1=64, units_2=64, dropout_1=0.2, dropout_2=0.2, name="price_volume_data", out_name="lstm_features"
+    time_steps,
+    num_features,
+    units_1=64,
+    units_2=64,
+    dropout_1=0.2,
+    dropout_2=0.2,
+    name="price_volume_data",
+    out_name="lstm_features",
 ):
     ts_input = Input(shape=(time_steps, num_features), name=name)
 

@@ -2,43 +2,50 @@ import joblib
 import pandas as pd
 import numpy as np
 import matplotlib
-matplotlib.use('Agg')
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import os
 
 # Ensure artifacts and backtest_results exist
-os.makedirs('artifacts', exist_ok=True)
-os.makedirs('backtest_results', exist_ok=True)
+os.makedirs("artifacts", exist_ok=True)
+os.makedirs("backtest_results", exist_ok=True)
 
 try:
     import xgboost as xgb
-    xgb_model = xgb.XGBClassifier()
-    xgb_model.load_model('artifacts/xgb_ensemble.json')
-except:
-    xgb_model = joblib.load('artifacts/xgb_ensemble.json')
 
-lgbm_model = joblib.load('artifacts/lgbm_agent.joblib')
+    xgb_model = xgb.XGBClassifier()
+    xgb_model.load_model("artifacts/xgb_ensemble.json")
+except Exception:
+    xgb_model = joblib.load("artifacts/xgb_ensemble.json")
+
+lgbm_model = joblib.load("artifacts/lgbm_agent.joblib")
 
 FEATURE_COLUMNS = [
-    'MA20', 'MA20_vs_MA50', 'EMA9_vs_EMA21', 'VIX_Level', 
-    'BB_Width', 'ADX', 'BB_Position', 'MACD_Hist', 'RSI', 
-    'Relative_Strength', 'OBV_Change', 'VIX_Change', 
-    'Upper_Shadow', 'Lower_Shadow', 'Return'
+    "MA20",
+    "MA20_vs_MA50",
+    "EMA9_vs_EMA21",
+    "VIX_Level",
+    "BB_Width",
+    "ADX",
+    "BB_Position",
+    "MACD_Hist",
+    "RSI",
+    "Relative_Strength",
+    "OBV_Change",
+    "VIX_Change",
+    "Upper_Shadow",
+    "Lower_Shadow",
+    "Return",
 ]
 
 # XGBoost importances (normalized 0-1)
 xgb_imp_raw = xgb_model.feature_importances_
-xgb_imp = pd.Series(
-    xgb_imp_raw / np.sum(xgb_imp_raw),
-    index=FEATURE_COLUMNS
-)
+xgb_imp = pd.Series(xgb_imp_raw / np.sum(xgb_imp_raw), index=FEATURE_COLUMNS)
 
 # LightGBM importances (normalized 0-1)
 lgbm_imp_raw = lgbm_model.feature_importances_
-lgbm_imp = pd.Series(
-    lgbm_imp_raw / np.sum(lgbm_imp_raw),
-    index=FEATURE_COLUMNS
-)
+lgbm_imp = pd.Series(lgbm_imp_raw / np.sum(lgbm_imp_raw), index=FEATURE_COLUMNS)
 
 # Combined score
 combined = (xgb_imp + lgbm_imp) / 2
@@ -59,13 +66,13 @@ else:
 print(f"\nTotal noise features: {len(noise)}")
 
 # Save importances
-combined.to_csv('backtest_results/feature_importances.csv')
+combined.to_csv("backtest_results/feature_importances.csv")
 
 # Plot
 plt.figure(figsize=(12, 10))
-combined.plot(kind='barh')
-plt.title('Normalized Feature Importance — XGB + LGBM Combined')
+combined.plot(kind="barh")
+plt.title("Normalized Feature Importance — XGB + LGBM Combined")
 plt.gca().invert_yaxis()
 plt.tight_layout()
-plt.savefig('backtest_results/feature_importances.png')
+plt.savefig("backtest_results/feature_importances.png")
 print("\nSaved: backtest_results/feature_importances.png")

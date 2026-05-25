@@ -11,9 +11,20 @@ model.fit(X, y)
 
 X_flat = np.random.rand(1, 14)
 FEATURE_COLUMNS = [
-    'MA20_vs_MA50', 'EMA9_vs_EMA21', 'Price_vs_EMA9', 'Price_vs_EMA21',
-    'VIX_Level', 'BB_Width', 'BB_Position', 'RSI', 'ADX', 'MACD_Hist', 
-    'Relative_Strength', 'OBV_Change', 'Return', 'Volume_Ratio'
+    "MA20_vs_MA50",
+    "EMA9_vs_EMA21",
+    "Price_vs_EMA9",
+    "Price_vs_EMA21",
+    "VIX_Level",
+    "BB_Width",
+    "BB_Position",
+    "RSI",
+    "ADX",
+    "MACD_Hist",
+    "Relative_Strength",
+    "OBV_Change",
+    "Return",
+    "Volume_Ratio",
 ]
 X_df = pd.DataFrame(X_flat, columns=FEATURE_COLUMNS)
 explainer = shap.TreeExplainer(model)

@@ -24,7 +24,9 @@ class RiskAgent:
         veto_reason = None
 
         # institutional veto logic
-        if alpha_signal["signal_idx"] in [0, 2] and risk_metrics.get("stampede_risk", {}).get("is_crowded", False):
+        if alpha_signal["signal_idx"] in [0, 2] and risk_metrics.get(
+            "stampede_risk", {}
+        ).get("is_crowded", False):
             is_safe = False
             veto_reason = "Stampede Risk (Crowded Trade)"
 
@@ -41,6 +43,7 @@ class RiskAgent:
             veto_reason = f"High Prediction Uncertainty ({risk_metrics.get('uncertainty_score'):.2f})"
 
         return {"is_safe": is_safe, "veto_reason": veto_reason}
+
 
 class ExecutionAgent:
     """

@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def calculate_micro_imbalance(bid_volumes: np.ndarray, ask_volumes: np.ndarray):
     """
     Simulates institutional LOB imbalance calculation.
@@ -10,6 +11,7 @@ def calculate_micro_imbalance(bid_volumes: np.ndarray, ask_volumes: np.ndarray):
     if (total_bid + total_ask) == 0:
         return 0.0
     return (total_bid - total_ask) / (total_bid + total_ask)
+
 
 class PredictiveSmartRouter:
     """
@@ -22,15 +24,15 @@ class PredictiveSmartRouter:
         # based on a hash of the ticker name and current minute.
         import hashlib
         from datetime import datetime
-        
+
         venues = ["NYSE", "NASDAQ", "IEX_DARK_POOL", "CITADEL_CONNECT"]
-        
+
         # Create deterministic "noise" based on the current minute
         current_min = datetime.now().strftime("%Y-%m-%d %H:%M")
         seed_str = f"{ticker}_{current_min}"
         seed_val = int(hashlib.md5(seed_str.encode()).hexdigest(), 16) % 10000
         np.random.seed(seed_val)
-        
+
         # Simulate an imbalance and a venue liquidity distribution
         simulated_liquidity = np.random.dirichlet(np.ones(len(venues)), size=1)[0]
         best_venue_idx = np.argmax(simulated_liquidity)
@@ -43,7 +45,9 @@ class PredictiveSmartRouter:
             "optimal_venue": venues[best_venue_idx],
             "venue_confidence": f"{round(simulated_liquidity[best_venue_idx] * 100, 1)}%",
             "micro_imbalance_proxy": round(imbalance, 3),
-            "execution_strategy": "TWAP_AGGRESSIVE" if simulated_liquidity[best_venue_idx] > 0.4 else "IS_PASSIVE",
+            "execution_strategy": "TWAP_AGGRESSIVE"
+            if simulated_liquidity[best_venue_idx] > 0.4
+            else "IS_PASSIVE",
         }
 
     def execute_fast_path(self, order_logic):

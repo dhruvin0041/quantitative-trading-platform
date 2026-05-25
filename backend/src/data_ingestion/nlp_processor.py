@@ -3,20 +3,20 @@ from transformers import BertTokenizer
 import requests
 import xml.etree.ElementTree as ET
 import os
-import google.generativeai as genai
+from google import genai
 
 
 import time
 import json
 import re
 
+
 class GeminiAnalyzer:
     def __init__(self, api_key=None):
         api_key = api_key or os.getenv("GOOGLE_API_KEY")
         if api_key:
-            genai.configure(api_key=api_key)
-            # Use 2.0 Flash - free tier, fast, best choice
-            self.model = genai.GenerativeModel("gemini-2.0-flash")
+            self.client = genai.Client(api_key=api_key)
+            self.model_name = "gemini-3-flash-preview"
             self.active = True
         else:
             self.active = False
@@ -45,7 +45,10 @@ class GeminiAnalyzer:
         max_retries = 2
         for attempt in range(max_retries + 1):
             try:
-                response = self.model.generate_content(prompt)
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                )
                 text = response.text
 
                 match = re.search(r"\{.*\}", text, re.DOTALL)
@@ -58,11 +61,12 @@ class GeminiAnalyzer:
             except Exception as e:
                 err_msg = str(e)
                 if "429" in err_msg and attempt < max_retries:
-                    time.sleep(5) # Wait 5 seconds as requested for rate limits
+                    time.sleep(5)  # Wait 5 seconds as requested for rate limits
                     continue
                 return 0.0, "Qualitative analysis unavailable"
 
         return 0.0, "Qualitative analysis unavailable"
+
 
 class NewsTokenizer:
     def __init__(self, max_length=128):

@@ -15,6 +15,7 @@ from src.data_ingestion.technical_indicators import add_advanced_features
 # CONFIGURATION
 # ==========================================
 
+
 def setup_logger():
     import logging
 
@@ -151,12 +152,10 @@ if __name__ == "__main__":
 
     if is_panic:
         logger.warning("🚨 HYDRA PANIC ALERT: Market Veto Active")
-    
+
     if alerts:
         logger.info(f"Generated {len(alerts)} actionable signals.")
     else:
-        logger.info(
-            "No actionable signals detected today."
-        )
+        logger.info("No actionable signals detected today.")
 
     logger.info("--- Scan Complete ---")

@@ -3,6 +3,7 @@ class SectorMapper:
     Maps tickers to GICS sectors.
     Used for tracking exposure and performance attribution.
     """
+
     def __init__(self):
         # Sample mapping - in production, this would be fetched from an API/Database
         self.mapping = {
@@ -19,7 +20,7 @@ class SectorMapper:
             "UNH": "Health Care",
             "LLY": "Health Care",
             "XOM": "Energy",
-            "CVX": "Energy"
+            "CVX": "Energy",
         }
 
     def get_sector(self, ticker):

@@ -1,6 +1,6 @@
 import React from 'react';
 import { ChartData } from '@/types';
-import { Cpu, AlertTriangle, Newspaper, Activity, AlertCircle, BrainCircuit, Clock, CheckCircle2, Info } from 'lucide-react';
+import { Cpu, AlertTriangle, Newspaper, AlertCircle, BrainCircuit, Clock, CheckCircle2, Info } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
@@ -21,7 +21,7 @@ export function SignalIntelligence({ data, currency = '$' }: SignalIntelligenceP
 
   const { 
     signal, confidence_score, uncertainty_score, market_regime, 
-    volatility_state, volume_ratio, models, projections, 
+    volatility_state, volume_ratio: _volume_ratio, models, projections, 
     is_point_forecast, model_agreement, bullish_models, 
     bearish_models, neutral_models, timestamp,
     signal_note, qualitative_alpha, xai, sentiment_score 
@@ -47,7 +47,7 @@ export function SignalIntelligence({ data, currency = '$' }: SignalIntelligenceP
     return 'bg-green-500 text-white border-green-600';
   };
 
-  const getUncertaintyColor = (score: number) => {
+  const _getUncertaintyColor = (score: number) => {
     if (score < 31) return 'bg-green-500';
     if (score < 46) return 'bg-amber-500';
     return 'bg-red-500';

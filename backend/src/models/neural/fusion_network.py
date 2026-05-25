@@ -1,12 +1,12 @@
 import tensorflow as tf
 import keras
 from keras.layers import (
-    Dense, 
-    Dropout, 
-    BatchNormalization, 
-    MultiHeadAttention, 
-    LayerNormalization, 
-    Layer
+    Dense,
+    Dropout,
+    BatchNormalization,
+    MultiHeadAttention,
+    LayerNormalization,
+    Layer,
 )
 from src.models.neural.lstm_branch import build_lstm_branch
 from src.models.neural.cnn_branch import build_cnn_branch
@@ -14,38 +14,37 @@ from src.models.neural.transformer_branch import build_transformer_branch
 from src.models.neural.tcn_agent import build_tcn_branch
 from src.models.neural.patchtst_agent import build_patchtst_branch
 
+
 class CrossModalAttention(Layer):
     """
     Dynamically weights the importance of different modality branches
     (LSTM, CNN, Transformer, TCN, PatchTST, Peer Context) depending on the market regime.
     """
+
     def __init__(self, num_heads=4, key_dim=64, **kwargs):
         super(CrossModalAttention, self).__init__(**kwargs)
         self.num_heads = num_heads
         self.key_dim = key_dim
         self.attention = MultiHeadAttention(num_heads=num_heads, key_dim=key_dim)
         self.layer_norm = LayerNormalization(epsilon=1e-6)
-        
+
     def call(self, inputs):
         # inputs is a list of tensors of shape (batch, hidden_dim)
         # Stack them into (batch, num_modalities, hidden_dim)
         stacked = tf.stack(inputs, axis=1)
-        
+
         # Self-attention across modalities
         attn_out, attention_scores = self.attention(
-            query=stacked, 
-            value=stacked, 
-            key=stacked, 
-            return_attention_scores=True
+            query=stacked, value=stacked, key=stacked, return_attention_scores=True
         )
-        
+
         # Residual + Norm
         x = self.layer_norm(stacked + attn_out)
-        
+
         # Average across modalities to get final representation
         fused = tf.reduce_mean(x, axis=1)
         return fused, attention_scores
-        
+
     def get_config(self):
         config = super(CrossModalAttention, self).get_config()
         config.update({"num_heads": self.num_heads, "key_dim": self.key_dim})
@@ -106,9 +105,9 @@ def build_fusion_model(config):
         dropout_1=0.1,
         dropout_2=0.1,
         name="peer_context_data",
-        out_name="peer_features"
+        out_name="peer_features",
     )
-    
+
     # Force alignment of output dimensions to 64 for cross-attention
     lstm_aligned = Dense(64, activation="linear")(lstm_features)
     cnn_aligned = Dense(64, activation="linear")(cnn_features)
@@ -119,10 +118,19 @@ def build_fusion_model(config):
 
     # 2. Cross-Modal Attention Fusion (Replaces Concatenation)
     fused_features, attention_scores = CrossModalAttention(num_heads=4, key_dim=64)(
-        [lstm_aligned, cnn_aligned, transformer_aligned, tcn_aligned, patch_aligned, peer_aligned]
+        [
+            lstm_aligned,
+            cnn_aligned,
+            transformer_aligned,
+            tcn_aligned,
+            patch_aligned,
+            peer_aligned,
+        ]
     )
 
-    combined = Dense(config["model"]["dense_units_1"], activation="relu")(fused_features)
+    combined = Dense(config["model"]["dense_units_1"], activation="relu")(
+        fused_features
+    )
     combined = BatchNormalization()(combined)
     combined = Dropout(config["model"]["dropout_rate"])(combined)
 
@@ -148,9 +156,7 @@ def build_fusion_model(config):
     )
 
     model.compile(
-        optimizer=keras.optimizers.Adam(
-            learning_rate=config["model"]["learning_rate"]
-        ),
+        optimizer=keras.optimizers.Adam(learning_rate=config["model"]["learning_rate"]),
         loss={
             "direction_output": "binary_crossentropy",
             "range_output": "huber",

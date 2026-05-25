@@ -115,7 +115,7 @@ export function PriceChart({ data, loading }: PriceChartProps) {
       chart.remove();
       chartRef.current = null;
     };
-  }, [resolvedTheme]);
+  }, [resolvedTheme, data, loading]);
 
   useEffect(() => {
     if (!data || !data.candles || !chartRef.current || !candlestickSeriesRef.current) return;
@@ -148,7 +148,7 @@ export function PriceChart({ data, loading }: PriceChartProps) {
     }
 
     chartRef.current.timeScale().fitContent();
-  }, [data]);
+  }, [data, resolvedTheme]);
 
   return (
     <div className="w-full relative aspect-[21/9]" data-tour="chart">

@@ -1,18 +1,49 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Activity, BarChart2, ShieldAlert, Trophy, Percent, Target, Zap, LineChart, TrendingUp, TrendingDown, Layers } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Activity, ShieldAlert, LineChart, Layers, Target } from 'lucide-react';
+
+interface PerfData {
+  trading: {
+    equity_curve: number[];
+    daily_pnl: number;
+    monthly_pnl: number;
+    win_rate: number;
+    profit_factor: number;
+    drawdown: number;
+  };
+  models: {
+    ensemble: number;
+    lstm: number;
+    xgboost: number;
+    lightgbm: number;
+    dqn: number;
+    consensus_rate: number;
+  };
+  risk: {
+    beta: number;
+    alpha: number;
+    exposure: number;
+    kelly: number;
+    volatility: number;
+    var_95: number;
+  };
+  signals: {
+    active: number;
+    historical: number;
+    regime: string;
+  };
+}
 
 export default function InstitutionalDashboard() {
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<any>(null);
-
-  const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const [data, setData] = useState<PerfData | null>(null);
 
   useEffect(() => {
+    const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
     const fetchStats = async () => {
       try {
         const res = await fetch(`${API_URL}/performance`, {
@@ -21,7 +52,7 @@ export default function InstitutionalDashboard() {
         const perfData = await res.json();
         
         // Transform to match UI needs
-        const transformed = {
+        const transformed: PerfData = {
           trading: {
             equity_curve: perfData.returns?.daily ? Object.values(perfData.returns.daily) : [],
             daily_pnl: 0, // Could calc from history
@@ -70,6 +101,14 @@ export default function InstitutionalDashboard() {
           <Activity className="w-8 h-8 text-blue-500 animate-pulse" />
           <span className="text-xs font-mono tracking-widest text-zinc-500 uppercase">Loading Institutional Telemetry...</span>
         </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+        <div className="text-red-500 font-mono text-sm">Failed to load performance data.</div>
       </div>
     );
   }
@@ -165,7 +204,7 @@ export default function InstitutionalDashboard() {
               </CardHeader>
               <CardContent className="pt-4 space-y-4">
                 <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
-                  <span className="text-xs font-mono text-zinc-500">Jensen's Alpha</span>
+                  <span className="text-xs font-mono text-zinc-500">Jensen&apos;s Alpha</span>
                   <span className="text-sm font-mono font-bold text-green-500">+{data.risk.alpha}%</span>
                 </div>
                 <div className="flex justify-between items-center border-b border-zinc-800 pb-2">

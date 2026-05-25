@@ -127,19 +127,16 @@ def objective(trial):
     )
     time_steps = 60
     ts_seq, y_dir, y_min, y_max = create_time_series_sequences(df_ready, time_steps)
-    y_sig = df_ready["target_signal"].values[time_steps:]
-
-    # Simple Mock news for speed
-    dummy_ids = np.zeros((len(ts_seq), 128))
-    dummy_masks = np.zeros((len(ts_seq), 128))
+    y_sig = df_ready["target_signal"].values[time_steps - 1 :]
 
     split = int(len(ts_seq) * 0.8)
     X_train_dl = [
         ts_seq[:split],
         ts_seq[:split],
         ts_seq[:split],
-        dummy_ids[:split],
-        dummy_masks[:split],
+        ts_seq[:split],
+        ts_seq[:split],
+        ts_seq[:split],  # Dummy peer data
     ]
     Y_train_dl = [
         y_dir[:split],
@@ -151,8 +148,9 @@ def objective(trial):
         ts_seq[split:],
         ts_seq[split:],
         ts_seq[split:],
-        dummy_ids[split:],
-        dummy_masks[split:],
+        ts_seq[split:],
+        ts_seq[split:],
+        ts_seq[split:],  # Dummy peer data
     ]
     Y_test_sig = y_sig[split:]
 
@@ -182,7 +180,7 @@ def objective(trial):
 
 
 if __name__ == "__main__":
-    from clean_artifacts import clean_optimization_artifacts
+    from scripts.ops.clean_artifacts import clean_optimization_artifacts
 
     clean_optimization_artifacts(ticker=TICKER)
 

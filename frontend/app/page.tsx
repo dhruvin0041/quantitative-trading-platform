@@ -5,7 +5,6 @@ import { PriceChart } from '@/components/dashboard/PriceChart';
 import { SignalIntelligence } from '@/components/dashboard/SignalIntelligence';
 import { PortfolioAnalytics } from '@/components/dashboard/PortfolioAnalytics';
 import { RiskDashboard } from '@/components/dashboard/RiskDashboard';
-import { PerformanceValidation } from '@/components/dashboard/PerformanceValidation';
 import { ChartData, UniverseStock } from '@/types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';

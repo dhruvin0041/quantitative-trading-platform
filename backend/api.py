@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, HTTPException, Security, Request
 from fastapi.security.api_key import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
 from fastapi.responses import Response
 
 import yfinance as yf
@@ -31,13 +31,20 @@ from src.agents.orchestrator import InstitutionalOrchestrator
 from src.execution.smart_router import PredictiveSmartRouter
 from src.execution.reporting import ReportGenerator
 from src.execution.paper_trading import PaperTradingEngine
+from src.execution.fx_engine import FXEngine
 from src.models.monitoring.drift_monitor import DriftMonitor
-from src.schemas import PredictResponse, UniverseResponse, UniverseStockItem, BacktestSummary
+from src.schemas import (
+    PredictResponse,
+    UniverseResponse,
+    UniverseStockItem,
+    BacktestSummary,
+)
 from src.execution.performance_analyzer import PerformanceAnalyzer
 from src.execution.alerts import AlertSystem
 from src.data_ingestion.sector_mapper import SectorMapper
 from src.execution.signal_journal import SignalJournal
 from src.execution.empirical_validation import ValidationAnalytics
+
 
 # --- Structured Logging ---
 class JSONFormatter(logging.Formatter):
@@ -50,6 +57,7 @@ class JSONFormatter(logging.Formatter):
             "funcName": record.funcName,
         }
         return json.dumps(log_record)
+
 
 os.makedirs("logs", exist_ok=True)
 logger = logging.getLogger(__name__)
@@ -70,10 +78,13 @@ load_dotenv()
 try:
     API_KEY = os.environ["API_KEY"]
 except KeyError:
-    logger.critical("CRITICAL: API_KEY environment variable is NOT SET. System halting for security.")
+    logger.critical(
+        "CRITICAL: API_KEY environment variable is NOT SET. System halting for security."
+    )
     API_KEY = "ENFORCE_FAILURE"
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=True)
+
 
 async def verify_api_key(api_key: str = Security(api_key_header)):
     if API_KEY == "ENFORCE_FAILURE" or api_key != API_KEY:
@@ -81,14 +92,21 @@ async def verify_api_key(api_key: str = Security(api_key_header)):
         raise HTTPException(status_code=403, detail="Invalid API Key")
     return api_key
 
+
 # --- Observability: Prometheus Metrics ---
-from prometheus_client import REGISTRY
+
 try:
-    REQUEST_COUNT = Counter('api_requests_total', 'Total API requests', ['method', 'endpoint', 'status_code'])
-    REQUEST_LATENCY = Histogram('api_request_latency_seconds', 'API request latency', ['endpoint'])
+    REQUEST_COUNT = Counter(
+        "api_requests_total",
+        "Total API requests",
+        ["method", "endpoint", "status_code"],
+    )
+    REQUEST_LATENCY = Histogram(
+        "api_request_latency_seconds", "API request latency", ["endpoint"]
+    )
 except ValueError:
-    REQUEST_COUNT = REGISTRY._names_to_collectors['api_requests_total']
-    REQUEST_LATENCY = REGISTRY._names_to_collectors['api_request_latency_seconds']
+    REQUEST_COUNT = REGISTRY._names_to_collectors["api_requests_total"]
+    REQUEST_LATENCY = REGISTRY._names_to_collectors["api_request_latency_seconds"]
 
 app = FastAPI(title="Hydra Terminal API", version="2.1.0")
 
@@ -110,16 +128,17 @@ rate_limit_store = {}
 RATE_LIMIT = 50
 RATE_WINDOW = 60
 
+
 @app.middleware("http")
 async def api_middleware(request: Request, call_next):
     client_ip = request.client.host
     now = time.time()
-    
+
     # Rate Limiting
     ip_history = rate_limit_store.get(client_ip, [])
     ip_history = [t for t in ip_history if now - t < RATE_WINDOW]
     rate_limit_store[client_ip] = ip_history
-    
+
     if len(ip_history) >= RATE_LIMIT:
         return Response(content="Rate limit exceeded", status_code=429)
     ip_history.append(now)
@@ -129,11 +148,16 @@ async def api_middleware(request: Request, call_next):
     response = await call_next(request)
     duration = time.time() - start_time
 
-    REQUEST_COUNT.labels(method=request.method, endpoint=request.url.path, status_code=response.status_code).inc()
+    REQUEST_COUNT.labels(
+        method=request.method,
+        endpoint=request.url.path,
+        status_code=response.status_code,
+    ).inc()
     if request.url.path == "/predict":
         REQUEST_LATENCY.labels(endpoint="/predict").observe(duration)
 
     return response
+
 
 # --- System Components Initialization ---
 logger.info("Initializing Hydra Ecosystem Components...")
@@ -141,6 +165,8 @@ config = load_config()
 
 with open("configs/kept_features.json", "r") as f:
     kept_features_list = json.load(f)
+
+config["data"]["num_features"] = len(kept_features_list)
 
 model_manager = ModelManager(config, kept_features_list)
 model_manager.load_all_models()
@@ -163,15 +189,24 @@ signal_journal = SignalJournal()
 validation_engine = ValidationAnalytics(signal_journal)
 
 inference_service = InferenceService(
-    model_manager, gemini_analyzer, physical_edge, dependency_graph,
-    orchestrator, smart_router, report_gen, paper_engine, perf_analyzer,
-    signal_journal
+    model_manager,
+    gemini_analyzer,
+    physical_edge,
+    dependency_graph,
+    orchestrator,
+    smart_router,
+    report_gen,
+    paper_engine,
+    perf_analyzer,
+    signal_journal,
 )
+
 
 def sanitize_ticker(ticker: str) -> str:
     if not re.match(r"^[A-Z0-9.-]{1,15}$", ticker.upper()):
         raise HTTPException(status_code=400, detail="Invalid Ticker Format")
     return ticker.upper()
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -179,22 +214,33 @@ async def startup_event():
         while True:
             await fx_engine.update_rates()
             await asyncio.sleep(300)
+
     asyncio.create_task(fx_refresh_loop())
+
 
 @app.get("/metrics")
 async def metrics():
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
 
 @app.get("/health")
 async def health_check():
     return {
         "status": "HEALTHY",
         "models_ready": model_manager.lstm_model is not None,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
     }
 
-@app.get("/universe", dependencies=[Depends(verify_api_key)], response_model=UniverseResponse)
+
+@app.get(
+    "/universe", dependencies=[Depends(verify_api_key)], response_model=UniverseResponse
+)
 async def get_stock_universe():
+    # Cache Check
+    cached_universe = await api_cache.get("universe_data")
+    if cached_universe:
+        return cached_universe
+
     def fetch_universe():
         try:
             all_tickers = []
@@ -206,25 +252,43 @@ async def get_stock_universe():
             for market_id, tickers_dict in UNIVERSES_METADATA.items():
                 for t, meta in tickers_dict.items():
                     try:
-                        prices = data['Close'][t].dropna() if isinstance(data['Close'], pd.DataFrame) else data['Close'].dropna()
+                        prices = (
+                            data["Close"][t].dropna()
+                            if isinstance(data["Close"], pd.DataFrame)
+                            else data["Close"].dropna()
+                        )
                         curr = float(prices.iloc[-1]) if len(prices) >= 1 else 0.0
                         prev = float(prices.iloc[-2]) if len(prices) >= 2 else curr
                         pct = ((curr / prev) - 1) * 100 if prev != 0 else 0.0
-                    except: curr, pct = 0.0, 0.0
-                    results.append(UniverseStockItem(
-                        ticker=t, name=meta["name"], price=curr, pct_change=pct, market=market_id,
-                        metadata={**meta, "ticker": t, "market": market_id.upper()}
-                    ))
+                    except Exception:
+                        curr, pct = 0.0, 0.0
+                    results.append(
+                        UniverseStockItem(
+                            ticker=t,
+                            name=meta["name"],
+                            price=curr,
+                            pct_change=pct,
+                            market=market_id,
+                            metadata={**meta, "ticker": t, "market": market_id.upper()},
+                        )
+                    )
             return {"universe": results}
         except Exception as e:
             logger.error(f"Failed to fetch universe: {str(e)}")
             return {"universe": []}
-    return await asyncio.to_thread(fetch_universe)
 
-@app.get("/predict", dependencies=[Depends(verify_api_key)], response_model=PredictResponse)
+    universe_data = await asyncio.to_thread(fetch_universe)
+    # Cache for 1 hour
+    await api_cache.set("universe_data", universe_data, ttl=3600)
+    return universe_data
+
+
+@app.get(
+    "/predict", dependencies=[Depends(verify_api_key)], response_model=PredictResponse
+)
 async def get_prediction(ticker: str = "AAPL"):
     ticker = sanitize_ticker(ticker)
-    
+
     # Identify Market Metadata
     metadata = None
     for m_id, m_dict in UNIVERSES_METADATA.items():
@@ -232,22 +296,36 @@ async def get_prediction(ticker: str = "AAPL"):
             metadata = {**m_dict[ticker], "ticker": ticker, "market": m_id.upper()}
             break
     if not metadata:
-        metadata = {"ticker": ticker, "market": "UNKNOWN", "exchange": "UNKNOWN", "currency": "USD", "timezone": "UTC"}
+        metadata = {
+            "ticker": ticker,
+            "market": "UNKNOWN",
+            "exchange": "UNKNOWN",
+            "currency": "USD",
+            "timezone": "UTC",
+        }
 
     cached = await api_cache.get(f"predict_{ticker}")
     if cached:
-        cached["portfolio"] = paper_engine.get_portfolio_summary({ticker: cached["current_price"]})
+        cached["portfolio"] = paper_engine.get_portfolio_summary(
+            {ticker: cached["current_price"]}
+        )
         return cached
 
     response_data = await inference_service.get_prediction(ticker, config, metadata)
     await api_cache.set(f"predict_{ticker}", response_data)
     return response_data
 
+
 @app.get("/performance", dependencies=[Depends(verify_api_key)])
 async def get_performance():
-    analysis = perf_analyzer.analyze(paper_engine.portfolio_snapshots, paper_engine.history, paper_engine.initial_capital)
-    if analysis.get("summary"): alert_system.check_performance(analysis["summary"])
-    
+    analysis = perf_analyzer.analyze(
+        paper_engine.portfolio_snapshots,
+        paper_engine.history,
+        paper_engine.initial_capital,
+    )
+    if analysis.get("summary"):
+        alert_system.check_performance(analysis["summary"])
+
     accs = model_manager.accuracies
     analysis["models"] = {
         "ensemble": accs.get("ensemble_accuracy", 54.6),
@@ -255,26 +333,37 @@ async def get_performance():
         "xgboost": accs.get("xgb_accuracy", 0.0),
         "lightgbm": accs.get("lgbm_accuracy", 0.0),
         "dqn": accs.get("dqn_accuracy", 0.0),
-        "consensus_rate": 0.0
+        "consensus_rate": 0.0,
     }
-    analysis["signals"] = {"active": len([p for p in paper_engine.positions.values() if p["shares"] > 0]), "historical": len(paper_engine.history), "regime": "LIVE EXECUTION"}
+    analysis["signals"] = {
+        "active": len([p for p in paper_engine.positions.values() if p["shares"] > 0]),
+        "historical": len(paper_engine.history),
+        "regime": "LIVE EXECUTION",
+    }
     return analysis
 
-@app.get("/backtest", dependencies=[Depends(verify_api_key)], response_model=BacktestSummary)
+
+@app.get(
+    "/backtest", dependencies=[Depends(verify_api_key)], response_model=BacktestSummary
+)
 async def get_backtest(ticker: str = "AAPL", period: str = "1y"):
     return BacktestService.get_summary(ticker, period)
+
 
 @app.get("/alerts", dependencies=[Depends(verify_api_key)])
 async def get_alerts():
     return {"alerts": alert_system.get_recent_alerts()}
 
+
 @app.get("/fx_rates", dependencies=[Depends(verify_api_key)])
 async def get_fx_rates():
     return fx_engine.get_summary()
 
+
 @app.get("/validation", dependencies=[Depends(verify_api_key)])
 async def get_validation():
     return await asyncio.to_thread(validation_engine.get_full_dashboard_data)
+
 
 @app.post("/portfolio/base_currency", dependencies=[Depends(verify_api_key)])
 async def set_base_currency(request: Request):
@@ -285,6 +374,8 @@ async def set_base_currency(request: Request):
     paper_engine.set_base_currency(new_currency)
     return {"status": "SUCCESS", "base_currency": new_currency}
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=False)

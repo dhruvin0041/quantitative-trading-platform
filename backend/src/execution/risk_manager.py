@@ -82,10 +82,10 @@ def get_position_sizing(model_confidence, trade_history=None):
         wins = [t for t in trade_history if t.get("pnl", 0) > 0]
         losses = [t for t in trade_history if t.get("pnl", 0) < 0]
         win_rate = len(wins) / len(trade_history)
-        
+
         avg_win = np.mean([t["pnl"] for t in wins]) if wins else 0
         avg_loss = abs(np.mean([t["pnl"] for t in losses])) if losses else 0
-        
+
         avg_win_loss = (avg_win / avg_loss) if avg_loss > 0 else 1.2
     else:
         win_rate = 0.55

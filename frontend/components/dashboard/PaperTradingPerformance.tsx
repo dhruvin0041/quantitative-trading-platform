@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Target, TrendingUp, BarChart, History, PieChart, Activity, Info, Briefcase, CheckCircle2, AlertCircle } from 'lucide-react';
+
+import { Target, TrendingUp, BarChart, History, PieChart, Activity, Briefcase } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface PerformanceSummary {
@@ -28,7 +28,7 @@ interface PaperTradingPerformanceProps {
 }
 
 export function PaperTradingPerformance({ currency = '$' }: PaperTradingPerformanceProps) {
-  const [performance, setPerformance] = useState<any>(null);
+  const [performance, setPerformance] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
 
   const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
@@ -60,7 +60,8 @@ export function PaperTradingPerformance({ currency = '$' }: PaperTradingPerforma
     </div>
   );
 
-  const summary: PerformanceSummary = performance?.summary || {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const summary: PerformanceSummary = (performance as any)?.summary || {
     total_return: 0, sharpe: 0, sortino: 0, calmar: 0, max_drawdown: 0, win_rate: 0, profit_factor: 0, today_pnl: 0, mtd_pnl: 0, ytd_pnl: 0,
     total_trades: 0, open_trades: 0, closed_trades: 0, winning_trades: 0, losing_trades: 0
   };

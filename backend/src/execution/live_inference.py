@@ -17,43 +17,51 @@ from src.data_ingestion.market_data import fetch_historical_data, get_sector_pee
 
 # ... [FEATURE_COLUMNS and other functions] ...
 
-def compute_shap_explanation(model, X_flat):
+
+def compute_shap_explanation(model, X_flat, signal_idx=2):
     """
-    Computes SHAP values for XGBoost model to identify top drivers.
+    Computes SHAP values for the specified signal index (0=Sell, 1=Hold, 2=Buy).
     """
     try:
         # DATA INTEGRITY FIX: SHAP requires DataFrame for proper feature mapping
         X_df = pd.DataFrame(X_flat, columns=FEATURE_COLUMNS)
-        
+
         explainer = shap.TreeExplainer(model)
         shap_values = explainer.shap_values(X_df)
-        
+
         # Handle multiclass output
-        # If it's a 3D array
-        if hasattr(shap_values, 'ndim') and shap_values.ndim == 3:
-            if shap_values.shape[2] == 3: # LightGBM (samples, features, classes)
-                vals = shap_values[0, :, 2] # Class 2 (BUY)
-            else: # (samples, classes, features)
-                vals = shap_values[0, 2, :] # Class 2 (BUY)
+        if hasattr(shap_values, "ndim") and shap_values.ndim == 3:
+            if shap_values.shape[2] == 3:  # (samples, features, classes)
+                vals = shap_values[0, :, signal_idx]
+            else:  # (samples, classes, features)
+                vals = shap_values[0, signal_idx, :]
         elif isinstance(shap_values, list):
-            vals = shap_values[2][0] if len(shap_values) > 2 else shap_values[0][0]
+            # For older SHAP versions or certain models returning list of classes
+            vals = shap_values[signal_idx][0] if len(shap_values) > signal_idx else shap_values[0][0]
         else:
             vals = shap_values[0]
-            
+
         shap_importance = dict(zip(FEATURE_COLUMNS, vals))
         # Sort by magnitude
-        top_drivers_raw = sorted(shap_importance.items(), key=lambda x: abs(x[1]), reverse=True)[:3]
-        
+        top_drivers_raw = sorted(
+            shap_importance.items(), key=lambda x: abs(x[1]), reverse=True
+        )[:3]
+
         drivers = []
         for feat, val in top_drivers_raw:
             direction = "bullish" if val > 0 else "bearish"
-            drivers.append({"feature": feat, "impact": abs(float(val)), "direction": direction})
-            
-        explanation = f"Signal driven primarily by {', '.join([d['feature'] for d in drivers])}"
+            drivers.append(
+                {"feature": feat, "impact": abs(float(val)), "direction": direction}
+            )
+
+        explanation = (
+            f"Signal driven primarily by {', '.join([d['feature'] for d in drivers])}"
+        )
         return {"top_drivers": drivers, "explanation": explanation}
     except Exception as e:
         print(f"SHAP error: {str(e)}")
         return {"top_drivers": [], "explanation": f"XAI engine error: {str(e)}"}
+
 
 def get_calibrated_probs(model, calibrators, X):
     raw_probs = model.predict_proba(X)[0]
@@ -61,34 +69,37 @@ def get_calibrated_probs(model, calibrators, X):
     sell_prob = calibrators["sell"].predict([raw_probs[0]])[0]
     hold_prob = max(0, 1.0 - buy_prob - sell_prob)
     total = buy_prob + sell_prob + hold_prob
-    if total == 0: total = 1.0
-    return np.array([sell_prob/total, hold_prob/total, buy_prob/total])
+    if total == 0:
+        total = 1.0
+    return np.array([sell_prob / total, hold_prob / total, buy_prob / total])
+
 
 def lstm_calibrated_probs(raw_probs, temperature=2.5):
-    logits = np.log(np.clip(raw_probs, 1e-7, 1-1e-7))
+    logits = np.log(np.clip(raw_probs, 1e-7, 1 - 1e-7))
     scaled_logits = logits / temperature
     exps = np.exp(scaled_logits - np.max(scaled_logits))
     return exps / np.sum(exps)
+
 
 def get_meta_prediction(base_probs, regime_id, volatility_id, vol_ratio, rsi, adx):
     """
     Blends individual model probabilities using the ElasticNet Meta-Ensemble.
     """
     try:
-        meta = MetaEnsemble.load('artifacts/meta_ensemble.joblib')
-        
+        meta = MetaEnsemble.load("artifacts/meta_ensemble.joblib")
+
         # Build meta-feature vector as specified
         # [lstm_prob, xgb_prob, lgbm_prob, dqn_buy, dqn_sell, regime, vol_state, vol_ratio, rsi/100, adx/100]
         meta_features = {
             "LSTM": base_probs["LSTM"],
             "XGBoost": base_probs["XGBoost"],
             "LightGBM": base_probs["LightGBM"],
-            "DQN": base_probs["DQN"]
+            "DQN": base_probs["DQN"],
         }
-        
+
         final_probs = meta.predict_proba(meta_features, regime_id)
         uncertainty = meta.calculate_uncertainty(meta_features, final_probs)
-        
+
         return final_probs, uncertainty
     except Exception as e:
         print(f"Meta-Ensemble error: {e}. Falling back to average.")
@@ -97,9 +108,20 @@ def get_meta_prediction(base_probs, regime_id, volatility_id, vol_ratio, rsi, ad
 
 
 FEATURE_COLUMNS = [
-    'MA20_vs_MA50', 'EMA9_vs_EMA21', 'Price_vs_EMA9', 'Price_vs_EMA21',
-    'VIX_Level', 'BB_Width', 'BB_Position', 'RSI', 'ADX', 'MACD_Hist', 
-    'Relative_Strength', 'OBV_Change', 'Return', 'Volume_Ratio'
+    "MA20_vs_MA50",
+    "EMA9_vs_EMA21",
+    "Price_vs_EMA9",
+    "Price_vs_EMA21",
+    "VIX_Level",
+    "BB_Width",
+    "BB_Position",
+    "RSI",
+    "ADX",
+    "MACD_Hist",
+    "Relative_Strength",
+    "OBV_Change",
+    "Return",
+    "Volume_Ratio",
 ]
 
 
@@ -109,16 +131,16 @@ def load_config():
 
 
 def detect_regime(spy_data):
-    spy_ma50 = spy_data['Close'].rolling(50).mean().iloc[-1]
-    spy_ma200 = spy_data['Close'].rolling(200).mean().iloc[-1]
-    spy_current = spy_data['Close'].iloc[-1]
-    
+    spy_ma50 = spy_data["Close"].rolling(50).mean().iloc[-1]
+    spy_ma200 = spy_data["Close"].rolling(200).mean().iloc[-1]
+    spy_current = spy_data["Close"].iloc[-1]
+
     if spy_current > spy_ma50 > spy_ma200:
-        return 'BULL', 0.55   # Normal threshold
+        return "BULL", 0.55  # Normal threshold
     elif spy_current < spy_ma50 < spy_ma200:
-        return 'BEAR', 0.62   # Require higher conviction in downtrend
+        return "BEAR", 0.62  # Require higher conviction in downtrend
     else:
-        return 'NEUTRAL', 0.58  # Transitioning market
+        return "NEUTRAL", 0.58  # Transitioning market
 
 
 def is_near_earnings(ticker):
@@ -130,97 +152,113 @@ def is_near_earnings(ticker):
         next_earnings = earnings_dates.index[0]
         days_to_earnings = abs((next_earnings - pd.Timestamp.now()).days)
         return days_to_earnings <= 2
-    except:
+    except Exception:
         return False
 
 
 def add_upgraded_features(df, spy_df, vix_df):
     # Momentum Indicators
-    delta = df['Close'].diff()
+    delta = df["Close"].diff()
     # Institutional Standard: Wilder's RSI (EMA-based)
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
-    avg_gain = gain.ewm(alpha=1/14, min_periods=14, adjust=False).mean()
-    avg_loss = loss.ewm(alpha=1/14, min_periods=14, adjust=False).mean()
+    avg_gain = gain.ewm(alpha=1 / 14, min_periods=14, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1 / 14, min_periods=14, adjust=False).mean()
     RS = avg_gain / (avg_loss + 1e-9)
-    df['RSI'] = 100 - (100 / (1 + RS))
+    df["RSI"] = 100 - (100 / (1 + RS))
 
-    ema12 = df['Close'].ewm(span=12).mean()
-    ema26 = df['Close'].ewm(span=26).mean()
-    df['MACD'] = ema12 - ema26
-    df['MACD_Signal'] = df['MACD'].ewm(span=9).mean()
-    df['MACD_Hist'] = df['MACD'] - df['MACD_Signal']
+    ema12 = df["Close"].ewm(span=12).mean()
+    ema26 = df["Close"].ewm(span=26).mean()
+    df["MACD"] = ema12 - ema26
+    df["MACD_Signal"] = df["MACD"].ewm(span=9).mean()
+    df["MACD_Hist"] = df["MACD"] - df["MACD_Signal"]
 
-    low14 = df['Low'].rolling(14).min()
-    high14 = df['High'].rolling(14).max()
-    df['Stoch_K'] = 100 * (df['Close'] - low14) / (high14 - low14 + 1e-9)
-    df['Stoch_D'] = df['Stoch_K'].rolling(3).mean()
+    low14 = df["Low"].rolling(14).min()
+    high14 = df["High"].rolling(14).max()
+    df["Stoch_K"] = 100 * (df["Close"] - low14) / (high14 - low14 + 1e-9)
+    df["Stoch_D"] = df["Stoch_K"].rolling(3).mean()
 
     # Volatility Indicators
-    df['BB_Mid'] = df['Close'].rolling(20).mean()
-    df['BB_Std'] = df['Close'].rolling(20).std()
-    df['BB_Upper'] = df['BB_Mid'] + 2 * df['BB_Std']
-    df['BB_Lower'] = df['BB_Mid'] - 2 * df['BB_Std']
-    df['BB_Width'] = (df['BB_Upper'] - df['BB_Lower']) / (df['BB_Mid'] + 1e-9)
-    df['BB_Position'] = (df['Close'] - df['BB_Lower']) / (df['BB_Upper'] - df['BB_Lower'] + 1e-9)
+    df["BB_Mid"] = df["Close"].rolling(20).mean()
+    df["BB_Std"] = df["Close"].rolling(20).std()
+    df["BB_Upper"] = df["BB_Mid"] + 2 * df["BB_Std"]
+    df["BB_Lower"] = df["BB_Mid"] - 2 * df["BB_Std"]
+    df["BB_Width"] = (df["BB_Upper"] - df["BB_Lower"]) / (df["BB_Mid"] + 1e-9)
+    df["BB_Position"] = (df["Close"] - df["BB_Lower"]) / (
+        df["BB_Upper"] - df["BB_Lower"] + 1e-9
+    )
 
-    df['TR'] = pd.concat([
-        df['High'] - df['Low'],
-        (df['High'] - df['Close'].shift()).abs(),
-        (df['Low'] - df['Close'].shift()).abs()
-    ], axis=1).max(axis=1)
-    df['ATR'] = df['TR'].rolling(14).mean()
-    df['ATR_Pct'] = df['ATR'] / (df['Close'] + 1e-9)
+    df["TR"] = pd.concat(
+        [
+            df["High"] - df["Low"],
+            (df["High"] - df["Close"].shift()).abs(),
+            (df["Low"] - df["Close"].shift()).abs(),
+        ],
+        axis=1,
+    ).max(axis=1)
+    df["ATR"] = df["TR"].rolling(14).mean()
+    df["ATR_Pct"] = df["ATR"] / (df["Close"] + 1e-9)
 
     # Volume Indicators
-    df['OBV'] = (np.sign(df['Close'].diff()) * df['Volume']).fillna(0).cumsum()
-    df['OBV_Change'] = df['OBV'].pct_change()
+    df["OBV"] = (np.sign(df["Close"].diff()) * df["Volume"]).fillna(0).cumsum()
+    df["OBV_Change"] = df["OBV"].pct_change()
 
-    df['Volume_MA20'] = df['Volume'].rolling(20).mean()
-    df['Volume_Ratio'] = df['Volume'] / (df['Volume_MA20'] + 1e-9)
+    df["Volume_MA20"] = df["Volume"].rolling(20).mean()
+    df["Volume_Ratio"] = df["Volume"] / (df["Volume_MA20"] + 1e-9)
 
     # Trend Indicators
-    df['EMA9'] = df['Close'].ewm(span=9).mean()
-    df['EMA21'] = df['Close'].ewm(span=21).mean()
-    df['EMA9_vs_EMA21'] = (df['EMA9'] - df['EMA21']) / (df['Close'] + 1e-9)
-    df['Price_vs_EMA9'] = (df['Close'] - df['EMA9']) / (df['Close'] + 1e-9)
-    df['Price_vs_EMA21'] = (df['Close'] - df['EMA21']) / (df['Close'] + 1e-9)
+    df["EMA9"] = df["Close"].ewm(span=9).mean()
+    df["EMA21"] = df["Close"].ewm(span=21).mean()
+    df["EMA9_vs_EMA21"] = (df["EMA9"] - df["EMA21"]) / (df["Close"] + 1e-9)
+    df["Price_vs_EMA9"] = (df["Close"] - df["EMA9"]) / (df["Close"] + 1e-9)
+    df["Price_vs_EMA21"] = (df["Close"] - df["EMA21"]) / (df["Close"] + 1e-9)
 
-    plus_DM = df['High'].diff()
-    minus_DM = -df['Low'].diff()
-    
+    plus_DM = df["High"].diff()
+    minus_DM = -df["Low"].diff()
+
     # Correct ADX directional movement
     plus_DM_true = np.where((plus_DM > minus_DM) & (plus_DM > 0), plus_DM, 0)
     minus_DM_true = np.where((minus_DM > plus_DM) & (minus_DM > 0), minus_DM, 0)
-    
-    TR14 = df['TR'].rolling(14).sum()
-    plus_DI = 100 * (pd.Series(plus_DM_true, index=df.index).rolling(14).sum() / (TR14 + 1e-9))
-    minus_DI = 100 * (pd.Series(minus_DM_true, index=df.index).rolling(14).sum() / (TR14 + 1e-9))
+
+    TR14 = df["TR"].rolling(14).sum()
+    plus_DI = 100 * (
+        pd.Series(plus_DM_true, index=df.index).rolling(14).sum() / (TR14 + 1e-9)
+    )
+    minus_DI = 100 * (
+        pd.Series(minus_DM_true, index=df.index).rolling(14).sum() / (TR14 + 1e-9)
+    )
     DX = 100 * (abs(plus_DI - minus_DI) / (plus_DI + minus_DI + 1e-9))
-    df['ADX'] = DX.rolling(14).mean()
+    df["ADX"] = DX.rolling(14).mean()
 
     # Price Pattern Features
-    df['Candle_Body'] = abs(df['Close'] - df['Open']) / (df['High'] - df['Low'] + 1e-9)
-    df['Upper_Shadow'] = (df['High'] - df[['Close','Open']].max(axis=1)) / (df['ATR'] + 1e-9)
-    df['Lower_Shadow'] = (df[['Close','Open']].min(axis=1) - df['Low']) / (df['ATR'] + 1e-9)
-    df['Gap'] = (df['Open'] - df['Close'].shift()) / (df['Close'].shift() + 1e-9)
+    df["Candle_Body"] = abs(df["Close"] - df["Open"]) / (df["High"] - df["Low"] + 1e-9)
+    df["Upper_Shadow"] = (df["High"] - df[["Close", "Open"]].max(axis=1)) / (
+        df["ATR"] + 1e-9
+    )
+    df["Lower_Shadow"] = (df[["Close", "Open"]].min(axis=1) - df["Low"]) / (
+        df["ATR"] + 1e-9
+    )
+    df["Gap"] = (df["Open"] - df["Close"].shift()) / (df["Close"].shift() + 1e-9)
 
     # Keep existing features
-    df['Return'] = df['Close'].pct_change()
-    df['Volume_Change'] = df['Volume'].pct_change()
-    df['High_Low'] = df['High'] - df['Low']
-    df['MA20'] = df['Close'].rolling(20).mean()
-    df['MA50'] = df['Close'].rolling(50).mean()
-    df['MA20_vs_MA50'] = (df['MA20'] - df['MA50']) / (df['Close'] + 1e-9)
+    df["Return"] = df["Close"].pct_change()
+    df["Volume_Change"] = df["Volume"].pct_change()
+    df["High_Low"] = df["High"] - df["Low"]
+    df["MA20"] = df["Close"].rolling(20).mean()
+    df["MA50"] = df["Close"].rolling(50).mean()
+    df["MA20_vs_MA50"] = (df["MA20"] - df["MA50"]) / (df["Close"] + 1e-9)
 
     # Market Context Features
-    df['SPY_Return'] = spy_df['Close'].pct_change().reindex(df.index)
-    df['VIX_Level'] = vix_df['Close'].reindex(df.index)
-    df['VIX_Change'] = vix_df['Close'].pct_change().reindex(df.index)
-    df['Relative_Strength'] = df['Return'] - df['SPY_Return']
-    
-    df[['SPY_Return','VIX_Level','VIX_Change','Relative_Strength']] = \
-        df[['SPY_Return','VIX_Level','VIX_Change','Relative_Strength']].ffill().fillna(0)
+    df["SPY_Return"] = spy_df["Close"].pct_change().reindex(df.index)
+    df["VIX_Level"] = vix_df["Close"].reindex(df.index)
+    df["VIX_Change"] = vix_df["Close"].pct_change().reindex(df.index)
+    df["Relative_Strength"] = df["Return"] - df["SPY_Return"]
+
+    df[["SPY_Return", "VIX_Level", "VIX_Change", "Relative_Strength"]] = (
+        df[["SPY_Return", "VIX_Level", "VIX_Change", "Relative_Strength"]]
+        .ffill()
+        .fillna(0)
+    )
 
     df.dropna(inplace=True)
     return df
@@ -233,12 +271,14 @@ def fetch_live_data(ticker, config):
         start_date="2022-01-01",
         end_date=pd.Timestamp.now().strftime("%Y-%m-%d"),
     )
-    
-    spy_df = yf.download('SPY', period='2y', interval='1d', progress=False)
-    vix_df = yf.download('^VIX', period='2y', interval='1d', progress=False)
-    
-    if isinstance(spy_df.columns, pd.MultiIndex): spy_df.columns = spy_df.columns.droplevel(1)
-    if isinstance(vix_df.columns, pd.MultiIndex): vix_df.columns = vix_df.columns.droplevel(1)
+
+    spy_df = yf.download("SPY", period="2y", interval="1d", progress=False)
+    vix_df = yf.download("^VIX", period="2y", interval="1d", progress=False)
+
+    if isinstance(spy_df.columns, pd.MultiIndex):
+        spy_df.columns = spy_df.columns.droplevel(1)
+    if isinstance(vix_df.columns, pd.MultiIndex):
+        vix_df.columns = vix_df.columns.droplevel(1)
 
     df = add_upgraded_features(df, spy_df, vix_df)
 
@@ -269,26 +309,38 @@ def fetch_live_data(ticker, config):
     ts_sequence = scaled_data.reshape(1, time_steps, -1)
     peer_sequence = peer_scaled.reshape(1, time_steps, -1)
     tabular_row = scaled_data[-1].reshape(1, -1)
-    
+
     price_series = df["Close"].squeeze()
     current_price = float(price_series.iloc[-1])
 
     regime, req_conf = detect_regime(spy_df)
 
-    current_volume = df['Volume'].iloc[-1]
-    avg_volume_20d = df['Volume'].rolling(20).mean().iloc[-1]
+    current_volume = df["Volume"].iloc[-1]
+    avg_volume_20d = df["Volume"].rolling(20).mean().iloc[-1]
     vol_ratio = current_volume / (avg_volume_20d + 1e-9)
 
     tech_snapshot = {
-        "RSI": round(float(df['RSI'].iloc[-1]), 2),
-        "MACD": round(float(df['MACD'].iloc[-1]), 2),
-        "ATR": round(float(df['ATR'].iloc[-1]), 2),
-        "BB_Position": round(float(df['BB_Position'].iloc[-1]), 2),
-        "ADX": round(float(df['ADX'].iloc[-1]), 2),
-        "Volume_Ratio": round(float(vol_ratio), 2)
+        "RSI": round(float(df["RSI"].iloc[-1]), 2),
+        "MACD": round(float(df["MACD"].iloc[-1]), 2),
+        "ATR": round(float(df["ATR"].iloc[-1]), 2),
+        "BB_Position": round(float(df["BB_Position"].iloc[-1]), 2),
+        "ADX": round(float(df["ADX"].iloc[-1]), 2),
+        "Volume_Ratio": round(float(vol_ratio), 2),
     }
 
-    return ts_sequence, peer_sequence, tabular_row, current_price, config, regime, req_conf, vol_ratio, tech_snapshot
+    return (
+        ts_sequence,
+        peer_sequence,
+        tabular_row,
+        current_price,
+        config,
+        regime,
+        req_conf,
+        vol_ratio,
+        tech_snapshot,
+        df,
+        spy_df,
+    )
 
 
 def fetch_live_news(ticker, tokenizer, config):
@@ -302,7 +354,9 @@ def main():
     ticker = "MSFT"
     config = load_config()
 
-    ts_seq, peer_seq, tabular, price, config, regime, req_conf, vol_ratio, tech = fetch_live_data(ticker, config)
+    ts_seq, peer_seq, tabular, price, config, regime, req_conf, vol_ratio, tech = (
+        fetch_live_data(ticker, config)
+    )
 
     config["data"]["num_features"] = len(FEATURE_COLUMNS)
 
@@ -311,14 +365,17 @@ def main():
 
     xgb_model = xgb.XGBClassifier()
     xgb_model.load_model("artifacts/xgb_ensemble.json")
-    
+
     lgbm_model = joblib.load("artifacts/lgbm_agent.joblib")
 
-    dl_p = dl_model.predict([ts_seq, ts_seq, ts_seq, ts_seq, ts_seq, peer_seq], verbose=0)[2][0]
+    dl_p = dl_model.predict(
+        [ts_seq, ts_seq, ts_seq, ts_seq, ts_seq, peer_seq], verbose=0
+    )[2][0]
     xgb_p = xgb_model.predict_proba(tabular)[0]
     lgbm_p = lgbm_model.predict_proba(tabular)[0]
 
     votes = []
+
     def get_vote(p):
         """
         p is [prob_sell, prob_hold, prob_buy]
@@ -326,45 +383,49 @@ def main():
         """
         idx = np.argmax(p)
         if p[idx] < req_conf:
-            return 'HOLD' # No conviction
-        
-        if idx == 0: return 'SELL'
-        elif idx == 2: return 'BUY'
-        else: return 'HOLD'
-    
+            return "HOLD"  # No conviction
+
+        if idx == 0:
+            return "SELL"
+        elif idx == 2:
+            return "BUY"
+        else:
+            return "HOLD"
+
     votes.append(get_vote(dl_p))
     votes.append(get_vote(xgb_p))
     votes.append(get_vote(lgbm_p))
 
-    buy_votes = votes.count('BUY')
-    sell_votes = votes.count('SELL')
+    buy_votes = votes.count("BUY")
+    sell_votes = votes.count("SELL")
 
     if buy_votes >= 2:
-        final_signal = 'BUY'
+        final_signal = "BUY"
         # Average the 'Buy' probability across models
         confidence = (sum([dl_p[2], xgb_p[2], lgbm_p[2]]) / 3) * 100
     elif sell_votes >= 2:
-        final_signal = 'SELL'
+        final_signal = "SELL"
         # Average the 'Sell' probability across models
         confidence = (sum([dl_p[0], xgb_p[0], lgbm_p[0]]) / 3) * 100
     else:
-        final_signal = 'VETOED'
+        final_signal = "VETOED"
         # For vetoed, use the highest conflicting probability as the 'uncertainty' metric
         confidence = (max(dl_p.max(), xgb_p.max(), lgbm_p.max())) * 100
-    
+
     signal_note = None
     if is_near_earnings(ticker):
-        final_signal = 'HOLD'
-        signal_note = 'Suppressed: Earnings window'
+        final_signal = "HOLD"
+        signal_note = "Suppressed: Earnings window"
     elif vol_ratio < 0.7:
-        final_signal = 'HOLD'
-        signal_note = 'Suppressed: Low volume (ratio: {:.2f})'.format(vol_ratio)
+        final_signal = "HOLD"
+        signal_note = "Suppressed: Low volume (ratio: {:.2f})".format(vol_ratio)
 
     print("=" * 40)
     print(f"UPGRADED HYDRA REPORT: {ticker}")
     print(f"Price: ${price:.2f} | Regime: {regime} | Vol Ratio: {vol_ratio:.2f}")
     print(f"Final Action: {final_signal} ({confidence:.1f}%)")
-    if signal_note: print(f"NOTE: {signal_note}")
+    if signal_note:
+        print(f"NOTE: {signal_note}")
     print("-" * 20)
     print(f"DL Signal: {votes[0]} ({dl_p[2]:.2f})")
     print(f"XGB Signal: {votes[1]} ({xgb_p[2]:.2f})")

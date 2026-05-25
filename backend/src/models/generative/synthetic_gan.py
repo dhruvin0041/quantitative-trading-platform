@@ -58,29 +58,30 @@ class MarketTimeGAN:
             peak_capital = capital
             max_dd = 0.0
             shares = 0
-            
+
             for t in range(path.shape[0]):
                 state = path[t]
                 if len(state) < dqn_agent.state_size:
                     state = np.pad(state, (0, dqn_agent.state_size - len(state)))
-                
+
                 action = dqn_agent.act(state)
                 # Use first feature as synthetic price proxy
                 price = 100 * (1 + state[0])
-                if price <= 0: price = 1.0
-                    
-                if action == 2 and capital >= price: # BUY
+                if price <= 0:
+                    price = 1.0
+
+                if action == 2 and capital >= price:  # BUY
                     shares += 1
                     capital -= price
-                elif action == 0 and shares > 0: # SELL
+                elif action == 0 and shares > 0:  # SELL
                     capital += shares * price
                     shares = 0
-                    
+
                 current_value = capital + (shares * price)
                 peak_capital = max(peak_capital, current_value)
                 dd = (peak_capital - current_value) / peak_capital
                 max_dd = max(max_dd, dd)
-                
+
             results.append(max_dd)
 
         return {

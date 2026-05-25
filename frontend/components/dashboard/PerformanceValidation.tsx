@@ -3,6 +3,7 @@ import { Trophy } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export function PerformanceValidation() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [metrics, setMetrics] = useState<any>(null);
 
   useEffect(() => {
@@ -40,6 +41,7 @@ export function PerformanceValidation() {
       </div>
       <div className="p-4 flex flex-col gap-2 flex-1 justify-center">
         {metrics.map((metric: any, i: number) => (
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           <motion.div 
             key={metric.label}
             initial={{ opacity: 0, x: -10 }}

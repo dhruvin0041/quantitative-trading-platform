@@ -10,12 +10,13 @@ from src.models.neural.tft_agent import build_tft_branch
 
 logger = logging.getLogger(__name__)
 
+
 class ModelManager:
     def __init__(self, config, kept_features_list):
         self.config = config
         self.kept_features_list = kept_features_list
         self.num_features = len(kept_features_list)
-        
+
         self.lstm_model = None
         self.tft_model = None
         self.xgb_model = None
@@ -40,11 +41,11 @@ class ModelManager:
                 self.accuracies = json.load(f)
         except Exception:
             self.accuracies = {
-                "ensemble_accuracy": 54.6, 
-                "dl_accuracy": 52.1, 
-                "xgb_accuracy": 55.4, 
-                "lgbm_accuracy": 53.2, 
-                "dqn_accuracy": 48.9
+                "ensemble_accuracy": 54.6,
+                "dl_accuracy": 52.1,
+                "xgb_accuracy": 55.4,
+                "lgbm_accuracy": 53.2,
+                "dqn_accuracy": 48.9,
             }
 
     def _load_lstm(self):
@@ -58,7 +59,7 @@ class ModelManager:
         try:
             tft_input, tft_output = build_tft_branch(
                 time_steps=self.config["data"]["time_steps"],
-                num_features=self.num_features
+                num_features=self.num_features,
             )
             self.tft_model = keras.Model(inputs=tft_input, outputs=tft_output)
             self.tft_model.load_weights("artifacts/tft_quantile_weights.weights.h5")
