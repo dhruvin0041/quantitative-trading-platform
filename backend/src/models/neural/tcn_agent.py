@@ -1,6 +1,5 @@
 import tensorflow as tf
-from keras.layers import Input, Conv1D, Dense, Dropout, SpatialDropout1D, BatchNormalization, Activation, Add
-import keras
+from keras.layers import Input, Conv1D, Dense, SpatialDropout1D, BatchNormalization, Activation, Add
 
 def build_residual_block(x, dilation_rate, nb_filters, kernel_size, padding, dropout_rate=0.2):
     """

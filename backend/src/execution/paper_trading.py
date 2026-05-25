@@ -1,7 +1,6 @@
 import json
 import os
 from datetime import datetime
-import pandas as pd
 import numpy as np
 
 from src.execution.fx_engine import FXEngine
@@ -63,7 +62,7 @@ class PaperTradingEngine:
             return price * (1 - slippage)
         return price
 
-    def execute_trade(self, ticker, action, price, confidence_fraction, regime="NORMAL", sector="Unknown", stop_loss=None, take_profit=None, currency="USD", market="USA"):
+    def execute_trade(self, ticker, action, price, confidence_fraction, regime="NORMAL", sector="Unknown", stop_loss=None, take_profit=None, currency="USD", market="USA", signal_id=None):
         if action == "HOLD" or action == "VETOED" or "SCALE_BACK" in action:
             return None
             
@@ -87,6 +86,7 @@ class PaperTradingEngine:
             if self.capital >= cost_base and shares_to_buy > 0:
                 self.capital -= cost_base
                 self.positions[ticker] = {
+                    "signal_id": signal_id,
                     "shares": shares_to_buy, 
                     "avg_price": executed_price, 
                     "sector": sector,
@@ -108,7 +108,8 @@ class PaperTradingEngine:
                     "regime": regime,
                     "sector": sector,
                     "stop_loss": stop_loss,
-                    "take_profit": take_profit
+                    "take_profit": take_profit,
+                    "signal_id": signal_id
                 }
                 self.history.append(trade_record)
                 
@@ -137,7 +138,9 @@ class PaperTradingEngine:
                     "revenue_base": revenue_base,
                     "pnl": pnl_base,
                     "regime": regime,
-                    "sector": self.positions[ticker].get("sector", "Unknown")
+                    "sector": self.positions[ticker].get("sector", "Unknown"),
+                    "signal_id": self.positions[ticker].get("signal_id"),
+                    "entry_time": self.positions[ticker].get("entry_time")
                 }
                 self.positions.pop(ticker, None)
                 self.history.append(trade_record)
@@ -199,7 +202,9 @@ class PaperTradingEngine:
                     "revenue_base": revenue_base,
                     "pnl": pnl_base,
                     "regime": "AUTO",
-                    "sector": pos.get("sector", "Unknown")
+                    "sector": pos.get("sector", "Unknown"),
+                    "signal_id": pos.get("signal_id"),
+                    "entry_time": pos.get("entry_time")
                 }
                 self.history.append(trade_record)
                 self.positions.pop(ticker)

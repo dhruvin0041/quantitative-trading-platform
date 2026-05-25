@@ -2,7 +2,6 @@
 import joblib
 import json
 import pandas as pd
-import numpy as np
 import yfinance as yf
 from sklearn.preprocessing import StandardScaler
 from src.execution.live_inference import add_upgraded_features, FEATURE_COLUMNS

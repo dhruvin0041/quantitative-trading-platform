@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import random
-from collections import deque
 
 class DuelingDQNetwork(nn.Module):
     def __init__(self, state_size, action_size):

@@ -1,14 +1,11 @@
 import tensorflow as tf
 import keras
 from keras.layers import (
-    Concatenate, 
     Dense, 
     Dropout, 
     BatchNormalization, 
     MultiHeadAttention, 
     LayerNormalization, 
-    GlobalAveragePooling1D,
-    Reshape,
     Layer
 )
 from src.models.neural.lstm_branch import build_lstm_branch
@@ -16,7 +13,6 @@ from src.models.neural.cnn_branch import build_cnn_branch
 from src.models.neural.transformer_branch import build_transformer_branch
 from src.models.neural.tcn_agent import build_tcn_branch
 from src.models.neural.patchtst_agent import build_patchtst_branch
-from src.models.neural.tft_agent import build_tft_branch
 
 class CrossModalAttention(Layer):
     """

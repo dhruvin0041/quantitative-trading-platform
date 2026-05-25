@@ -5,8 +5,6 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 import xgboost as xgb
-import tensorflow as tf
-from datetime import datetime, timedelta
 import warnings
 
 # Suppress warnings
@@ -15,12 +13,12 @@ os.environ["TF_USE_LEGACY_KERAS"] = "1"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
 # Imports from project
-from src.execution.live_inference import load_config, add_upgraded_features, get_meta_prediction, FEATURE_COLUMNS
+from src.execution.live_inference import load_config, add_upgraded_features, FEATURE_COLUMNS
 from src.models.neural.fusion_network import build_fusion_model
 from src.models.rl.dqn_agent import DQNAgent
 from src.models.ensemble.meta_ensemble import MetaEnsemble
 from src.models.regime_detector import RegimeDetector
-from src.optimization.objective_functions import calculate_sharpe_ratio, calculate_max_drawdown, calculate_profit_factor
+from src.optimization.objective_functions import calculate_sharpe_ratio
 
 FEATURE_COLUMNS = [
     'MA20_vs_MA50', 'EMA9_vs_EMA21', 'Price_vs_EMA9', 'Price_vs_EMA21',

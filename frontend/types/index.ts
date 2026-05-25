@@ -1,5 +1,6 @@
 export interface AssetMetadata {
   ticker: string;
+  name?: string;
   market: string;
   exchange: string;
   currency: string;
@@ -101,6 +102,14 @@ export interface ChartData {
   };
   technical_snapshot: TechnicalSnapshot;
   qualitative_alpha?: string | null;
+  risk?: {
+    var_95: number;
+    cvar: number;
+    beta: number;
+    kelly_fraction: number;
+    target_size: number;
+    max_drawdown: number;
+  };
   xai?: {
     top_drivers: { feature: string; impact: number; direction: string }[];
     explanation: string;

@@ -1,11 +1,8 @@
 import joblib
-import pandas as pd
 import numpy as np
-import os
 import json
 from sklearn.metrics import brier_score_loss
 from sklearn.calibration import calibration_curve
-import matplotlib.pyplot as plt
 
 def calculate_ece(y_true, y_prob, n_bins=10):
     prob_true, prob_pred = calibration_curve(y_true, y_prob, n_bins=n_bins)

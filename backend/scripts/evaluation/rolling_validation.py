@@ -1,15 +1,10 @@
-import os
-import json
-import joblib
 import pandas as pd
 import numpy as np
 import yfinance as yf
-from datetime import datetime, timedelta
+from datetime import timedelta
 import xgboost as xgb
-from lightgbm import LGBMClassifier
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import brier_score_loss
-from src.execution.live_inference import add_upgraded_features, FEATURE_COLUMNS, load_config
+from src.execution.live_inference import add_upgraded_features, FEATURE_COLUMNS
 from src.data_ingestion.market_data import fetch_historical_data, apply_dynamic_triple_barrier
 
 def calculate_ece(y_true, y_prob, n_bins=10):

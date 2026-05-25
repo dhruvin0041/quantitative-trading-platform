@@ -8,7 +8,6 @@ import json
 import yaml
 import joblib
 import numpy as np
-import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 import xgboost as xgb
 from src.models.neural.fusion_network import build_fusion_model
@@ -166,7 +165,6 @@ def run_walk_forward(ticker="AAPL", windows=4):
     print(f"STARTING WALK-FORWARD OPTIMIZATION: {ticker}")
     print(f"{'=' * 50}")
 
-    from train import main as train_main
     
     end_dt = datetime.now()
     all_equity = []
@@ -202,7 +200,7 @@ def run_walk_forward(ticker="AAPL", windows=4):
     sharpe = np.sqrt(252) * (returns.mean() / returns.std()) if returns.std() != 0 else 0
     max_dd = (pd.Series(all_equity) / pd.Series(all_equity).cummax() - 1).min()
 
-    print(f"\n--- WFO Performance Summary ---")
+    print("\n--- WFO Performance Summary ---")
     print(f"Total Return: {round(((all_equity[-1]/initial_capital)-1)*100, 2)}%")
     print(f"Annualized Sharpe: {round(sharpe, 2)}")
     print(f"Max Drawdown: {round(max_dd*100, 2)}%")

@@ -2,7 +2,6 @@ import sqlite3
 import json
 import time
 import threading
-from datetime import datetime
 
 class SQLiteCache:
     def __init__(self, db_path="data/cache.db"):

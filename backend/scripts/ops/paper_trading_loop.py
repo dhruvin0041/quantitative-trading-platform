@@ -1,6 +1,5 @@
 import time
 import requests
-import json
 import os
 from datetime import datetime
 from dotenv import load_dotenv
@@ -57,10 +56,10 @@ def run_paper_trading_loop():
                 win_rate = summary.get("Win Rate", 0)
                 
                 print("\n" + "="*45)
-                print(f" HYDRA PORTFOLIO STATUS ")
+                print(" HYDRA PORTFOLIO STATUS ")
                 print(f" Total Equity: ${equity:,.2f}")
                 print(f" Live Win Rate: {win_rate:.1f}%")
-                print(f" Backtest WR:   54.6%")
+                print(" Backtest WR:   54.6%")
                 print(f" Alpha Gap:     {win_rate - 54.6:+.1f}%")
                 print("="*45)
         except:

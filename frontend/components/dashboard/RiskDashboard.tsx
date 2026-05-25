@@ -5,9 +5,10 @@ import { ChartData } from '@/types';
 
 interface RiskDashboardProps {
   data: ChartData | null;
+  currency?: string;
 }
 
-export function RiskDashboard({ data }: RiskDashboardProps) {
+export function RiskDashboard({ data, currency = "$" }: RiskDashboardProps) {
   if (!data || !data.risk) return null;
 
   const { risk } = data;
@@ -17,7 +18,7 @@ export function RiskDashboard({ data }: RiskDashboardProps) {
     { label: 'CVaR', value: `${(risk.cvar * 100).toFixed(2)}%`, isDanger: risk.cvar > 0.03 },
     { label: 'Beta', value: risk.beta.toFixed(2), isDanger: false },
     { label: 'Kelly Frac.', value: (risk.kelly_fraction * 100).toFixed(1) + '%', isDanger: false },
-    { label: 'Target Size', value: `$${risk.target_size.toLocaleString()}`, isHighlight: true },
+    { label: 'Target Size', value: `${currency}${risk.target_size.toLocaleString()}`, isHighlight: true },
     { label: 'Max Drawdown', value: `${risk.max_drawdown.toFixed(1)}%`, isDanger: true },
   ];
 

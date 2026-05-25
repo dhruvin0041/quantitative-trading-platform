@@ -1,9 +1,7 @@
-import os
-import joblib
 import pandas as pd
 import numpy as np
 import yfinance as yf
-from datetime import datetime, timedelta
+from datetime import timedelta
 import xgboost as xgb
 from sklearn.preprocessing import StandardScaler
 from src.execution.live_inference import add_upgraded_features
@@ -16,7 +14,7 @@ STATIONARY_FEATURES = [
 ]
 
 def run_sanitized_audit(tickers=["AAPL", "MSFT", "NVDA"]):
-    print(f"=== QUANTITATIVE STABILITY AUDIT (STRICT SANITIZATION) ===")
+    print("=== QUANTITATIVE STABILITY AUDIT (STRICT SANITIZATION) ===")
     
     full_start = "2021-01-01"
     full_end = "2026-05-23"
@@ -100,7 +98,7 @@ def run_sanitized_audit(tickers=["AAPL", "MSFT", "NVDA"]):
     losses = abs(res_df[res_df['ret'] < 0]['ret'].sum())
     pf = profits / losses if losses > 0 else 0
     
-    print(f"\nAUDIT RESULTS:")
+    print("\nAUDIT RESULTS:")
     print(f"Total Signals: {len(res_df)}")
     print(f"Win Rate:      {wr:.1f}%")
     print(f"Profit Factor: {pf:.2f}")

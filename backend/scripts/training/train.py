@@ -9,14 +9,11 @@ import yfinance as yf
 import mlflow
 import mlflow.sklearn
 import mlflow.tensorflow
-from datetime import datetime
-from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import StandardScaler
 from src.execution.live_inference import load_config, add_upgraded_features, FEATURE_COLUMNS
 
 from src.models.neural.fusion_network import build_fusion_model
 from src.models.rl.dqn_agent import DQNAgent
-from src.models.boosting.lgbm_agent import train_lgbm_agent
 from src.features.sequence_builder import create_time_series_sequences
 from src.data_ingestion.market_data import (
     fetch_historical_data,

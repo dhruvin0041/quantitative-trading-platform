@@ -1,9 +1,7 @@
-import os
 import json
 import joblib
 import logging
 import xgboost as xgb
-import numpy as np
 import keras
 from src.models.neural.fusion_network import build_fusion_model
 from src.models.rl.dqn_agent import DQNAgent

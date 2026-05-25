@@ -3,7 +3,7 @@ import numpy as np
 from sklearn.model_selection import TimeSeriesSplit
 import lightgbm as lgb
 import xgboost as xgb
-from src.optimization.objective_functions import sharpe_objective, calculate_sortino_ratio, calculate_max_drawdown
+from src.optimization.objective_functions import sharpe_objective
 from src.optimization.search_spaces import get_lgbm_search_space, get_xgb_search_space
 
 class PurgedTimeSeriesSplit:

@@ -1,6 +1,5 @@
 import tensorflow as tf
-from keras.layers import Input, Dense, Dropout, LayerNormalization, Add, Flatten, MultiHeadAttention, Lambda, Reshape
-import keras
+from keras.layers import Input, Dense, Dropout, LayerNormalization, Add, Flatten, MultiHeadAttention, Lambda
 
 def build_patchtst_branch(time_steps, num_features, patch_len=12, stride=6, d_model=64, n_heads=4, e_layers=2, dropout=0.1):
     """

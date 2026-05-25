@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class InferenceService:
     def __init__(self, model_manager, gemini_analyzer, physical_edge, 
                  dependency_graph, orchestrator, smart_router, 
-                 report_gen, paper_engine, perf_analyzer):
+                 report_gen, paper_engine, perf_analyzer, signal_journal=None):
         self.mm = model_manager
         self.gemini = gemini_analyzer
         self.physical = physical_edge
@@ -30,8 +30,13 @@ class InferenceService:
         self.report_gen = report_gen
         self.paper_engine = paper_engine
         self.perf_analyzer = perf_analyzer
+        self.journal = signal_journal
 
     async def get_prediction(self, ticker, config, metadata):
+        import uuid
+        import json
+        signal_id = f"SIG_{datetime.now().strftime('%Y%m%d%H%M%S')}_{ticker}_{str(uuid.uuid4())[:8]}"
+
         # 1. Fetch live data
         ts_sequence, peer_sequence, tabular_row, current_price, updated_config, market_regime, req_conf, vol_ratio, tech_snapshot = await asyncio.to_thread(fetch_live_data, ticker, config)
 
@@ -204,6 +209,8 @@ class InferenceService:
         reporting_data = self.report_gen.package_chart_data(ticker, df_full, ai_report_stub, historical_markers)
         response_data.update(reporting_data)
         
+        response_data["signal_id"] = signal_id
+
         # Paper Trading with Currency Context
         if final_signal in ['BUY', 'SELL']:
             atr = tech_snapshot.get("ATR", current_price * 0.02)
@@ -212,11 +219,49 @@ class InferenceService:
             trade = self.paper_engine.execute_trade(
                 ticker, final_signal, current_price, kelly_frac, market_regime, 
                 currency=metadata["currency"], market=metadata["market"],
-                stop_loss=sl, take_profit=tp
+                stop_loss=sl, take_profit=tp, signal_id=signal_id
             )
             if trade: response_data["paper_trade"] = trade
 
-        self.paper_engine.update_positions({ticker: current_price})
+        closed_trades = self.paper_engine.update_positions({ticker: current_price})
         response_data["portfolio"] = self.paper_engine.get_portfolio_summary({ticker: current_price})
+        
+        # Log to Signal Journal
+        if self.journal:
+            self.journal.log_signal({
+                "signal_id": signal_id,
+                "timestamp": datetime.now().isoformat(),
+                "asset": ticker,
+                "market": metadata["market"],
+                "exchange": metadata.get("exchange", "UNKNOWN"),
+                "signal_type": final_signal,
+                "entry_price": current_price,
+                "position_size": kelly_frac,
+                "confidence": confidence_score,
+                "uncertainty": uncertainty * 100,
+                "agreement": model_agreement,
+                "market_regime": market_regime,
+                "volatility_regime": "HIGH" if vol_id == 2 else ("LOW" if vol_id == 0 else "MEDIUM"),
+                "model_consensus": json.dumps({
+                    "DL_FUSION": map_model_output(dl_preds_raw),
+                    "XGB_AGENT":  map_model_output(xgb_preds_raw),
+                    "LGBM_AGENT": map_model_output(lgbm_preds_raw)
+                })
+            })
+            
+            # Update any closed trades in the journal
+            for ct in closed_trades:
+                if ct.get("signal_id"):
+                    # compute holding time roughly in days based on trade open time
+                    holding_time = 0
+                    if ct.get("entry_time"):
+                        entry_dt = datetime.fromisoformat(ct["entry_time"])
+                        holding_time = max(1, (datetime.now() - entry_dt).days)
+                    self.journal.update_signal_exit(
+                        signal_id=ct["signal_id"],
+                        exit_price=ct["price"],
+                        realized_pnl=ct["pnl"],
+                        holding_time=holding_time
+                    )
 
         return response_data

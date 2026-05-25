@@ -1,4 +1,3 @@
-import json
 import os
 from datetime import datetime
 from src.execution.performance_analyzer import PerformanceAnalyzer

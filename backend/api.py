@@ -24,7 +24,6 @@ from src.execution.backtest_service import BacktestService
 from src.utils.cache import SimpleCache
 
 from src.execution.live_inference import load_config
-from src.execution.risk_manager import calculate_beta
 from src.data_ingestion.nlp_processor import GeminiAnalyzer
 from src.data_ingestion.alternative_data import PhysicalEdgeAnalyzer
 from src.data_ingestion.supply_chain_graph import SupplyChainGraph
@@ -37,7 +36,8 @@ from src.schemas import PredictResponse, UniverseResponse, UniverseStockItem, Ba
 from src.execution.performance_analyzer import PerformanceAnalyzer
 from src.execution.alerts import AlertSystem
 from src.data_ingestion.sector_mapper import SectorMapper
-from src.execution.fx_engine import FXEngine
+from src.execution.signal_journal import SignalJournal
+from src.execution.empirical_validation import ValidationAnalytics
 
 # --- Structured Logging ---
 class JSONFormatter(logging.Formatter):
@@ -159,9 +159,13 @@ orchestrator = InstitutionalOrchestrator()
 smart_router = PredictiveSmartRouter()
 report_gen = ReportGenerator(kept_features_list)
 
+signal_journal = SignalJournal()
+validation_engine = ValidationAnalytics(signal_journal)
+
 inference_service = InferenceService(
     model_manager, gemini_analyzer, physical_edge, dependency_graph,
-    orchestrator, smart_router, report_gen, paper_engine, perf_analyzer
+    orchestrator, smart_router, report_gen, paper_engine, perf_analyzer,
+    signal_journal
 )
 
 def sanitize_ticker(ticker: str) -> str:
@@ -267,6 +271,10 @@ async def get_alerts():
 @app.get("/fx_rates", dependencies=[Depends(verify_api_key)])
 async def get_fx_rates():
     return fx_engine.get_summary()
+
+@app.get("/validation", dependencies=[Depends(verify_api_key)])
+async def get_validation():
+    return await asyncio.to_thread(validation_engine.get_full_dashboard_data)
 
 @app.post("/portfolio/base_currency", dependencies=[Depends(verify_api_key)])
 async def set_base_currency(request: Request):

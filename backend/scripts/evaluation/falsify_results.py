@@ -1,9 +1,7 @@
-import os
-import joblib
 import pandas as pd
 import numpy as np
 import yfinance as yf
-from datetime import datetime, timedelta
+from datetime import timedelta
 import xgboost as xgb
 from sklearn.preprocessing import StandardScaler
 from src.execution.live_inference import add_upgraded_features, FEATURE_COLUMNS

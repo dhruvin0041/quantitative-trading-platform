@@ -1,10 +1,6 @@
 import pandas as pd
-import numpy as np
 import yfinance as yf
-import os
-import json
 from src.execution.live_inference import add_upgraded_features, FEATURE_COLUMNS
-from src.data_ingestion.market_data import fetch_historical_data
 
 def analyze_correlations():
     print("Fetching data for correlation analysis...")
@@ -28,7 +24,7 @@ def analyze_correlations():
                     if high_corr.loc[i,j] and i < j]
                     
     print("\n=== CORRELATION REPORT ===")
-    print(f"Highly correlated pairs (>0.85 abs):")
+    print("Highly correlated pairs (>0.85 abs):")
     for p1, p2 in pairs:
         print(f" - {p1} vs {p2}: {corr_matrix.loc[p1, p2]:.4f}")
         
