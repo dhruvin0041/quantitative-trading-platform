@@ -1,26 +1,34 @@
 # MODEL CARD
 
 ## 1. Model Details
-- **Architecture**: Meta-Ensemble (LSTM, XGBoost, LightGBM, DQN, TFT, Informer, PatchTST).
-- **Task**: 3-Class Time-Series Classification (BUY, HOLD, SELL) via Triple Barrier Labeling.
-- **Version**: 4.0.0
+- **Architecture**: Meta-Ensemble (LSTM Fusion, XGBoost, LightGBM, DQN).
+- **Task**: 3-Class Time-Series Classification (SELL, HOLD, BUY) via Triple Barrier Labeling.
+- **Ensemble Logic**: Weighted consensus with dynamic uncertainty quantification.
+- **Version**: 5.1.0 (2026 Paradigm)
 
-## 2. Intended Use
-- **Primary Use**: Generating systematic trading signals for S&P 500 equities.
-- **Out of Scope**: High-Frequency Trading (HFT), illiquid micro-caps, automated execution without human oversight.
+## 2. Model Pipeline
+Hydra utilizes a 4-branch intelligence pipeline:
+- **DL Fusion**: Dual-branch LSTM architecture analyzing ticker-specific time-steps and cross-sector peer correlations.
+- **GBDT Agents**: Gradient Boosted Decision Trees (XGBoost/LightGBM) optimized for high-dimensional tabular feature sets.
+- **RL Policy**: Deep Q-Network (DQN) agent trained for sequential action optimization (Execution timing).
+- **Qualitative Alpha**: **Gemini 2.0 Flash** performing zero-shot fundamental analysis on SEC 8-K filings and news context.
 
 ## 3. Training Data
-- **Sources**: Yahoo Finance OHLCV, SEC EDGAR (mocked), Options Flow (mocked).
-- **Timeframe**: 2020-01-01 to Present.
-- **Preprocessing**: Robust scaling, missing value forward-filling, dynamic feature deflation to remove multicollinearity while protecting mean-reverting indicators.
+- **Financial OHLCV**: S&P 500 and Nifty 50 constituents (2022-Present).
+- **Alternative Signals**: Global port weather coordinates (Open-Meteo) and search interest proxies.
+- **Fundamental Context**: Real-time SEC EDGAR RSS feed.
+- **Preprocessing**: Robust scaling, forward-filling, and cross-sectional factor neutralization (PCA-based).
 
-## 4. Evaluation & Metrics
-- **Validation**: Walk-Forward Optimization (WFO) utilizing a 1-year training window and a 90-day out-of-sample testing window.
-- **Primary Metrics**: Jensen's Alpha, Sharpe Ratio, Maximum Drawdown, Precision, and Recall on minority classes (BUY/SELL).
+## 4. Evaluation & Verification
+- **Validation Strategy**: Walk-Forward Optimization (WFO) with 252-day training windows and 90-day out-of-sample segments.
+- **Explainability**: SHAP (SHapley Additive exPlanations) values logged for every decision to provide mathematical transparency of feature impact.
+- **Data Integrity**: Systematic "Zero-State" protocol enforced via `clean_artifacts.py` to prevent neural pathway contamination across tickers.
 
-## 5. Limitations & Risks
-- **Regime Change**: The models assume future market dynamics will vaguely resemble historical data. Extreme black swan events (e.g., COVID-19 crash) may degrade performance temporarily until the Meta-Ensemble recalibrates weights.
-- **Slippage**: Simulated at 0.1%. In fast-moving markets, true slippage may exceed this, degrading the realized Sharpe ratio.
+## 5. Limitations & Operational Risks
+- **Black Swan Events**: Rapid, non-linear regime shifts (e.g., flash crashes) may exceed the Meta-Ensemble's recalibration latency.
+- **API Dependency**: Heavy reliance on Yahoo Finance and Open-Meteo availability; system fallback defaults to `HOLD` on data interruption.
+- **Slippage**: Simulation assumes 0.05% slippage; high-volatility environments or illiquid tickers may realize higher execution costs.
 
 ## 6. Biases
-- **Survivorship Bias**: Currently mitigated by tracking delisted equities in the paper-trading environment, but historical data fetching may still suffer if external APIs overwrite delisted tickers.
+- **Survivorship Bias**: Mitigated by ticker-neutral architecture, though historical backtests are limited to current constituents.
+- **Recency Bias**: The Meta-Ensemble dynamically weights models based on recent performance, which may underperform during sudden mean-reversion at cycle peaks.

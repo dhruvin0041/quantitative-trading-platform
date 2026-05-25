@@ -1,32 +1,44 @@
 # SYSTEM ARCHITECTURE
 
 ## Overview
-Hydra Terminal is an institutional-grade, multi-agent quantitative trading system designed for scalability, zero look-ahead bias, and absolute determinism.
+Hydra Terminal is a State-of-the-Art (SOTA) 2026 quantitative trading and market intelligence system. It utilizes a **Decentralized Multi-Agent Mesh** architecture to fuse multi-modal data into high-conviction institutional signals.
 
-## 1. Data Flow Pipeline
-1. **Ingestion**: Raw OHLCV data is fetched via Yahoo Finance.
-2. **Alternative Data**: Options Flow, Insider Trading, and Analyst Revisions are fetched and merged into the primary pipeline.
-3. **Feature Engineering**: 40+ quantitative indicators (RSI, ADX, Bollinger Bands, ATR) are computed.
-4. **Triple Barrier Labeling**: Intrabar High/Low prices are checked against ATR-based dynamic barriers to generate labels without look-ahead bias.
+## 1. Modular Service Layer
+The system is built on a strictly decoupled service architecture to ensure scalability and maintainability.
 
-## 2. Model Flow
-1. **Tabular & Sequential Split**: Data is bifurcated into cross-sectional rows for boosting models (XGBoost, LightGBM) and sequences for deep models.
-2. **Deep Learning Core**: Temporal Fusion Transformer (TFT), PatchTST, and LSTM analyze sequences.
-3. **Boosting Core**: XGBoost and LightGBM analyze the raw feature snapshot.
-4. **Reinforcement Learning**: DQN evaluates the output of all other models.
-5. **Meta-Ensemble**: Dynamically weights the models based on rolling 30-day out-of-sample accuracy to generate a final probability matrix.
+- **Inference Service (`inference_service.py`)**: Orchestrates the live prediction pipeline, coordinating between data ingestion, model management, and agentic consensus.
+- **Model Manager (`model_loader.py`)**: Centralized registry for loading architectures, managing weights (DL, GBDT, RL), and tracking ensemble accuracies.
+- **Backtest Service (`backtest_service.py`)**: Dedicated engine for historical performance retrieval and walk-forward summary generation.
+- **FX Engine (`fx_engine.py`)**: Real-time currency normalization service providing live exchange rates for global portfolio accounting.
 
-## 3. Consensus Engine
-The consensus engine requires a super-majority (e.g., 2/3 agreement) across the dynamically weighted ensemble. 
-If models disagree or confidence is low, the signal is `VETOED` and defaults to `HOLD`.
+## 2. Multi-Modal Data Pipeline
+Hydra integrates financial and physical intelligence layers:
+1.  **Financial Layer**: Raw OHLCV data from Yahoo Finance and real-time SEC EDGAR filings (8-K/10-Q).
+2.  **Physical Layer**: Geospatial intelligence via port-coordinate weather monitoring (Open-Meteo) and retail foot-traffic proxies (Google Trends simulation).
+3.  **Qualitative Layer**: LLM-driven fundamental analysis using **Gemini 2.0 Flash** to detect "moving targets" and litigious risk.
 
-## 4. Execution Engine & Risk Management
-1. **Sizing**: Uses the Kelly Criterion adjusted by the ensemble confidence score.
-2. **Circuit Breakers**: A hard 20% drawdown limit halts all execution logic.
-3. **Paper Trading**: Executes simulated trades, recording fills, slippage, and commissions in SQLite.
+## 3. The Agentic Mesh
+The intelligence core consists of specialized agents that negotiate execution:
+- **Alpha Agent**: Optimizes for expected return using a 4-branch fusion ensemble (LSTM, XGB, LGBM, DQN).
+- **Risk Agent**: The "Final Arbiter" with absolute Veto power. Enforces Kelly sizing, Beta limits, and Crowd/Stampede risk checks.
+- **Execution Agent**: Simulates institutional fills with 0.05% slippage and multi-currency accounting logic.
 
-## 5. Deployment Flow
-- **FastAPI**: Serves inference endpoints and Prometheus metrics.
-- **Next.js**: Provides the real-time institutional dashboard.
-- **Docker**: The entire stack is containerized for deterministic deployment.
-- **GitHub Actions**: CI/CD pipelines automate testing, linting, and weekly Walk-Forward Optimization backtests.
+## 4. Signal Generation Flow
+```mermaid
+graph TD
+    A[Multi-Modal Ingestion] --> B[Feature Engineering Engine]
+    B --> C[Model Ensemble Layer]
+    C --> D[DL Fusion Agent]
+    C --> E[GBDT Agents: XGB/LGBM]
+    C --> F[DQN Policy Agent]
+    D & E & F --> G[Meta-Ensemble Meta-Prediction]
+    G --> H[Agentic Consensus Mesh]
+    H --> I[Risk Guardrail Veto]
+    I --> J[Signal: BUY/SELL/HOLD/VETOED]
+```
+
+## 5. Deployment & Observability
+- **Backend**: FastAPI (Async-first) with strict JSON structured logging.
+- **Frontend**: Next.js 16.2 utilizing an intrinsic sizing model for institutional command center visuals.
+- **Telemetry**: Integrated Prometheus metrics for latency and request tracking.
+- **Storage**: JSON-based "Zero-State" persistence for paper trading and portfolio snapshots.

@@ -76,6 +76,6 @@ This document validates the successful execution of the comprehensive institutio
 ### Deployment Recommendations
 *   **Immediate Action:** Execute `graphify update .` to index the new architecture.
 *   **Next Sprint (Data):** Run the Optuna sweeps across historical SPY/QQQ components to establish baseline Sharpe distributions.
-*   **Inference Pipeline:** Refactor the inference serving loop to batch requests, enabling sub-millisecond execution for the newly expanded ensemble.
+*   **Production Deployment:** Utilize the refactored `InferenceService` and `ModelManager` to scale execution across multi-market universes with real-time FX normalization.
 
 **END OF REPORT**
