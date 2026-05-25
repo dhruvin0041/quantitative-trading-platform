@@ -67,6 +67,9 @@ backend/artifacts/*.pth
 backend/artifacts/*.h5
 backend/artifacts/*.json
 backend/data/*.db
+backend/mlflow.db
+backend/mlruns/
+backend/backtest_results/
 
 # Allow specific trained models for institutional baseline
 !backend/artifacts/lgbm_agent.joblib
