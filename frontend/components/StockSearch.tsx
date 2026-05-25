@@ -169,12 +169,22 @@ export function StockSearch({ universe, onSelect }: StockSearchProps) {
                   }}
                   onMouseEnter={() => setSelectedIndex(index)}
                 >
-                  <span className="font-mono font-bold text-sm" style={{ color: '#E8650A' }}>
+                  <span className="font-mono font-bold text-sm shrink-0" style={{ color: '#E8650A' }}>
                     {highlightMatch(stock.ticker, debouncedQuery.trim())}
                   </span>
-                  <span className="text-[10px] text-muted-foreground truncate ml-4 flex-1 text-right font-medium">
-                    {highlightMatch(stock.name, debouncedQuery.trim())}
-                  </span>
+                  <div className="flex items-center gap-1.5 ml-4 flex-1 justify-end">
+                    <span className={cn(
+                      "text-[8px] font-black uppercase px-1.5 py-0.5 rounded border leading-none shrink-0",
+                      stock.market === 'us' 
+                        ? "bg-blue-500/10 text-blue-500 border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-400" 
+                        : "bg-orange-500/10 text-orange-600 border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-400"
+                    )}>
+                      {stock.market === 'us' ? '🇺🇸 USA' : '🇮🇳 INDIA'}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground truncate max-w-[120px] font-medium">
+                      {highlightMatch(stock.name, debouncedQuery.trim())}
+                    </span>
+                  </div>
                 </li>
               ))}
             </ul>

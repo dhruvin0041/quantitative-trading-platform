@@ -1,13 +1,15 @@
 import React from 'react';
 import { ChartData } from '@/types';
-import { Briefcase, Wallet, Percent, LayoutList } from 'lucide-react';
+import { Briefcase, Wallet, Percent, LayoutList, Activity } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { cn } from '@/lib/utils';
 
 interface PortfolioAnalyticsProps {
   data: ChartData | null;
+  currency?: string;
 }
 
-export function PortfolioAnalytics({ data }: PortfolioAnalyticsProps) {
+export function PortfolioAnalytics({ data, currency = '$' }: PortfolioAnalyticsProps) {
   if (!data || !data.portfolio) return null;
 
   const { portfolio } = data;
@@ -16,28 +18,35 @@ export function PortfolioAnalytics({ data }: PortfolioAnalyticsProps) {
   const stats = [
     {
       label: 'Total Equity',
-      value: `$${portfolio.equity.toLocaleString()}`,
+      value: `${currency}${(portfolio.equity ?? 0).toLocaleString()}`,
       icon: <Briefcase className="w-3.5 h-3.5 text-muted-foreground" />,
       color: 'text-foreground'
     },
     {
       label: 'Available Cash',
-      value: `$${portfolio.cash.toLocaleString()}`,
+      value: `${currency}${(portfolio.cash ?? 0).toLocaleString()}`,
       icon: <Wallet className="w-3.5 h-3.5 text-muted-foreground" />,
-      color: 'text-[var(--signal-buy)]'
+      color: 'text-emerald-500'
     },
     {
-      label: 'Net Return',
-      value: `${isPositive ? '+' : ''}${portfolio.return_pct.toFixed(2)}%`,
+      label: 'Today\'s PnL',
+      value: `${(portfolio.today_pnl ?? 0) >= 0 ? '+' : ''}${currency}${(portfolio.today_pnl ?? 0).toLocaleString()}`,
+      icon: <Activity className="w-3.5 h-3.5 text-muted-foreground" />,
+      color: (portfolio.today_pnl ?? 0) >= 0 ? 'text-green-500' : 'text-red-500'
+    },
+    {
+      label: 'Inception Return',
+      value: `${isPositive ? '+' : ''}${(portfolio.return_pct ?? 0).toFixed(2)}%`,
       icon: <Percent className="w-3.5 h-3.5 text-muted-foreground" />,
-      color: isPositive ? 'text-[var(--signal-buy)] dark:text-glow' : 'text-[var(--signal-sell)] dark:text-glow'
-    },
-    {
-      label: 'Active Positions',
-      value: Object.values(portfolio.positions).filter(p => p.shares > 0).length,
-      icon: <LayoutList className="w-3.5 h-3.5 text-muted-foreground" />,
-      color: 'text-primary'
+      color: isPositive ? 'text-green-500 dark:text-glow' : 'text-red-500 dark:text-glow'
     }
+  ];
+
+  const pnlBreakdown = [
+    { label: 'MTD PnL', value: portfolio.mtd_pnl ?? 0, prefix: currency },
+    { label: 'YTD PnL', value: portfolio.ytd_pnl ?? 0, prefix: currency },
+    { label: 'Realized', value: portfolio.realized_pnl ?? 0, prefix: currency },
+    { label: 'Unrealized', value: portfolio.unrealized_pnl ?? 0, prefix: currency }
   ];
 
   const activePositions = Object.entries(portfolio.positions).filter(([, pos]) => pos.shares > 0);
@@ -75,6 +84,18 @@ export function PortfolioAnalytics({ data }: PortfolioAnalyticsProps) {
           ))}
         </div>
 
+        {/* Detailed Breakdown */}
+        <div className="grid grid-cols-2 gap-2 p-2 rounded-lg bg-secondary/30 border border-border">
+           {pnlBreakdown.map(item => (
+             <div key={item.label} className="flex justify-between items-center px-1">
+               <span className="text-[8px] font-bold text-muted-foreground uppercase">{item.label}</span>
+               <span className={cn("text-[9px] font-mono font-bold", item.value >= 0 ? "text-green-500" : "text-red-500")}>
+                 {item.value >= 0 ? '+' : ''}{item.prefix}{Math.abs(item.value).toLocaleString()}
+               </span>
+             </div>
+           ))}
+        </div>
+
         {activePositions.length > 0 && (
           <div className="overflow-hidden rounded-lg border border-border shadow-inner bg-muted/10 dark:bg-transparent">
             <table className="w-full text-xs text-left font-mono">
@@ -90,7 +111,7 @@ export function PortfolioAnalytics({ data }: PortfolioAnalyticsProps) {
                   <tr key={ticker} className="hover:bg-primary/5 dark:hover:bg-white/5 transition-colors group/row">
                     <td className="px-3 py-2 font-black text-foreground font-sans group-hover/row:text-primary transition-colors">{ticker}</td>
                     <td className="px-3 py-2 text-right opacity-90 font-bold">{pos.shares.toLocaleString()}</td>
-                    <td className="px-3 py-2 text-right opacity-90 font-bold text-primary dark:text-foreground">${pos.avg_price.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right opacity-90 font-bold text-primary dark:text-foreground">{currency}{pos.avg_price.toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>

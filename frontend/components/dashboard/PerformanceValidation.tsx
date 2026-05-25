@@ -1,15 +1,33 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Trophy } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export function PerformanceValidation() {
-  const perfMetrics = [
-    { label: 'Sharpe Ratio', value: '2.14', description: 'Risk-adj return' },
-    { label: 'Sortino Ratio', value: '3.42', description: 'Downside risk-adj' },
-    { label: 'Calmar Ratio', value: '1.85', description: 'Return vs Drawdown' },
-    { label: 'Profit Factor', value: '1.76', description: 'Gross Profit / Loss' },
-    { label: 'Win Rate', value: '64.2%', description: 'Profitable trades' },
-  ];
+  const [metrics, setMetrics] = useState<any>(null);
+
+  useEffect(() => {
+    const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    
+    fetch(`${API_URL}/performance`, {
+      headers: { "X-API-Key": API_KEY }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.summary) {
+          setMetrics([
+            { label: 'Sharpe Ratio', value: data.summary.sharpe.toFixed(2), description: 'Risk-adj return' },
+            { label: 'Sortino Ratio', value: data.summary.sortino.toFixed(2), description: 'Downside risk-adj' },
+            { label: 'Calmar Ratio', value: data.summary.calmar.toFixed(2), description: 'Return vs Drawdown' },
+            { label: 'Profit Factor', value: data.summary.profit_factor.toFixed(2), description: 'Gross Profit / Loss' },
+            { label: 'Win Rate', value: `${data.summary.win_rate.toFixed(1)}%`, description: 'Profitable trades' },
+          ]);
+        }
+      })
+      .catch(err => console.error("Failed to fetch performance:", err));
+  }, []);
+
+  if (!metrics) return null;
 
   return (
     <div className="glass-panel rounded-xl flex flex-col overflow-hidden group transition-all duration-300 flex-1">
@@ -18,9 +36,10 @@ export function PerformanceValidation() {
           <Trophy className="w-3.5 h-3.5 text-primary" />
           <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">System Validation</h3>
         </div>
+        <div className="text-[8px] font-mono font-bold opacity-50 uppercase tracking-tighter">Live_Telemetry</div>
       </div>
       <div className="p-4 flex flex-col gap-2 flex-1 justify-center">
-        {perfMetrics.map((metric, i) => (
+        {metrics.map((metric: any, i: number) => (
           <motion.div 
             key={metric.label}
             initial={{ opacity: 0, x: -10 }}

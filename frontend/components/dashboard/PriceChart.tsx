@@ -151,10 +151,10 @@ export function PriceChart({ data, loading }: PriceChartProps) {
   }, [data]);
 
   return (
-    <div className="w-full h-full relative" data-tour="chart">
+    <div className="w-full relative aspect-[21/9]" data-tour="chart">
       {/* Loading Overlay */}
       {(loading && !data) && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 backdrop-blur-md">
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 backdrop-blur-md rounded-xl">
           <Skeleton className="w-full h-full bg-white/5" />
         </div>
       )}
@@ -162,7 +162,7 @@ export function PriceChart({ data, loading }: PriceChartProps) {
       {/* Chart Container */}
       <div 
         ref={chartContainerRef} 
-        className="w-full h-full absolute inset-0" 
+        className="w-full h-full" 
       />
     </div>
   );

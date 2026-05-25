@@ -1,14 +1,24 @@
 import React from 'react';
 import { ShieldAlert } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { ChartData } from '@/types';
 
-export function RiskDashboard() {
+interface RiskDashboardProps {
+  data: ChartData | null;
+}
+
+export function RiskDashboard({ data }: RiskDashboardProps) {
+  if (!data || !data.risk) return null;
+
+  const { risk } = data;
+
   const riskMetrics = [
-    { label: 'VaR (95%)', value: '-$2,450', isDanger: true },
-    { label: 'CVaR', value: '-$3,100', isDanger: true },
-    { label: 'Beta', value: '0.85', isDanger: false },
-    { label: 'Kelly Frac.', value: '0.24', isDanger: false },
-    { label: 'Max Drawdown', value: '-12.4%', isDanger: true },
+    { label: 'VaR (95%)', value: `${(risk.var_95 * 100).toFixed(2)}%`, isDanger: risk.var_95 > 0.02 },
+    { label: 'CVaR', value: `${(risk.cvar * 100).toFixed(2)}%`, isDanger: risk.cvar > 0.03 },
+    { label: 'Beta', value: risk.beta.toFixed(2), isDanger: false },
+    { label: 'Kelly Frac.', value: (risk.kelly_fraction * 100).toFixed(1) + '%', isDanger: false },
+    { label: 'Target Size', value: `$${risk.target_size.toLocaleString()}`, isHighlight: true },
+    { label: 'Max Drawdown', value: `${risk.max_drawdown.toFixed(1)}%`, isDanger: true },
   ];
 
   return (
@@ -36,7 +46,11 @@ export function RiskDashboard() {
             className={`flex flex-col gap-1 p-2.5 bg-muted/30 dark:bg-black/20 rounded-lg border border-border hover:bg-muted/50 dark:hover:bg-black/40 transition-colors ${i === riskMetrics.length - 1 ? 'col-span-2 text-center items-center' : ''}`}
           >
             <span className="text-[9px] text-muted-foreground uppercase font-black tracking-wider">{metric.label}</span>
-            <span className={`text-base font-mono font-black ${metric.isDanger ? 'text-[var(--signal-sell)]' : 'text-primary dark:text-foreground'}`}>
+            <span className={`text-base font-mono font-black ${
+              metric.isDanger ? 'text-[var(--signal-sell)]' : 
+              metric.label === 'Target Size' ? 'text-amber-500' :
+              'text-primary dark:text-foreground'
+            }`}>
               {metric.value}
             </span>
           </motion.div>

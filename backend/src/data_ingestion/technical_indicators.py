@@ -196,6 +196,122 @@ def add_advanced_features(
     df["BB_120_Upper"] = bb_120.bollinger_hband()
     df["BB_120_Lower"] = bb_120.bollinger_lband()
 
+    # ==========================================
+    # PHASE 2: INSTITUTIONAL-GRADE FEATURES
+    # ==========================================
+    
+    # --- Market Structure ---
+    # Swing Highs and Lows (Window = 5)
+    df['Swing_High'] = df['High'] == df['High'].rolling(window=5, center=True).max()
+    df['Swing_Low'] = df['Low'] == df['Low'].rolling(window=5, center=True).min()
+    df['Swing_High'] = df['Swing_High'].astype(int)
+    df['Swing_Low'] = df['Swing_Low'].astype(int)
+    
+    # Higher Highs / Lower Lows (simplified rolling check)
+    rolling_max = df['High'].rolling(20).max()
+    rolling_min = df['Low'].rolling(20).min()
+    df['Higher_High'] = (df['High'] >= rolling_max).astype(int)
+    df['Lower_Low'] = (df['Low'] <= rolling_min).astype(int)
+    
+    # Break of Structure (BOS) / Change of Character (ChoCh) proxy
+    df['BOS_Bullish'] = ((df['Close'] > df['High'].shift(1).rolling(10).max()) & (df['SMA_50'] > df['MA_120'])).astype(int)
+    df['ChoCh_Bearish'] = ((df['Close'] < df['Low'].shift(1).rolling(10).min()) & (df['SMA_50'] > df['MA_120'])).astype(int)
+    
+    # --- Volatility Features ---
+    # Realized Volatility (20 day rolling std of log returns * sqrt(252))
+    df['Realized_Vol_20'] = df['Log_Ret'].rolling(window=20).std() * np.sqrt(252)
+    
+    # ATR Percentile (Where is current ATR relative to last 252 days)
+    df['ATR_Percentile'] = df['ATR'].rolling(window=252).apply(lambda x: pd.Series(x).rank(pct=True).iloc[-1] if len(x.dropna()) > 0 else np.nan)
+    
+    # Volatility Expansion / Compression (Bollinger Band Width)
+    df['BB_Width'] = (df['BB_Upper'] - df['BB_Lower']) / df['BB_Mid']
+    df['Vol_Expansion'] = (df['BB_Width'] > df['BB_Width'].rolling(20).mean() + df['BB_Width'].rolling(20).std()).astype(int)
+    df['Vol_Compression'] = (df['BB_Width'] < df['BB_Width'].rolling(20).mean() - df['BB_Width'].rolling(20).std()).astype(int)
+    df['Vol_Regime'] = np.where(df['Realized_Vol_20'] > df['Realized_Vol_20'].rolling(252).median(), 1, 0)
+    
+    # --- Statistical Features ---
+    # Z-Score Price and Volume
+    df['Z_Score_Price'] = (df['Close'] - df['Close'].rolling(20).mean()) / df['Close'].rolling(20).std()
+    df['Z_Score_Volume'] = (df['Volume'] - df['Volume'].rolling(20).mean()) / df['Volume'].rolling(20).std()
+    
+    # Rolling Skewness and Kurtosis
+    df['Skewness_20'] = df['Log_Ret'].rolling(window=20).skew()
+    df['Kurtosis_20'] = df['Log_Ret'].rolling(window=20).kurt()
+    
+    # Hurst Exponent Proxy (Variance Ratio test simplification)
+    # H < 0.5 mean reverting, H = 0.5 random walk, H > 0.5 trending
+    var_5 = df['Log_Ret'].rolling(5).sum().var()
+    var_1 = df['Log_Ret'].var()
+    # Avoid division by zero
+    if var_1 != 0:
+        df['Hurst_Proxy'] = np.log(var_5 / (5 * var_1)) / np.log(5) + 0.5
+    else:
+        df['Hurst_Proxy'] = 0.5
+        
+    df['Hurst_Proxy'] = df['Hurst_Proxy'].fillna(0.5)
+    
+    # Fractal Dimension Proxy
+    # D = (log(L) + log(2)) / log(N)
+    high_low_20 = df['High'].rolling(20).max() - df['Low'].rolling(20).min()
+    path_len = (df['High'] - df['Low']).rolling(20).sum()
+    df['Fractal_Dim'] = np.where(high_low_20 > 0, 1 + np.log(path_len / high_low_20) / np.log(20 * 2), 1.5)
+    
+    # Rolling Entropy (Shannon entropy of up/down days)
+    up_days = (df['Log_Ret'] > 0).astype(int)
+    p_up = up_days.rolling(20).mean()
+    p_down = 1 - p_up
+    # Clip to avoid log(0)
+    p_up_c = np.clip(p_up, 1e-5, 1 - 1e-5)
+    p_down_c = np.clip(p_down, 1e-5, 1 - 1e-5)
+    df['Rolling_Entropy'] = - (p_up_c * np.log2(p_up_c) + p_down_c * np.log2(p_down_c))
+    
+    # Regime Persistence (days since MA_120 cross)
+    cross_events = (df['Close'] > df['MA_120']).astype(int).diff().abs()
+    df['Regime_Persistence'] = cross_events.groupby((cross_events == 1).cumsum()).cumcount()
+
+    # --- Liquidity Features ---
+    # Dollar Volume
+    df['Dollar_Volume'] = df['Close'] * df['Volume']
+    
+    # Relative Volume (RVOL)
+    df['Relative_Volume'] = df['Volume'] / df['Volume'].rolling(20).mean()
+    df['Volume_Shock'] = (df['Relative_Volume'] > 3.0).astype(int)
+    
+    # Roll Spread Estimate (Roll 1984 effective spread proxy)
+    # 2 * sqrt(-Cov(dP_t, dP_t-1))
+    dp = df['Close'].diff()
+    cov_dp = dp.rolling(20).cov(dp.shift(1))
+    df['Roll_Spread'] = np.where(cov_dp < 0, 2 * np.sqrt(-cov_dp), 0)
+    
+    # Amihud Liquidity Proxy (Absolute return / Dollar Volume)
+    df['Illiquidity_Amihud'] = df['Log_Ret'].abs() / df['Dollar_Volume']
+    df['Illiquidity_Amihud'] = df['Illiquidity_Amihud'].rolling(20).mean()
+
+    # --- Cross Asset Features (SPY Beta & Correlation) ---
+    try:
+        spy_df = yf.download("SPY", start=df.index[0], end=df.index[-1], progress=False)
+        spy_df = clean_multiindex_columns(spy_df)
+        spy_ret = np.log(spy_df['Close'] / spy_df['Close'].shift(1))
+        
+        # Align index
+        spy_ret = spy_ret.reindex(df.index).ffill().fillna(0)
+        
+        # Rolling Correlation
+        df['SPY_Corr_20'] = df['Log_Ret'].rolling(20).corr(spy_ret)
+        
+        # Market Beta
+        spy_var = spy_ret.rolling(20).var()
+        df['Market_Beta_20'] = np.where(spy_var > 0, df['Log_Ret'].rolling(20).cov(spy_ret) / spy_var, 1.0)
+        
+        # Relative Performance
+        df['Rel_Perf_SPY_20'] = df['Close'].pct_change(20) - spy_df['Close'].pct_change(20).reindex(df.index).ffill().fillna(0)
+    except Exception as e:
+        print(f"Warning: Could not fetch SPY data for cross-asset features. {e}")
+        df['SPY_Corr_20'] = 0.0
+        df['Market_Beta_20'] = 1.0
+        df['Rel_Perf_SPY_20'] = 0.0
+
     df.dropna(inplace=True)
     return df
 

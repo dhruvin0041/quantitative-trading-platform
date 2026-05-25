@@ -7,46 +7,60 @@ import { motion } from 'framer-motion';
 
 export default function InstitutionalDashboard() {
   const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<any>(null);
 
-  // Mocked state for presentation since this requires live DB connection
-  const [data] = useState({
-    trading: {
-      equity_curve: [100000, 100500, 101200, 100800, 102000, 103500, 103100, 104500, 105200, 106000],
-      daily_pnl: 800,
-      monthly_pnl: 6000,
-      win_rate: 62.5,
-      profit_factor: 1.85,
-      drawdown: -2.1
-    },
-    models: {
-      lstm: 58.4,
-      xgboost: 56.2,
-      lightgbm: 57.1,
-      dqn: 54.8,
-      tft: 59.2,
-      informer: 58.8,
-      patchtst: 60.1,
-      ensemble: 63.5,
-      consensus_rate: 42.0
-    },
-    risk: {
-      beta: 0.85,
-      alpha: 4.2,
-      exposure: 65.0,
-      kelly: 18.5,
-      volatility: 12.4,
-      var_95: 1.2
-    },
-    signals: {
-      active: 4,
-      historical: 128,
-      regime: "BULL / LOW VOLATILITY"
-    }
-  });
+  const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 800);
-    return () => clearTimeout(timer);
+    const fetchStats = async () => {
+      try {
+        const res = await fetch(`${API_URL}/performance`, {
+          headers: { "X-API-Key": API_KEY }
+        });
+        const perfData = await res.json();
+        
+        // Transform to match UI needs
+        const transformed = {
+          trading: {
+            equity_curve: perfData.returns?.daily ? Object.values(perfData.returns.daily) : [],
+            daily_pnl: 0, // Could calc from history
+            monthly_pnl: 0,
+            win_rate: perfData.summary?.win_rate || 0,
+            profit_factor: perfData.summary?.profit_factor || 0,
+            drawdown: perfData.summary?.max_drawdown || 0
+          },
+          models: {
+            ensemble: perfData.models?.ensemble || 0,
+            lstm: perfData.models?.lstm || 0,
+            xgboost: perfData.models?.xgboost || 0,
+            lightgbm: perfData.models?.lightgbm || 0,
+            dqn: perfData.models?.dqn || 0,
+            consensus_rate: perfData.models?.consensus_rate || 0
+          },
+          risk: {
+            beta: 1.0, // Need to implement beta tracking in perf analyzer if desired here
+            alpha: perfData.summary?.sharpe || 0, // proxy
+            exposure: 0,
+            kelly: 0,
+            volatility: 0,
+            var_95: 0
+          },
+          signals: {
+            active: perfData.signals?.active || 0,
+            historical: perfData.signals?.historical || 0,
+            regime: perfData.signals?.regime || "LIVE TELEMETRY"
+          }
+        };
+        setData(transformed);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
   }, []);
 
   if (loading) {
@@ -122,23 +136,16 @@ export default function InstitutionalDashboard() {
               <CardHeader className="pb-2 border-b border-zinc-800/50">
                 <CardTitle className="text-sm font-bold flex items-center gap-2 text-zinc-300">
                   <Layers className="w-4 h-4 text-purple-500" />
-                  Model Monitoring (Out-of-Sample Accuracy)
+                  Model Monitoring (System Accuracy)
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
-                  { name: "PatchTST", acc: data.models.patchtst, color: "text-purple-400" },
-                  { name: "TFT", acc: data.models.tft, color: "text-purple-400" },
-                  { name: "Informer", acc: data.models.informer, color: "text-purple-400" },
-                  { name: "LSTM V4", acc: data.models.lstm, color: "text-blue-400" },
-                  { name: "LightGBM", acc: data.models.lightgbm, color: "text-orange-400" },
-                  { name: "XGBoost", acc: data.models.xgboost, color: "text-orange-400" },
-                  { name: "DQN Policy", acc: data.models.dqn, color: "text-green-400" },
                   { name: "META-ENSEMBLE", acc: data.models.ensemble, color: "text-zinc-100" }
                 ].map(m => (
                   <div key={m.name} className="flex justify-between items-center p-3 bg-zinc-900/50 border border-zinc-800 rounded">
                     <span className="text-[10px] font-bold text-zinc-400 uppercase">{m.name}</span>
-                    <span className={`text-sm font-mono font-bold ${m.color}`}>{m.acc}%</span>
+                    <span className={`text-sm font-mono font-bold ${m.color}`}>{m.acc.toFixed(1)}%</span>
                   </div>
                 ))}
               </CardContent>

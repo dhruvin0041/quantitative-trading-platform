@@ -29,7 +29,7 @@ export function CommandMenu() {
 
   React.useEffect(() => {
     const down = (e: KeyboardEvent) => {
-      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+      if (e.key === "k" && e.altKey) {
         e.preventDefault()
         setOpen((open) => !open)
       }

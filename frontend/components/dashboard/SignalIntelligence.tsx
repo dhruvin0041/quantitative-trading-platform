@@ -1,59 +1,69 @@
 import React from 'react';
 import { ChartData } from '@/types';
-import { Cpu, AlertTriangle, Newspaper, Activity, AlertCircle } from 'lucide-react';
+import { Cpu, AlertTriangle, Newspaper, Activity, AlertCircle, BrainCircuit, Clock, CheckCircle2, Info } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { formatDistanceToNow } from 'date-fns';
 
 import { Variants } from 'framer-motion';
 
 interface SignalIntelligenceProps {
   data: ChartData | null;
+  currency?: string;
 }
 
-export function SignalIntelligence({ data }: SignalIntelligenceProps) {
+export function SignalIntelligence({ data, currency = '$' }: SignalIntelligenceProps) {
   if (!data || !data.models) return (
-    <div className="h-full w-full flex items-center justify-center text-muted-foreground font-mono text-xs uppercase tracking-widest border border-white/5 rounded-xl bg-card/20">
+    <div className="min-h-[280px] w-full flex items-center justify-center text-muted-foreground font-mono text-xs uppercase tracking-widest border border-white/5 rounded-xl bg-card/20">
       Awaiting Signal Telemetry...
     </div>
   );
 
-  const { signal, confidence_score, market_regime, volatility_state, volume_ratio, models, projections, technical_snapshot, signal_note, qualitative_alpha } = data;
+  const { 
+    signal, confidence_score, uncertainty_score, market_regime, 
+    volatility_state, volume_ratio, models, projections, 
+    is_point_forecast, model_agreement, bullish_models, 
+    bearish_models, neutral_models, timestamp,
+    signal_note, qualitative_alpha, xai, sentiment_score 
+  } = data;
+
+  const isDivergent = (market_regime === 'BULL' && signal.includes('SELL')) || (market_regime === 'BEAR' && signal.includes('BUY'));
 
   const getSignalColor = (action: string) => {
-    if (action.includes('BUY')) return 'text-[var(--signal-buy)] border-[var(--signal-buy)]/30 bg-[var(--signal-buy)]/10 dark:text-[var(--signal-buy)] dark:border-[var(--signal-buy)]/30 dark:bg-[var(--signal-buy)]/10';
-    if (action.includes('SELL')) return 'text-[var(--signal-sell)] border-[var(--signal-sell)]/30 bg-[var(--signal-sell)]/10 dark:text-[var(--signal-sell)] dark:border-[var(--signal-sell)]/30 dark:bg-[var(--signal-sell)]/10';
-    return 'text-[var(--signal-hold)] border-[var(--signal-hold)]/30 bg-[var(--signal-hold)]/10 dark:text-[var(--signal-hold)] dark:border-[var(--signal-hold)]/30 dark:bg-[var(--signal-hold)]/10';
+    if (action.includes('BUY')) return 'text-[var(--signal-buy)] border-[var(--signal-buy)]/30 bg-[var(--signal-buy)]/10';
+    if (action.includes('SELL')) return 'text-[var(--signal-sell)] border-[var(--signal-sell)]/30 bg-[var(--signal-sell)]/10';
+    return 'text-[var(--signal-hold)] border-[var(--signal-hold)]/30 bg-[var(--signal-hold)]/10';
   };
 
   const getRegimeColor = (regime: string) => {
-    if (regime === 'BULL') return 'bg-green-500/20 text-green-500 border-green-500/30';
-    if (regime === 'BEAR') return 'bg-red-500/20 text-red-500 border-red-500/30';
-    return 'bg-zinc-500/20 text-zinc-400 border-zinc-500/30';
+    if (regime === 'BULL') return 'bg-green-500 text-white border-green-600';
+    if (regime === 'BEAR') return 'bg-red-500 text-white border-red-600';
+    return 'bg-zinc-500 text-white border-zinc-600';
   };
 
   const getVolatilityColor = (state: string) => {
-    if (state === 'HIGH') return 'bg-orange-500/20 text-orange-500 border-orange-500/30';
-    if (state === 'MEDIUM') return 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30';
-    return 'bg-blue-500/20 text-blue-500 border-blue-500/30';
+    if (state === 'HIGH') return 'bg-red-500 text-white border-red-600';
+    if (state === 'MEDIUM') return 'bg-orange-500 text-white border-orange-600';
+    return 'bg-green-500 text-white border-green-600';
   };
 
-  const getRSIColor = (rsi: number) => {
-    if (rsi > 70) return 'text-red-500';
-    if (rsi < 30) return 'text-green-500';
-    return 'text-foreground';
+  const getUncertaintyColor = (score: number) => {
+    if (score < 31) return 'bg-green-500';
+    if (score < 46) return 'bg-amber-500';
+    return 'bg-red-500';
   };
 
-  const getADXColor = (adx: number) => {
-    if (adx > 25) return 'text-orange-500';
-    if (adx < 20) return 'text-muted-foreground';
-    return 'text-foreground';
+  const getUncertaintyText = (score: number) => {
+    if (score < 31) return 'LOW';
+    if (score < 46) return 'MODERATE';
+    return 'HIGH';
   };
 
   const container: Variants = {
     hidden: { opacity: 0 },
     show: {
       opacity: 1,
-      transition: { staggerChildren: 0.1 }
+      transition: { staggerChildren: 0.05 }
     }
   };
 
@@ -66,6 +76,19 @@ export function SignalIntelligence({ data }: SignalIntelligenceProps) {
     }
   };
 
+  const signalAge = timestamp ? formatDistanceToNow(new Date(timestamp), { addSuffix: true }) : 'Unknown';
+
+  // PRIORITY #6: Model Disagreement Intelligence
+  const getDisagreementNote = () => {
+    const counts = { BULL: bullish_models || 0, BEAR: bearish_models || 0, NEUT: neutral_models || 0 };
+    if (model_agreement >= 100) return "Full Consensus: Unified direction confirmed across all agent architectures.";
+    if (model_agreement >= 66) {
+      const majority = counts.BULL > counts.BEAR ? "Bullish" : "Bearish";
+      return `Strong Consensus: ${majority} edge identified with minor technical divergence.`;
+    }
+    return "Conflicting Consensus: Tree agents and Neural Fusion are reporting divergent structural patterns. Caution advised.";
+  };
+
   return (
     <motion.div 
       variants={container}
@@ -74,9 +97,28 @@ export function SignalIntelligence({ data }: SignalIntelligenceProps) {
       className="flex flex-col gap-4 h-full"
       data-tour="intelligence"
     >
+      {/* Prediction Timestamp Header */}
+      <div className="flex items-center justify-between px-1">
+        <div className="flex items-center gap-2 text-[9px] font-mono font-bold text-muted-foreground uppercase tracking-widest">
+           <Clock className="w-3 h-3" />
+           Generated: {new Date(timestamp).toLocaleString()} UTC ({signalAge})
+        </div>
+        <div className="flex items-center gap-3">
+           <div className="flex items-center gap-2 text-[9px] font-mono font-bold text-primary uppercase tracking-widest">
+              <CheckCircle2 className="w-3 h-3" />
+              Agreement: {model_agreement?.toFixed(1)}%
+           </div>
+           <div className="flex gap-1">
+              <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-green-500/10 text-green-500 border border-green-500/30">B:{bullish_models || 0}</span>
+              <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 border border-red-500/30">S:{bearish_models || 0}</span>
+              <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-zinc-500/10 text-zinc-400 border border-zinc-500/30">H:{neutral_models || 0}</span>
+           </div>
+        </div>
+      </div>
+
       {/* Warning Banner */}
       {signal_note && (
-        <motion.div variants={item} className="flex items-center gap-2 px-4 py-2 bg-orange-500/10 border border-orange-500/30 rounded-lg text-orange-500 text-xs font-bold">
+        <motion.div variants={item} className="flex items-center gap-2 px-4 py-2 bg-orange-100 border border-orange-500 dark:bg-orange-950/50 dark:border-orange-600 rounded-lg text-orange-700 dark:text-orange-400 text-xs font-bold w-full">
           <AlertCircle className="w-4 h-4" />
           <span>⚠️ {signal_note}</span>
         </motion.div>
@@ -84,33 +126,119 @@ export function SignalIntelligence({ data }: SignalIntelligenceProps) {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1">
         {/* Model Consensus */}
-        <motion.div variants={item} className="glass-panel rounded-xl flex flex-col overflow-hidden group transition-all duration-300">
-          <div className="bg-secondary/50 dark:bg-black/40 border-b border-border px-4 py-2 flex items-center justify-between">
+        <motion.div 
+          variants={item} 
+          className={cn(
+            "glass-panel rounded-xl flex flex-col overflow-hidden group transition-all duration-300 border-2",
+            isDivergent ? "border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.2)]" : "border-border"
+          )}
+        >
+          <div className={cn(
+            "border-b px-4 py-2 flex items-center justify-between transition-colors",
+            isDivergent ? "bg-amber-500/10 border-amber-500/30" : "bg-secondary/50 dark:bg-black/40 border-border"
+          )}>
             <div className="flex items-center gap-2">
-              <Cpu className="w-3.5 h-3.5 text-primary" />
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Model Consensus</h3>
-            </div>
-            <div className="flex gap-1.5">
-              <span className={cn("text-[8px] font-black px-1.5 py-0.5 rounded border uppercase", getRegimeColor(market_regime))}>{market_regime}</span>
-              <span className={cn("text-[8px] font-black px-1.5 py-0.5 rounded border uppercase", getVolatilityColor(volatility_state))}>{volatility_state} VOL</span>
+              <Cpu className={cn("w-3.5 h-3.5", isDivergent ? "text-amber-500" : "text-primary")} />
+              <h3 className={cn(
+                "text-[10px] font-black uppercase tracking-widest",
+                isDivergent ? "text-amber-500" : "text-muted-foreground"
+              )}>Model Consensus</h3>
             </div>
           </div>
           <div className="p-4 flex-1 flex flex-col gap-2 justify-center">
-            {Object.entries(models).map(([name, pred]) => (
-              <div key={name} className="flex items-center justify-between p-2 rounded border border-border bg-muted/30 dark:bg-black/20 group-hover:bg-muted/50 dark:group-hover:bg-black/40 transition-colors">
-                <span className="text-[10px] font-mono text-muted-foreground uppercase font-bold">{name}</span>
-                <div className="flex items-center gap-2">
-                  <span className={cn("text-[9px] font-black uppercase px-2 py-0.5 rounded border", getSignalColor(pred.signal))}>
-                    {pred.signal}
-                  </span>
-                  <span className="text-[10px] font-mono font-bold text-primary dark:text-foreground w-10 text-right">{Math.round(pred.probability * 100)}%</span>
+            {Object.entries(models).map(([name, pred]) => {
+              const isMeta = name.includes("META") || name.includes("ENSEMBLE");
+              if (isMeta) return null;
+              
+              const prob = pred.probability;
+              const probText = prob === 0 ? "N/A" : `${Math.round(prob * 100)}%`;
+              
+              return (
+                <div key={name} className="flex items-center justify-between p-2 rounded border border-border bg-muted/30 dark:bg-black/20 group-hover:bg-muted/50 dark:group-hover:bg-black/40 transition-colors">
+                  <span className="text-[10px] font-mono text-muted-foreground uppercase font-bold">{name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={cn("text-[9px] font-black uppercase px-2 py-0.5 rounded border", getSignalColor(pred.signal))}>
+                      {pred.signal}
+                    </span>
+                    <span className="text-[10px] font-mono font-bold text-primary dark:text-foreground w-10 text-right">{probText}</span>
+                  </div>
                 </div>
-              </div>
-            ))}
-            <div className="mt-2 pt-2 border-t border-border/50 flex justify-between items-center">
-              <span className="text-[9px] font-bold text-muted-foreground uppercase">Volume Ratio</span>
-              <span className={cn("text-[10px] font-mono font-bold", volume_ratio < 0.7 ? "text-red-500" : "text-green-500")}>{volume_ratio.toFixed(2)}</span>
+              );
+            })}
+            
+            <div className="mt-2 p-2 rounded bg-secondary/30 border border-border/50">
+               <span className="text-[8px] font-bold text-muted-foreground uppercase mb-1 block">CONSENSUS INTELLIGENCE</span>
+               <p className="text-[9px] text-foreground leading-tight italic">{getDisagreementNote()}</p>
             </div>
+
+            <div className="flex gap-1.5 mt-2 justify-center">
+              <span className={cn("text-[8px] font-black px-2 py-1 rounded-full uppercase shadow-sm", getRegimeColor(market_regime))}>
+                {market_regime === 'BULL' ? '🐂' : market_regime === 'BEAR' ? '🐻' : '⚖️'} {market_regime}
+              </span>
+              <span className={cn("text-[8px] font-black px-2 py-1 rounded-full uppercase shadow-sm", getVolatilityColor(volatility_state))}>
+                {volatility_state} VOL
+              </span>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* PRIORITY #2: XAI Signal Drivers with Visual Hierarchy */}
+        <motion.div variants={item} className="glass-panel rounded-xl flex flex-col overflow-hidden group transition-all duration-300">
+          <div className="bg-secondary/50 dark:bg-black/40 border-b border-border px-4 py-2 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <BrainCircuit className="w-3.5 h-3.5 text-primary" />
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">XAI Signal Drivers</h3>
+            </div>
+          </div>
+          <div className="p-4 flex-1 flex flex-col justify-center gap-3">
+            {xai && xai.top_drivers && xai.top_drivers.length > 0 ? (
+              <>
+                <div className="flex flex-col gap-2.5">
+                  {xai.top_drivers.slice(0, 3).map((driver, idx) => {
+                    const maxImpact = Math.max(...xai.top_drivers.map(d => Math.abs(d.impact)));
+                    const barWidth = (Math.abs(driver.impact) / maxImpact) * 100;
+                    
+                    return (
+                      <div key={idx} className="flex flex-col gap-1">
+                        <div className="flex justify-between items-end">
+                          <span className="text-[10px] font-black text-foreground uppercase tracking-tight flex items-center gap-1.5">
+                            <span className="text-[8px] opacity-30">#{idx + 1}</span> {driver.feature}
+                          </span>
+                          <span className={cn(
+                            "text-[9px] font-mono font-black",
+                            driver.direction === 'bullish' ? "text-green-500" : "text-red-500"
+                          )}>
+                            {driver.impact > 0 ? '+' : ''}{driver.impact.toFixed(3)}
+                          </span>
+                        </div>
+                        <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden flex">
+                          <div 
+                            className={cn(
+                              "h-full rounded-full transition-all duration-1000 ease-out",
+                              driver.direction === 'bullish' ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" : "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]"
+                            )}
+                            style={{ width: `${barWidth}%` }}
+                          />
+                        </div>
+                        <span className={cn(
+                          "text-[7px] font-black uppercase tracking-widest",
+                          driver.direction === 'bullish' ? "text-green-600/70" : "text-red-600/70"
+                        )}>Contribution: {driver.direction}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-1 pt-2 border-t border-border/30">
+                  <p className="text-[10px] text-muted-foreground italic leading-relaxed text-center">
+                    {xai.explanation}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center">
+                <span className="text-[10px] text-muted-foreground italic uppercase tracking-tighter opacity-50">SHAP Inference Unavailable</span>
+              </div>
+            )}
           </div>
         </motion.div>
 
@@ -119,77 +247,125 @@ export function SignalIntelligence({ data }: SignalIntelligenceProps) {
           <div className="bg-secondary/50 dark:bg-black/40 border-b border-border px-4 py-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-3.5 h-3.5 text-primary" />
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">10-Day Projections</h3>
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">10-Day Projections (TFT)</h3>
             </div>
+            {is_point_forecast && (
+               <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-blue-500 text-white uppercase tracking-tighter">Point Forecast</span>
+            )}
           </div>
           <div className="p-4 flex-1 flex flex-col justify-center gap-4">
-            <div className="flex items-center justify-between font-mono text-sm relative">
-              <div className="flex flex-col">
-                <span className="text-muted-foreground text-[10px] font-bold uppercase mb-1 text-center">Floor</span>
-                <span className="text-[var(--signal-sell)] font-black text-xl">${projections.floor.toFixed(2)}</span>
+            <div className="flex items-center justify-between font-mono text-sm relative z-10">
+              <div className="flex flex-col items-center">
+                <span className="text-muted-foreground text-[9px] font-bold uppercase mb-1">P10 Floor</span>
+                <span className="text-[var(--signal-sell)] font-black text-lg">{currency}{projections.floor.toFixed(2)}</span>
               </div>
-              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-1/3 h-px bg-border opacity-50"></div>
-              <div className="flex flex-col">
-                <span className="text-muted-foreground text-[10px] font-bold uppercase mb-1 text-center">Ceiling</span>
-                <span className="text-[var(--signal-buy)] font-black text-xl">${projections.ceiling.toFixed(2)}</span>
+              <div className="flex flex-col items-center">
+                <span className="text-muted-foreground text-[9px] font-bold uppercase mb-1">P50 Median</span>
+                <span className="text-foreground font-black text-lg">
+                  {is_point_forecast ? "N/A" : `${currency}${projections.median?.toFixed(2)}`}
+                </span>
+              </div>
+              <div className="flex flex-col items-center">
+                <span className="text-muted-foreground text-[9px] font-bold uppercase mb-1">P90 Ceiling</span>
+                <span className="text-[var(--signal-buy)] font-black text-lg">{currency}{projections.ceiling.toFixed(2)}</span>
               </div>
             </div>
-            <p className="text-[11px] text-muted-foreground leading-relaxed border-l-4 border-primary/30 pl-3 bg-primary/5 py-2 rounded-r-md italic">
-              <span className="text-primary font-black uppercase text-[9px] not-italic mr-1">Signal:</span> {signal} ({confidence_score.toFixed(1)}%)
-            </p>
+            
+            {/* PRIORITY #5: Confidence vs Uncertainty Visual Separation */}
+            <div className="grid grid-cols-2 gap-3 mt-1">
+               <div className={cn(
+                 "p-2 rounded border bg-muted/20 relative group/info transition-all",
+                 signal.includes('BUY') ? "border-l-2 border-l-green-500" : signal.includes('SELL') ? "border-l-2 border-l-red-500" : "border-l-2 border-l-zinc-500",
+                 (uncertainty_score && uncertainty_score > 40) ? "opacity-50 grayscale-[0.5]" : "opacity-100"
+               )}>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-[8px] font-black uppercase text-muted-foreground">Confidence</span>
+                    <Info className="w-2.5 h-2.5 text-muted-foreground/50" />
+                  </div>
+                  <span className={cn("text-xs font-mono font-black", getSignalColor(signal).split(' ')[0])}>{confidence_score.toFixed(1)}%</span>
+                  <div className="absolute left-0 bottom-full mb-2 w-48 p-2 rounded bg-black text-white text-[9px] leading-tight opacity-0 group-hover/info:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl border border-white/10">
+                    How strongly the model ensemble favors the predicted direction.
+                  </div>
+               </div>
+
+               <div className={cn(
+                 "p-2 rounded border relative group/info2 transition-all animate-in fade-in zoom-in duration-300",
+                 uncertainty_score && uncertainty_score > 40 
+                   ? "bg-red-500/10 border-red-500 border-l-4 shadow-[0_0_15px_rgba(239,68,68,0.1)]" 
+                   : "bg-muted/20 border-border border-l-2 border-l-emerald-500"
+               )}>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className={cn(
+                      "text-[8px] font-black uppercase",
+                      uncertainty_score && uncertainty_score > 40 ? "text-red-500" : "text-muted-foreground"
+                    )}>Uncertainty</span>
+                    {uncertainty_score && uncertainty_score > 40 ? <AlertTriangle className="w-2.5 h-2.5 text-red-500 animate-pulse" /> : <Info className="w-2.5 h-2.5 text-muted-foreground/50" />}
+                  </div>
+                  <span className={cn("text-xs font-mono font-black", uncertainty_score && uncertainty_score > 40 ? "text-red-500" : "text-emerald-500")}>
+                    {uncertainty_score !== undefined ? `${getUncertaintyText(uncertainty_score)} (${uncertainty_score.toFixed(1)}%)` : 'N/A'}
+                  </span>
+                  {uncertainty_score && uncertainty_score > 40 && (
+                     <div className="mt-1 flex items-center gap-1">
+                        <div className="w-1 h-1 rounded-full bg-red-500 animate-ping" />
+                        <span className="text-[7px] font-black text-red-500 uppercase tracking-tighter">Veto Risk High</span>
+                     </div>
+                  )}
+                  <div className="absolute right-0 bottom-full mb-2 w-48 p-2 rounded bg-black text-white text-[9px] leading-tight opacity-0 group-hover/info2:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl border border-white/10">
+                    Measure of prediction stability. High uncertainty triggers an automatic RiskAgent VETO.
+                  </div>
+               </div>
+            </div>
           </div>
         </motion.div>
 
-        {/* Technical Snapshot */}
-        <motion.div variants={item} className="glass-panel rounded-xl flex flex-col overflow-hidden group transition-all duration-300">
-          <div className="bg-secondary/50 dark:bg-black/40 border-b border-border px-4 py-2 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Activity className="w-3.5 h-3.5 text-primary" />
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Technical Snapshot</h3>
-            </div>
-          </div>
-          <div className="p-4 flex-1 grid grid-cols-3 gap-3">
-            <div className="flex flex-col items-center justify-center p-2 rounded bg-muted/20 border border-border/50">
-              <span className="text-[8px] font-bold text-muted-foreground uppercase mb-1">RSI</span>
-              <span className={cn("text-xs font-mono font-black", getRSIColor(technical_snapshot.RSI))}>{technical_snapshot.RSI}</span>
-            </div>
-            <div className="flex flex-col items-center justify-center p-2 rounded bg-muted/20 border border-border/50">
-              <span className="text-[8px] font-bold text-muted-foreground uppercase mb-1">MACD</span>
-              <span className="text-xs font-mono font-black">{technical_snapshot.MACD}</span>
-            </div>
-            <div className="flex flex-col items-center justify-center p-2 rounded bg-muted/20 border border-border/50">
-              <span className="text-[8px] font-bold text-muted-foreground uppercase mb-1">ATR</span>
-              <span className="text-xs font-mono font-black">{technical_snapshot.ATR}</span>
-            </div>
-            <div className="flex flex-col items-center justify-center p-2 rounded bg-muted/20 border border-border/50">
-              <span className="text-[8px] font-bold text-muted-foreground uppercase mb-1">BB Pos</span>
-              <span className="text-xs font-mono font-black">{technical_snapshot.BB_Position}</span>
-            </div>
-            <div className="flex flex-col items-center justify-center p-2 rounded bg-muted/20 border border-border/50">
-              <span className="text-[8px] font-bold text-muted-foreground uppercase mb-1">ADX</span>
-              <span className={cn("text-xs font-mono font-black", getADXColor(technical_snapshot.ADX))}>{technical_snapshot.ADX}</span>
-            </div>
-            <div className="flex flex-col items-center justify-center p-2 rounded bg-muted/20 border border-border/50">
-              <span className="text-[8px] font-bold text-muted-foreground uppercase mb-1">Vol Ratio</span>
-              <span className="text-xs font-mono font-black">{technical_snapshot.Volume_Ratio}</span>
-            </div>
-          </div>
-        </motion.div>
       </div>
 
-      {/* Qualitative Alpha / NLP */}
-      <motion.div variants={item} className="glass-panel rounded-xl flex flex-col overflow-hidden group transition-all duration-300 h-24">
-        <div className="bg-secondary/50 dark:bg-black/40 border-b border-border px-4 py-1 flex items-center justify-between">
+      {/* PRIORITY #4: NLP Panel Compression */}
+      <motion.div variants={item} className={cn(
+        "glass-panel rounded-xl flex flex-col overflow-hidden group transition-all duration-500",
+        (!qualitative_alpha || qualitative_alpha.includes("unavailable")) ? "min-h-[40px] opacity-80" : "min-h-[96px]"
+      )}>
+        <div className="bg-secondary/50 dark:bg-black/40 border-b border-border px-4 py-1 flex items-center justify-between h-8 shrink-0">
           <div className="flex items-center gap-2">
             <Newspaper className="w-3 h-3 text-primary" />
             <h3 className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Qualitative Alpha (Gemini)</h3>
           </div>
+          {(!qualitative_alpha || qualitative_alpha.includes("unavailable")) && (
+             <div className="flex items-center gap-2">
+                <span className="text-[8px] font-black text-amber-500 uppercase tracking-widest px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">Module Disabled</span>
+                <span className="text-[8px] text-muted-foreground hidden sm:inline">Set GOOGLE_API_KEY to enable Fundamental Analysis</span>
+             </div>
+          )}
         </div>
-        <div className="p-3 flex-1 overflow-y-auto">
-          <p className="text-[10px] text-foreground font-medium leading-relaxed italic">
-            &quot;{qualitative_alpha || "No qualitative data available for this cycle."}&quot;
-          </p>
-        </div>
+        
+        {qualitative_alpha && !qualitative_alpha.includes("unavailable") ? (
+          <div className="p-3 flex-1 flex items-center gap-4 animate-in fade-in slide-in-from-bottom-1 duration-500">
+            <p className="text-[10px] text-foreground font-medium leading-relaxed italic flex-1">
+              &quot;{qualitative_alpha}&quot;
+            </p>
+            
+            {sentiment_score !== undefined && sentiment_score !== null && (
+              <div className="w-48 shrink-0 flex flex-col gap-1 border-l border-border/50 pl-4">
+                <span className="text-[8px] font-bold text-muted-foreground uppercase text-center">Sentiment Score</span>
+                <div className="flex justify-between text-[8px] font-black text-muted-foreground px-1">
+                  <span className="text-red-500">BEARISH</span>
+                  <span className="text-green-500">BULLISH</span>
+                </div>
+                <div className="relative h-1.5 w-full rounded-full bg-gradient-to-r from-red-500 via-yellow-500 to-green-500 opacity-80 mt-1">
+                  <div 
+                    className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-white border border-black rounded-full shadow-sm"
+                    style={{ left: `calc(${((sentiment_score + 1) / 2) * 100}% - 5px)` }}
+                  />
+                </div>
+                <span className="text-[9px] font-mono text-center mt-0.5">{sentiment_score.toFixed(2)}</span>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="px-4 py-1.5 flex items-center">
+             <span className="text-[9px] text-muted-foreground italic font-medium">Fundamental telemetry currently suppressed by rate-limits or missing credentials.</span>
+          </div>
+        )}
       </motion.div>
     </motion.div>
   );

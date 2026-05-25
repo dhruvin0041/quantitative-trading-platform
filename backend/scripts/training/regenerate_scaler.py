@@ -23,8 +23,17 @@ def regenerate():
     for t in tickers:
         try:
             print(f"Processing {t}...")
-            df = fetch_historical_data(t, "2022-01-01", pd.Timestamp.now().strftime("%Y-%m-%d"))
+            # Fetch up to end of 2023 for scaler fitting to avoid data leakage
+            df = fetch_historical_data(t, "2019-01-01", "2023-12-31")
             df = add_upgraded_features(df, spy_df, vix_df)
+            
+            # Target generation just to match preprocessing, though not needed for scaling features
+            df['target_direction'] = (df['Close'].shift(-5) > df['Close'] * 1.02).astype(int)
+            df['target_min'] = (df['Low'].rolling(5).min().shift(-5) - df['Close']) / df['Close']
+            df['target_max'] = (df['High'].rolling(5).max().shift(-5) - df['Close']) / df['Close']
+            
+            df = df.dropna()
+            
             all_data.append(df[FEATURE_COLUMNS])
         except Exception as e:
             print(f"Error processing {t}: {e}")

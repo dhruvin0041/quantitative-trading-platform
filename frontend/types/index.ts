@@ -1,6 +1,18 @@
+export interface AssetMetadata {
+  ticker: string;
+  market: string;
+  exchange: string;
+  currency: string;
+  timezone: string;
+}
+
 export interface UniverseStock {
   ticker: string;
   name: string;
+  price: number;
+  pct_change: number;
+  market: string;
+  metadata?: AssetMetadata;
 }
 
 export interface ModelPrediction {
@@ -43,13 +55,23 @@ export interface AIReport {
 export interface Position {
   shares: number;
   avg_price: number;
+  currency: string;
+  market: string;
 }
 
 export interface Portfolio {
   cash: number;
   equity: number;
   return_pct: number;
+  base_currency: string;
+  today_pnl: number;
+  mtd_pnl: number;
+  ytd_pnl: number;
+  inception_pnl: number;
+  realized_pnl: number;
+  unrealized_pnl: number;
   positions: Record<string, Position>;
+  fx_rates: Record<string, number>;
 }
 
 export interface ChartData {
@@ -58,22 +80,36 @@ export interface ChartData {
   price: number; // Legacy support
   signal: string;
   confidence_score: number;
+  uncertainty_score?: number;
+  sentiment_score?: number;
   signal_note?: string | null;
   market_regime: string;
   volatility_state: string;
   volume_ratio: number;
+  is_point_forecast: boolean;
+  model_agreement: number;
+  bullish_models?: number;
+  bearish_models?: number;
+  neutral_models?: number;
+  timestamp: string;
+  metadata: AssetMetadata;
   models: Record<string, ModelPrediction>;
   projections: {
     floor: number;
+    median?: number;
     ceiling: number;
   };
   technical_snapshot: TechnicalSnapshot;
   qualitative_alpha?: string | null;
+  xai?: {
+    top_drivers: { feature: string; impact: number; direction: string }[];
+    explanation: string;
+  };
   
   // Chart related
   candles: { time: string; open: number; high: number; low: number; close: number }[];
   clouds: { time: string; ribbon_upper: number; ribbon_lower: number; bb_upper: number; bb_lower: number }[];
   ai_report: AIReport; // Keep for legacy component compatibility
   historical_markers: { time: string; action: string; probability: number; label?: string }[];
-  portfolio?: Portfolio;
+  portfolio: Portfolio;
 }

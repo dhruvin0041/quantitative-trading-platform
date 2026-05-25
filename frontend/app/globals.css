@@ -220,7 +220,7 @@
   100% { transform: translateX(-50%); }
 }
 .animate-ticker {
-  animation: ticker 600s linear infinite; /* Ultra-crawl for absolute focus */
+  animation: ticker 70s linear infinite; /* Optimized speed for high-frequency terminal feel */
 }
 .animate-ticker:hover {
   animation-play-state: paused;

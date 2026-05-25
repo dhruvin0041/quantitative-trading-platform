@@ -27,7 +27,7 @@ class RiskAgent:
         if alpha_signal["signal_idx"] in [0, 2] and risk_metrics.get("stampede_risk", {}).get("is_crowded", False):
             is_safe = False
             veto_reason = "Stampede Risk (Crowded Trade)"
-            
+
         if risk_metrics.get("beta", 1.0) > 2.5:
             is_safe = False
             veto_reason = "Beta too high (Extreme Volatility)"
@@ -36,8 +36,11 @@ class RiskAgent:
             is_safe = False
             veto_reason = "Low Confidence Alpha"
 
-        return {"is_safe": is_safe, "veto_reason": veto_reason}
+        if risk_metrics.get("uncertainty_score", 0.0) > 0.40:
+            is_safe = False
+            veto_reason = f"High Prediction Uncertainty ({risk_metrics.get('uncertainty_score'):.2f})"
 
+        return {"is_safe": is_safe, "veto_reason": veto_reason}
 
 class ExecutionAgent:
     """

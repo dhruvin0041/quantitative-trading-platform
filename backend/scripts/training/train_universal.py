@@ -155,8 +155,10 @@ def train_universal_engine():
 
     # 6. Train Macro Regime Detector
     print("Calibrating Macro Kill-Switch (VIX Regimes)...")
-    from src.models.regime_detector import train_macro_regime_model
-    train_macro_regime_model()
+    from src.models.regime_detector import RegimeDetector
+    regime_model = RegimeDetector(n_regimes=3, method='hmm')
+    regime_model.fit(master_df)
+    regime_model.save()
 
     print("Project Hydra: Universal Brain Deployment Complete.")
 

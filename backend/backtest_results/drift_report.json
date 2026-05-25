@@ -1,0 +1,62 @@
+{
+  "MA50": {
+    "ks": 1.0,
+    "psi": 0.2424594054723263,
+    "status": "DRIFT DETECTED"
+  },
+  "MA20": {
+    "ks": 1.0,
+    "psi": 2.208336038527325,
+    "status": "DRIFT DETECTED"
+  },
+  "MA20_vs_MA50": {
+    "ks": 0.5043478260869565,
+    "psi": 3.870428011321892,
+    "status": "DRIFT DETECTED"
+  },
+  "EMA9_vs_EMA21": {
+    "ks": 0.5234782608695652,
+    "psi": 9.175769482009047,
+    "status": "DRIFT DETECTED"
+  },
+  "VIX_Level": {
+    "ks": 1.0,
+    "psi": 7.061864977631192,
+    "status": "DRIFT DETECTED"
+  },
+  "BB_Width": {
+    "ks": 0.591304347826087,
+    "psi": 7.715796826237092,
+    "status": "DRIFT DETECTED"
+  },
+  "ATR": {
+    "ks": 1.0,
+    "psi": 6.261380597492154,
+    "status": "DRIFT DETECTED"
+  },
+  "ADX": {
+    "ks": 1.0,
+    "psi": 2.030475723958042,
+    "status": "DRIFT DETECTED"
+  },
+  "BB_Position": {
+    "ks": 0.6826086956521739,
+    "psi": 7.1982074422857165,
+    "status": "DRIFT DETECTED"
+  },
+  "MACD_Hist": {
+    "ks": 0.2893280632411067,
+    "psi": 8.942502093154147,
+    "status": "DRIFT DETECTED"
+  },
+  "Relative_Strength": {
+    "ks": 0.5217391304347826,
+    "psi": 9.665086027161449,
+    "status": "DRIFT DETECTED"
+  },
+  "OBV_Change": {
+    "ks": 0.3525691699604743,
+    "psi": 8.178780016166993,
+    "status": "DRIFT DETECTED"
+  }
+}

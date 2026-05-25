@@ -76,4 +76,3 @@ if __name__ == "__main__":
     # Default behavior for manual execution
     clean_training_artifacts()
     print("\n>>> System artifacts cleaned. <<<")
-cts cleaned. <<<")

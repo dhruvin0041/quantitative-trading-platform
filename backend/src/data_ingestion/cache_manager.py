@@ -5,7 +5,7 @@ import threading
 from datetime import datetime
 
 class SQLiteCache:
-    def __init__(self, db_path="cache.db"):
+    def __init__(self, db_path="data/cache.db"):
         self.db_path = db_path
         self.lock = threading.Lock()
         self._init_db()
