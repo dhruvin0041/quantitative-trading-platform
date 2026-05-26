@@ -14,7 +14,30 @@ class PerformanceAnalyzer:
 
     def analyze(self, snapshots, trade_history, initial_capital):
         if not snapshots:
-            return {}
+            return {
+                "summary": {
+                    "total_return": 0.0,
+                    "sharpe": 0.0,
+                    "sortino": 0.0,
+                    "calmar": 0.0,
+                    "max_drawdown": 0.0,
+                    "win_rate": 0.0,
+                    "profit_factor": 0.0,
+                    "today_pnl": 0.0,
+                    "mtd_pnl": 0.0,
+                    "ytd_pnl": 0.0,
+                    "inception_pnl": 0.0,
+                    "realized_pnl": 0.0,
+                    "unrealized_pnl": 0.0,
+                    "total_trades": 0,
+                    "open_trades": 0,
+                    "closed_trades": 0,
+                    "winning_trades": 0,
+                    "losing_trades": 0,
+                },
+                "returns": {"daily": {}, "monthly": {}},
+                "attribution": {"by_regime": {}, "by_sector": {}},
+            }
 
         df_snapshots = pd.DataFrame(snapshots)
         df_snapshots["time"] = pd.to_datetime(df_snapshots["time"])

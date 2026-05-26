@@ -18,7 +18,7 @@ class BacktestService:
             df = pd.read_csv(trades_path)
             # Ensure ticker matches (it might be AAPL or AAPL.NS depending on how it was saved)
             ticker_upper = ticker.upper()
-            df_ticker = df[df["ticker"].str.upper() == ticker_upper]
+            df_ticker = df[df["ticker"].str.upper() == ticker_upper].copy()
 
             if df_ticker.empty:
                 return BacktestSummary(
@@ -31,6 +31,13 @@ class BacktestService:
                     vetoed_rate=0.0,
                     coverage=0.0,
                 )
+
+            # Defensive Column Check
+            if "was_correct" not in df_ticker.columns:
+                df_ticker["was_correct"] = False
+            
+            # Ensure was_correct is boolean
+            df_ticker["was_correct"] = df_ticker["was_correct"].astype(bool)
 
             df_ticker["date_parsed"] = pd.to_datetime(df_ticker["date"])
             end_date = df_ticker["date_parsed"].max()

@@ -102,18 +102,26 @@ def run_backtest():
         return
 
     # 2. Setup
-    tickers = [
-        "AAPL",
-        "MSFT",
-        "NVDA",
-        "GOOGL",
-        "AMZN",
-        "META",
-        "TSLA",
-        "JPM",
-        "JNJ",
-        "XOM",
-    ]
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--ticker", type=str, help="Specific ticker to backtest")
+    args = parser.parse_args()
+
+    if args.ticker:
+        tickers = [args.ticker]
+    else:
+        tickers = [
+            "AAPL",
+            "MSFT",
+            "NVDA",
+            "GOOGL",
+            "AMZN",
+            "META",
+            "TSLA",
+            "JPM",
+            "JNJ",
+            "XOM",
+        ]
     time_steps = config["data"]["time_steps"]
 
     trades = []

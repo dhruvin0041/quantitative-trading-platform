@@ -12,6 +12,7 @@ class PaperTradingEngine:
         initial_capital=1000000.0,
         db_path="data/paper_trading.json",
         base_currency="USD",
+        fx_engine=None,
     ):
         self.initial_capital = initial_capital
         self.capital = initial_capital
@@ -20,7 +21,7 @@ class PaperTradingEngine:
         self.history = []
         self.portfolio_snapshots = []  # List of {time, equity, cash, base_currency}
         self.db_path = db_path
-        self.fx_engine = FXEngine()
+        self.fx_engine = fx_engine if fx_engine else FXEngine()
         self._load()
 
     def _load(self):
@@ -53,17 +54,44 @@ class PaperTradingEngine:
         os.replace(temp_path, self.db_path)
 
     def set_base_currency(self, new_base: str):
-        """Institutional Base Currency Switch: Re-normalizes the entire cash account."""
+        """Institutional Base Currency Switch: Re-normalizes the entire account and history."""
         if new_base == self.base_currency:
             return
 
-        # Convert cash from old base to new base
+        old_base = self.base_currency
+        # 1. Convert capital and initial_capital
         self.capital = self.fx_engine.convert_to_base(
-            self.capital, self.base_currency, new_base
+            self.capital, old_base, new_base
         )
         self.initial_capital = self.fx_engine.convert_to_base(
-            self.initial_capital, self.base_currency, new_base
+            self.initial_capital, old_base, new_base
         )
+
+        # 2. Convert portfolio snapshots (Historical equity curve)
+        for snapshot in self.portfolio_snapshots:
+            snapshot["equity"] = self.fx_engine.convert_to_base(
+                snapshot["equity"], old_base, new_base
+            )
+            snapshot["cash"] = self.fx_engine.convert_to_base(
+                snapshot["cash"], old_base, new_base
+            )
+            snapshot["base_currency"] = new_base
+
+        # 3. Convert trade history (Realized metrics)
+        for trade in self.history:
+            if "cost_base" in trade:
+                trade["cost_base"] = self.fx_engine.convert_to_base(
+                    trade["cost_base"], old_base, new_base
+                )
+            if "revenue_base" in trade:
+                trade["revenue_base"] = self.fx_engine.convert_to_base(
+                    trade["revenue_base"], old_base, new_base
+                )
+            if "pnl" in trade:
+                trade["pnl"] = self.fx_engine.convert_to_base(
+                    trade["pnl"], old_base, new_base
+                )
+
         self.base_currency = new_base
         self._save()
 
@@ -280,6 +308,20 @@ class PaperTradingEngine:
         if len(self.portfolio_snapshots) > 1:
             today_pnl = total_equity - self.portfolio_snapshots[-2]["equity"]
 
+        # Normalize positions for display
+        display_positions = {}
+        for ticker, pos in self.positions.items():
+            if pos["shares"] > 0:
+                # Convert average price to base currency
+                base_avg_price = self.fx_engine.convert_to_base(
+                    pos["avg_price"], pos.get("currency", "USD"), self.base_currency
+                )
+                display_positions[ticker] = {
+                    **pos,
+                    "avg_price": base_avg_price,
+                    "original_currency": pos.get("currency", "USD"),
+                }
+
         return {
             "cash": round(self.capital, 2),
             "equity": round(total_equity, 2),
@@ -291,7 +333,7 @@ class PaperTradingEngine:
             "inception_pnl": round(total_equity - self.initial_capital, 2),
             "realized_pnl": round(realized_pnl, 2),
             "unrealized_pnl": round(unrealized_pnl, 2),
-            "positions": self.positions,
+            "positions": display_positions,
             "fx_rates": self.fx_engine.rates,
         }
 
