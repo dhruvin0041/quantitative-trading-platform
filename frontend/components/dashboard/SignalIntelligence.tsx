@@ -1,6 +1,6 @@
 import React from 'react';
 import { ChartData } from '@/types';
-import { Cpu, AlertTriangle, Newspaper, AlertCircle, BrainCircuit, Clock, CheckCircle2, Info } from 'lucide-react';
+import { Cpu, AlertTriangle, Newspaper, AlertCircle, BrainCircuit, Clock, CheckCircle2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
@@ -278,49 +278,46 @@ export function SignalIntelligence({ data, currency = '$' }: SignalIntelligenceP
               )}
             </div>
             
-            {/* PRIORITY #5: Confidence vs Uncertainty Visual Separation */}
-            <div className="grid grid-cols-2 gap-3 mt-1">
-               <div className={cn(
-                 "p-2 rounded border bg-muted/20 relative group/info transition-all",
-                 signal.includes('BUY') ? "border-l-2 border-l-green-500" : signal.includes('SELL') ? "border-l-2 border-l-red-500" : "border-l-2 border-l-zinc-500",
-                 (uncertainty_score && uncertainty_score > 40) ? "opacity-50 grayscale-[0.5]" : "opacity-100"
-               )}>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-[8px] font-black uppercase text-muted-foreground">Confidence</span>
-                    <Info className="w-2.5 h-2.5 text-muted-foreground/50" />
+            {/* Kelly Transparency & Distribution */}
+            <div className="mt-4 pt-4 border-t border-border/50">
+               <div className="flex items-center justify-between mb-3">
+                  <span className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">Risk Allocation (Kelly)</span>
+                  <span className={cn(
+                    "text-[10px] font-mono font-black px-2 py-0.5 rounded",
+                    (data.risk?.kelly_fraction || 0) > 0 ? "bg-emerald-500/10 text-emerald-500" : "bg-muted text-muted-foreground opacity-50"
+                  )}>
+                    {((data.risk?.kelly_fraction || 0) * 100).toFixed(1)}% Allocation
+                  </span>
+               </div>
+               
+               <div className="grid grid-cols-3 gap-2">
+                  <div className="flex flex-col p-2 rounded bg-secondary/30 border border-border/50">
+                    <span className="text-[7px] font-black text-muted-foreground uppercase opacity-70">Win Prob</span>
+                    <span className="text-xs font-mono font-bold text-foreground">{(data.risk?.win_probability || 0).toFixed(2)}</span>
                   </div>
-                  <span className={cn("text-xs font-mono font-black", getSignalColor(signal).split(' ')[0])}>{confidence_score.toFixed(1)}%</span>
-                  <div className="absolute left-0 bottom-full mb-2 w-48 p-2 rounded bg-black text-white text-[9px] leading-tight opacity-0 group-hover/info:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl border border-white/10">
-                    How strongly the model ensemble favors the predicted direction.
+                  <div className="flex flex-col p-2 rounded bg-secondary/30 border border-border/50">
+                    <span className="text-[7px] font-black text-muted-foreground uppercase opacity-70">Exp. Value</span>
+                    <span className={cn(
+                      "text-xs font-mono font-bold",
+                      (data.risk?.expected_value || 0) >= 0 ? "text-emerald-500" : "text-red-500"
+                    )}>
+                      {(data.risk?.expected_value || 0).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex flex-col p-2 rounded bg-secondary/30 border border-border/50">
+                    <span className="text-[7px] font-black text-muted-foreground uppercase opacity-70">R/R Ratio</span>
+                    <span className="text-xs font-mono font-bold text-foreground">{(data.risk?.risk_reward_ratio || 0).toFixed(2)}</span>
                   </div>
                </div>
 
-               <div className={cn(
-                 "p-2 rounded border relative group/info2 transition-all animate-in fade-in zoom-in duration-300",
-                 uncertainty_score && uncertainty_score > 40 
-                   ? "bg-red-500/10 border-red-500 border-l-4 shadow-[0_0_15px_rgba(239,68,68,0.1)]" 
-                   : "bg-muted/20 border-border border-l-2 border-l-emerald-500"
-               )}>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className={cn(
-                      "text-[8px] font-black uppercase",
-                      uncertainty_score && uncertainty_score > 40 ? "text-red-500" : "text-muted-foreground"
-                    )}>Uncertainty</span>
-                    {uncertainty_score && uncertainty_score > 40 ? <AlertTriangle className="w-2.5 h-2.5 text-red-500 animate-pulse" /> : <Info className="w-2.5 h-2.5 text-muted-foreground/50" />}
-                  </div>
-                  <span className={cn("text-xs font-mono font-black", uncertainty_score && uncertainty_score > 40 ? "text-red-500" : "text-emerald-500")}>
-                    {uncertainty_score !== undefined ? `${getUncertaintyText(uncertainty_score)} (${uncertainty_score.toFixed(1)}%)` : 'N/A'}
-                  </span>
-                  {uncertainty_score && uncertainty_score > 40 && (
-                     <div className="mt-1 flex items-center gap-1">
-                        <div className="w-1 h-1 rounded-full bg-red-500 animate-ping" />
-                        <span className="text-[7px] font-black text-red-500 uppercase tracking-tighter">Veto Risk High</span>
-                     </div>
-                  )}
-                  <div className="absolute right-0 bottom-full mb-2 w-48 p-2 rounded bg-black text-white text-[9px] leading-tight opacity-0 group-hover/info2:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl border border-white/10">
-                    Measure of prediction stability. High uncertainty triggers an automatic RiskAgent VETO.
-                  </div>
-               </div>
+               {(data.risk?.expected_value || 0) < 0 && (
+                 <div className="mt-2 flex items-start gap-2 p-2 rounded bg-red-500/5 border border-red-500/20">
+                    <AlertCircle className="w-3 h-3 text-red-500 shrink-0 mt-0.5" />
+                    <p className="text-[8px] text-red-500 leading-tight font-medium italic">
+                      Zero allocation enforced by RiskAgent due to negative Expected Value (EV).
+                    </p>
+                 </div>
+               )}
             </div>
           </div>
         </motion.div>

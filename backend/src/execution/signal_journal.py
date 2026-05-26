@@ -98,5 +98,6 @@ class SignalJournal:
 
     def get_closed_trades(self):
         return pd.read_sql_query(
-            "SELECT * FROM signals WHERE outcome IN ('WIN', 'LOSS', 'FLAT') ORDER BY timestamp DESC", self.conn
+            "SELECT * FROM signals WHERE outcome IN ('WIN', 'LOSS', 'FLAT') ORDER BY timestamp DESC",
+            self.conn,
         )

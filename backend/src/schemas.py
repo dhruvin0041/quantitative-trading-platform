@@ -44,6 +44,14 @@ class PortfolioSummary(BaseModel):
     positions: Dict[str, Position]
     fx_rates: Dict[str, float] = {}
 
+    # Audit Fields
+    initial_capital: float = 0.0
+    total_trades: int = 0
+    winning_trades: int = 0
+    losing_trades: int = 0
+    win_rate: float = 0.0
+    profit_factor: float = 0.0
+
 
 class XAIDriver(BaseModel):
     feature: str
@@ -69,6 +77,15 @@ class RiskMetrics(BaseModel):
     kelly_fraction: float
     target_size: float
     max_drawdown: float
+
+    # Transparency Fields
+    win_probability: float = 0.0
+    expected_value: float = 0.0
+    risk_reward_ratio: float = 0.0
+    peak_equity: float = 0.0
+    peak_date: str = ""
+    trough_equity: float = 0.0
+    trough_date: str = ""
 
 
 class PredictResponse(BaseModel):

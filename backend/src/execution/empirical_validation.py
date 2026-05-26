@@ -145,12 +145,12 @@ class ValidationAnalytics:
         for model in models_list:
             model_wins = 0
             model_total = 0
-            
+
             for _, row in df.iterrows():
                 try:
                     consensus = json.loads(row["model_consensus"])
                     model_vote = consensus.get(model, {}).get("signal")
-                    
+
                     if model_vote:
                         model_total += 1
                         # If model voted correctly for a winning trade
@@ -159,15 +159,15 @@ class ValidationAnalytics:
                         # If model voted against a losing trade (correctly predicted direction but trade lost? No, simpler)
                         # Standard attribution: if model's vote matches the signal that became a WIN.
                         elif row["outcome"] == "LOSS" and model_vote in ["BUY", "SELL"]:
-                            pass # model was wrong
+                            pass  # model was wrong
                 except Exception:
                     continue
-            
+
             wr = (model_wins / model_total * 100) if model_total > 0 else 0
             attribution[model] = {
                 "win_rate": float(wr),
                 "total_votes": model_total,
-                "confidence_avg": 0.0 # Could extend to log this too
+                "confidence_avg": 0.0,  # Could extend to log this too
             }
 
         return attribution

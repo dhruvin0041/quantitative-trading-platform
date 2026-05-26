@@ -82,43 +82,25 @@ class PerformanceAnalyzer:
         # Risk Metrics
         sharpe = self.calculate_sharpe(daily_returns)
         sortino = self.calculate_sortino(daily_returns)
-        max_dd, calmar = self.calculate_drawdown_metrics(daily_equity, daily_returns)
+        max_dd, calmar, peak_info, trough_info = self.calculate_drawdown_metrics(
+            daily_equity, daily_returns
+        )
 
         # Trade Counts
         total_trades = len(trade_history) if trade_history else 0
 
-        # In this system, paper_trading engine positions are separate from history.
-        # We'll use a better heuristic for open trades: history items with action=BUY that don't have a matching SELL yet.
-        buy_counts = {}
-        if trade_history:
-            for t in trade_history:
-                ticker = t["ticker"]
-                if t["action"] == "BUY":
-                    buy_counts[ticker] = buy_counts.get(ticker, 0) + t["shares"]
-                elif t["action"] == "SELL":
-                    buy_counts[ticker] = buy_counts.get(ticker, 0) - t["shares"]
-
-            open_trades_count = len(
-                [ticker for ticker, shares in buy_counts.items() if shares > 0]
-            )
-        else:
-            open_trades_count = 0
-
-        # Trade Metrics
+        # Consistent Trade Metrics
         trades_df = pd.DataFrame(trade_history) if trade_history else pd.DataFrame()
-
         win_rate = 0.0
         profit_factor = 0.0
         wins_count = 0
         losses_count = 0
         closed_trades_count = 0
+        realized_pnl = 0.0
 
         if not trades_df.empty:
             if "pnl" in trades_df.columns:
                 realized_pnl = trades_df[trades_df["action"] == "SELL"]["pnl"].sum()
-
-            # Simple unrealized PnL proxy: Current Equity - (Cash + Realized PnL from initial)
-            unrealized_pnl = today_equity - (initial_capital + realized_pnl)
 
             sells = trades_df[trades_df["action"] == "SELL"]
             if not sells.empty:
@@ -132,21 +114,18 @@ class PerformanceAnalyzer:
                 gross_profit = wins["pnl"].sum()
                 gross_loss = abs(losses["pnl"].sum())
                 profit_factor = (
-                    gross_profit / gross_loss if gross_loss > 0 else float("inf")
+                    gross_profit / gross_loss
+                    if gross_loss > 0
+                    else (100.0 if wins_count > 0 else 0.0)
                 )
 
-        # Attribution
-        regime_perf = {}
-        sector_perf = {}
-        if not trades_df.empty and "pnl" in trades_df.columns:
-            sells = trades_df[trades_df["action"] == "SELL"]
-            if not sells.empty:
-                regime_perf = sells.groupby("regime")["pnl"].sum().to_dict()
-                sector_perf = sells.groupby("sector")["pnl"].sum().to_dict()
+        unrealized_pnl = today_equity - (initial_capital + realized_pnl)
 
         return {
             "summary": {
-                "total_return": ((today_equity / initial_capital) - 1) * 100,
+                "total_return": ((today_equity / initial_capital) - 1) * 100
+                if initial_capital != 0
+                else 0,
                 "sharpe": sharpe,
                 "sortino": sortino,
                 "calmar": calmar,
@@ -160,51 +139,60 @@ class PerformanceAnalyzer:
                 "realized_pnl": realized_pnl,
                 "unrealized_pnl": unrealized_pnl,
                 "total_trades": total_trades,
-                "open_trades": open_trades_count,
-                "closed_trades": len(sells)
-                if not trades_df.empty and "action" in trades_df.columns
-                else 0,
+                "open_trades": total_trades - closed_trades_count,
+                "closed_trades": closed_trades_count,
                 "winning_trades": wins_count,
                 "losing_trades": losses_count,
+                "initial_capital": initial_capital,
+                "peak_equity": peak_info["value"],
+                "peak_date": peak_info["date"],
+                "trough_equity": trough_info["value"],
+                "trough_date": trough_info["date"],
             },
             "returns": {
                 "daily": daily_returns.tail(30).to_dict(),
                 "monthly": monthly_returns.to_dict(),
             },
-            "attribution": {"by_regime": regime_perf, "by_sector": sector_perf},
+            "attribution": {"by_regime": {}, "by_sector": {}},
         }
 
     def calculate_sharpe(self, returns):
-        if len(returns) < 2:
+        if len(returns) < 5:  # Require at least 5 days for a valid Sharpe
             return 0.0
         adj_rf = (1 + self.risk_free_rate) ** (1 / 252) - 1
         excess_returns = returns - adj_rf
-        return (
-            np.sqrt(252) * excess_returns.mean() / returns.std()
-            if returns.std() != 0
-            else 0.0
-        )
+        return np.sqrt(252) * excess_returns.mean() / (returns.std() + 1e-9)
 
     def calculate_sortino(self, returns):
-        if len(returns) < 2:
+        if len(returns) < 5:
             return 0.0
         adj_rf = (1 + self.risk_free_rate) ** (1 / 252) - 1
         excess_returns = returns - adj_rf
         downside_returns = excess_returns[excess_returns < 0]
         downside_std = downside_returns.std()
-        return (
-            np.sqrt(252) * excess_returns.mean() / downside_std
-            if downside_std != 0
-            else 0.0
-        )
+        return np.sqrt(252) * excess_returns.mean() / (downside_std + 1e-9)
 
     def calculate_drawdown_metrics(self, equity, returns):
         if len(equity) < 2:
-            return 0.0, 0.0
+            return 0.0, 0.0, {"value": 0, "date": ""}, {"value": 0, "date": ""}
+
         rolling_max = equity.cummax()
         drawdowns = (equity - rolling_max) / rolling_max
         max_dd = drawdowns.min()
 
+        trough_idx = drawdowns.idxmin()
+        peak_idx = (
+            equity[:trough_idx].idxmax()
+            if not equity[:trough_idx].empty
+            else equity.index[0]
+        )
+
+        peak_info = {"value": float(equity.loc[peak_idx]), "date": peak_idx.isoformat()}
+        trough_info = {
+            "value": float(equity.loc[trough_idx]),
+            "date": trough_idx.isoformat(),
+        }
+
         annual_return = returns.mean() * 252
         calmar = annual_return / abs(max_dd) if max_dd != 0 else 0.0
-        return max_dd, calmar
+        return max_dd, calmar, peak_info, trough_info

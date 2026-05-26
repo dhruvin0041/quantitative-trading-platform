@@ -44,7 +44,7 @@ export function RiskDashboard({ data, currency = "$" }: RiskDashboardProps) {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: i * 0.1, duration: 0.3 }}
-            className={`flex flex-col gap-1 p-2.5 bg-muted/30 dark:bg-black/20 rounded-lg border border-border hover:bg-muted/50 dark:hover:bg-black/40 transition-colors ${i === riskMetrics.length - 1 ? 'col-span-2 text-center items-center' : ''}`}
+            className={`flex flex-col gap-1 p-2.5 bg-muted/30 dark:bg-black/20 rounded-lg border border-border hover:bg-muted/50 dark:hover:bg-black/40 transition-colors ${metric.label === 'Max Drawdown' ? 'col-span-2' : ''}`}
           >
             <span className="text-[9px] text-muted-foreground uppercase font-black tracking-wider">{metric.label}</span>
             <span className={`text-base font-mono font-black ${
@@ -54,6 +54,21 @@ export function RiskDashboard({ data, currency = "$" }: RiskDashboardProps) {
             }`}>
               {metric.value}
             </span>
+            
+            {metric.label === 'Max Drawdown' && risk.peak_equity > 0 && (
+              <div className="mt-2 pt-2 border-t border-border/50 grid grid-cols-2 gap-4 text-[8px] font-mono">
+                 <div className="flex flex-col">
+                    <span className="text-muted-foreground uppercase mb-0.5">Peak Balance</span>
+                    <span className="font-bold text-foreground">{currency}{risk.peak_equity.toLocaleString()}</span>
+                    <span className="text-[7px] text-muted-foreground opacity-70">({new Date(risk.peak_date).toLocaleDateString()})</span>
+                 </div>
+                 <div className="flex flex-col items-end text-right">
+                    <span className="text-muted-foreground uppercase mb-0.5">Trough Balance</span>
+                    <span className="font-bold text-[var(--signal-sell)]">{currency}{risk.trough_equity.toLocaleString()}</span>
+                    <span className="text-[7px] text-muted-foreground opacity-70">({new Date(risk.trough_date).toLocaleDateString()})</span>
+                 </div>
+              </div>
+            )}
           </motion.div>
         ))}
       </div>

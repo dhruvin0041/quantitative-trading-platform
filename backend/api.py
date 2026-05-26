@@ -10,7 +10,13 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, HTTPException, Security, Request
 from fastapi.security.api_key import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
+from prometheus_client import (
+    Counter,
+    Histogram,
+    generate_latest,
+    CONTENT_TYPE_LATEST,
+    REGISTRY,
+)
 from fastapi.responses import Response
 
 import yfinance as yf

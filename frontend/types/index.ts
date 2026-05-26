@@ -73,6 +73,14 @@ export interface Portfolio {
   unrealized_pnl: number;
   positions: Record<string, Position>;
   fx_rates: Record<string, number>;
+  
+  // Audit Fields
+  initial_capital: number;
+  total_trades: number;
+  winning_trades: number;
+  losing_trades: number;
+  win_rate: number;
+  profit_factor: number;
 }
 
 export interface ChartData {
@@ -109,6 +117,15 @@ export interface ChartData {
     kelly_fraction: number;
     target_size: number;
     max_drawdown: number;
+    
+    // Transparency Fields
+    win_probability: number;
+    expected_value: number;
+    risk_reward_ratio: number;
+    peak_equity: number;
+    peak_date: string;
+    trough_equity: number;
+    trough_date: string;
   };
   xai?: {
     top_drivers: { feature: string; impact: number; direction: string }[];

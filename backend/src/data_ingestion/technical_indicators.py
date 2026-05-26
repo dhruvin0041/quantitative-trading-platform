@@ -271,7 +271,7 @@ def add_advanced_features(
     # H < 0.5 mean reverting, H = 0.5 random walk, H > 0.5 trending
     var_5 = df["Log_Ret"].rolling(5).sum().rolling(20).var()
     var_1 = df["Log_Ret"].rolling(20).var()
-    
+
     df["Hurst_Proxy"] = np.log(var_5 / (5 * var_1 + 1e-9)) / np.log(5) + 0.5
     df["Hurst_Proxy"] = df["Hurst_Proxy"].fillna(0.5)
 

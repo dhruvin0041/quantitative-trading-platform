@@ -76,8 +76,12 @@ def objective(trial):
             # LSTM Params
             "lstm_units_1": trial.suggest_categorical("lstm_u1", [32, 64, 128, 256]),
             "lstm_units_2": trial.suggest_categorical("lstm_u2", [32, 64, 96, 128]),
-            "lstm_dropout_1": trial.suggest_categorical("lstm_d1", [0.1, 0.2, 0.3, 0.4]),
-            "lstm_dropout_2": trial.suggest_categorical("lstm_d2", [0.1, 0.2, 0.3, 0.4]),
+            "lstm_dropout_1": trial.suggest_categorical(
+                "lstm_d1", [0.1, 0.2, 0.3, 0.4]
+            ),
+            "lstm_dropout_2": trial.suggest_categorical(
+                "lstm_d2", [0.1, 0.2, 0.3, 0.4]
+            ),
             # CNN Params
             "cnn_filters_1": trial.suggest_categorical("cnn_f1", [16, 32, 48, 64]),
             "cnn_filters_2": trial.suggest_categorical("cnn_f2", [32, 64, 96, 128]),

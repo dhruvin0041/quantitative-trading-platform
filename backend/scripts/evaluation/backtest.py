@@ -103,6 +103,7 @@ def run_backtest():
 
     # 2. Setup
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--ticker", type=str, help="Specific ticker to backtest")
     args = parser.parse_args()

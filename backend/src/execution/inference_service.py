@@ -128,7 +128,7 @@ class InferenceService:
         # Build risk metrics for consensus
         beta = calculate_beta(ticker_df_risk["Close"], spy_df_risk["Close"])
         stampede = detect_stampede_risk(vol_ratio, final_prob)
-        
+
         # Sizing and Hedging
         risk_profile = get_position_sizing(final_prob, self.paper_engine.history)
         kelly_frac = min(0.05, float(risk_profile["raw_fraction"]))
@@ -139,7 +139,7 @@ class InferenceService:
             "uncertainty_score": uncertainty,
             "stampede_risk": stampede,
             "suggested_allocation": risk_profile["suggested_allocation"],
-            "hedge_ratio_spy": hedge_ratio
+            "hedge_ratio_spy": hedge_ratio,
         }
 
         consensus_result = self.orchestrator.run_consensus(
@@ -223,7 +223,8 @@ class InferenceService:
             self.paper_engine.history,
             self.paper_engine.initial_capital,
         )
-        max_dd = perf_summary.get("summary", {}).get("max_drawdown", 0.0)
+        perf_data = perf_summary.get("summary", {})
+        max_dd = perf_data.get("max_drawdown", 0.0)
 
         risk_metrics = RiskMetrics(
             var_95=var_95,
@@ -232,6 +233,13 @@ class InferenceService:
             kelly_fraction=kelly_frac,
             target_size=float(self.paper_engine.capital * kelly_frac),
             max_drawdown=float(max_dd),
+            win_probability=float(risk_profile.get("win_prob", 0.0)),
+            expected_value=float(risk_profile.get("expectancy", 0.0)),
+            risk_reward_ratio=float(risk_profile.get("win_loss_ratio", 0.0)),
+            peak_equity=float(perf_data.get("peak_equity", 0.0)),
+            peak_date=str(perf_data.get("peak_date", "")),
+            trough_equity=float(perf_data.get("trough_equity", 0.0)),
+            trough_date=str(perf_data.get("trough_date", "")),
         )
 
         def map_model_output(probs):

@@ -65,7 +65,13 @@ class ReportGenerator:
         date_col = "Date" if "Date" in df_chart.columns else "index"
         df_chart["time"] = df_chart[date_col].dt.strftime("%Y-%m-%d")
         df_chart = df_chart.rename(
-            columns={"Open": "open", "High": "high", "Low": "low", "Close": "close", "Volume": "volume"}
+            columns={
+                "Open": "open",
+                "High": "high",
+                "Low": "low",
+                "Close": "close",
+                "Volume": "volume",
+            }
         )
 
         candles = df_chart[["time", "open", "high", "low", "close", "volume"]].to_dict(

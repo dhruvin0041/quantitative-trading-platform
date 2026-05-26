@@ -35,7 +35,7 @@ class BacktestService:
             # Defensive Column Check
             if "was_correct" not in df_ticker.columns:
                 df_ticker["was_correct"] = False
-            
+
             # Ensure was_correct is boolean
             df_ticker["was_correct"] = df_ticker["was_correct"].astype(bool)
 
@@ -69,13 +69,17 @@ class BacktestService:
 
             all_active = df_ticker[df_ticker["signal"].isin(["BUY", "SELL", "VETOED"])]
             vetoed = df_ticker[df_ticker["signal"] == "VETOED"]
-            
-            vetoed_rate = (len(vetoed) / len(all_active) * 100) if not all_active.empty else 0.0
-            coverage = (len(all_active) / len(df_ticker) * 100) if not df_ticker.empty else 0.0
+
+            vetoed_rate = (
+                (len(vetoed) / len(all_active) * 100) if not all_active.empty else 0.0
+            )
+            coverage = (
+                (len(all_active) / len(df_ticker) * 100) if not df_ticker.empty else 0.0
+            )
 
             df_trades = df_ticker[df_ticker["signal"].isin(["BUY", "SELL"])]
             if df_trades.empty:
-                 return BacktestSummary(
+                return BacktestSummary(
                     ticker=ticker,
                     period=period,
                     win_rate=0.0,

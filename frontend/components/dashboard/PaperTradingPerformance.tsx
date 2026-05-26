@@ -21,6 +21,7 @@ interface PerformanceSummary {
   closed_trades: number;
   winning_trades: number;
   losing_trades: number;
+  initial_capital: number;
 }
 
 interface PaperTradingPerformanceProps {
@@ -61,7 +62,7 @@ export function PaperTradingPerformance({ currency = '$' }: PaperTradingPerforma
   );
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const summary: PerformanceSummary = (performance as any)?.summary || {
+  const summary: PerformanceSummary & { initial_capital?: number } = (performance as any)?.summary || {
     total_return: 0, sharpe: 0, sortino: 0, calmar: 0, max_drawdown: 0, win_rate: 0, profit_factor: 0, today_pnl: 0, mtd_pnl: 0, ytd_pnl: 0,
     total_trades: 0, open_trades: 0, closed_trades: 0, winning_trades: 0, losing_trades: 0
   };
@@ -108,11 +109,11 @@ export function PaperTradingPerformance({ currency = '$' }: PaperTradingPerforma
       tooltip: "Risk-adjusted return using the full portfolio return series."
     },
     { 
-      label: 'Max DD', 
-      value: `${summary.max_drawdown.toFixed(1)}%`, 
-      raw: summary.max_drawdown,
+      label: 'Sortino', 
+      value: summary.sortino.toFixed(2), 
+      raw: summary.sortino,
       icon: <BarChart className="w-3 h-3" />,
-      tooltip: "Maximum peak-to-trough decline in equity."
+      tooltip: "Downside risk-adjusted return."
     },
   ];
 
@@ -122,6 +123,9 @@ export function PaperTradingPerformance({ currency = '$' }: PaperTradingPerforma
         <div className="flex items-center gap-2">
           <History className="w-3.5 h-3.5 text-primary" />
           <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Performance Audit</h3>
+        </div>
+        <div className="flex items-center gap-2">
+           <span className="text-[8px] font-mono font-bold text-muted-foreground uppercase tracking-widest">Base: {currency}</span>
         </div>
       </div>
       
@@ -144,26 +148,21 @@ export function PaperTradingPerformance({ currency = '$' }: PaperTradingPerforma
           <div className="flex flex-col gap-1.5 p-2.5 rounded-lg bg-secondary/30 border border-border">
              <div className="flex justify-between items-center mb-1">
                <span className="text-[8px] font-bold text-muted-foreground uppercase flex items-center gap-1">
-                 <History className="w-2.5 h-2.5" /> PnL Session
+                 <Activity className="w-2.5 h-2.5" /> Returns Analysis
                </span>
              </div>
              <div className="flex justify-between items-center">
-               <span className="text-[8px] font-medium text-muted-foreground uppercase pl-0.5">Today PnL</span>
+               <span className="text-[8px] font-medium text-muted-foreground uppercase pl-0.5">Inception</span>
                <span className={cn(
                  "text-xs font-mono font-black",
-                 summary.today_pnl >= 0 ? "text-green-500" : "text-red-500"
+                 summary.total_return >= 0 ? "text-green-500" : "text-red-500"
                )}>
-                 {summary.today_pnl >= 0 ? '+' : ''}{currency}{summary.today_pnl.toLocaleString()}
+                 {summary.total_return >= 0 ? '+' : ''}{summary.total_return.toFixed(2)}%
                </span>
              </div>
-             <div className="flex justify-between items-center opacity-70">
-               <span className="text-[8px] font-medium text-muted-foreground uppercase pl-0.5">MTD PnL</span>
-               <span className={cn(
-                 "text-[10px] font-mono font-bold",
-                 summary.mtd_pnl >= 0 ? "text-green-500" : "text-red-500"
-               )}>
-                 {summary.mtd_pnl >= 0 ? '+' : ''}{currency}{summary.mtd_pnl.toLocaleString()}
-               </span>
+             <div className="flex justify-between items-center opacity-70 mt-1 pt-1 border-t border-border/30">
+               <span className="text-[7px] font-medium text-muted-foreground uppercase pl-0.5">Initial Cap</span>
+               <span className="text-[9px] font-mono font-bold">{currency}{(summary as any).initial_capital?.toLocaleString()}</span>
              </div>
           </div>
 
@@ -199,6 +198,10 @@ export function PaperTradingPerformance({ currency = '$' }: PaperTradingPerforma
                   <div className="flex items-center gap-1">
                     <span className="text-[8px] font-medium text-red-500 uppercase">Loss</span>
                     <span className="text-[10px] font-mono font-bold text-red-500">{summary.losing_trades}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[8px] font-medium text-muted-foreground uppercase">Calmar</span>
+                    <span className="text-[10px] font-mono font-bold">{summary.calmar.toFixed(2)}</span>
                   </div>
                </div>
              </div>

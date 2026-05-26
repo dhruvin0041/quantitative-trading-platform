@@ -29,7 +29,9 @@ class PaperTradingEngine:
             try:
                 with open(self.db_path, "r") as f:
                     data = json.load(f)
-                    self.initial_capital = data.get("initial_capital", self.initial_capital)
+                    self.initial_capital = data.get(
+                        "initial_capital", self.initial_capital
+                    )
                     self.capital = data.get("capital", self.initial_capital)
                     self.base_currency = data.get("base_currency", "USD")
                     self.positions = data.get("positions", {})
@@ -62,9 +64,7 @@ class PaperTradingEngine:
 
         old_base = self.base_currency
         # 1. Convert capital and initial_capital
-        self.capital = self.fx_engine.convert_to_base(
-            self.capital, old_base, new_base
-        )
+        self.capital = self.fx_engine.convert_to_base(self.capital, old_base, new_base)
         self.initial_capital = self.fx_engine.convert_to_base(
             self.initial_capital, old_base, new_base
         )

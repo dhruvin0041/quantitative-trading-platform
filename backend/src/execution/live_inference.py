@@ -6,6 +6,7 @@ os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
 import yaml
 import joblib
+import logging
 import numpy as np
 import pandas as pd
 import xgboost as xgb
@@ -14,6 +15,8 @@ import shap
 from src.models.neural.fusion_network import build_fusion_model
 from src.models.ensemble.meta_ensemble import MetaEnsemble
 from src.data_ingestion.market_data import fetch_historical_data, get_sector_peer
+
+logger = logging.getLogger(__name__)
 
 # ... [FEATURE_COLUMNS and other functions] ...
 
@@ -37,7 +40,11 @@ def compute_shap_explanation(model, X_flat, signal_idx=2):
                 vals = shap_values[0, signal_idx, :]
         elif isinstance(shap_values, list):
             # For older SHAP versions or certain models returning list of classes
-            vals = shap_values[signal_idx][0] if len(shap_values) > signal_idx else shap_values[0][0]
+            vals = (
+                shap_values[signal_idx][0]
+                if len(shap_values) > signal_idx
+                else shap_values[0][0]
+            )
         else:
             vals = shap_values[0]
 
@@ -165,7 +172,7 @@ def add_upgraded_features(df, spy_df, vix_df):
     close_s = df["Close"].squeeze()
     if isinstance(close_s, pd.DataFrame):
         close_s = close_s.iloc[:, 0]
-        
+
     delta = close_s.diff()
     # Institutional Standard: Wilder's RSI (EMA-based)
     gain = delta.clip(lower=0)
@@ -183,9 +190,11 @@ def add_upgraded_features(df, spy_df, vix_df):
 
     low14 = df["Low"].squeeze().rolling(14).min()
     high14 = df["High"].squeeze().rolling(14).max()
-    if isinstance(low14, pd.DataFrame): low14 = low14.iloc[:, 0]
-    if isinstance(high14, pd.DataFrame): high14 = high14.iloc[:, 0]
-    
+    if isinstance(low14, pd.DataFrame):
+        low14 = low14.iloc[:, 0]
+    if isinstance(high14, pd.DataFrame):
+        high14 = high14.iloc[:, 0]
+
     df["Stoch_K"] = 100 * (close_s - low14) / (high14 - low14 + 1e-9)
     df["Stoch_D"] = df["Stoch_K"].rolling(3).mean()
 
@@ -201,8 +210,10 @@ def add_upgraded_features(df, spy_df, vix_df):
 
     high_s = df["High"].squeeze()
     low_s = df["Low"].squeeze()
-    if isinstance(high_s, pd.DataFrame): high_s = high_s.iloc[:, 0]
-    if isinstance(low_s, pd.DataFrame): low_s = low_s.iloc[:, 0]
+    if isinstance(high_s, pd.DataFrame):
+        high_s = high_s.iloc[:, 0]
+    if isinstance(low_s, pd.DataFrame):
+        low_s = low_s.iloc[:, 0]
 
     df["TR"] = pd.concat(
         [
@@ -217,7 +228,8 @@ def add_upgraded_features(df, spy_df, vix_df):
 
     # Volume Indicators
     vol_s = df["Volume"].squeeze()
-    if isinstance(vol_s, pd.DataFrame): vol_s = vol_s.iloc[:, 0]
+    if isinstance(vol_s, pd.DataFrame):
+        vol_s = vol_s.iloc[:, 0]
 
     df["OBV"] = (np.sign(close_s.diff()) * vol_s).fillna(0).cumsum()
     df["OBV_Change"] = df["OBV"].pct_change()
@@ -251,8 +263,9 @@ def add_upgraded_features(df, spy_df, vix_df):
 
     # Price Pattern Features
     open_s = df["Open"].squeeze()
-    if isinstance(open_s, pd.DataFrame): open_s = open_s.iloc[:, 0]
-    
+    if isinstance(open_s, pd.DataFrame):
+        open_s = open_s.iloc[:, 0]
+
     df["Candle_Body"] = abs(close_s - open_s) / (high_s - low_s + 1e-9)
     df["Upper_Shadow"] = (high_s - df[["Close", "Open"]].max(axis=1).squeeze()) / (
         df["ATR"] + 1e-9
@@ -328,12 +341,14 @@ def fetch_live_data(ticker, config):
     peer_filtered = peer_df.reindex(columns=FEATURE_COLUMNS).dropna()
 
     common_idx = df_filtered.index.intersection(peer_filtered.index)
-    
-    # Institutional Fallback: If assets are from different markets (e.g. India vs US), 
-    # the intersection will be empty. We fall back to using the primary ticker's 
+
+    # Institutional Fallback: If assets are from different markets (e.g. India vs US),
+    # the intersection will be empty. We fall back to using the primary ticker's
     # own timeline as the context if the overlap is insufficient (< 30 days).
     if len(common_idx) < 30:
-        logger.warning(f"Insufficient market overlap between {ticker} and peer {peer_ticker}. Falling back to self-context.")
+        logger.warning(
+            f"Insufficient market overlap between {ticker} and peer {peer_ticker}. Falling back to self-context."
+        )
         df_filtered = df.reindex(columns=FEATURE_COLUMNS).dropna()
         peer_filtered = df_filtered.copy()
         common_idx = df_filtered.index
@@ -342,7 +357,9 @@ def fetch_live_data(ticker, config):
         peer_filtered = peer_filtered.loc[common_idx]
 
     if df_filtered.empty:
-        raise ValueError(f"Cleaned dataset for {ticker} is empty after feature engineering. Check data sources.")
+        raise ValueError(
+            f"Cleaned dataset for {ticker} is empty after feature engineering. Check data sources."
+        )
 
     scaler = joblib.load("artifacts/latest_scaler.joblib")
     time_steps = config["data"]["time_steps"]
@@ -358,7 +375,9 @@ def fetch_live_data(ticker, config):
             recent_data = np.vstack([padding, recent_data])
             peer_recent = np.vstack([padding, peer_recent])
         else:
-            raise ValueError(f"Not enough data points for {ticker} to generate a prediction.")
+            raise ValueError(
+                f"Not enough data points for {ticker} to generate a prediction."
+            )
 
     scaled_data = scaler.transform(recent_data)
     peer_scaled = scaler.transform(peer_recent)
