@@ -153,7 +153,7 @@ def train_dqn(X_dl, Y_dl, dl_model, xgb_model, scaler, kept_features):
     state_matrix = np.hstack((X_tabular, dl_preds, xgb_preds))
     agent = DQNAgent(state_matrix.shape[1])
 
-    for e in range(5):
+    for e in range(30):
         state = state_matrix[0]
         for t in range(min(500, len(state_matrix) - 1)):
             action = agent.act(state)
@@ -210,7 +210,7 @@ def main():
         mlflow.log_param("time_steps", updated_config["data"]["time_steps"])
         model = build_fusion_model(updated_config)
         history = model.fit(
-            x=X_train, y=Y_train, epochs=5, validation_split=0.1, verbose=1
+            x=X_train, y=Y_train, epochs=30, validation_split=0.1, verbose=1
         )
 
         # Log final metrics
@@ -235,7 +235,7 @@ def main():
         # Train on actual price returns (Regression)
         # Using Y_range[:, 1] (target_max) as proxy for target return distribution
         tft_model.fit(
-            X_train[0], Y_train[1][:, 1], epochs=5, validation_split=0.1, verbose=1
+            X_train[0], Y_train[1][:, 1], epochs=30, validation_split=0.1, verbose=1
         )
         tft_model.save_weights("artifacts/tft_quantile_weights.weights.h5")
         mlflow.tensorflow.log_model(tft_model, "tft_model")

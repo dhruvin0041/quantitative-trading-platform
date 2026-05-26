@@ -248,10 +248,20 @@ def add_upgraded_features(df, spy_df, vix_df):
     df["MA50"] = df["Close"].rolling(50).mean()
     df["MA20_vs_MA50"] = (df["MA20"] - df["MA50"]) / (df["Close"] + 1e-9)
 
+    # Defensive check for Series extraction from DataFrames (yfinance consistency)
+    def get_series(df, col):
+        s = df[col]
+        if isinstance(s, pd.DataFrame):
+            return s.iloc[:, 0]
+        return s
+
+    spy_close = get_series(spy_df, "Close")
+    vix_close = get_series(vix_df, "Close")
+
     # Market Context Features
-    df["SPY_Return"] = spy_df["Close"].pct_change().reindex(df.index)
-    df["VIX_Level"] = vix_df["Close"].reindex(df.index)
-    df["VIX_Change"] = vix_df["Close"].pct_change().reindex(df.index)
+    df["SPY_Return"] = spy_close.pct_change().reindex(df.index)
+    df["VIX_Level"] = vix_close.reindex(df.index)
+    df["VIX_Change"] = vix_close.pct_change().reindex(df.index)
     df["Relative_Strength"] = df["Return"] - df["SPY_Return"]
 
     df[["SPY_Return", "VIX_Level", "VIX_Change", "Relative_Strength"]] = (

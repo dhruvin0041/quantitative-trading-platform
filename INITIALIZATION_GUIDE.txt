@@ -1,0 +1,47 @@
+HYDRA TERMINAL: INITIALIZATION FROM ZERO-STATE
+==============================================
+
+Follow these steps in order to initialize, optimize, and launch the system 
+for a specific ticker (Example: RELIANCE.NS).
+
+PREREQUISITES:
+- Python 3.12+
+- Node.js 20+
+- Valid GOOGLE_API_KEY in backend/.env (optional for alpha research)
+- Valid API_KEY in backend/.env (must match frontend/.env.local)
+
+STEP 1: PURGE LEGACY DATA
+-------------------------
+Removes old model weights and clears python caches.
+> cd backend
+> python scripts/ops/clean_artifacts.py
+
+STEP 2: GBDT ENSEMBLE OPTIMIZATION
+----------------------------------
+Runs 200 Bayesian trials to find optimal settings for XGB, LGBM, CatBoost, and RF.
+> python scripts/training/optimize_models.py
+
+STEP 3: NEURAL & LABELING OPTIMIZATION
+--------------------------------------
+Finds the best Triple Barrier thresholds and Neural architecture for the ticker.
+> $env:PYTHONPATH='.'; python scripts/training/optimize.py --ticker RELIANCE.NS --trials 50
+
+STEP 4: PRODUCTION TRAINING
+---------------------------
+Trains the final model weights for 30 epochs/episodes using optimized configs.
+> $env:PYTHONPATH='.'; python scripts/training/train.py --ticker RELIANCE.NS
+
+STEP 5: LAUNCH INFERENCE ENGINE (BACKEND)
+-----------------------------------------
+Starts the FastAPI service on http://localhost:8000.
+> $env:PYTHONPATH='.'; python api.py
+
+STEP 6: LAUNCH COMMAND CENTER (FRONTEND)
+----------------------------------------
+Starts the Next.js dashboard on http://localhost:3000.
+(Run in a separate terminal)
+> cd ../frontend
+> npm run dev
+
+==============================================
+SYSTEM READY: Visit http://localhost:3000 and search for RELIANCE.NS.

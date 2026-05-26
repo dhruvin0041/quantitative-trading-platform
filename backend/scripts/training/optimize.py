@@ -55,9 +55,9 @@ df_features = add_advanced_features(df_raw.copy())
 # ==========================================
 def objective(trial):
     # 1. Labeling Hyperparameters
-    tp_mult = trial.suggest_float("tp_atr_multiplier", 1.0, 3.0)
-    sl_mult = trial.suggest_float("sl_atr_multiplier", 0.5, 2.0)
-    horizon = trial.suggest_int("horizon", 5, 15)
+    tp_mult = trial.suggest_categorical("tp_atr_multiplier", [1.0, 1.5, 2.0, 3.0])
+    sl_mult = trial.suggest_categorical("sl_atr_multiplier", [0.5, 1.0, 1.5, 2.0])
+    horizon = trial.suggest_categorical("horizon", [5, 8, 12, 15])
 
     try:
         df_labeled = apply_dynamic_triple_barrier(
@@ -74,38 +74,38 @@ def objective(trial):
         "data": {"time_steps": 60, "max_seq_length": 128},
         "model": {
             # LSTM Params
-            "lstm_units_1": trial.suggest_int("lstm_u1", 32, 128),
-            "lstm_units_2": trial.suggest_int("lstm_u2", 32, 128),
-            "lstm_dropout_1": trial.suggest_float("lstm_d1", 0.1, 0.4),
-            "lstm_dropout_2": trial.suggest_float("lstm_d2", 0.1, 0.4),
+            "lstm_units_1": trial.suggest_categorical("lstm_u1", [32, 64, 128, 256]),
+            "lstm_units_2": trial.suggest_categorical("lstm_u2", [32, 64, 96, 128]),
+            "lstm_dropout_1": trial.suggest_categorical("lstm_d1", [0.1, 0.2, 0.3, 0.4]),
+            "lstm_dropout_2": trial.suggest_categorical("lstm_d2", [0.1, 0.2, 0.3, 0.4]),
             # CNN Params
-            "cnn_filters_1": trial.suggest_int("cnn_f1", 16, 64),
-            "cnn_filters_2": trial.suggest_int("cnn_f2", 32, 128),
-            "cnn_kernel": trial.suggest_int("cnn_k", 2, 5),
-            "cnn_dense": trial.suggest_int("cnn_d", 32, 128),
+            "cnn_filters_1": trial.suggest_categorical("cnn_f1", [16, 32, 48, 64]),
+            "cnn_filters_2": trial.suggest_categorical("cnn_f2", [32, 64, 96, 128]),
+            "cnn_kernel": trial.suggest_categorical("cnn_k", [2, 3, 5, 7]),
+            "cnn_dense": trial.suggest_categorical("cnn_d", [32, 64, 96, 128]),
             # Transformer Params
-            "trans_head_size": trial.suggest_int("tr_hs", 64, 256),
-            "trans_heads": trial.suggest_categorical("tr_h", [2, 4, 8]),
-            "trans_ff_dim": trial.suggest_int("tr_ff", 64, 256),
-            "trans_dropout": trial.suggest_float("tr_d", 0.05, 0.3),
+            "trans_head_size": trial.suggest_categorical("tr_hs", [64, 128, 256, 512]),
+            "trans_heads": trial.suggest_categorical("tr_h", [2, 4, 8, 16]),
+            "trans_ff_dim": trial.suggest_categorical("tr_ff", [64, 128, 256, 512]),
+            "trans_dropout": trial.suggest_categorical("tr_d", [0.05, 0.1, 0.2, 0.3]),
             # Fusion Params
-            "dense_units_1": trial.suggest_int("dense_1", 64, 256),
-            "dense_units_2": trial.suggest_int("dense_2", 32, 128),
-            "dropout_rate": trial.suggest_float("dropout", 0.1, 0.5),
-            "learning_rate": trial.suggest_float("lr", 5e-5, 5e-3, log=True),
+            "dense_units_1": trial.suggest_categorical("dense_1", [64, 128, 256, 512]),
+            "dense_units_2": trial.suggest_categorical("dense_2", [32, 64, 96, 128]),
+            "dropout_rate": trial.suggest_categorical("dropout", [0.1, 0.2, 0.3, 0.4]),
+            "learning_rate": trial.suggest_categorical("lr", [5e-5, 1e-4, 1e-3, 5e-3]),
         },
     }
 
     # 3. XGBoost Hyperparameters (EXPANDED)
     xgb_params = {
-        "max_depth": trial.suggest_int("xgb_depth", 3, 12),
-        "learning_rate": trial.suggest_float("xgb_lr", 0.005, 0.3, log=True),
-        "n_estimators": trial.suggest_int("xgb_n", 100, 500),
-        "subsample": trial.suggest_float("xgb_sub", 0.5, 1.0),
-        "colsample_bytree": trial.suggest_float("xgb_col", 0.5, 1.0),
-        "gamma": trial.suggest_float("xgb_gam", 0, 5),
-        "reg_alpha": trial.suggest_float("xgb_alp", 1e-8, 1.0, log=True),
-        "reg_lambda": trial.suggest_float("xgb_lam", 1e-8, 1.0, log=True),
+        "max_depth": trial.suggest_categorical("xgb_depth", [3, 6, 9, 12]),
+        "learning_rate": trial.suggest_categorical("xgb_lr", [0.005, 0.05, 0.1, 0.3]),
+        "n_estimators": trial.suggest_categorical("xgb_n", [100, 250, 500, 1000]),
+        "subsample": trial.suggest_categorical("xgb_sub", [0.5, 0.7, 0.85, 1.0]),
+        "colsample_bytree": trial.suggest_categorical("xgb_col", [0.5, 0.7, 0.85, 1.0]),
+        "gamma": trial.suggest_categorical("xgb_gam", [0, 1, 3, 5]),
+        "reg_alpha": trial.suggest_categorical("xgb_alp", [1e-8, 0.1, 1.0, 10.0]),
+        "reg_lambda": trial.suggest_categorical("xgb_lam", [1e-8, 0.1, 1.0, 10.0]),
     }
 
     # Prepare sequences
