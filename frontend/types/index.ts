@@ -81,6 +81,7 @@ export interface Portfolio {
   losing_trades: number;
   win_rate: number;
   profit_factor: number;
+  recent_closed_trades?: any[];
 }
 
 export interface ChartData {

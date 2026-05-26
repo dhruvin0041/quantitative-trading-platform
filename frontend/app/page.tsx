@@ -418,18 +418,33 @@ export default function HydraTerminal() {
                           <thead className="sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b border-border">
                             <tr>
                               <th className="px-4 py-2 text-[8px] font-black uppercase text-muted-foreground">Asset</th>
-                              <th className="px-4 py-2 text-[8px] font-black uppercase text-muted-foreground">Shares</th>
-                              <th className="px-4 py-2 text-[8px] font-black uppercase text-muted-foreground">Avg Price</th>
-                              <th className="px-4 py-2 text-[8px] font-black uppercase text-muted-foreground">Market</th>
+                              <th className="px-4 py-2 text-[8px] font-black uppercase text-muted-foreground">Entry</th>
+                              <th className="px-4 py-2 text-[8px] font-black uppercase text-muted-foreground">Exit</th>
+                              <th className="px-4 py-2 text-[8px] font-black uppercase text-muted-foreground">PnL</th>
+                              <th className="px-4 py-2 text-[8px] font-black uppercase text-muted-foreground">Outcome</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {Object.entries(chartData.portfolio.positions).map(([ticker, pos]) => (
-                              <tr key={ticker} className="border-b border-border/30 hover:bg-muted/30 transition-colors">
-                                <td className="px-4 py-2 font-mono text-[10px] font-bold">{ticker}</td>
-                                <td className="px-4 py-2 font-mono text-[10px]">{pos.shares}</td>
-                                <td className="px-4 py-2 font-mono text-[10px]">{currencySymbol}{pos.avg_price.toLocaleString()}</td>
-                                <td className="px-4 py-2"><span className="text-[8px] px-1.5 py-0.5 rounded bg-secondary uppercase font-bold">{pos.market}</span></td>
+                            {/* Display closed trades from signal_journal or recent portfolio actions */}
+                            {chartData.portfolio.recent_closed_trades?.map((trade: any, i: number) => (
+                              <tr key={i} className="border-b border-border/30 hover:bg-muted/30 transition-colors">
+                                <td className="px-4 py-2 font-mono text-[10px] font-bold">{trade.ticker}</td>
+                                <td className="px-4 py-2 font-mono text-[9px] opacity-70">{new Date(trade.entry_time).toLocaleDateString()}</td>
+                                <td className="px-4 py-2 font-mono text-[9px] opacity-70">{new Date(trade.exit_time).toLocaleDateString()}</td>
+                                <td className={cn(
+                                  "px-4 py-2 font-mono text-[10px] font-bold",
+                                  trade.realized_pnl >= 0 ? "text-green-500" : "text-red-500"
+                                )}>
+                                  {currencySymbol}{trade.realized_pnl.toLocaleString()}
+                                </td>
+                                <td className="px-4 py-2">
+                                  <span className={cn(
+                                    "text-[7px] px-1.5 py-0.5 rounded uppercase font-black",
+                                    trade.realized_pnl >= 0 ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500"
+                                  )}>
+                                    {trade.realized_pnl >= 0 ? 'WIN' : 'LOSS'}
+                                  </span>
+                                </td>
                               </tr>
                             ))}
                           </tbody>

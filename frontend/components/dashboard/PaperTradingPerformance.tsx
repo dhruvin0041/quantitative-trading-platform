@@ -22,6 +22,7 @@ interface PerformanceSummary {
   winning_trades: number;
   losing_trades: number;
   initial_capital: number;
+  expectancy: number;
 }
 
 interface PaperTradingPerformanceProps {

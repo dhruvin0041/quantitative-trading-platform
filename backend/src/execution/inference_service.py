@@ -349,9 +349,32 @@ class InferenceService:
                 response_data["paper_trade"] = trade
 
         closed_trades = self.paper_engine.update_positions({ticker: current_price})
-        response_data["portfolio"] = self.paper_engine.get_portfolio_summary(
+        portfolio_summary = self.paper_engine.get_portfolio_summary(
             {ticker: current_price}
         )
+
+        # SSOT: Include normalized recent closed trades for the UI table
+        recent_closed = []
+        for trade in reversed(self.paper_engine.history):
+            if trade["action"] == "SELL" and len(recent_closed) < 5:
+                # Normalize PnL to base currency for the UI
+                pnl_base = self.paper_engine.fx_engine.convert_to_base(
+                    trade.get("pnl", 0),
+                    trade.get("currency", "USD"),
+                    self.paper_engine.base_currency,
+                )
+                recent_closed.append(
+                    {
+                        "ticker": trade["ticker"],
+                        "entry_time": trade.get("entry_time", ""),
+                        "exit_time": trade.get("timestamp", ""),
+                        "realized_pnl": round(pnl_base, 2),
+                        "outcome": trade.get("outcome", "UNKNOWN"),
+                    }
+                )
+
+        portfolio_summary["recent_closed_trades"] = recent_closed
+        response_data["portfolio"] = portfolio_summary
 
         # Log to Signal Journal
         if self.journal:

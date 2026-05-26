@@ -34,6 +34,8 @@ class PerformanceAnalyzer:
                     "closed_trades": 0,
                     "winning_trades": 0,
                     "losing_trades": 0,
+                    "initial_capital": initial_capital,
+                    "expectancy": 0.0,
                 },
                 "returns": {"daily": {}, "monthly": {}},
                 "attribution": {"by_regime": {}, "by_sector": {}},
@@ -74,22 +76,24 @@ class PerformanceAnalyzer:
         mtd_pnl = today_equity - mtd_equity_start
         ytd_pnl = today_equity - ytd_equity_start
         inception_pnl = today_equity - initial_capital
+        inception_return_pct = (
+            ((today_equity / initial_capital) - 1) * 100
+            if initial_capital != 0
+            else 0.0
+        )
 
         # Monthly Returns
         monthly_equity = df_snapshots["equity"].resample("M").last().ffill()
         monthly_returns = monthly_equity.pct_change().dropna()
 
-        # Risk Metrics
+        # Risk Metrics (Portfolio Level)
         sharpe = self.calculate_sharpe(daily_returns)
         sortino = self.calculate_sortino(daily_returns)
         max_dd, calmar, peak_info, trough_info = self.calculate_drawdown_metrics(
             daily_equity, daily_returns
         )
 
-        # Trade Counts
-        total_trades = len(trade_history) if trade_history else 0
-
-        # Consistent Trade Metrics
+        # Consistent Trade Metrics (Asset Level)
         trades_df = pd.DataFrame(trade_history) if trade_history else pd.DataFrame()
         win_rate = 0.0
         profit_factor = 0.0
@@ -97,6 +101,7 @@ class PerformanceAnalyzer:
         losses_count = 0
         closed_trades_count = 0
         realized_pnl = 0.0
+        expectancy = 0.0
 
         if not trades_df.empty:
             if "pnl" in trades_df.columns:
@@ -106,26 +111,27 @@ class PerformanceAnalyzer:
             if not sells.empty:
                 closed_trades_count = len(sells)
                 wins = sells[sells["pnl"] > 0]
-                losses = sells[sells["pnl"] <= 0]
+                losses = sells[sells["pnl"] < 0]
                 wins_count = len(wins)
                 losses_count = len(losses)
                 win_rate = wins_count / closed_trades_count
 
                 gross_profit = wins["pnl"].sum()
                 gross_loss = abs(losses["pnl"].sum())
-                profit_factor = (
-                    gross_profit / gross_loss
-                    if gross_loss > 0
-                    else (100.0 if wins_count > 0 else 0.0)
-                )
 
+                if gross_loss > 0:
+                    profit_factor = gross_profit / gross_loss
+                else:
+                    profit_factor = 10.0 if wins_count > 0 else 0.0
+
+                expectancy = self.calculate_expectancy(win_rate, wins, losses)
+
+        total_trades = len(trade_history) if trade_history else 0
         unrealized_pnl = today_equity - (initial_capital + realized_pnl)
 
         return {
             "summary": {
-                "total_return": ((today_equity / initial_capital) - 1) * 100
-                if initial_capital != 0
-                else 0,
+                "total_return": inception_return_pct,
                 "sharpe": sharpe,
                 "sortino": sortino,
                 "calmar": calmar,
@@ -148,6 +154,7 @@ class PerformanceAnalyzer:
                 "peak_date": peak_info["date"],
                 "trough_equity": trough_info["value"],
                 "trough_date": trough_info["date"],
+                "expectancy": expectancy,
             },
             "returns": {
                 "daily": daily_returns.tail(30).to_dict(),
@@ -157,42 +164,48 @@ class PerformanceAnalyzer:
         }
 
     def calculate_sharpe(self, returns):
-        if len(returns) < 5:  # Require at least 5 days for a valid Sharpe
+        """Standardized Sharpe: (Mean - RiskFree) / StdDev * sqrt(252)"""
+        if len(returns) < 5 or returns.std() < 1e-7:
             return 0.0
         adj_rf = (1 + self.risk_free_rate) ** (1 / 252) - 1
         excess_returns = returns - adj_rf
         return np.sqrt(252) * excess_returns.mean() / (returns.std() + 1e-9)
 
     def calculate_sortino(self, returns):
+        """Standardized Sortino: (Mean - RiskFree) / DownsideDev * sqrt(252)"""
         if len(returns) < 5:
             return 0.0
         adj_rf = (1 + self.risk_free_rate) ** (1 / 252) - 1
         excess_returns = returns - adj_rf
         downside_returns = excess_returns[excess_returns < 0]
+        if len(downside_returns) < 2:
+            return 0.0
         downside_std = downside_returns.std()
         return np.sqrt(252) * excess_returns.mean() / (downside_std + 1e-9)
 
     def calculate_drawdown_metrics(self, equity, returns):
         if len(equity) < 2:
             return 0.0, 0.0, {"value": 0, "date": ""}, {"value": 0, "date": ""}
-
         rolling_max = equity.cummax()
-        drawdowns = (equity - rolling_max) / rolling_max
+        drawdowns = (equity - rolling_max) / (rolling_max + 1e-9)
         max_dd = drawdowns.min()
-
         trough_idx = drawdowns.idxmin()
         peak_idx = (
             equity[:trough_idx].idxmax()
             if not equity[:trough_idx].empty
             else equity.index[0]
         )
-
-        peak_info = {"value": float(equity.loc[peak_idx]), "date": peak_idx.isoformat()}
+        peak_info = {"value": float(equity.loc[peak_idx]), "date": str(peak_idx.date())}
         trough_info = {
             "value": float(equity.loc[trough_idx]),
-            "date": trough_idx.isoformat(),
+            "date": str(trough_idx.date()),
         }
-
         annual_return = returns.mean() * 252
-        calmar = annual_return / abs(max_dd) if max_dd != 0 else 0.0
+        calmar = annual_return / abs(max_dd) if abs(max_dd) > 1e-7 else 0.0
         return max_dd, calmar, peak_info, trough_info
+
+    def calculate_expectancy(self, win_rate, wins, losses):
+        """Avg Profit * Win% - Avg Loss * Loss%"""
+        avg_win = wins["pnl"].mean() if not wins.empty else 0.0
+        avg_loss = abs(losses["pnl"].mean()) if not losses.empty else 0.0
+        return (avg_win * win_rate) - (avg_loss * (1 - win_rate))

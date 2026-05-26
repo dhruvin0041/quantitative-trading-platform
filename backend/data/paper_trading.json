@@ -1,5 +1,5 @@
 {
-    "initial_capital": 95480003.3569336,
+    "initial_capital": 95589996.33789062,
     "capital": 80429369.99161328,
     "base_currency": "INR",
     "positions": {
@@ -90,7 +90,8 @@
             "revenue": 5961.1580666503905,
             "pnl": -569.1876993868816,
             "regime": "BULL",
-            "sector": "Unknown"
+            "sector": "Unknown",
+            "outcome": "LOSS"
         },
         {
             "time": "2026-05-25T11:59:06.069932",
@@ -101,7 +102,8 @@
             "revenue": 121878.27232238771,
             "pnl": -11637.271257158274,
             "regime": "BULL",
-            "sector": "Unknown"
+            "sector": "Unknown",
+            "outcome": "LOSS"
         },
         {
             "time": "2026-05-25T11:59:17.270154",
@@ -112,7 +114,8 @@
             "revenue": 119453.64143325808,
             "pnl": -11405.76085897405,
             "regime": "BULL",
-            "sector": "Unknown"
+            "sector": "Unknown",
+            "outcome": "LOSS"
         },
         {
             "time": "2026-05-25T12:58:20.319199",
@@ -135,7 +138,8 @@
             "revenue": 8197.79892189026,
             "pnl": -782.7482942432695,
             "regime": "BULL",
-            "sector": "Unknown"
+            "sector": "Unknown",
+            "outcome": "LOSS"
         }
     ],
     "portfolio_snapshots": [
@@ -1066,6 +1070,42 @@
         {
             "time": "2026-05-26T13:52:28.896195",
             "equity": 95403396.62862426,
+            "cash": 80429369.99161328,
+            "base_currency": "INR"
+        },
+        {
+            "time": "2026-05-26T14:09:08.784369",
+            "equity": 95423009.48949824,
+            "cash": 80429369.99161328,
+            "base_currency": "INR"
+        },
+        {
+            "time": "2026-05-26T14:09:12.603611",
+            "equity": 95430224.88966943,
+            "cash": 80429369.99161328,
+            "base_currency": "INR"
+        },
+        {
+            "time": "2026-05-26T14:09:23.690682",
+            "equity": 95423009.147246,
+            "cash": 80429369.99161328,
+            "base_currency": "INR"
+        },
+        {
+            "time": "2026-05-26T14:09:28.710952",
+            "equity": 95430224.88966943,
+            "cash": 80429369.99161328,
+            "base_currency": "INR"
+        },
+        {
+            "time": "2026-05-26T14:09:32.617973",
+            "equity": 95423009.147246,
+            "cash": 80429369.99161328,
+            "base_currency": "INR"
+        },
+        {
+            "time": "2026-05-26T14:09:37.418920",
+            "equity": 95430224.88966943,
             "cash": 80429369.99161328,
             "base_currency": "INR"
         }
