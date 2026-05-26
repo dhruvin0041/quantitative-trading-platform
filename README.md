@@ -1,207 +1,150 @@
-# Hydra Terminal
+# 🐉 Hydra Terminal: Universal Multi-Asset Intelligence Platform
 
-[![Build Status](https://img.shields.io/github/actions/workflow/status/dhruvin0041/stock-indicator-buy-sell/ci.yml?branch=main&style=for-the-badge)](https://github.com/dhruvin0041/stock-indicator-buy-sell/actions)
-[![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
-[![Next.js](https://img.shields.io/badge/Next.js-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
-[![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python)](https://www.python.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/release/python-3120/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-009688.svg)](https://fastapi.tiangolo.com)
+[![Next.js 16.2](https://img.shields.io/badge/Next.js-16.2-black.svg)](https://nextjs.org/)
+[![TensorFlow 2.16](https://img.shields.io/badge/TensorFlow-2.16-orange.svg)](https://www.tensorflow.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://www.typescriptlang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Hydra Terminal is a State-of-the-Art (SOTA) 2026 quantitative trading and market intelligence system. It operates as a decentralized multi-agent mesh designed for institutional-grade alpha discovery, risk management, and execution simulation.
+Hydra Terminal is an institutional-grade quantitative research workstation and universal signal intelligence platform. Built for precision and selectivity, Hydra transforms raw market data into high-conviction trading signals across multiple asset classes using a multi-agent ensemble architecture and rigorous statistical validation.
 
-The system fuses deep learning (LSTM/CNN), gradient boosting (XGBoost/LightGBM), and reinforcement learning (DQN) with real-world physical proxies (Weather/Supply Chain) and qualitative LLM-driven alpha (Gemini 2.0) to deliver high-conviction trading signals across global markets.
+## 🚀 Key Capabilities
 
----
+### Signal Engine V2.0 (Institutional Grade)
+*   **0–100 Signal Quality Score:** A unified scoring system that evaluates every signal across 7 layers of confirmation. Only scores > 60 reach the workstation.
+*   **Dynamic Model Weighting:** Adaptive rebalancing of model influence (LSTM, XGBoost, LightGBM, DQN) based on current market regime and recent predictive accuracy.
+*   **Confidence Calibration:** A sophisticated engine that aligns predicted probabilities with empirical win rates using Brier Scores and ECE metrics.
+*   **Multi-Timeframe Consensus:** Real-time alignment checks across Daily, 4H, and 1H intervals to prevent "counter-trend" traps.
+*   **Expected Value (EV) Filtering:** Statistical validation where every trade must have a positive mathematical expectancy (`EV > 0`) based on historical average gains and losses.
 
-## 📑 Table of Contents
+### Portfolio & Risk Systems
+*   **FX-Normalized Accounting:** Real-time multi-currency support (USD, INR, EUR, GBP) with institutional-grade FX conversion.
+*   **Risk Veto System:** Specialized Risk Agents with absolute power to suppress signals failing VaR, Crowding (Stampede), or Volatility checks.
+*   **Full Kelly Sizing:** Dynamic position sizing optimized for capital preservation and growth.
 
-- [Key Features](#key-features)
-- [Architecture](#architecture)
-- [Technology Stack](#technology-stack)
-- [Multi-Market & Currency](#multi-market--currency)
-- [Intelligence & Signal Generation](#intelligence--signal-generation)
-- [Risk Management](#risk-management)
-- [Installation & Local Development](#installation--local-development)
-- [Environment Configuration](#environment-configuration)
-- [Project Structure](#project-structure)
-- [License & Disclaimer](#license--disclaimer)
+### Validation Framework
+*   **Signal Journal V2:** Persistent high-fidelity logging of every generated signal, calibrated probability, and market condition for post-trade analysis.
+*   **Performance Research Hub:** In-depth analytics tracking Win Rate, Profit Factor, and Sharpe ratios segmented by Quality Score buckets.
 
----
+## 📊 Supported Asset Classes
 
-## ✨ Key Features
+Hydra Terminal provides **Asset-Specific Intelligence**, meaning it applies unique alpha drivers depending on the asset profile:
 
-- **Agentic Consensus Mesh**: Alpha, Risk, and Execution agents negotiate trades with absolute Veto power for the Risk Agent.
-- **Hybrid Intelligence**: Ensemble fusion of Deep Learning, GBDT, and RL policies calibrated for regime-aware execution.
-- **Multi-Market Support**: Native support for U.S. (NYSE/NASDAQ) and Indian (NSE) universes with structured metadata.
-- **FX Normalization**: Real-time FX engine (USD/INR/EUR/GBP) for true cross-market portfolio accounting.
-- **Physical Alpha Proxies**: Supply chain risk detection via real-time weather coordinates for global ports and Google Trends proxies.
-- **Explainable AI (XAI)**: Full mathematical transparency using SHAP to log the primary drivers behind every decision.
-- **Institutional Paper Trading**: Precision simulation with 0.05% slippage, Kelly sizing, and multi-currency equity tracking.
-- **Data Integrity Audit**: Systematic "Zero-State" protocol and calibration audits to prevent neural pathway contamination.
-
----
+| Class | Highlights | Verified Assets |
+| :--- | :--- | :--- |
+| **Equities** | Earnings Windows, Sector Rotation, Market Breadth | AAPL, TSLA, RELIANCE.NS, NIFTY 50 |
+| **Commodities** | DXY Correlation, Inflation Hedges, Real Yields | Gold (GC=F), Silver, Crude Oil, Copper |
+| **Crypto** | Funding Rates, Stablecoin Flows, Network Activity | BTC, ETH, SOL, BNB, XRP |
+| **Forex** | Interest Rate Differentials, Yield Curves | EURUSD, GBPUSD, USDJPY, USDINR |
+| **Indices** | Global Sentiment, Volatility Clustering | S&P 500, NASDAQ, DAX, FTSE |
 
 ## 🏗 Architecture
 
-Hydra Terminal follows a strictly decoupled, modular architecture designed for high-performance financial execution.
-
-### System Flow
 ```mermaid
 graph TD
-    A[Market Data: OHLCV, SEC, Weather] --> B[Feature Engineering Engine]
-    B --> C[Model Ensemble Layer]
-    subgraph "Intelligence Mesh"
-    C --> D[DL Fusion Agent]
-    C --> E[XGBoost Agent]
-    C --> F[LightGBM Agent]
-    C --> G[DQN Policy Agent]
+    subgraph "Data Layer"
+        MD[Market Data: OHLCV]
+        AD[Alternative Data: News/DXY/VIX]
+        GNN[N-Tier Dependency Mapping]
     end
-    D & E & F & G --> H[Meta-Ensemble Consensus]
-    H --> I[Risk Agent: Veto/Crowding Check]
-    I --> J[Execution Agent: Paper Trading]
-    J --> K[Institutional Command Center]
-    K --> L[Performance Analytics]
+
+    subgraph "Intelligence Core"
+        FE[Feature Engineering]
+        APE[Asset Profile Engine]
+        EN[Model Ensemble: DL/XGB/LGBM/RL]
+        AW[Adaptive Weighting Engine]
+    end
+
+    subgraph "Signal Engine V2.0"
+        SQE[Signal Quality Engine: 0-100 Score]
+        CCE[Confidence Calibration Engine]
+        EVE[Expected Value Engine]
+        RE2[Regime Engine 2.0: 8 States]
+    end
+
+    subgraph "Institutional Execution"
+        RA[Risk Agent: Veto Logic]
+        SJ[Signal Journal: Audit Trail]
+        PE[Portfolio Engine: FX-Aware]
+    end
+
+    MD --> FE
+    AD --> APE
+    FE --> EN
+    APE --> EN
+    EN --> AW
+    AW --> SQE
+    SQE --> CCE
+    CCE --> EVE
+    EVE --> RE2
+    RE2 --> RA
+    RA --> SJ
+    SJ --> PE
+    PE --> FD[Frontend Dashboard]
 ```
 
----
-
-## 🛠 Technology Stack
-
-### Backend (`backend/`)
-- **Framework**: FastAPI (Async-first)
-- **ML/AI**: TensorFlow 2.16, Keras, XGBoost, LightGBM, Scikit-learn
-- **RL**: PyTorch (DQN Implementation)
-- **LLM**: Google Gemini 2.0 Flash (Qualitative Alpha)
-- **Data**: YFinance, Pandas, NumPy, Numba (High-performance paths)
-- **Monitoring**: Prometheus, MLflow (Experiment tracking)
-
-### Frontend (`frontend/`)
-- **Framework**: Next.js 16.2 (App Router)
-- **Language**: TypeScript (Strict Typing)
-- **Styling**: Tailwind CSS (Intrinsic Sizing Model)
-- **Charts**: Lightweight-Charts v5+ (Institutional Visuals)
-- **Components**: Radix UI, Shadcn/ui
-
----
-
-## 🌍 Multi-Market & Currency
-
-The system is engineered for global portfolio management:
-
-- **Global Universes**:
-  - **USA**: 20+ High-liquidity tickers (AAPL, MSFT, NVDA, etc.)
-  - **India**: 20+ Nifty 50 benchmarks (RELIANCE.NS, TCS.NS, etc.)
-- **FX Normalization**: The `FXEngine` provides real-time conversion into the user-defined base currency, enabling seamless PnL tracking for cross-border trades.
-
----
-
-## 🧠 Signal Intelligence
-
-Signal generation is driven by **Multi-Agent Consensus**:
-
-1.  **Deep Learning Fusion**: Combines time-series sequences with peer asset correlations.
-2.  **GBDT Ensemble**: High-precision tabular feature extraction via XGBoost and LightGBM.
-3.  **DQN Policy**: Optimizes sequential decision-making (Buy/Sell/Hold) based on current state and historical feedback.
-4.  **Qualitative Alpha**: Gemini 2.0 analyzes SEC filings (8-K/10-Q) and news context for "moving targets" and litigious risks.
-
----
-
-## 🛡 Risk Management
-
-The Risk Agent has absolute authority to suppress signals based on institutional guardrails:
-
-- **Kelly Criterion**: Optimal position sizing scaled by model confidence.
-- **Jensen's Alpha**: Measuring skill vs. market beta.
-- **Stampede Risk**: Detecting crowded trades via retail sentiment volatility.
-- **Regime Veto**: Hard conviction thresholds enforced during BEAR vs. BULL regimes.
-- **Standard Filters**: Volatility (ATR) ratios and earnings window suppression.
-
----
-
-## 🚀 Installation & Local Development
+## 🛠 Installation
 
 ### Prerequisites
-- Python 3.12+
-- Node.js 20+
-- Google Gemini API Key (Optional, for Qualitative Alpha)
+*   **Python 3.12+**
+*   **Node.js 20+**
+*   **Git**
 
-### 1. Repository Setup
-```bash
-git clone https://github.com/dhruvin0041/stock-indicator-buy-sell.git
-cd stock-indicator-buy-sell
-```
-
-### 2. Backend Setup
+### 1. Backend Setup
 ```bash
 cd backend
 python -m venv venv
-source venv/bin/activate  # venv\Scripts\activate on Windows
+source venv/bin/activate  # Windows: .\venv\Scripts\activate
 pip install -r requirements.txt
+```
+
+### 2. Environment Configuration
+Create a `.env` file in the `backend/` directory:
+```bash
+API_KEY=your_institutional_key
+FRONTEND_URL=http://localhost:3000
+GOOGLE_API_KEY=your_gemini_api_key
 ```
 
 ### 3. Frontend Setup
 ```bash
-cd ../frontend
+cd frontend
 npm install
 ```
 
----
+## 🚦 Running Hydra
 
-## ⚙️ Environment Configuration
-
-Create a `.env` file in the `backend/` directory:
-
-| Variable | Description |
-| :--- | :--- |
-| `API_KEY` | Your unique Hydra API Key (required) |
-| `GOOGLE_API_KEY` | Google Gemini API Key (optional) |
-| `FRONTEND_URL` | Comma-separated list of allowed origins (default: http://localhost:3000) |
-
----
-
-## 🖥 Local Development
-
-### Running the Backend
+### Start Backend
 ```bash
 cd backend
+$env:PYTHONPATH='.'  # PowerShell
 python api.py
 ```
-The API will be available at `http://localhost:8000`. Explore the interactive documentation at `/docs`.
 
-### Running the Frontend
+### Start Frontend
 ```bash
 cd frontend
 npm run dev
 ```
-The terminal dashboard will be available at `http://localhost:3000`.
+
+### Institutional Commands
+*   **System Audit:** `python backend/scripts/ops/generate_report.py --audit`
+*   **Signal Learning:** `python backend/scripts/ops/analyze_signals.py`
+*   **Clean Artifacts:** `python backend/scripts/ops/clean_artifacts.py`
+
+## 📁 Repository Structure
+*   `backend/src/execution/`: Core Signal Engine V2.0, Risk, and Portfolio logic.
+*   `backend/src/models/`: Multi-agent ensemble (Neural, Boosting, RL).
+*   `backend/src/data_ingestion/`: Multi-modal data fetching and GNN mappings.
+*   `frontend/app/`: Next.js 16.2 Institutional Command Center.
+*   `docs/`: Detailed technical specifications and implementation reports.
+
+## 🗺 Roadmap
+- [ ] **Signal Quality Optimization:** Refining the 7-layer confirmation thresholds.
+- [ ] **Adaptive Portfolio Construction:** Automated rebalancing based on regime-specific win rates.
+- [ ] **Live Validation Dataset Growth:** Expanding the Signal Journal for 10k+ verified trade outcomes.
+- [ ] **Advanced Regime Research:** Integrating HMM-based volatility clustering for micro-regime detection.
 
 ---
-
-## 📂 Project Structure
-
-```
-├── backend/
-│   ├── artifacts/          # Trained model weights & scalers
-│   ├── configs/            # Risk params & kept features
-│   ├── scripts/            # Training, Research & Ops pipelines
-│   └── src/
-│       ├── agents/         # Multi-agent mesh (Alpha/Risk/Execution)
-│       ├── data_ingestion/ # Multi-modal data pipelines
-│       ├── execution/      # Paper Trading, FX & Signal Engines
-│       └── models/         # Architecture definitions (DL/RL/GBDT)
-├── frontend/
-│   ├── app/                # Next.js App Router (Dashboard/Performance)
-│   └── components/         # Institutional UI (XAI Bars/Charts)
-└── docs/                   # Implementation reports & System design
-```
-
----
-
-## 📄 License & Disclaimer
-
-**License**: Distributed under the MIT License. See `LICENSE` for more information.
-
-**Disclaimer**: Hydra Terminal is an educational research platform. Trading stocks involves significant risk. The signals generated by this system are for simulation and research purposes only and do not constitute financial advice. Past performance is not indicative of future results.
-
----
-**Hydra Terminal** — Built for the 2026 market paradigm.
+**Hydra Terminal** — built for precision, grounded in data, executed by agents.
