@@ -88,6 +88,33 @@ class RiskMetrics(BaseModel):
     trough_date: str = ""
 
 
+class SignalQuality(BaseModel):
+    score: float = Field(ge=0.0, le=100.0)
+    grade: str  # INSTITUTIONAL, WATCHLIST, NO_TRADE
+    explanation: str
+    layers_passed: List[str]
+    layers_failed: List[str]
+
+
+class CalibrationMetrics(BaseModel):
+    brier_score: float = 0.0
+    ece: float = 0.0  # Expected Calibration Error
+    reliability_diagram: List[Dict[str, Any]] = []
+
+
+class ModelWeight(BaseModel):
+    weight: float
+    reason: str
+    recent_accuracy: float
+
+
+class ExpectedValueMetrics(BaseModel):
+    ev_pct: float
+    win_prob: float
+    avg_gain_pct: float
+    avg_loss_pct: float
+
+
 class PredictResponse(BaseModel):
     ticker: str
     current_price: float
@@ -96,15 +123,23 @@ class PredictResponse(BaseModel):
     uncertainty_score: float
     signal_note: Optional[str] = None
     market_regime: str
+    market_regime_v2: str = "NEUTRAL"  # Detailed regime from 2.0 engine
     volatility_state: str
     volume_ratio: float
     is_point_forecast: bool = False
     models: Dict[str, ModelPrediction]
+    model_weights: Dict[str, ModelWeight] = {}
     projections: Projections
     qualitative_alpha: Optional[str] = None
     xai: Optional[XAIBlock] = None
     sentiment_score: Optional[float] = None
     risk: Optional[RiskMetrics] = None
+
+    # Signal V2.0 Fields
+    quality: Optional[SignalQuality] = None
+    calibration: Optional[CalibrationMetrics] = None
+    expected_value: Optional[ExpectedValueMetrics] = None
+    multi_timeframe_consensus: Dict[str, str] = {}  # { "1H": "BUY", "4H": "HOLD", ... }
 
     # Transparency fields
     timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
@@ -112,6 +147,10 @@ class PredictResponse(BaseModel):
     bullish_models: int = 0
     bearish_models: int = 0
     neutral_models: int = 0
+
+    # Asset Specific Intelligence
+    asset_class: str = "EQUITY"
+    asset_context: Dict[str, Any] = {}  # Funding rates, real yields, etc.
 
     # Chart & Portfolio
     portfolio: Optional[PortfolioSummary] = None

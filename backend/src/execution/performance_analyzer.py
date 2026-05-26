@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from datetime import datetime
+from src.execution.signal_learning import SignalPerformanceResearch
 
 
 class PerformanceAnalyzer:
@@ -11,8 +12,9 @@ class PerformanceAnalyzer:
 
     def __init__(self, risk_free_rate=0.04):
         self.risk_free_rate = risk_free_rate
+        self.signal_research = SignalPerformanceResearch()
 
-    def analyze(self, snapshots, trade_history, initial_capital):
+    def analyze(self, snapshots, trade_history, initial_capital, signal_data=None):
         if not snapshots:
             return {
                 "summary": {
@@ -39,6 +41,7 @@ class PerformanceAnalyzer:
                 },
                 "returns": {"daily": {}, "monthly": {}},
                 "attribution": {"by_regime": {}, "by_sector": {}},
+                "signal_research": {},
             }
 
         df_snapshots = pd.DataFrame(snapshots)
@@ -129,6 +132,11 @@ class PerformanceAnalyzer:
         total_trades = len(trade_history) if trade_history else 0
         unrealized_pnl = today_equity - (initial_capital + realized_pnl)
 
+        # Phase 12: Signal Quality Research
+        quality_research = {}
+        if signal_data is not None:
+            quality_research = self.signal_research.analyze_quality_buckets(signal_data)
+
         return {
             "summary": {
                 "total_return": inception_return_pct,
@@ -161,6 +169,7 @@ class PerformanceAnalyzer:
                 "monthly": monthly_returns.to_dict(),
             },
             "attribution": {"by_regime": {}, "by_sector": {}},
+            "signal_research": quality_research,
         }
 
     def calculate_sharpe(self, returns):

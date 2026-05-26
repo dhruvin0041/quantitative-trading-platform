@@ -32,8 +32,15 @@ class SignalJournal:
                     uncertainty REAL,
                     agreement REAL,
                     market_regime TEXT,
+                    market_regime_v2 TEXT,
                     volatility_regime TEXT,
                     model_consensus TEXT, -- JSON string of model predictions
+                    quality_score REAL,
+                    quality_grade TEXT,
+                    ev_pct REAL,
+                    expected_gain REAL,
+                    expected_loss REAL,
+                    asset_class TEXT,
                     holding_time INTEGER,
                     realized_pnl REAL,
                     unrealized_pnl REAL,
@@ -48,9 +55,11 @@ class SignalJournal:
                 INSERT OR REPLACE INTO signals (
                     signal_id, timestamp, asset, market, exchange, signal_type,
                     entry_price, exit_price, position_size, confidence, uncertainty,
-                    agreement, market_regime, volatility_regime, model_consensus,
+                    agreement, market_regime, market_regime_v2, volatility_regime, 
+                    model_consensus, quality_score, quality_grade, ev_pct, 
+                    expected_gain, expected_loss, asset_class,
                     holding_time, realized_pnl, unrealized_pnl, outcome
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     data.get("signal_id"),
@@ -66,8 +75,15 @@ class SignalJournal:
                     data.get("uncertainty", 0.0),
                     data.get("agreement", 0.0),
                     data.get("market_regime", "UNKNOWN"),
+                    data.get("market_regime_v2", "UNKNOWN"),
                     data.get("volatility_regime", "UNKNOWN"),
                     data.get("model_consensus", "{}"),
+                    data.get("quality_score", 0.0),
+                    data.get("quality_grade", "N/A"),
+                    data.get("ev_pct", 0.0),
+                    data.get("expected_gain", 0.0),
+                    data.get("expected_loss", 0.0),
+                    data.get("asset_class", "EQUITY"),
                     data.get("holding_time", 0),
                     data.get("realized_pnl", 0.0),
                     data.get("unrealized_pnl", 0.0),

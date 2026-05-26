@@ -118,6 +118,27 @@ export interface Portfolio {
   recent_closed_trades?: Trade[];
 }
 
+export interface SignalQuality {
+  score: number;
+  grade: 'INSTITUTIONAL' | 'WATCHLIST' | 'NO_TRADE';
+  explanation: string;
+  layers_passed: string[];
+  layers_failed: string[];
+}
+
+export interface ExpectedValueMetrics {
+  ev_pct: number;
+  win_prob: number;
+  avg_gain_pct: number;
+  avg_loss_pct: number;
+}
+
+export interface ModelWeight {
+  weight: number;
+  reason: string;
+  recent_accuracy: number;
+}
+
 export interface ChartData {
   ticker: string;
   current_price: number;
@@ -128,6 +149,7 @@ export interface ChartData {
   sentiment_score?: number;
   signal_note?: string | null;
   market_regime: string;
+  market_regime_v2?: string;
   volatility_state: string;
   volume_ratio: number;
   is_point_forecast: boolean;
@@ -138,6 +160,7 @@ export interface ChartData {
   timestamp: string;
   metadata: AssetMetadata;
   models: Record<string, ModelPrediction>;
+  model_weights?: Record<string, ModelWeight>;
   projections: {
     floor: number;
     median?: number;
@@ -145,6 +168,14 @@ export interface ChartData {
   };
   technical_snapshot: TechnicalSnapshot;
   qualitative_alpha?: string | null;
+  
+  // Signal V2.0 Fields
+  quality?: SignalQuality;
+  expected_value?: ExpectedValueMetrics;
+  multi_timeframe_consensus?: Record<string, string>;
+  asset_class?: string;
+  asset_context?: Record<string, unknown>;
+
   risk?: {
     var_95: number;
     cvar: number;
