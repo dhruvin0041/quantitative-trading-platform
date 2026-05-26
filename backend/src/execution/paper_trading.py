@@ -29,6 +29,7 @@ class PaperTradingEngine:
             try:
                 with open(self.db_path, "r") as f:
                     data = json.load(f)
+                    self.initial_capital = data.get("initial_capital", self.initial_capital)
                     self.capital = data.get("capital", self.initial_capital)
                     self.base_currency = data.get("base_currency", "USD")
                     self.positions = data.get("positions", {})
@@ -42,6 +43,7 @@ class PaperTradingEngine:
         with open(temp_path, "w") as f:
             json.dump(
                 {
+                    "initial_capital": self.initial_capital,
                     "capital": self.capital,
                     "base_currency": self.base_currency,
                     "positions": self.positions,

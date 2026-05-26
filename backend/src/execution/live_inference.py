@@ -157,8 +157,16 @@ def is_near_earnings(ticker):
 
 
 def add_upgraded_features(df, spy_df, vix_df):
+    # Ensure columns are flattened if MultiIndex exists
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+
     # Momentum Indicators
-    delta = df["Close"].diff()
+    close_s = df["Close"].squeeze()
+    if isinstance(close_s, pd.DataFrame):
+        close_s = close_s.iloc[:, 0]
+        
+    delta = close_s.diff()
     # Institutional Standard: Wilder's RSI (EMA-based)
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
@@ -167,54 +175,65 @@ def add_upgraded_features(df, spy_df, vix_df):
     RS = avg_gain / (avg_loss + 1e-9)
     df["RSI"] = 100 - (100 / (1 + RS))
 
-    ema12 = df["Close"].ewm(span=12).mean()
-    ema26 = df["Close"].ewm(span=26).mean()
+    ema12 = close_s.ewm(span=12).mean()
+    ema26 = close_s.ewm(span=26).mean()
     df["MACD"] = ema12 - ema26
     df["MACD_Signal"] = df["MACD"].ewm(span=9).mean()
     df["MACD_Hist"] = df["MACD"] - df["MACD_Signal"]
 
-    low14 = df["Low"].rolling(14).min()
-    high14 = df["High"].rolling(14).max()
-    df["Stoch_K"] = 100 * (df["Close"] - low14) / (high14 - low14 + 1e-9)
+    low14 = df["Low"].squeeze().rolling(14).min()
+    high14 = df["High"].squeeze().rolling(14).max()
+    if isinstance(low14, pd.DataFrame): low14 = low14.iloc[:, 0]
+    if isinstance(high14, pd.DataFrame): high14 = high14.iloc[:, 0]
+    
+    df["Stoch_K"] = 100 * (close_s - low14) / (high14 - low14 + 1e-9)
     df["Stoch_D"] = df["Stoch_K"].rolling(3).mean()
 
     # Volatility Indicators
-    df["BB_Mid"] = df["Close"].rolling(20).mean()
-    df["BB_Std"] = df["Close"].rolling(20).std()
+    df["BB_Mid"] = close_s.rolling(20).mean()
+    df["BB_Std"] = close_s.rolling(20).std()
     df["BB_Upper"] = df["BB_Mid"] + 2 * df["BB_Std"]
     df["BB_Lower"] = df["BB_Mid"] - 2 * df["BB_Std"]
     df["BB_Width"] = (df["BB_Upper"] - df["BB_Lower"]) / (df["BB_Mid"] + 1e-9)
-    df["BB_Position"] = (df["Close"] - df["BB_Lower"]) / (
+    df["BB_Position"] = (close_s - df["BB_Lower"]) / (
         df["BB_Upper"] - df["BB_Lower"] + 1e-9
     )
 
+    high_s = df["High"].squeeze()
+    low_s = df["Low"].squeeze()
+    if isinstance(high_s, pd.DataFrame): high_s = high_s.iloc[:, 0]
+    if isinstance(low_s, pd.DataFrame): low_s = low_s.iloc[:, 0]
+
     df["TR"] = pd.concat(
         [
-            df["High"] - df["Low"],
-            (df["High"] - df["Close"].shift()).abs(),
-            (df["Low"] - df["Close"].shift()).abs(),
+            high_s - low_s,
+            (high_s - close_s.shift()).abs(),
+            (low_s - close_s.shift()).abs(),
         ],
         axis=1,
     ).max(axis=1)
     df["ATR"] = df["TR"].rolling(14).mean()
-    df["ATR_Pct"] = df["ATR"] / (df["Close"] + 1e-9)
+    df["ATR_Pct"] = df["ATR"] / (close_s + 1e-9)
 
     # Volume Indicators
-    df["OBV"] = (np.sign(df["Close"].diff()) * df["Volume"]).fillna(0).cumsum()
+    vol_s = df["Volume"].squeeze()
+    if isinstance(vol_s, pd.DataFrame): vol_s = vol_s.iloc[:, 0]
+
+    df["OBV"] = (np.sign(close_s.diff()) * vol_s).fillna(0).cumsum()
     df["OBV_Change"] = df["OBV"].pct_change()
 
-    df["Volume_MA20"] = df["Volume"].rolling(20).mean()
-    df["Volume_Ratio"] = df["Volume"] / (df["Volume_MA20"] + 1e-9)
+    df["Volume_MA20"] = vol_s.rolling(20).mean()
+    df["Volume_Ratio"] = vol_s / (df["Volume_MA20"] + 1e-9)
 
     # Trend Indicators
-    df["EMA9"] = df["Close"].ewm(span=9).mean()
-    df["EMA21"] = df["Close"].ewm(span=21).mean()
-    df["EMA9_vs_EMA21"] = (df["EMA9"] - df["EMA21"]) / (df["Close"] + 1e-9)
-    df["Price_vs_EMA9"] = (df["Close"] - df["EMA9"]) / (df["Close"] + 1e-9)
-    df["Price_vs_EMA21"] = (df["Close"] - df["EMA21"]) / (df["Close"] + 1e-9)
+    df["EMA9"] = close_s.ewm(span=9).mean()
+    df["EMA21"] = close_s.ewm(span=21).mean()
+    df["EMA9_vs_EMA21"] = (df["EMA9"] - df["EMA21"]) / (close_s + 1e-9)
+    df["Price_vs_EMA9"] = (close_s - df["EMA9"]) / (close_s + 1e-9)
+    df["Price_vs_EMA21"] = (close_s - df["EMA21"]) / (close_s + 1e-9)
 
-    plus_DM = df["High"].diff()
-    minus_DM = -df["Low"].diff()
+    plus_DM = high_s.diff()
+    minus_DM = -low_s.diff()
 
     # Correct ADX directional movement
     plus_DM_true = np.where((plus_DM > minus_DM) & (plus_DM > 0), plus_DM, 0)
@@ -231,22 +250,25 @@ def add_upgraded_features(df, spy_df, vix_df):
     df["ADX"] = DX.rolling(14).mean()
 
     # Price Pattern Features
-    df["Candle_Body"] = abs(df["Close"] - df["Open"]) / (df["High"] - df["Low"] + 1e-9)
-    df["Upper_Shadow"] = (df["High"] - df[["Close", "Open"]].max(axis=1)) / (
+    open_s = df["Open"].squeeze()
+    if isinstance(open_s, pd.DataFrame): open_s = open_s.iloc[:, 0]
+    
+    df["Candle_Body"] = abs(close_s - open_s) / (high_s - low_s + 1e-9)
+    df["Upper_Shadow"] = (high_s - df[["Close", "Open"]].max(axis=1).squeeze()) / (
         df["ATR"] + 1e-9
     )
-    df["Lower_Shadow"] = (df[["Close", "Open"]].min(axis=1) - df["Low"]) / (
+    df["Lower_Shadow"] = (df[["Close", "Open"]].min(axis=1).squeeze() - low_s) / (
         df["ATR"] + 1e-9
     )
-    df["Gap"] = (df["Open"] - df["Close"].shift()) / (df["Close"].shift() + 1e-9)
+    df["Gap"] = (open_s - close_s.shift()) / (close_s.shift() + 1e-9)
 
     # Keep existing features
-    df["Return"] = df["Close"].pct_change()
-    df["Volume_Change"] = df["Volume"].pct_change()
-    df["High_Low"] = df["High"] - df["Low"]
-    df["MA20"] = df["Close"].rolling(20).mean()
-    df["MA50"] = df["Close"].rolling(50).mean()
-    df["MA20_vs_MA50"] = (df["MA20"] - df["MA50"]) / (df["Close"] + 1e-9)
+    df["Return"] = close_s.pct_change()
+    df["Volume_Change"] = vol_s.pct_change()
+    df["High_Low"] = high_s - low_s
+    df["MA20"] = close_s.rolling(20).mean()
+    df["MA50"] = close_s.rolling(50).mean()
+    df["MA20_vs_MA50"] = (df["MA20"] - df["MA50"]) / (close_s + 1e-9)
 
     # Defensive check for Series extraction from DataFrames (yfinance consistency)
     def get_series(df, col):
@@ -291,6 +313,8 @@ def fetch_live_data(ticker, config):
         vix_df.columns = vix_df.columns.droplevel(1)
 
     df = add_upgraded_features(df, spy_df, vix_df)
+    # Institutional Fix: Remove duplicate columns before reindexing to prevent crash
+    df = df.loc[:, ~df.columns.duplicated()].copy()
 
     peer_ticker = get_sector_peer(ticker)
     peer_df = fetch_historical_data(
@@ -304,14 +328,37 @@ def fetch_live_data(ticker, config):
     peer_filtered = peer_df.reindex(columns=FEATURE_COLUMNS).dropna()
 
     common_idx = df_filtered.index.intersection(peer_filtered.index)
-    df_filtered = df_filtered.loc[common_idx]
-    peer_filtered = peer_filtered.loc[common_idx]
+    
+    # Institutional Fallback: If assets are from different markets (e.g. India vs US), 
+    # the intersection will be empty. We fall back to using the primary ticker's 
+    # own timeline as the context if the overlap is insufficient (< 30 days).
+    if len(common_idx) < 30:
+        logger.warning(f"Insufficient market overlap between {ticker} and peer {peer_ticker}. Falling back to self-context.")
+        df_filtered = df.reindex(columns=FEATURE_COLUMNS).dropna()
+        peer_filtered = df_filtered.copy()
+        common_idx = df_filtered.index
+    else:
+        df_filtered = df_filtered.loc[common_idx]
+        peer_filtered = peer_filtered.loc[common_idx]
+
+    if df_filtered.empty:
+        raise ValueError(f"Cleaned dataset for {ticker} is empty after feature engineering. Check data sources.")
 
     scaler = joblib.load("artifacts/latest_scaler.joblib")
     time_steps = config["data"]["time_steps"]
 
     recent_data = df_filtered.tail(time_steps).values
     peer_recent = peer_filtered.tail(time_steps).values
+
+    if len(recent_data) < time_steps:
+        # Pad with first available row if not enough history
+        padding_len = time_steps - len(recent_data)
+        if len(recent_data) > 0:
+            padding = np.tile(recent_data[0], (padding_len, 1))
+            recent_data = np.vstack([padding, recent_data])
+            peer_recent = np.vstack([padding, peer_recent])
+        else:
+            raise ValueError(f"Not enough data points for {ticker} to generate a prediction.")
 
     scaled_data = scaler.transform(recent_data)
     peer_scaled = scaler.transform(peer_recent)

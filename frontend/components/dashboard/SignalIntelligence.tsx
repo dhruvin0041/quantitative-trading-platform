@@ -21,7 +21,7 @@ export function SignalIntelligence({ data, currency = '$' }: SignalIntelligenceP
 
   const { 
     signal, confidence_score, uncertainty_score, market_regime, 
-    volatility_state, volume_ratio: _volume_ratio, models, projections, 
+    volatility_state, models, projections, 
     is_point_forecast, model_agreement, bullish_models, 
     bearish_models, neutral_models, timestamp,
     signal_note, qualitative_alpha, xai, sentiment_score 
@@ -255,20 +255,27 @@ export function SignalIntelligence({ data, currency = '$' }: SignalIntelligenceP
           </div>
           <div className="p-4 flex-1 flex flex-col justify-center gap-4">
             <div className="flex items-center justify-between font-mono text-sm relative z-10">
-              <div className="flex flex-col items-center">
-                <span className="text-muted-foreground text-[9px] font-bold uppercase mb-1">P10 Floor</span>
-                <span className="text-[var(--signal-sell)] font-black text-lg">{currency}{projections.floor.toFixed(2)}</span>
-              </div>
-              <div className="flex flex-col items-center">
-                <span className="text-muted-foreground text-[9px] font-bold uppercase mb-1">P50 Median</span>
-                <span className="text-foreground font-black text-lg">
-                  {is_point_forecast ? "N/A" : `${currency}${projections.median?.toFixed(2)}`}
-                </span>
-              </div>
-              <div className="flex flex-col items-center">
-                <span className="text-muted-foreground text-[9px] font-bold uppercase mb-1">P90 Ceiling</span>
-                <span className="text-[var(--signal-buy)] font-black text-lg">{currency}{projections.ceiling.toFixed(2)}</span>
-              </div>
+              {is_point_forecast ? (
+                <div className="flex flex-col items-center justify-center w-full py-2 opacity-70">
+                  <span className="text-foreground font-black text-lg">{currency}{projections.median?.toFixed(2)}</span>
+                  <span className="text-[10px] uppercase font-black tracking-widest mt-1 text-muted-foreground">Point Forecast Only</span>
+                </div>
+              ) : (
+                <>
+                  <div className="flex flex-col items-center">
+                    <span className="text-muted-foreground text-[9px] font-bold uppercase mb-1">P10 Floor</span>
+                    <span className="text-[var(--signal-sell)] font-black text-lg">{currency}{projections.floor.toFixed(2)}</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <span className="text-muted-foreground text-[9px] font-bold uppercase mb-1">P50 Median</span>
+                    <span className="text-foreground font-black text-lg">{currency}{projections.median?.toFixed(2)}</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <span className="text-muted-foreground text-[9px] font-bold uppercase mb-1">P90 Ceiling</span>
+                    <span className="text-[var(--signal-buy)] font-black text-lg">{currency}{projections.ceiling.toFixed(2)}</span>
+                  </div>
+                </>
+              )}
             </div>
             
             {/* PRIORITY #5: Confidence vs Uncertainty Visual Separation */}

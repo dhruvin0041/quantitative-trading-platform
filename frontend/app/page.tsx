@@ -53,6 +53,7 @@ export default function HydraTerminal() {
     const fetchPrediction = async () => {
       setLoading(true);
       setError(null);
+      setChartData(null); // CRITICAL UX FIX: Clear stale data before fetching to prevent mismatched ticker/price rendering
       try {
         const res = await fetch(`${API_URL}/predict?ticker=${ticker}`, {
           headers: { "X-API-Key": API_KEY }

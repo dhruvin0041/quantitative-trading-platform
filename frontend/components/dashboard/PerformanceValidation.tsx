@@ -2,9 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Trophy } from 'lucide-react';
 import { motion } from 'framer-motion';
 
+interface ValidationMetric {
+  label: string;
+  value: string;
+  description: string;
+}
+
 export function PerformanceValidation() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [metrics, setMetrics] = useState<any>(null);
+  const [metrics, setMetrics] = useState<ValidationMetric[] | null>(null);
 
   useEffect(() => {
     const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
@@ -40,8 +45,7 @@ export function PerformanceValidation() {
         <div className="text-[8px] font-mono font-bold opacity-50 uppercase tracking-tighter">Live_Telemetry</div>
       </div>
       <div className="p-4 flex flex-col gap-2 flex-1 justify-center">
-        {metrics.map((metric: any, i: number) => (
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        {metrics.map((metric: ValidationMetric, i: number) => (
           <motion.div 
             key={metric.label}
             initial={{ opacity: 0, x: -10 }}
