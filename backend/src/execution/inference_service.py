@@ -317,8 +317,19 @@ class InferenceService:
             },
             "Context": {"Top_Headline_Processed": news_text},
         }
+        # SSOT: Include system signals from journal for the chart
+        system_signals = None
+        if self.journal:
+            # Fetch last 30 signals to overlay on chart
+            system_signals = self.journal.get_all_signals()
+            system_signals = system_signals[system_signals["asset"] == ticker].head(30)
+
         reporting_data = self.report_gen.package_chart_data(
-            ticker, df_full, ai_report_stub, historical_markers
+            ticker,
+            df_full,
+            ai_report_stub,
+            historical_markers,
+            system_signals=system_signals,
         )
         response_data.update(reporting_data)
 
@@ -400,6 +411,7 @@ class InferenceService:
                             "DL_FUSION": map_model_output(dl_preds_raw),
                             "XGB_AGENT": map_model_output(xgb_preds_raw),
                             "LGBM_AGENT": map_model_output(lgbm_preds_raw),
+                            "CONSENSUS": consensus_result,
                         }
                     ),
                 }

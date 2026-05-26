@@ -83,7 +83,7 @@ class PerformanceAnalyzer:
         )
 
         # Monthly Returns
-        monthly_equity = df_snapshots["equity"].resample("M").last().ffill()
+        monthly_equity = df_snapshots["equity"].resample("ME").last().ffill()
         monthly_returns = monthly_equity.pct_change().dropna()
 
         # Risk Metrics (Portfolio Level)

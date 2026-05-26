@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Play, Loader2, TrendingUp, BarChart3, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { BacktestSummary } from '@/types';
 
 interface BacktestPanelProps {
   isOpen: boolean;
@@ -10,27 +11,11 @@ interface BacktestPanelProps {
   currentTicker: string;
 }
 
-interface BacktestResults {
-  win_rate: number;
-  profit_factor: number;
-  sharpe_ratio: number;
-  max_drawdown: number;
-  vetoed_rate: number;
-  coverage?: number;
-  signal_coverage?: number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  monthly_win_rates?: any[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  best_signal?: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  worst_signal?: any;
-}
-
 export function BacktestPanel({ isOpen, onClose, currentTicker }: BacktestPanelProps) {
   const [ticker, setTicker] = useState(currentTicker);
   const [period, setPeriod] = useState('1y');
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<BacktestResults | null>(null);
+  const [results, setResults] = useState<BacktestSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const runBacktest = async () => {
@@ -49,10 +34,9 @@ export function BacktestPanel({ isOpen, onClose, currentTicker }: BacktestPanelP
       }
       const data = await res.json();
       setResults(data);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setError(err.message || "Failed to run backtest. Ensure backend is running and data is available.");
+      setError(err instanceof Error ? err.message : "Failed to run backtest. Ensure backend is running and data is available.");
     } finally {
       setLoading(false);
     }
@@ -137,33 +121,27 @@ export function BacktestPanel({ isOpen, onClose, currentTicker }: BacktestPanelP
                 <div className="grid grid-cols-3 gap-3">
                   <div className="p-3 bg-card border border-border rounded-lg flex flex-col items-center">
                     <span className="text-[9px] font-bold text-muted-foreground uppercase mb-1">Win Rate</span>
-  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                    <span className="text-lg font-black text-green-500">{(results as any).win_rate}%</span>
+                    <span className="text-lg font-black text-green-500">{results.win_rate}%</span>
                   </div>
                   <div className="p-3 bg-card border border-border rounded-lg flex flex-col items-center">
                     <span className="text-[9px] font-bold text-muted-foreground uppercase mb-1">Profit Factor</span>
-  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                    <span className="text-lg font-black">{(results as any).profit_factor}</span>
+                    <span className="text-lg font-black">{results.profit_factor}</span>
                   </div>
                   <div className="p-3 bg-card border border-border rounded-lg flex flex-col items-center">
                     <span className="text-[9px] font-bold text-muted-foreground uppercase mb-1">Sharpe</span>
-  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                    <span className="text-lg font-black">{(results as any).sharpe_ratio}</span>
+                    <span className="text-lg font-black">{results.sharpe_ratio}</span>
                   </div>
                   <div className="p-3 bg-card border border-border rounded-lg flex flex-col items-center">
                     <span className="text-[9px] font-bold text-muted-foreground uppercase mb-1">Max Drawdown</span>
-  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                    <span className="text-lg font-black text-red-500">{(results as any).max_drawdown}%</span>
+                    <span className="text-lg font-black text-red-500">{results.max_drawdown}%</span>
                   </div>
                   <div className="p-3 bg-card border border-border rounded-lg flex flex-col items-center">
                     <span className="text-[9px] font-bold text-muted-foreground uppercase mb-1">Vetoed Rate</span>
-  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                    <span className="text-lg font-black text-amber-500">{(results as any).vetoed_rate}%</span>
+                    <span className="text-lg font-black text-amber-500">{results.vetoed_rate}%</span>
                   </div>
                   <div className="p-3 bg-card border border-border rounded-lg flex flex-col items-center">
                     <span className="text-[9px] font-bold text-muted-foreground uppercase mb-1">Coverage</span>
-  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                    <span className="text-lg font-black text-primary">{(results as any).coverage || (results as any).signal_coverage || 0}%</span>
+                    <span className="text-lg font-black text-primary">{results.coverage || results.signal_coverage || 0}%</span>
                   </div>
                 </div>
 

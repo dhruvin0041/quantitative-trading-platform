@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from src.data_ingestion.technical_indicators import (
     add_advanced_features,
     clean_multiindex_columns,
@@ -47,7 +48,9 @@ class ReportGenerator:
                 )
         return markers, df_full
 
-    def package_chart_data(self, ticker, df_full, ai_report_dict, historical_markers):
+    def package_chart_data(
+        self, ticker, df_full, ai_report_dict, historical_markers, system_signals=None
+    ):
         """
         Formats data for the Next.js institutional dashboard.
         """
@@ -78,16 +81,37 @@ class ReportGenerator:
             orient="records"
         )
 
-        df_cloud_json = df_chart.dropna(
-            subset=["ribbon_upper", "ribbon_lower", "bb_upper", "bb_lower"]
+        # Clouds: include all timestamps that have at least one indicator to prevent early termination
+        df_cloud_json = df_chart.copy()
+        # Only drop if ALL essential indicators are missing
+        df_cloud_json = df_cloud_json.dropna(
+            subset=["ribbon_upper", "ribbon_lower", "bb_upper", "bb_lower"], how="all"
         )
+
         clouds = df_cloud_json[
             ["time", "ribbon_upper", "ribbon_lower", "bb_upper", "bb_lower"]
         ].to_dict(orient="records")
+
+        # Merge System Signals (from Journal) with Historical Pivots
+        final_markers = historical_markers.copy()
+        if system_signals is not None and not system_signals.empty:
+            for _, sig in system_signals.iterrows():
+                # Convert timestamp to date string
+                sig_time = pd.to_datetime(sig["timestamp"]).strftime("%Y-%m-%d")
+                # Avoid duplicates with historical markers on same date
+                if not any(m["time"] == sig_time for m in final_markers):
+                    final_markers.append(
+                        {
+                            "time": sig_time,
+                            "action": sig["signal_type"],
+                            "label": f"Hydra {sig['signal_type']}",
+                            "probability": sig["confidence"],
+                        }
+                    )
 
         return {
             "candles": candles,
             "clouds": clouds,
             "ai_report": ai_report_dict,
-            "historical_markers": historical_markers,
+            "historical_markers": final_markers,
         }

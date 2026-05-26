@@ -20,7 +20,7 @@ export function SignalIntelligence({ data, currency = '$' }: SignalIntelligenceP
   );
 
   const { 
-    signal, confidence_score, uncertainty_score, market_regime, 
+    signal, market_regime, 
     volatility_state, models, projections, 
     is_point_forecast, model_agreement, bullish_models, 
     bearish_models, neutral_models, timestamp,
@@ -45,18 +45,6 @@ export function SignalIntelligence({ data, currency = '$' }: SignalIntelligenceP
     if (state === 'HIGH') return 'bg-red-500 text-white border-red-600';
     if (state === 'MEDIUM') return 'bg-orange-500 text-white border-orange-600';
     return 'bg-green-500 text-white border-green-600';
-  };
-
-  const _getUncertaintyColor = (score: number) => {
-    if (score < 31) return 'bg-green-500';
-    if (score < 46) return 'bg-amber-500';
-    return 'bg-red-500';
-  };
-
-  const getUncertaintyText = (score: number) => {
-    if (score < 31) return 'LOW';
-    if (score < 46) return 'MODERATE';
-    return 'HIGH';
   };
 
   const container: Variants = {

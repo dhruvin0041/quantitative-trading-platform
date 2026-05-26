@@ -4,9 +4,33 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Activity, Trophy, LineChart, Layers, Crosshair, CheckCircle2, AlertTriangle, AlertCircle, TrendingDown } from 'lucide-react';
 
+interface ValidationMetrics {
+  win_rate: number;
+  total_trades: number;
+  profit_factor: number;
+}
+
+interface ValidationData {
+  status?: string;
+  performance?: Record<string, number>;
+  calibration?: {
+    ece?: number;
+    reliability_curve?: { bin: string; count: number; predicted_conf: number; actual_win_rate: number }[];
+  };
+  strategy_health?: {
+    status?: string;
+    historical_win_rate?: number;
+    rolling_win_rate?: number;
+    drift?: number;
+  };
+  market_segmentation?: Record<string, ValidationMetrics>;
+  regime_segmentation?: Record<string, ValidationMetrics>;
+  recent_signals?: { asset: string; confidence: number; outcome: string }[];
+}
+
 export default function ValidationDashboard() {
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<Record<string, unknown> | null>(null);
+  const [data, setData] = useState<ValidationData | null>(null);
 
   const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -54,12 +78,9 @@ export default function ValidationDashboard() {
     );
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const p = (data?.performance as any) || {};
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const c = (data?.calibration as any) || {};
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const h = (data?.strategy_health as any) || {};
+  const p = data?.performance || ({} as Record<string, number>);
+  const c = data?.calibration || ({} as NonNullable<ValidationData['calibration']>);
+  const h = data?.strategy_health || ({} as NonNullable<ValidationData['strategy_health']>);
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-zinc-100 font-sans p-6 pb-20">
@@ -154,7 +175,7 @@ export default function ValidationDashboard() {
                 <MetricBox label="Status" value={h.status || 'UNKNOWN'} color={h.status === 'HEALTHY' ? 'text-green-500' : 'text-red-500'} />
                 <MetricBox label="Historical Win Rate" value={`${h.historical_win_rate?.toFixed(1) || 0}%`} />
                 <MetricBox label="Recent Win Rate" value={`${h.rolling_win_rate?.toFixed(1) || 0}%`} />
-                <MetricBox label="Performance Drift" value={`${h.drift > 0 ? '-' : '+'}${Math.abs(h.drift || 0).toFixed(1)}%`} color={h.drift > 0 ? 'text-red-500' : 'text-green-500'} />
+                <MetricBox label="Performance Drift" value={`${(h.drift || 0) > 0 ? '-' : '+'}${Math.abs(h.drift || 0).toFixed(1)}%`} color={(h.drift || 0) > 0 ? 'text-red-500' : 'text-green-500'} />
               </CardContent>
             </Card>
 
@@ -235,8 +256,7 @@ export default function ValidationDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                    {(data as any).recent_signals?.map((sig: any, idx: number) => (
+                    {data?.recent_signals?.map((sig: { asset: string; confidence: number; outcome: string }, idx: number) => (
                       <tr key={idx} className="border-b border-zinc-800 hover:bg-zinc-900/50">
                         <td className="p-2 font-bold text-zinc-300">{sig.asset}</td>
                         <td className="p-2 text-zinc-400">{sig.confidence?.toFixed(1)}%</td>

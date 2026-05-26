@@ -63,7 +63,7 @@ export function PaperTradingPerformance({ currency = '$' }: PaperTradingPerforma
   );
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const summary: PerformanceSummary & { initial_capital?: number } = (performance as any)?.summary || {
+  const summary: PerformanceSummary = (performance as any)?.summary || {
     total_return: 0, sharpe: 0, sortino: 0, calmar: 0, max_drawdown: 0, win_rate: 0, profit_factor: 0, today_pnl: 0, mtd_pnl: 0, ytd_pnl: 0,
     total_trades: 0, open_trades: 0, closed_trades: 0, winning_trades: 0, losing_trades: 0
   };
@@ -163,7 +163,7 @@ export function PaperTradingPerformance({ currency = '$' }: PaperTradingPerforma
              </div>
              <div className="flex justify-between items-center opacity-70 mt-1 pt-1 border-t border-border/30">
                <span className="text-[7px] font-medium text-muted-foreground uppercase pl-0.5">Initial Cap</span>
-               <span className="text-[9px] font-mono font-bold">{currency}{(summary as any).initial_capital?.toLocaleString()}</span>
+               <span className="text-[9px] font-mono font-bold">{currency}{summary.initial_capital?.toLocaleString()}</span>
              </div>
           </div>
 

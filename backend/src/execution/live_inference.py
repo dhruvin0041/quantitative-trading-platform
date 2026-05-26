@@ -299,13 +299,13 @@ def add_upgraded_features(df, spy_df, vix_df):
     df["VIX_Change"] = vix_close.pct_change().reindex(df.index)
     df["Relative_Strength"] = df["Return"] - df["SPY_Return"]
 
+    # Ensure no trailing NaNs from forward-fillable metrics
     df[["SPY_Return", "VIX_Level", "VIX_Change", "Relative_Strength"]] = (
         df[["SPY_Return", "VIX_Level", "VIX_Change", "Relative_Strength"]]
         .ffill()
         .fillna(0)
     )
 
-    df.dropna(inplace=True)
     return df
 
 

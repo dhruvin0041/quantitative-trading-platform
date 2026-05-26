@@ -313,8 +313,11 @@ def add_advanced_features(
     df["Roll_Spread"] = np.where(cov_dp < 0, 2 * np.sqrt(-cov_dp), 0)
 
     # Amihud Liquidity Proxy (Absolute return / Dollar Volume)
-    df["Illiquidity_Amihud"] = df["Log_Ret"].abs() / df["Dollar_Volume"]
-    df["Illiquidity_Amihud"] = df["Illiquidity_Amihud"].rolling(20).mean()
+    # Add 1e-9 to prevent division by zero which causes inf/NaN and drops recent data
+    df["Illiquidity_Amihud"] = df["Log_Ret"].abs() / (df["Dollar_Volume"] + 1e-9)
+    df["Illiquidity_Amihud"] = (
+        df["Illiquidity_Amihud"].rolling(20).mean().ffill().fillna(0)
+    )
 
     # --- Cross Asset Features (SPY Beta & Correlation) ---
     try:
@@ -344,7 +347,11 @@ def add_advanced_features(
         df["Market_Beta_20"] = 1.0
         df["Rel_Perf_SPY_20"] = 0.0
 
-    df.dropna(inplace=True)
+    # Ensure no trailing NaNs from forward-fillable metrics
+    df["VIX"] = df["VIX"].ffill().fillna(0)
+    df["Treasury_10Y"] = df["Treasury_10Y"].ffill().fillna(0)
+
+    # Return full dataframe to preserve chart alignment
     return df
 
 

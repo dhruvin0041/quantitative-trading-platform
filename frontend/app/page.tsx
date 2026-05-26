@@ -5,7 +5,7 @@ import { PriceChart } from '@/components/dashboard/PriceChart';
 import { SignalIntelligence } from '@/components/dashboard/SignalIntelligence';
 import { PortfolioAnalytics } from '@/components/dashboard/PortfolioAnalytics';
 import { RiskDashboard } from '@/components/dashboard/RiskDashboard';
-import { ChartData, UniverseStock } from '@/types';
+import { ChartData, UniverseStock, Trade } from '@/types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Activity, Cpu, Menu, ChevronRight, CheckCircle2 } from 'lucide-react';
@@ -426,7 +426,7 @@ export default function HydraTerminal() {
                           </thead>
                           <tbody>
                             {/* Display closed trades from signal_journal or recent portfolio actions */}
-                            {chartData.portfolio.recent_closed_trades?.map((trade: any, i: number) => (
+                            {chartData.portfolio.recent_closed_trades?.map((trade: Trade, i: number) => (
                               <tr key={i} className="border-b border-border/30 hover:bg-muted/30 transition-colors">
                                 <td className="px-4 py-2 font-mono text-[10px] font-bold">{trade.ticker}</td>
                                 <td className="px-4 py-2 font-mono text-[9px] opacity-70">{new Date(trade.entry_time).toLocaleDateString()}</td>

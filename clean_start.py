@@ -1,10 +1,12 @@
-import os
 import subprocess
 import time
 
+
 def kill_port(port):
     try:
-        output = subprocess.check_output(f"netstat -ano | findstr :{port}", shell=True).decode()
+        output = subprocess.check_output(
+            f"netstat -ano | findstr :{port}", shell=True
+        ).decode()
         for line in output.splitlines():
             if "LISTENING" in line:
                 pid = line.strip().split()[-1]
@@ -12,6 +14,7 @@ def kill_port(port):
                 subprocess.run(f"taskkill /PID {pid} /F", shell=True)
     except Exception:
         pass
+
 
 print("Cleaning up ports 8000 and 3000...")
 kill_port(8000)

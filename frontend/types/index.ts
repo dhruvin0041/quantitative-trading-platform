@@ -60,6 +60,40 @@ export interface Position {
   market: string;
 }
 
+export interface Trade {
+  ticker: string;
+  entry_time: string;
+  exit_time: string;
+  entry_price?: number;
+  exit_price?: number;
+  realized_pnl: number;
+  pnl_pct?: number;
+  outcome?: 'WIN' | 'LOSS';
+}
+
+export interface BacktestSignal {
+  date: string;
+  ticker: string;
+  signal: string;
+  confidence: number;
+  actual_return: number;
+}
+
+export interface BacktestSummary {
+  ticker: string;
+  period: string;
+  win_rate: number;
+  profit_factor: number;
+  sharpe_ratio: number;
+  max_drawdown: number;
+  vetoed_rate: number;
+  coverage: number;
+  signal_coverage?: number; // Support for alternate field name
+  best_signal?: BacktestSignal;
+  worst_signal?: BacktestSignal;
+  monthly_win_rates: { month: string; win_rate: number }[];
+}
+
 export interface Portfolio {
   cash: number;
   equity: number;
@@ -81,7 +115,7 @@ export interface Portfolio {
   losing_trades: number;
   win_rate: number;
   profit_factor: number;
-  recent_closed_trades?: any[];
+  recent_closed_trades?: Trade[];
 }
 
 export interface ChartData {
