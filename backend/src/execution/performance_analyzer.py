@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 from src.execution.signal_learning import SignalPerformanceResearch
+from src.execution.statistical_engine import StatisticalValidityEngine
 
 
 class PerformanceAnalyzer:
@@ -13,6 +14,7 @@ class PerformanceAnalyzer:
     def __init__(self, risk_free_rate=0.04):
         self.risk_free_rate = risk_free_rate
         self.signal_research = SignalPerformanceResearch()
+        self.stat_engine = StatisticalValidityEngine()
 
     def analyze(self, snapshots, trade_history, initial_capital, signal_data=None):
         if not snapshots:

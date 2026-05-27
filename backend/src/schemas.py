@@ -65,9 +65,15 @@ class XAIBlock(BaseModel):
 
 
 class Projections(BaseModel):
-    floor: float
-    median: float
-    ceiling: float
+    p10: float
+    p50: float
+    p90: float
+    confidence: float
+    reliability: str
+    # Legacy compatibility
+    floor: Optional[float] = 0.0
+    median: Optional[float] = 0.0
+    ceiling: Optional[float] = 0.0
 
 
 class RiskMetrics(BaseModel):
@@ -122,14 +128,27 @@ class PredictResponse(BaseModel):
     confidence_score: float
     uncertainty_score: float
     signal_note: Optional[str] = None
+    
+    # Phase 10: Institutional Explainability
+    signal_reasoning: str = ""
+    veto_reason: str = ""
+    timing_reason: str = ""
+    forecast_reason: str = ""
+    rr_reason: str = ""
+    
     market_regime: str
-    market_regime_v2: str = "NEUTRAL"  # Detailed regime from 2.0 engine
+    market_regime_v2: str = "NEUTRAL"
     volatility_state: str
     volume_ratio: float
     is_point_forecast: bool = False
     models: Dict[str, ModelPrediction]
     model_weights: Dict[str, ModelWeight] = {}
     projections: Projections
+    trade_parameters: Dict[str, Any] = {}
+    timing_intelligence: Dict[str, Any] = {}
+    confidence_breakdown: Dict[str, float] = {}
+    explainable_confidence: float = 0.0
+    
     qualitative_alpha: Optional[str] = None
     xai: Optional[XAIBlock] = None
     sentiment_score: Optional[float] = None

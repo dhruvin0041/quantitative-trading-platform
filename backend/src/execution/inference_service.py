@@ -3,6 +3,12 @@ import logging
 import numpy as np
 from datetime import datetime
 
+from src.execution.consensus_engine import WeightedConsensusEngine
+from src.execution.forecast_engine import ForecastCalibrationEngine
+from src.execution.trade_engine import TradeConstructionEngine
+from src.execution.timing_engine import PredictiveTimingEngine
+from src.execution.confidence_engine import ConfidenceBreakdownEngine
+
 from src.execution.live_inference import (
     fetch_live_data,
     fetch_live_news,
@@ -61,6 +67,8 @@ class InferenceService:
         self.consensus_engine = WeightedConsensusEngine()
         self.forecast_engine = ForecastCalibrationEngine()
         self.trade_engine = TradeConstructionEngine()
+        self.timing_engine = PredictiveTimingEngine()
+        self.confidence_engine = ConfidenceBreakdownEngine()
         self.paper_engine = paper_engine
         self.perf_analyzer = perf_analyzer
         self.journal = signal_journal
@@ -142,20 +150,20 @@ class InferenceService:
             "DQN": dqn_p,
         }
 
-        # Apply Dynamic Weights
-        ensemble_p = np.zeros(3)
-        for model_name, p in base_probs.items():
-            w = model_weights_raw.get(model_name, {"weight": 0.25})["weight"]
-            ensemble_p += p * w
-
-        final_prob_raw = float(np.max(ensemble_p))
+        # Phase 1: Weighted Consensus Engine
+        extracted_weights = {k: v.get("weight", 0.25) for k, v in model_weights_raw.items()}
+        agreement_data = self.consensus_engine.compute_agreement(base_probs, extracted_weights)
+        
+        final_prob_raw = agreement_data["agreement_score"] / 100.0
         cal_results = self.calibration_engine.calibrate(
             final_prob_raw * 100, ticker, asset_class
         )
         calibrated_prob = cal_results["calibrated_prob"]
         calibration_metrics = cal_results["metrics"]
 
-        # 5. Signal Selection (V2.0 Pipeline)
+        # 5. Signal Selection & Predictive Timing
+        timing_data = self.timing_engine.calculate_timing_features(ticker_df_risk)
+        
         regime_id_map = {"BEAR": 0, "NEUTRAL": 1, "BULL": 2}
         regime_id = regime_id_map.get(market_regime, 1)
         vol_id = 1
@@ -193,16 +201,27 @@ class InferenceService:
             "hedge_ratio_spy": f"{beta:.2f}",
         }
 
+        # Run multi-agent consensus with agreement data
         consensus_result = self.orchestrator.run_consensus(
-            ensemble_p, consensus_risk_input
+            agreement_data, consensus_risk_input
         )
         final_signal_idx = consensus_result["final_action_idx"]
         signals_map = {0: "SELL", 1: "HOLD", 2: "BUY"}
         pre_signal = signals_map[final_signal_idx]
 
+        # Phase 5: Confidence Decomposition
+        confidence_data = self.confidence_engine.decompose_confidence(
+            regime=regime_detailed,
+            volatility_ratio=vol_ratio,
+            agreement_score=agreement_data["agreement_score"],
+            ev_pct=ev_metrics["ev_pct"],
+            timing_score=timing_data["timing_score"],
+            asset_class=asset_class
+        )
+
         # Multi-Layer Quality Score
         quality_metrics = self.quality_engine.calculate_score(
-            consensus_agreement=float(consensus_result.get("agreement", 66.0)),
+            consensus_agreement=float(agreement_data["agreement_score"]),
             calibrated_confidence=calibrated_prob,
             ev_metrics=ev_metrics,
             regime_v2=regime_detailed,
@@ -231,7 +250,7 @@ class InferenceService:
             compute_shap_explanation, self.mm.lgbm_model, tabular_row, final_signal_idx
         )
 
-        # TFT Projections via ForecastCalibrationEngine
+        # Phase 2: Forecast Calibration Engine
         tft_preds = self.mm.tft_model.predict(ts_sequence, verbose=0)[0]
         recent_vol = float(tech_snapshot.get("ATR", current_price * 0.02) / current_price)
         
@@ -244,8 +263,15 @@ class InferenceService:
             regime=regime_detailed
         )
         
-        constrained_rets = [forecast_data["p10_return"], 0, forecast_data["p50_return"], 0, forecast_data["p90_return"]]
-        is_point_forecast = False
+        # Phase 3: Trade Construction Engine
+        trade_construction = self.trade_engine.construct_trade(
+            current_price=current_price,
+            atr=float(tech_snapshot.get("ATR", current_price * 0.02)),
+            direction=final_signal if final_signal in ["BUY", "SELL"] else "HOLD",
+            regime=regime_detailed,
+            asset_class=asset_class,
+            volatility=recent_vol
+        )
 
         # News & Sentiment
         tokenizer = NewsTokenizer(max_length=updated_config["data"]["max_seq_length"])
@@ -301,17 +327,13 @@ class InferenceService:
             "veto_reason": signal_note if final_signal in ["VETOED", "HOLD"] else "None",
             "timing_reason": f"Momentum acc {timing_data['momentum_acceleration']:.2f}, Volatility expansion {timing_data['volatility_expansion']:.2f}",
             "forecast_reason": f"Bounded by {asset_class} volatility constraints. Recent Vol: {recent_vol:.2f}",
-            "rr_reason": "Dynamic construction via ATR multiples aligned with regime and volatility state.",
+            "rr_reason": trade_construction.get("reject_reason", "Dynamic construction via ATR multiples aligned with regime and volatility state."),
             
             "market_regime": market_regime,
             "market_regime_v2": regime_detailed,
-            "volatility_state": "HIGH"
-            if vol_id == 2
-            else "LOW"
-            if vol_id == 0
-            else "MEDIUM",
+            "volatility_state": "HIGH" if vol_id == 2 else "LOW" if vol_id == 0 else "MEDIUM",
             "volume_ratio": round(vol_ratio, 2),
-            "is_point_forecast": is_point_forecast,
+            "is_point_forecast": False,
             "models": {
                 "DL_FUSION": map_model_output(dl_preds_raw),
                 "XGB_AGENT": map_model_output(xgb_preds_raw),
@@ -327,10 +349,13 @@ class InferenceService:
                 for k, v in model_weights_raw.items()
             },
             "projections": {
-                "floor": round(current_price * (1 + float(constrained_rets[0])), 2),
-                "median": round(current_price * (1 + float(constrained_rets[2])), 2),
-                "ceiling": round(current_price * (1 + float(constrained_rets[4])), 2),
+                "p10": round(forecast_data["p10_price"], 2),
+                "p50": round(forecast_data["p50_price"], 2),
+                "p90": round(forecast_data["p90_price"], 2),
+                "confidence": round(forecast_data["forecast_confidence"], 1),
+                "reliability": forecast_data["forecast_reliability"]
             },
+            "trade_parameters": trade_construction,
             "technical_snapshot": tech_snapshot,
             "qualitative_alpha": qual_reason,
             "xai": shap_xai,
@@ -340,9 +365,7 @@ class InferenceService:
                 score=quality_metrics["score"],
                 grade=quality_metrics["grade"],
                 explanation=quality_metrics["explanation"],
-                layers_passed=["CONSENSUS", "REGIME"]
-                if quality_metrics["score"] > 50
-                else [],
+                layers_passed=["CONSENSUS", "REGIME"] if quality_metrics["score"] > 50 else [],
                 layers_failed=["EV"] if ev_metrics["ev_pct"] <= 0 else [],
             ),
             "calibration": CalibrationMetrics(**calibration_metrics),
@@ -361,7 +384,7 @@ class InferenceService:
             ticker, ticker_df_risk
         )
         ai_report_stub = {
-            "Models": {"Meta_Model_Status": "Live Consensus V2.0 Active"},
+            "Models": {"Meta_Model_Status": "Live Consensus V2.1 Active"},
             "Risk": {"V2_Quality_Score": quality_metrics["score"]},
         }
 
@@ -413,12 +436,10 @@ class InferenceService:
                     "position_size": risk_metrics_obj.kelly_fraction,
                     "confidence": calibrated_prob,
                     "uncertainty": uncertainty * 100,
-                    "agreement": consensus_result.get("agreement", 0),
+                    "agreement": agreement_data["agreement_score"],
                     "market_regime": market_regime,
                     "market_regime_v2": regime_detailed,
-                    "volatility_regime": "HIGH"
-                    if vol_id == 2
-                    else ("LOW" if vol_id == 0 else "MEDIUM"),
+                    "volatility_regime": "HIGH" if vol_id == 2 else ("LOW" if vol_id == 0 else "MEDIUM"),
                     "model_consensus": json.dumps(response_data["models"]),
                     "quality_score": quality_metrics["score"],
                     "quality_grade": quality_metrics["grade"],

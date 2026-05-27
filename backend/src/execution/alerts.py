@@ -22,30 +22,45 @@ class AlertSystem:
 
     def check_performance(self, performance_summary):
         alerts = []
-        if performance_summary.get("max_drawdown", 0) < self.thresholds["max_drawdown"]:
+
+        def get_val(key):
+            val = performance_summary.get(key, 0)
+            if isinstance(val, str):
+                try:
+                    # Strip symbols like % if present
+                    clean_val = val.replace("%", "").split(" ")[0]
+                    return float(clean_val)
+                except (ValueError, IndexError):
+                    return None
+            return float(val)
+
+        max_dd = get_val("max_drawdown")
+        if max_dd is not None and max_dd < self.thresholds["max_drawdown"]:
             alerts.append(
                 {
                     "type": "PERFORMANCE_DEGRADATION",
                     "severity": "CRITICAL",
-                    "message": f"Max Drawdown ({performance_summary['max_drawdown']:.2f}%) exceeded threshold.",
+                    "message": f"Max Drawdown ({max_dd:.2f}%) exceeded threshold.",
                 }
             )
 
-        if performance_summary.get("sharpe", 0) < self.thresholds["sharpe_min"]:
+        sharpe = get_val("sharpe")
+        if sharpe is not None and sharpe < self.thresholds["sharpe_min"]:
             alerts.append(
                 {
                     "type": "PERFORMANCE_WARNING",
                     "severity": "HIGH",
-                    "message": f"Sharpe Ratio ({performance_summary['sharpe']:.2f}) is below acceptable institutional limits.",
+                    "message": f"Sharpe Ratio ({sharpe:.2f}) is below acceptable institutional limits.",
                 }
             )
 
-        if performance_summary.get("win_rate", 0) < self.thresholds["win_rate_min"]:
+        win_rate = get_val("win_rate")
+        if win_rate is not None and win_rate < self.thresholds["win_rate_min"]:
             alerts.append(
                 {
                     "type": "MODEL_VALIDATION_FAILURE",
                     "severity": "MEDIUM",
-                    "message": f"Win Rate ({performance_summary['win_rate']:.2f}%) dropped below threshold.",
+                    "message": f"Win Rate ({win_rate:.2f}%) dropped below threshold.",
                 }
             )
 
