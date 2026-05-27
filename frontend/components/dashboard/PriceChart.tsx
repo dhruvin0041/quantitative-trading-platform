@@ -80,10 +80,10 @@ export function PriceChart({ data, loading }: PriceChartProps) {
       candlestickSeriesRef.current.setData(data.candles);
       
       if (data.clouds && data.clouds.length > 0) {
-        bbUpperSeriesRef.current.setData(data.clouds.map(c => ({ time: c.time, value: c.bb_upper })));
-        bbLowerSeriesRef.current.setData(data.clouds.map(c => ({ time: c.time, value: c.bb_lower })));
-        ribbonUpperSeriesRef.current.setData(data.clouds.map(c => ({ time: c.time, value: c.ribbon_upper })));
-        ribbonLowerSeriesRef.current.setData(data.clouds.map(c => ({ time: c.time, value: c.ribbon_lower })));
+        bbUpperSeriesRef.current.setData(data.clouds.filter(c => c.bb_upper !== null).map(c => ({ time: c.time, value: c.bb_upper as number })));
+        bbLowerSeriesRef.current.setData(data.clouds.filter(c => c.bb_lower !== null).map(c => ({ time: c.time, value: c.bb_lower as number })));
+        ribbonUpperSeriesRef.current.setData(data.clouds.filter(c => c.ribbon_upper !== null).map(c => ({ time: c.time, value: c.ribbon_upper as number })));
+        ribbonLowerSeriesRef.current.setData(data.clouds.filter(c => c.ribbon_lower !== null).map(c => ({ time: c.time, value: c.ribbon_lower as number })));
       }
 
       if (data.historical_markers && data.historical_markers.length > 0) {
@@ -129,10 +129,10 @@ export function PriceChart({ data, loading }: PriceChartProps) {
     candlestickSeriesRef.current.setData(data.candles);
 
     if (data.clouds && data.clouds.length > 0 && bbUpperSeriesRef.current && bbLowerSeriesRef.current && ribbonUpperSeriesRef.current && ribbonLowerSeriesRef.current) {
-      bbUpperSeriesRef.current.setData(data.clouds.map(c => ({ time: c.time, value: c.bb_upper })));
-      bbLowerSeriesRef.current.setData(data.clouds.map(c => ({ time: c.time, value: c.bb_lower })));
-      ribbonUpperSeriesRef.current.setData(data.clouds.map(c => ({ time: c.time, value: c.ribbon_upper })));
-      ribbonLowerSeriesRef.current.setData(data.clouds.map(c => ({ time: c.time, value: c.ribbon_lower })));
+      bbUpperSeriesRef.current.setData(data.clouds.filter(c => c.bb_upper !== null).map(c => ({ time: c.time, value: c.bb_upper as number })));
+      bbLowerSeriesRef.current.setData(data.clouds.filter(c => c.bb_lower !== null).map(c => ({ time: c.time, value: c.bb_lower as number })));
+      ribbonUpperSeriesRef.current.setData(data.clouds.filter(c => c.ribbon_upper !== null).map(c => ({ time: c.time, value: c.ribbon_upper as number })));
+      ribbonLowerSeriesRef.current.setData(data.clouds.filter(c => c.ribbon_lower !== null).map(c => ({ time: c.time, value: c.ribbon_lower as number })));
     }
 
     if (data.historical_markers && data.historical_markers.length > 0) {

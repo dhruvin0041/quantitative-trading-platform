@@ -72,7 +72,37 @@ def clean_optimization_artifacts(ticker=None, universal=False):
     clean_cache()
 
 
-if __name__ == "__main__":
+def clean_data_state():
+    """Deletes institutional data state: Signal Journal and Paper Trading history."""
+    files = [
+        "data/empirical_validation.db",
+        "data/paper_trading.json",
+    ]
+    print("--- Cleaning Data State (Zero-State Protocol) ---")
+    for f in files:
+        if os.path.exists(f):
+            try:
+                os.remove(f)
+                print(f"  [DELETED] {f}")
+            except Exception as e:
+                print(f"  [ERROR] Could not delete {f}: {e}")
+
+
+def main(argv=None):
+    import sys
+    if argv is None:
+        argv = sys.argv[1:]
+
+    # Check for --full flag
+    if "--full" in argv:
+        clean_data_state()
+
     # Default behavior for manual execution
     clean_training_artifacts()
     print("\n>>> System artifacts cleaned. <<<")
+    if "--full" in argv:
+        print(">>> Institutional Zero-State Protocol Enforced. <<<")
+
+
+if __name__ == "__main__":
+    main()

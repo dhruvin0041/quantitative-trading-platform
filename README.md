@@ -131,7 +131,7 @@ npm run dev
 ### Institutional Commands
 *   **System Audit:** `python backend/scripts/ops/generate_report.py --audit`
 *   **Signal Learning:** `python backend/scripts/ops/analyze_signals.py`
-*   **Clean Artifacts:** `python backend/scripts/ops/clean_artifacts.py`
+*   **Clean Artifacts:** `python backend/scripts/ops/clean_artifacts.py [--full]`
 
 ## 📁 Repository Structure
 *   `backend/src/execution/`: Core Signal Engine V2.0, Risk, and Portfolio logic.

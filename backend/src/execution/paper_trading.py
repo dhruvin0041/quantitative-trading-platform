@@ -328,6 +328,7 @@ class PaperTradingEngine:
             "cash": round(self.capital, 2),
             "equity": round(total_equity, 2),
             "base_currency": self.base_currency,
+            "initial_capital": self.initial_capital,
             "return_pct": round(((total_equity / self.initial_capital) - 1) * 100, 2),
             "today_pnl": round(today_pnl, 2),
             "mtd_pnl": round(total_equity - self.initial_capital, 2),
@@ -341,13 +342,14 @@ class PaperTradingEngine:
 
     def calculate_var(self, returns_history, confidence_level=0.95):
         """Value at Risk (Historical)"""
-        if len(returns_history) < 20:
+        if len(returns_history) < 5:
             return 0.0
         return np.percentile(returns_history, (1 - confidence_level) * 100)
 
     def calculate_expected_shortfall(self, returns_history, confidence_level=0.95):
         """Expected Shortfall (CVaR)"""
-        if len(returns_history) < 20:
+        if len(returns_history) < 5:
             return 0.0
         var = self.calculate_var(returns_history, confidence_level)
-        return np.mean([r for r in returns_history if r <= var])
+        tail_returns = [r for r in returns_history if r <= var]
+        return np.mean(tail_returns) if tail_returns else 0.0

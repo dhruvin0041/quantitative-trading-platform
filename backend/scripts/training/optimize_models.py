@@ -14,12 +14,8 @@ from sklearn.model_selection import TimeSeriesSplit
 os.makedirs("models", exist_ok=True)
 os.makedirs("configs", exist_ok=True)
 
-# Load training data saved by train.py
-X_train = joblib.load("artifacts/X_train_tabular.joblib")
-y_train = joblib.load("artifacts/y_train_sig.joblib")
 
-
-def objective_xgb(trial):
+def objective_xgb(trial, X_train, y_train):
     params = {
         "n_estimators": trial.suggest_categorical(
             "n_estimators", [100, 300, 600, 1000]
@@ -67,7 +63,7 @@ def objective_xgb(trial):
     return np.mean(scores) if scores else 0.5
 
 
-def objective_lgbm(trial):
+def objective_lgbm(trial, X_train, y_train):
     params = {
         "n_estimators": trial.suggest_categorical(
             "n_estimators", [100, 300, 600, 1000]
@@ -120,7 +116,7 @@ def objective_lgbm(trial):
     return np.mean(scores) if scores else 0.5
 
 
-def objective_catboost(trial):
+def objective_catboost(trial, X_train, y_train):
     params = {
         "iterations": trial.suggest_categorical("iterations", [100, 300, 600, 1000]),
         "depth": trial.suggest_categorical("depth", [4, 6, 8, 10]),
@@ -157,7 +153,7 @@ def objective_catboost(trial):
     return np.mean(scores) if scores else 0.5
 
 
-def objective_rf(trial):
+def objective_rf(trial, X_train, y_train):
     params = {
         "n_estimators": trial.suggest_categorical(
             "n_estimators", [100, 200, 500, 1000]
@@ -192,6 +188,15 @@ def objective_rf(trial):
 
 
 def run_optimization():
+    # Load training data saved by train.py
+    if not os.path.exists("artifacts/X_train_tabular.joblib") or not os.path.exists("artifacts/y_train_sig.joblib"):
+        print(" [ERROR] Required data artifacts not found. Run data preparation first.")
+        return False
+
+    print("--- Loading Data for Bayesian Optimization ---")
+    X_train = joblib.load("artifacts/X_train_tabular.joblib")
+    y_train = joblib.load("artifacts/y_train_sig.joblib")
+
     print("Running Bayesian Optimization for 4 models with 4 choices per parameter...")
     for model_name, obj_func in [
         ("xgb", objective_xgb),
@@ -201,10 +206,11 @@ def run_optimization():
     ]:
         print(f"\nOptimizing {model_name}...")
         study = optuna.create_study(direction="maximize")
-        study.optimize(obj_func, n_trials=50)
+        study.optimize(lambda t: obj_func(t, X_train, y_train), n_trials=50)
         print(f"Best {model_name} AUC: {study.best_value}")
         with open(f"configs/best_{model_name}_params.json", "w") as f:
             json.dump(study.best_params, f, indent=2)
+    return True
 
 
 if __name__ == "__main__":

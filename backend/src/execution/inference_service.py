@@ -31,6 +31,7 @@ from src.schemas import (
     SignalQuality,
     ModelWeight,
     ExpectedValueMetrics,
+    CalibrationMetrics,
 )
 
 logger = logging.getLogger(__name__)
@@ -57,6 +58,9 @@ class InferenceService:
         self.orchestrator = orchestrator
         self.router = smart_router
         self.report_gen = report_gen
+        self.consensus_engine = WeightedConsensusEngine()
+        self.forecast_engine = ForecastCalibrationEngine()
+        self.trade_engine = TradeConstructionEngine()
         self.paper_engine = paper_engine
         self.perf_analyzer = perf_analyzer
         self.journal = signal_journal
@@ -145,9 +149,11 @@ class InferenceService:
             ensemble_p += p * w
 
         final_prob_raw = float(np.max(ensemble_p))
-        calibrated_prob = self.calibration_engine.calibrate(
+        cal_results = self.calibration_engine.calibrate(
             final_prob_raw * 100, ticker, asset_class
         )
+        calibrated_prob = cal_results["calibrated_prob"]
+        calibration_metrics = cal_results["metrics"]
 
         # 5. Signal Selection (V2.0 Pipeline)
         regime_id_map = {"BEAR": 0, "NEUTRAL": 1, "BULL": 2}
@@ -225,10 +231,21 @@ class InferenceService:
             compute_shap_explanation, self.mm.lgbm_model, tabular_row, final_signal_idx
         )
 
-        # TFT Projections
+        # TFT Projections via ForecastCalibrationEngine
         tft_preds = self.mm.tft_model.predict(ts_sequence, verbose=0)[0]
-        constrained_rets = np.clip(tft_preds, -0.20, 0.20)
-        is_point_forecast = np.all(np.isclose(constrained_rets, constrained_rets[0]))
+        recent_vol = float(tech_snapshot.get("ATR", current_price * 0.02) / current_price)
+        
+        forecast_data = self.forecast_engine.calibrate_forecast(
+            raw_forecasts=tft_preds,
+            current_price=current_price,
+            atr=float(tech_snapshot.get("ATR", current_price * 0.02)),
+            volatility=recent_vol,
+            asset_class=asset_class,
+            regime=regime_detailed
+        )
+        
+        constrained_rets = [forecast_data["p10_return"], 0, forecast_data["p50_return"], 0, forecast_data["p90_return"]]
+        is_point_forecast = False
 
         # News & Sentiment
         tokenizer = NewsTokenizer(max_length=updated_config["data"]["max_seq_length"])
@@ -247,9 +264,14 @@ class InferenceService:
         )
         perf_data = perf_summary.get("summary", {})
 
+        # Dynamic Risk Metrics from Paper Engine
+        returns_history = [t.get("pnl", 0) / self.paper_engine.initial_capital for t in self.paper_engine.history]
+        var_95 = self.paper_engine.calculate_var(returns_history)
+        cvar = self.paper_engine.calculate_expected_shortfall(returns_history)
+
         risk_metrics_obj = RiskMetrics(
-            var_95=0.0,  # calc as needed
-            cvar=0.0,
+            var_95=float(var_95),
+            cvar=float(cvar),
             beta=float(beta),
             kelly_fraction=min(0.05, float(risk_profile["raw_fraction"])),
             target_size=float(
@@ -273,6 +295,14 @@ class InferenceService:
             "confidence_score": round(calibrated_prob, 1),
             "uncertainty_score": round(uncertainty * 100, 1),
             "signal_note": signal_note,
+            
+            # Phase 10: Institutional Explainability
+            "signal_reasoning": f"Consensus directional agreement ({agreement_data['dominant_direction']}) crossed confidence threshold with favorable EV.",
+            "veto_reason": signal_note if final_signal in ["VETOED", "HOLD"] else "None",
+            "timing_reason": f"Momentum acc {timing_data['momentum_acceleration']:.2f}, Volatility expansion {timing_data['volatility_expansion']:.2f}",
+            "forecast_reason": f"Bounded by {asset_class} volatility constraints. Recent Vol: {recent_vol:.2f}",
+            "rr_reason": "Dynamic construction via ATR multiples aligned with regime and volatility state.",
+            
             "market_regime": market_regime,
             "market_regime_v2": regime_detailed,
             "volatility_state": "HIGH"
@@ -315,8 +345,12 @@ class InferenceService:
                 else [],
                 layers_failed=["EV"] if ev_metrics["ev_pct"] <= 0 else [],
             ),
+            "calibration": CalibrationMetrics(**calibration_metrics),
             "expected_value": ExpectedValueMetrics(**ev_metrics),
             "multi_timeframe_consensus": mtf_consensus,
+            "timing_intelligence": timing_data,
+            "confidence_breakdown": confidence_data["confidence_breakdown"],
+            "explainable_confidence": confidence_data["explainable_confidence"],
             "asset_class": asset_class,
             "asset_context": asset_context,
             "metadata": metadata,

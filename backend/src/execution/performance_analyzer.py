@@ -137,33 +137,43 @@ class PerformanceAnalyzer:
         if signal_data is not None:
             quality_research = self.signal_research.analyze_quality_buckets(signal_data)
 
+        summary_metrics = {
+            "total_return": inception_return_pct,
+            "sharpe": sharpe,
+            "sortino": sortino,
+            "calmar": calmar,
+            "max_drawdown": max_dd * 100,
+            "win_rate": win_rate * 100,
+            "profit_factor": profit_factor,
+            "today_pnl": today_pnl,
+            "mtd_pnl": mtd_pnl,
+            "ytd_pnl": ytd_pnl,
+            "inception_pnl": inception_pnl,
+            "realized_pnl": realized_pnl,
+            "unrealized_pnl": unrealized_pnl,
+            "total_trades": total_trades,
+            "open_trades": total_trades - closed_trades_count,
+            "closed_trades": closed_trades_count,
+            "winning_trades": wins_count,
+            "losing_trades": losses_count,
+            "initial_capital": initial_capital,
+            "peak_equity": peak_info["value"],
+            "peak_date": peak_info["date"],
+            "trough_equity": trough_info["value"],
+            "trough_date": trough_info["date"],
+            "expectancy": expectancy,
+        }
+        
+        stat_validity = self.stat_engine.validate_statistics(
+            daily_returns.tolist() if not daily_returns.empty else [],
+            trade_history if trade_history else [],
+            summary_metrics
+        )
+
         return {
-            "summary": {
-                "total_return": inception_return_pct,
-                "sharpe": sharpe,
-                "sortino": sortino,
-                "calmar": calmar,
-                "max_drawdown": max_dd * 100,
-                "win_rate": win_rate * 100,
-                "profit_factor": profit_factor,
-                "today_pnl": today_pnl,
-                "mtd_pnl": mtd_pnl,
-                "ytd_pnl": ytd_pnl,
-                "inception_pnl": inception_pnl,
-                "realized_pnl": realized_pnl,
-                "unrealized_pnl": unrealized_pnl,
-                "total_trades": total_trades,
-                "open_trades": total_trades - closed_trades_count,
-                "closed_trades": closed_trades_count,
-                "winning_trades": wins_count,
-                "losing_trades": losses_count,
-                "initial_capital": initial_capital,
-                "peak_equity": peak_info["value"],
-                "peak_date": peak_info["date"],
-                "trough_equity": trough_info["value"],
-                "trough_date": trough_info["date"],
-                "expectancy": expectancy,
-            },
+            "summary": stat_validity["validated_metrics"],
+            "confidence_intervals": stat_validity["confidence_intervals"],
+            "sample_sizes": stat_validity["sample_sizes"],
             "returns": {
                 "daily": daily_returns.tail(30).to_dict(),
                 "monthly": monthly_returns.to_dict(),

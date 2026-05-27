@@ -1,6 +1,9 @@
 tensorflow
 torch
 xgboost
+lightgbm
+catboost
+mlflow
 pandas
 numpy
 scikit-learn
@@ -17,7 +20,7 @@ seaborn
 statsmodels
 psutil
 python-dotenv
-google-generativeai
+google-genai
 networkx
 shap
 numba

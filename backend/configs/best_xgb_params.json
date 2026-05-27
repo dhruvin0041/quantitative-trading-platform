@@ -1,15 +1,15 @@
 {
-  "n_estimators": 100,
-  "max_depth": 12,
-  "lr": 0.001,
-  "subsample": 1.0,
-  "colsample_bytree": 1.0,
-  "min_child_weight": 5,
-  "gamma": 1e-08,
-  "reg_alpha": 0.1,
-  "reg_lambda": 1.0,
-  "max_bin": 384,
-  "colsample_bylevel": 0.85,
-  "max_delta_step": 5,
-  "scale_pos_weight": 1
+  "n_estimators": 1000,
+  "max_depth": 6,
+  "lr": 0.01,
+  "subsample": 0.85,
+  "colsample_bytree": 0.7,
+  "min_child_weight": 20,
+  "gamma": 5.0,
+  "reg_alpha": 10.0,
+  "reg_lambda": 0.1,
+  "max_bin": 256,
+  "colsample_bylevel": 0.5,
+  "max_delta_step": 1,
+  "scale_pos_weight": 10
 }

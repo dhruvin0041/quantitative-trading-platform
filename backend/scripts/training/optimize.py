@@ -24,36 +24,9 @@ from src.features.sequence_builder import create_time_series_sequences
 from datetime import datetime
 
 # ==========================================
-# UNIVERSAL CLI ARGUMENTS
-# ==========================================
-parser = argparse.ArgumentParser(description="Hybrid 5-Model Ensemble Optimizer")
-parser.add_argument("--ticker", type=str, default="AAPL", help="Stock ticker symbol")
-parser.add_argument(
-    "--trials", type=int, default=50, help="Number of Optuna trials (default: 50)"
-)
-parser.add_argument("--start", type=str, default="2020-01-01", help="Start date")
-parser.add_argument(
-    "--end", type=str, default=datetime.now().strftime("%Y-%m-%d"), help="End date"
-)
-args = parser.parse_args()
-
-TICKER = args.ticker.upper()
-N_TRIALS = args.trials
-START = args.start
-END = args.end
-
-# ==========================================
-# FETCH DATA ONCE
-# ==========================================
-print(f"--- Preparing Optimization Data for {TICKER} ---")
-df_raw = fetch_historical_data(TICKER, start_date=START, end_date=END)
-df_features = add_advanced_features(df_raw.copy())
-
-
-# ==========================================
 # OBJECTIVE FUNCTION
 # ==========================================
-def objective(trial):
+def objective(trial, df_features):
     # 1. Labeling Hyperparameters
     tp_mult = trial.suggest_categorical("tp_atr_multiplier", [1.0, 1.5, 2.0, 3.0])
     sl_mult = trial.suggest_categorical("sl_atr_multiplier", [0.5, 1.0, 1.5, 2.0])
@@ -183,18 +156,54 @@ def objective(trial):
     return accuracy
 
 
-if __name__ == "__main__":
+def run_optuna_optimization(ticker, n_trials=50, start="2020-01-01", end=None):
+    if end is None:
+        end = datetime.now().strftime("%Y-%m-%d")
+    
+    ticker = ticker.upper()
+
     from scripts.ops.clean_artifacts import clean_optimization_artifacts
+    clean_optimization_artifacts(ticker=ticker)
 
-    clean_optimization_artifacts(ticker=TICKER)
+    # ==========================================
+    # FETCH DATA ONCE
+    # ==========================================
+    print(f"--- Preparing Optimization Data for {ticker} ---")
+    df_raw = fetch_historical_data(ticker, start_date=start, end_date=end)
+    df_features = add_advanced_features(df_raw.copy())
 
-    print(f"\nStarting Hybrid 5-Model Optimization for {TICKER}...")
+    print(f"\nStarting Hybrid 5-Model Optimization for {ticker}...")
     study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=N_TRIALS)
+    study.optimize(lambda t: objective(t, df_features), n_trials=n_trials)
 
     print(f"\nBEST ACCURACY: {study.best_value * 100:.2f}%")
 
     os.makedirs("configs", exist_ok=True)
-    with open(f"configs/optimized_params_{TICKER}.json", "w") as f:
+    output_path = f"configs/optimized_params_{ticker}.json"
+    with open(output_path, "w") as f:
         json.dump(study.best_params, f, indent=4)
-    print(f"Results saved to configs/optimized_params_{TICKER}.json")
+    print(f"Results saved to {output_path}")
+    return True
+
+
+if __name__ == "__main__":
+    # ==========================================
+    # UNIVERSAL CLI ARGUMENTS
+    # ==========================================
+    parser = argparse.ArgumentParser(description="Hybrid 5-Model Ensemble Optimizer")
+    parser.add_argument("--ticker", type=str, default="AAPL", help="Stock ticker symbol")
+    parser.add_argument(
+        "--trials", type=int, default=50, help="Number of Optuna trials (default: 50)"
+    )
+    parser.add_argument("--start", type=str, default="2020-01-01", help="Start date")
+    parser.add_argument(
+        "--end", type=str, default=datetime.now().strftime("%Y-%m-%d"), help="End date"
+    )
+    args = parser.parse_args()
+
+    run_optuna_optimization(
+        ticker=args.ticker,
+        n_trials=args.trials,
+        start=args.start,
+        end=args.end
+    )

@@ -1,15 +1,14 @@
 import numpy as np
 from typing import Dict
 
-
 class AlphaAgent:
     """
     Maximizes expected return using hybrid ensemble signals.
     """
 
-    def generate_alpha_signal(self, ensemble_p: np.ndarray):
-        signal_idx = int(np.argmax(ensemble_p))
-        confidence = float(ensemble_p[signal_idx])
+    def generate_alpha_signal(self, agreement_data: Dict):
+        signal_idx = agreement_data["dominant_idx"]
+        confidence = agreement_data["agreement_score"] / 100.0
         return {"signal_idx": signal_idx, "confidence": confidence}
 
 
@@ -69,9 +68,9 @@ class InstitutionalOrchestrator:
         self.risk_agent = RiskAgent()
         self.execution_agent = ExecutionAgent()
 
-    def run_consensus(self, ensemble_p, risk_metrics):
+    def run_consensus(self, agreement_data: Dict, risk_metrics: Dict):
         # 1. Generate Alpha
-        alpha = self.alpha_agent.generate_alpha_signal(ensemble_p)
+        alpha = self.alpha_agent.generate_alpha_signal(agreement_data)
 
         # 2. Risk Validation (The Veto)
         risk_check = self.risk_agent.validate_trade(alpha, risk_metrics)
@@ -94,4 +93,5 @@ class InstitutionalOrchestrator:
                 "execution": execution,
             },
             "consensus_status": "APPROVED" if risk_check["is_safe"] else "VETOED",
+            "agreement": agreement_data["agreement_score"]
         }
