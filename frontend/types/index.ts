@@ -169,6 +169,17 @@ export interface ChartData {
   technical_snapshot: TechnicalSnapshot;
   qualitative_alpha?: string | null;
   
+  // Phase 10: Institutional Explainability
+  signal_reasoning?: string;
+  veto_reason?: string;
+  timing_reason?: string;
+  forecast_reason?: string;
+  rr_reason?: string;
+  timing_intelligence?: Record<string, unknown>;
+  confidence_breakdown?: Record<string, number>;
+  explainable_confidence?: number;
+  trade_parameters?: Record<string, unknown>;
+  
   // Signal V2.0 Fields
   quality?: SignalQuality;
   expected_value?: ExpectedValueMetrics;

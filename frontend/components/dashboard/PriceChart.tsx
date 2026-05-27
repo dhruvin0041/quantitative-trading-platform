@@ -30,7 +30,6 @@ export function PriceChart({ data, loading }: PriceChartProps) {
     const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0,0,0,0.06)';
     const buyColor = isDark ? '#00E676' : '#1D7A3A';
     const sellColor = isDark ? '#FF5252' : '#C0380A';
-    const vetoColor = '#FBBF24'; // Amber-400
     const maOrange = '#FF8C38';
     const maBlue = '#4FC3F7';
     const supportLineColor = isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)';
@@ -75,32 +74,6 @@ export function PriceChart({ data, loading }: PriceChartProps) {
     ribbonUpperSeriesRef.current = chart.addSeries(LineSeries, { color: maOrange, lineWidth: 1, crosshairMarkerVisible: false });
     ribbonLowerSeriesRef.current = chart.addSeries(LineSeries, { color: maBlue, lineWidth: 1, crosshairMarkerVisible: false });
 
-    // Re-apply data if available
-    if (data && data.candles) {
-      candlestickSeriesRef.current.setData(data.candles);
-      
-      if (data.clouds && data.clouds.length > 0) {
-        bbUpperSeriesRef.current.setData(data.clouds.filter(c => c.bb_upper !== null).map(c => ({ time: c.time, value: c.bb_upper as number })));
-        bbLowerSeriesRef.current.setData(data.clouds.filter(c => c.bb_lower !== null).map(c => ({ time: c.time, value: c.bb_lower as number })));
-        ribbonUpperSeriesRef.current.setData(data.clouds.filter(c => c.ribbon_upper !== null).map(c => ({ time: c.time, value: c.ribbon_upper as number })));
-        ribbonLowerSeriesRef.current.setData(data.clouds.filter(c => c.ribbon_lower !== null).map(c => ({ time: c.time, value: c.ribbon_lower as number })));
-      }
-
-      if (data.historical_markers && data.historical_markers.length > 0) {
-        const markers = data.historical_markers.map((marker) => ({
-          time: marker.time,
-          position: (marker.action === 'BUY' ? 'belowBar' : (marker.action === 'SELL' ? 'aboveBar' : 'inBar')) as "belowBar" | "aboveBar" | "inBar",
-          color: marker.action === 'BUY' ? buyColor : (marker.action === 'SELL' ? sellColor : vetoColor),
-          shape: (marker.action === 'BUY' ? 'arrowUp' : (marker.action === 'SELL' ? 'arrowDown' : 'circle')) as "arrowUp" | "arrowDown" | "circle",
-          text: marker.action,
-          size: marker.action === 'VETOED' ? 0.5 : 1,
-        }));
-        markers.sort((a, b) => new Date(a.time as string).getTime() - new Date(b.time as string).getTime());
-        createSeriesMarkers(candlestickSeriesRef.current, markers);
-      }
-      chart.timeScale().fitContent();
-    }
-
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
         chartRef.current.applyOptions({ 
@@ -116,7 +89,7 @@ export function PriceChart({ data, loading }: PriceChartProps) {
       chart.remove();
       chartRef.current = null;
     };
-  }, [resolvedTheme, data, loading]);
+  }, [resolvedTheme]);
 
   useEffect(() => {
     if (!data || !data.candles || !chartRef.current || !candlestickSeriesRef.current) return;
@@ -124,7 +97,6 @@ export function PriceChart({ data, loading }: PriceChartProps) {
     const isDark = resolvedTheme === 'dark';
     const buyColor = isDark ? '#00E676' : '#1D7A3A';
     const sellColor = isDark ? '#FF5252' : '#C0380A';
-    const vetoColor = '#FBBF24'; // Amber-400
 
     candlestickSeriesRef.current.setData(data.candles);
 
@@ -136,17 +108,42 @@ export function PriceChart({ data, loading }: PriceChartProps) {
     }
 
     if (data.historical_markers && data.historical_markers.length > 0) {
-      const markers = data.historical_markers.map((marker) => ({
+      // FIX 9: Chart Signal Saturation
+      const filteredMarkers = data.historical_markers.filter(m => {
+        // Drop VETOED/HOLD markers entirely from chart to reduce noise
+        if (m.action === 'VETOED' || m.action === 'HOLD') return false;
+        // Require institutional minimum confidence
+        if (m.probability && m.probability < 70) return false;
+        return true;
+      }).sort((a,b) => new Date(a.time as string).getTime() - new Date(b.time as string).getTime());
+      
+      // Duplicate suppression / Minimum spacing (drop if same action within 5 days)
+      const cleanedMarkers: typeof filteredMarkers = [];
+      let lastAction = null;
+      let lastTime = 0;
+      
+      for (const m of filteredMarkers) {
+        const timeVal = new Date(m.time as string).getTime();
+        if (lastAction === m.action && (timeVal - lastTime) < (5 * 24 * 60 * 60 * 1000)) {
+           continue;
+        }
+        cleanedMarkers.push(m);
+        lastAction = m.action;
+        lastTime = timeVal;
+      }
+
+      const markers = cleanedMarkers.map((marker) => ({
         time: marker.time,
-        position: (marker.action === 'BUY' ? 'belowBar' : (marker.action === 'SELL' ? 'aboveBar' : 'inBar')) as "belowBar" | "aboveBar" | "inBar",
-        color: marker.action === 'BUY' ? buyColor : (marker.action === 'SELL' ? sellColor : vetoColor),
-        shape: (marker.action === 'BUY' ? 'arrowUp' : (marker.action === 'SELL' ? 'arrowDown' : 'circle')) as "arrowUp" | "arrowDown" | "circle",
+        position: (marker.action === 'BUY' ? 'belowBar' : 'aboveBar') as "belowBar" | "aboveBar",
+        color: marker.action === 'BUY' ? buyColor : sellColor,
+        shape: (marker.action === 'BUY' ? 'arrowUp' : 'arrowDown') as "arrowUp" | "arrowDown",
         text: marker.action,
-        size: marker.action === 'VETOED' ? 0.5 : 1,
+        size: 1,
       }));
       
-      markers.sort((a, b) => new Date(a.time as string).getTime() - new Date(b.time as string).getTime());
       createSeriesMarkers(candlestickSeriesRef.current, markers);
+    } else {
+      createSeriesMarkers(candlestickSeriesRef.current, []);
     }
 
     chartRef.current.timeScale().fitContent();
@@ -169,4 +166,3 @@ export function PriceChart({ data, loading }: PriceChartProps) {
     </div>
   );
 }
-

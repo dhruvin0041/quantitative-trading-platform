@@ -413,7 +413,7 @@ export default function HydraTerminal() {
                       <span className="text-[8px] font-mono font-bold opacity-50 uppercase tracking-tighter">Live_Audit</span>
                    </div>
                    <div className="p-0 flex-1 overflow-auto max-h-[300px]">
-                      {chartData?.portfolio?.positions && Object.keys(chartData.portfolio.positions).length > 0 ? (
+                      {chartData?.portfolio?.recent_closed_trades && chartData.portfolio.recent_closed_trades.length > 0 ? (
                         <table className="w-full text-left border-collapse">
                           <thead className="sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b border-border">
                             <tr>
@@ -426,7 +426,7 @@ export default function HydraTerminal() {
                           </thead>
                           <tbody>
                             {/* Display closed trades from signal_journal or recent portfolio actions */}
-                            {chartData.portfolio.recent_closed_trades?.map((trade: Trade, i: number) => (
+                            {chartData.portfolio.recent_closed_trades.map((trade: Trade, i: number) => (
                               <tr key={i} className="border-b border-border/30 hover:bg-muted/30 transition-colors">
                                 <td className="px-4 py-2 font-mono text-[10px] font-bold">{trade.ticker}</td>
                                 <td className="px-4 py-2 font-mono text-[9px] opacity-70">{new Date(trade.entry_time).toLocaleDateString()}</td>
@@ -450,8 +450,8 @@ export default function HydraTerminal() {
                           </tbody>
                         </table>
                       ) : (
-                        <div className="flex items-center justify-center h-full text-[10px] text-muted-foreground uppercase font-mono tracking-widest opacity-50">
-                           No Closed Alpha recorded
+                        <div className="flex items-center justify-center h-full min-h-[100px] text-[10px] text-muted-foreground uppercase font-mono tracking-widest opacity-50">
+                           No closed trades available
                         </div>
                       )}
                    </div>

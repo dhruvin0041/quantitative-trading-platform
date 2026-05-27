@@ -21,12 +21,17 @@ export function PerformanceValidation() {
       .then(res => res.json())
       .then(data => {
         if (data.summary) {
+          const format = (val: number | string, decimals: number, suffix: string = '') => {
+            if (typeof val === 'string') return val;
+            return `${val.toFixed(decimals)}${suffix}`;
+          };
+
           setMetrics([
-            { label: 'Sharpe Ratio', value: data.summary.sharpe.toFixed(2), description: 'Risk-adj return' },
-            { label: 'Sortino Ratio', value: data.summary.sortino.toFixed(2), description: 'Downside risk-adj' },
-            { label: 'Calmar Ratio', value: data.summary.calmar.toFixed(2), description: 'Return vs Drawdown' },
-            { label: 'Profit Factor', value: data.summary.profit_factor.toFixed(2), description: 'Gross Profit / Loss' },
-            { label: 'Win Rate', value: `${data.summary.win_rate.toFixed(1)}%`, description: 'Profitable trades' },
+            { label: 'Sharpe Ratio', value: format(data.summary.sharpe, 2), description: 'Risk-adj return' },
+            { label: 'Sortino Ratio', value: format(data.summary.sortino, 2), description: 'Downside risk-adj' },
+            { label: 'Calmar Ratio', value: format(data.summary.calmar, 2), description: 'Return vs Drawdown' },
+            { label: 'Profit Factor', value: format(data.summary.profit_factor, 2), description: 'Gross Profit / Loss' },
+            { label: 'Win Rate', value: format(data.summary.win_rate, 1, '%'), description: 'Profitable trades' },
           ]);
         }
       })

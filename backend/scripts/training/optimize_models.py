@@ -189,7 +189,9 @@ def objective_rf(trial, X_train, y_train):
 
 def run_optimization():
     # Load training data saved by train.py
-    if not os.path.exists("artifacts/X_train_tabular.joblib") or not os.path.exists("artifacts/y_train_sig.joblib"):
+    if not os.path.exists("artifacts/X_train_tabular.joblib") or not os.path.exists(
+        "artifacts/y_train_sig.joblib"
+    ):
         print(" [ERROR] Required data artifacts not found. Run data preparation first.")
         return False
 

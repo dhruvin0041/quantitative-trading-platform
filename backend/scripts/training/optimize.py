@@ -23,6 +23,7 @@ from src.models.neural.fusion_network import build_fusion_model
 from src.features.sequence_builder import create_time_series_sequences
 from datetime import datetime
 
+
 # ==========================================
 # OBJECTIVE FUNCTION
 # ==========================================
@@ -159,10 +160,11 @@ def objective(trial, df_features):
 def run_optuna_optimization(ticker, n_trials=50, start="2020-01-01", end=None):
     if end is None:
         end = datetime.now().strftime("%Y-%m-%d")
-    
+
     ticker = ticker.upper()
 
     from scripts.ops.clean_artifacts import clean_optimization_artifacts
+
     clean_optimization_artifacts(ticker=ticker)
 
     # ==========================================
@@ -191,7 +193,9 @@ if __name__ == "__main__":
     # UNIVERSAL CLI ARGUMENTS
     # ==========================================
     parser = argparse.ArgumentParser(description="Hybrid 5-Model Ensemble Optimizer")
-    parser.add_argument("--ticker", type=str, default="AAPL", help="Stock ticker symbol")
+    parser.add_argument(
+        "--ticker", type=str, default="AAPL", help="Stock ticker symbol"
+    )
     parser.add_argument(
         "--trials", type=int, default=50, help="Number of Optuna trials (default: 50)"
     )
@@ -202,8 +206,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     run_optuna_optimization(
-        ticker=args.ticker,
-        n_trials=args.trials,
-        start=args.start,
-        end=args.end
+        ticker=args.ticker, n_trials=args.trials, start=args.start, end=args.end
     )

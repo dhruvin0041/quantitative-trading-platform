@@ -128,14 +128,14 @@ class PredictResponse(BaseModel):
     confidence_score: float
     uncertainty_score: float
     signal_note: Optional[str] = None
-    
+
     # Phase 10: Institutional Explainability
     signal_reasoning: str = ""
     veto_reason: str = ""
     timing_reason: str = ""
     forecast_reason: str = ""
     rr_reason: str = ""
-    
+
     market_regime: str
     market_regime_v2: str = "NEUTRAL"
     volatility_state: str
@@ -148,7 +148,7 @@ class PredictResponse(BaseModel):
     timing_intelligence: Dict[str, Any] = {}
     confidence_breakdown: Dict[str, float] = {}
     explainable_confidence: float = 0.0
-    
+
     qualitative_alpha: Optional[str] = None
     xai: Optional[XAIBlock] = None
     sentiment_score: Optional[float] = None

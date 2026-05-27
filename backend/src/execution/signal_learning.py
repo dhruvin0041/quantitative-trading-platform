@@ -83,31 +83,72 @@ class SignalPerformanceResearch:
 
         results = {}
         # Ensure we only check closed trades for accuracy
-        valid_trades = df[df["outcome"].isin(["WIN", "LOSS"])].copy() if "outcome" in df.columns else pd.DataFrame()
-        
+        valid_trades = (
+            df[df["outcome"].isin(["WIN", "LOSS"])].copy()
+            if "outcome" in df.columns
+            else pd.DataFrame()
+        )
+
         if not valid_trades.empty:
             valid_trades["is_win"] = (valid_trades["outcome"] == "WIN").astype(int)
 
             for low, high, label in buckets:
-                mask = (valid_trades["quality_score"] >= low) & (valid_trades["quality_score"] <= high)
+                mask = (valid_trades["quality_score"] >= low) & (
+                    valid_trades["quality_score"] <= high
+                )
                 subset = valid_trades[mask]
 
                 if not subset.empty:
                     win_rate = subset["is_win"].mean()
-                    
+
                     # Compute simplified Sharpe and Profit Factor for the bucket
                     # Note: These are rough approximations per signal bucket
-                    avg_pnl = subset["realized_pnl"].mean() if "realized_pnl" in subset.columns else 0.0
-                    std_pnl = subset["realized_pnl"].std() if "realized_pnl" in subset.columns else 0.0
+                    avg_pnl = (
+                        subset["realized_pnl"].mean()
+                        if "realized_pnl" in subset.columns
+                        else 0.0
+                    )
+                    std_pnl = (
+                        subset["realized_pnl"].std()
+                        if "realized_pnl" in subset.columns
+                        else 0.0
+                    )
                     sharpe = (avg_pnl / std_pnl) if std_pnl > 0 else 0.0
-                    
-                    gross_profit = subset[subset["realized_pnl"] > 0]["realized_pnl"].sum() if "realized_pnl" in subset.columns else 0.0
-                    gross_loss = abs(subset[subset["realized_pnl"] < 0]["realized_pnl"].sum()) if "realized_pnl" in subset.columns else 0.0
-                    pf = (gross_profit / gross_loss) if gross_loss > 0 else (10.0 if gross_profit > 0 else 0.0)
-                    
-                    expectancy = (subset[subset["is_win"] == 1]["realized_pnl"].mean() * win_rate) - (abs(subset[subset["is_win"] == 0]["realized_pnl"].mean()) * (1 - win_rate)) if "realized_pnl" in subset.columns else 0.0
-                    
-                    drawdown = subset["realized_pnl"].min() if "realized_pnl" in subset.columns else 0.0
+
+                    gross_profit = (
+                        subset[subset["realized_pnl"] > 0]["realized_pnl"].sum()
+                        if "realized_pnl" in subset.columns
+                        else 0.0
+                    )
+                    gross_loss = (
+                        abs(subset[subset["realized_pnl"] < 0]["realized_pnl"].sum())
+                        if "realized_pnl" in subset.columns
+                        else 0.0
+                    )
+                    pf = (
+                        (gross_profit / gross_loss)
+                        if gross_loss > 0
+                        else (10.0 if gross_profit > 0 else 0.0)
+                    )
+
+                    expectancy = (
+                        (
+                            subset[subset["is_win"] == 1]["realized_pnl"].mean()
+                            * win_rate
+                        )
+                        - (
+                            abs(subset[subset["is_win"] == 0]["realized_pnl"].mean())
+                            * (1 - win_rate)
+                        )
+                        if "realized_pnl" in subset.columns
+                        else 0.0
+                    )
+
+                    drawdown = (
+                        subset["realized_pnl"].min()
+                        if "realized_pnl" in subset.columns
+                        else 0.0
+                    )
 
                     results[label] = {
                         "count": len(subset),

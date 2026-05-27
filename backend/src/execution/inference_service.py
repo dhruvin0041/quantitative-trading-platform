@@ -151,9 +151,13 @@ class InferenceService:
         }
 
         # Phase 1: Weighted Consensus Engine
-        extracted_weights = {k: v.get("weight", 0.25) for k, v in model_weights_raw.items()}
-        agreement_data = self.consensus_engine.compute_agreement(base_probs, extracted_weights)
-        
+        extracted_weights = {
+            k: v.get("weight", 0.25) for k, v in model_weights_raw.items()
+        }
+        agreement_data = self.consensus_engine.compute_agreement(
+            base_probs, extracted_weights
+        )
+
         final_prob_raw = agreement_data["agreement_score"] / 100.0
         cal_results = self.calibration_engine.calibrate(
             final_prob_raw * 100, ticker, asset_class
@@ -163,7 +167,7 @@ class InferenceService:
 
         # 5. Signal Selection & Predictive Timing
         timing_data = self.timing_engine.calculate_timing_features(ticker_df_risk)
-        
+
         regime_id_map = {"BEAR": 0, "NEUTRAL": 1, "BULL": 2}
         regime_id = regime_id_map.get(market_regime, 1)
         vol_id = 1
@@ -216,7 +220,7 @@ class InferenceService:
             agreement_score=agreement_data["agreement_score"],
             ev_pct=ev_metrics["ev_pct"],
             timing_score=timing_data["timing_score"],
-            asset_class=asset_class
+            asset_class=asset_class,
         )
 
         # Multi-Layer Quality Score
@@ -252,17 +256,19 @@ class InferenceService:
 
         # Phase 2: Forecast Calibration Engine
         tft_preds = self.mm.tft_model.predict(ts_sequence, verbose=0)[0]
-        recent_vol = float(tech_snapshot.get("ATR", current_price * 0.02) / current_price)
-        
+        recent_vol = float(
+            tech_snapshot.get("ATR", current_price * 0.02) / current_price
+        )
+
         forecast_data = self.forecast_engine.calibrate_forecast(
             raw_forecasts=tft_preds,
             current_price=current_price,
             atr=float(tech_snapshot.get("ATR", current_price * 0.02)),
             volatility=recent_vol,
             asset_class=asset_class,
-            regime=regime_detailed
+            regime=regime_detailed,
         )
-        
+
         # Phase 3: Trade Construction Engine
         trade_construction = self.trade_engine.construct_trade(
             current_price=current_price,
@@ -270,7 +276,7 @@ class InferenceService:
             direction=final_signal if final_signal in ["BUY", "SELL"] else "HOLD",
             regime=regime_detailed,
             asset_class=asset_class,
-            volatility=recent_vol
+            volatility=recent_vol,
         )
 
         # News & Sentiment
@@ -291,7 +297,10 @@ class InferenceService:
         perf_data = perf_summary.get("summary", {})
 
         # Dynamic Risk Metrics from Paper Engine
-        returns_history = [t.get("pnl", 0) / self.paper_engine.initial_capital for t in self.paper_engine.history]
+        returns_history = [
+            t.get("pnl", 0) / self.paper_engine.initial_capital
+            for t in self.paper_engine.history
+        ]
         var_95 = self.paper_engine.calculate_var(returns_history)
         cvar = self.paper_engine.calculate_expected_shortfall(returns_history)
 
@@ -321,17 +330,24 @@ class InferenceService:
             "confidence_score": round(calibrated_prob, 1),
             "uncertainty_score": round(uncertainty * 100, 1),
             "signal_note": signal_note,
-            
             # Phase 10: Institutional Explainability
             "signal_reasoning": f"Consensus directional agreement ({agreement_data['dominant_direction']}) crossed confidence threshold with favorable EV.",
-            "veto_reason": signal_note if final_signal in ["VETOED", "HOLD"] else "None",
+            "veto_reason": signal_note
+            if final_signal in ["VETOED", "HOLD"]
+            else "None",
             "timing_reason": f"Momentum acc {timing_data['momentum_acceleration']:.2f}, Volatility expansion {timing_data['volatility_expansion']:.2f}",
             "forecast_reason": f"Bounded by {asset_class} volatility constraints. Recent Vol: {recent_vol:.2f}",
-            "rr_reason": trade_construction.get("reject_reason", "Dynamic construction via ATR multiples aligned with regime and volatility state."),
-            
+            "rr_reason": trade_construction.get(
+                "reject_reason",
+                "Dynamic construction via ATR multiples aligned with regime and volatility state.",
+            ),
             "market_regime": market_regime,
             "market_regime_v2": regime_detailed,
-            "volatility_state": "HIGH" if vol_id == 2 else "LOW" if vol_id == 0 else "MEDIUM",
+            "volatility_state": "HIGH"
+            if vol_id == 2
+            else "LOW"
+            if vol_id == 0
+            else "MEDIUM",
             "volume_ratio": round(vol_ratio, 2),
             "is_point_forecast": False,
             "models": {
@@ -353,7 +369,11 @@ class InferenceService:
                 "p50": round(forecast_data["p50_price"], 2),
                 "p90": round(forecast_data["p90_price"], 2),
                 "confidence": round(forecast_data["forecast_confidence"], 1),
-                "reliability": forecast_data["forecast_reliability"]
+                "reliability": forecast_data["forecast_reliability"],
+                # Legacy compatibility
+                "floor": round(forecast_data["p10_price"], 2),
+                "median": round(forecast_data["p50_price"], 2),
+                "ceiling": round(forecast_data["p90_price"], 2),
             },
             "trade_parameters": trade_construction,
             "technical_snapshot": tech_snapshot,
@@ -365,7 +385,9 @@ class InferenceService:
                 score=quality_metrics["score"],
                 grade=quality_metrics["grade"],
                 explanation=quality_metrics["explanation"],
-                layers_passed=["CONSENSUS", "REGIME"] if quality_metrics["score"] > 50 else [],
+                layers_passed=["CONSENSUS", "REGIME"]
+                if quality_metrics["score"] > 50
+                else [],
                 layers_failed=["EV"] if ev_metrics["ev_pct"] <= 0 else [],
             ),
             "calibration": CalibrationMetrics(**calibration_metrics),
@@ -439,7 +461,9 @@ class InferenceService:
                     "agreement": agreement_data["agreement_score"],
                     "market_regime": market_regime,
                     "market_regime_v2": regime_detailed,
-                    "volatility_regime": "HIGH" if vol_id == 2 else ("LOW" if vol_id == 0 else "MEDIUM"),
+                    "volatility_regime": "HIGH"
+                    if vol_id == 2
+                    else ("LOW" if vol_id == 0 else "MEDIUM"),
                     "model_consensus": json.dumps(response_data["models"]),
                     "quality_score": quality_metrics["score"],
                     "quality_grade": quality_metrics["grade"],

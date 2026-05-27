@@ -28,7 +28,9 @@ from src.data_ingestion.market_data import (
 )
 
 from scripts.ops.clean_artifacts import main as run_cleanup
-from scripts.training.optimize_models import run_optimization as run_bayesian_optimization
+from scripts.training.optimize_models import (
+    run_optimization as run_bayesian_optimization,
+)
 from scripts.training.optimize import run_optuna_optimization
 
 os.environ["TF_USE_LEGACY_KERAS"] = "1"
@@ -178,13 +180,17 @@ def train_dqn(X_dl, Y_dl, dl_model, xgb_model, scaler, kept_features):
 
 def main():
     parser = argparse.ArgumentParser(description="Unified Training Pipeline")
-    parser.add_argument("--ticker", type=str, default="RELIANCE.NS", help="Stock ticker symbol")
-    parser.add_argument("--trials", type=int, default=50, help="Number of Optuna trials")
+    parser.add_argument(
+        "--ticker", type=str, default="RELIANCE.NS", help="Stock ticker symbol"
+    )
+    parser.add_argument(
+        "--trials", type=int, default=50, help="Number of Optuna trials"
+    )
     args = parser.parse_args()
 
     ticker = args.ticker.upper()
     n_trials = args.trials
-    
+
     pipeline_start = time.time()
 
     # ==========================================
@@ -205,7 +211,7 @@ def main():
     print("\n[2/4] Optimizing branch models (XGB, LGBM, CatBoost, RF)...")
     step_start = time.time()
     config = load_config()
-    
+
     # We must prepare data FIRST because optimize_models.py depends on artifacts
     data, updated_config = prepare_data(ticker, config)
     (
@@ -361,6 +367,7 @@ def main():
         dqn_preds = np.array(dqn_preds)
 
         from src.models.ensemble.meta_ensemble import MetaEnsemble
+
         meta = MetaEnsemble()
 
         X_meta_train = []
@@ -385,7 +392,9 @@ def main():
         print("Meta-Ensemble saved to artifacts/meta_ensemble.joblib")
 
     print(f"\n  >>> Step 4 Complete ({time.time() - step_start:.2f}s)")
-    print(f"\n>>> UNIFIED TRAINING PIPELINE COMPLETE ({time.time() - pipeline_start:.2f}s) <<<")
+    print(
+        f"\n>>> UNIFIED TRAINING PIPELINE COMPLETE ({time.time() - pipeline_start:.2f}s) <<<"
+    )
     print("MLflow UI: run 'mlflow ui' to view experiment results")
 
 

@@ -7,12 +7,12 @@ import { cn } from '@/lib/utils';
 
 interface PerformanceSummary {
   total_return: number;
-  sharpe: number;
-  sortino: number;
-  calmar: number;
+  sharpe: number | string;
+  sortino: number | string;
+  calmar: number | string;
   max_drawdown: number;
-  win_rate: number;
-  profit_factor: number;
+  win_rate: number | string;
+  profit_factor: number | string;
   today_pnl: number;
   mtd_pnl: number;
   ytd_pnl: number;
@@ -68,7 +68,9 @@ export function PaperTradingPerformance({ currency = '$' }: PaperTradingPerforma
     total_trades: 0, open_trades: 0, closed_trades: 0, winning_trades: 0, losing_trades: 0
   };
 
-  const getMetricColor = (label: string, value: number) => {
+  const getMetricColor = (label: string, value: number | string) => {
+    if (typeof value === 'string') return 'text-muted-foreground';
+    
     if (label === 'Win Rate') {
       if (value > 55) return 'text-green-500 shadow-green-500/20';
       if (value >= 45) return 'text-amber-500 shadow-amber-500/20';
@@ -87,31 +89,36 @@ export function PaperTradingPerformance({ currency = '$' }: PaperTradingPerforma
     return 'text-foreground';
   };
 
+  const formatMetric = (val: number | string, decimals: number, suffix: string = '') => {
+    if (typeof val === 'string') return val;
+    return `${val.toFixed(decimals)}${suffix}`;
+  };
+
   const metrics = [
     { 
       label: 'Win Rate', 
-      value: `${summary.win_rate.toFixed(1)}%`, 
+      value: formatMetric(summary.win_rate, 1, '%'), 
       raw: summary.win_rate,
       icon: <Target className="w-3 h-3" />,
       tooltip: "Calculated based on closed trades only."
     },
     { 
       label: 'Profit Factor', 
-      value: summary.profit_factor.toFixed(2), 
+      value: formatMetric(summary.profit_factor, 2), 
       raw: summary.profit_factor,
       icon: <TrendingUp className="w-3 h-3" />,
       tooltip: "Ratio of Gross Profit to Gross Loss."
     },
     { 
       label: 'Sharpe', 
-      value: summary.sharpe.toFixed(2), 
+      value: formatMetric(summary.sharpe, 2), 
       raw: summary.sharpe,
       icon: <Activity className="w-3 h-3" />,
       tooltip: "Risk-adjusted return using the full portfolio return series."
     },
     { 
       label: 'Sortino', 
-      value: summary.sortino.toFixed(2), 
+      value: formatMetric(summary.sortino, 2), 
       raw: summary.sortino,
       icon: <BarChart className="w-3 h-3" />,
       tooltip: "Downside risk-adjusted return."
@@ -202,7 +209,7 @@ export function PaperTradingPerformance({ currency = '$' }: PaperTradingPerforma
                   </div>
                   <div className="flex items-center gap-1">
                     <span className="text-[8px] font-medium text-muted-foreground uppercase">Calmar</span>
-                    <span className="text-[10px] font-mono font-bold">{summary.calmar.toFixed(2)}</span>
+                    <span className="text-[10px] font-mono font-bold">{formatMetric(summary.calmar, 2)}</span>
                   </div>
                </div>
              </div>

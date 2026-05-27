@@ -165,11 +165,11 @@ class PerformanceAnalyzer:
             "trough_date": trough_info["date"],
             "expectancy": expectancy,
         }
-        
+
         stat_validity = self.stat_engine.validate_statistics(
             daily_returns.tolist() if not daily_returns.empty else [],
             trade_history if trade_history else [],
-            summary_metrics
+            summary_metrics,
         )
 
         return {

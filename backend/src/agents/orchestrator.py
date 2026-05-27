@@ -1,5 +1,5 @@
-import numpy as np
 from typing import Dict
+
 
 class AlphaAgent:
     """
@@ -93,5 +93,5 @@ class InstitutionalOrchestrator:
                 "execution": execution,
             },
             "consensus_status": "APPROVED" if risk_check["is_safe"] else "VETOED",
-            "agreement": agreement_data["agreement_score"]
+            "agreement": agreement_data["agreement_score"],
         }

@@ -90,6 +90,7 @@ def clean_data_state():
 
 def main(argv=None):
     import sys
+
     if argv is None:
         argv = sys.argv[1:]
 

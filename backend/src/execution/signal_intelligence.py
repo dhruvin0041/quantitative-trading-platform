@@ -55,7 +55,9 @@ class ConfidenceCalibrationEngine:
     def __init__(self, history_df: pd.DataFrame = None):
         self.history = history_df
 
-    def calibrate(self, raw_confidence: float, ticker: str, asset_class: str) -> Dict[str, Any]:
+    def calibrate(
+        self, raw_confidence: float, ticker: str, asset_class: str
+    ) -> Dict[str, Any]:
         # Placeholder for actual calibration logic (Platt scaling / Isotonic regression)
         # For now, apply a conservative institutional haircut
         calibrated = raw_confidence * 0.98
@@ -65,7 +67,7 @@ class ConfidenceCalibrationEngine:
         return {
             "calibrated_prob": calibrated,
             "metrics": {
-                "brier_score": 0.18, # Placeholder
+                "brier_score": 0.18,  # Placeholder
                 "ece": 0.05,
                 "reliability_diagram": [
                     {"bin": "0-20", "count": 10, "accuracy": 0.15},
@@ -73,8 +75,8 @@ class ConfidenceCalibrationEngine:
                     {"bin": "40-60", "count": 40, "accuracy": 0.52},
                     {"bin": "60-80", "count": 30, "accuracy": 0.72},
                     {"bin": "80-100", "count": 15, "accuracy": 0.88},
-                ]
-            }
+                ],
+            },
         }
 
 
