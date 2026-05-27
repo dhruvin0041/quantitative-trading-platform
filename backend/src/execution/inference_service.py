@@ -8,11 +8,12 @@ from src.execution.forecast_engine import ForecastCalibrationEngine
 from src.execution.trade_engine import TradeConstructionEngine
 from src.execution.timing_engine import PredictiveTimingEngine
 from src.execution.confidence_engine import ConfidenceBreakdownEngine
+from src.execution.execution_authority import ExecutionAuthorityEngine
+from src.execution.governance_engine import SignalGovernanceAnalytics
 
 from src.execution.live_inference import (
     fetch_live_data,
     fetch_live_news,
-    compute_shap_explanation,
     get_meta_prediction,
 )
 from src.execution.risk_manager import (
@@ -33,11 +34,8 @@ from src.execution.asset_intelligence import (
     MultiTimeframeEngine,
 )
 from src.schemas import (
-    RiskMetrics,
     SignalQuality,
-    ModelWeight,
     ExpectedValueMetrics,
-    CalibrationMetrics,
 )
 
 logger = logging.getLogger(__name__)
@@ -69,6 +67,8 @@ class InferenceService:
         self.trade_engine = TradeConstructionEngine()
         self.timing_engine = PredictiveTimingEngine()
         self.confidence_engine = ConfidenceBreakdownEngine()
+        self.execution_authority = ExecutionAuthorityEngine()
+        self.governance_analytics = SignalGovernanceAnalytics()
         self.paper_engine = paper_engine
         self.perf_analyzer = perf_analyzer
         self.journal = signal_journal
@@ -84,7 +84,6 @@ class InferenceService:
 
     async def get_prediction(self, ticker, config, metadata):
         import uuid
-        import json
 
         signal_id = f"SIG_{datetime.now().strftime('%Y%m%d%H%M%S')}_{ticker}_{str(uuid.uuid4())[:8]}"
 
@@ -103,7 +102,7 @@ class InferenceService:
             spy_df_risk,
         ) = await asyncio.to_thread(fetch_live_data, ticker, config)
 
-        # 2. V2.0 Pre-Inference Intelligence
+        # 2. Pre-Inference Intelligence
         regime_detailed = self.regime_v2.detect_regime_v2(ticker_df_risk, spy_df_risk)
         asset_class = self.asset_engine.get_asset_class(ticker)
         asset_context = self.asset_engine.enrich_context(ticker, ticker_df_risk)
@@ -111,7 +110,7 @@ class InferenceService:
             regime_detailed, asset_class
         )
 
-        # 3. Model Predictions (Using Dynamically weighted probabilities)
+        # 3. Model Predictions
         dl_outputs = self.mm.lstm_model.predict(
             x=[
                 ts_sequence,
@@ -124,33 +123,35 @@ class InferenceService:
             verbose=0,
         )
         dl_preds_raw = dl_outputs[2][0]
-
         xgb_preds_raw = self.mm.xgb_model.predict_proba(tabular_row)[0]
-
-        lgbm_preds_raw = np.array([0.33, 0.33, 0.33])
-        if self.mm.lgbm_model:
-            lgbm_preds_raw = self.mm.lgbm_model.predict_proba(tabular_row)[0]
+        lgbm_preds_raw = (
+            self.mm.lgbm_model.predict_proba(tabular_row)[0]
+            if self.mm.lgbm_model
+            else np.array([0.33, 0.33, 0.33])
+        )
 
         # DQN Prediction
         dqn_state = np.hstack(
             (tabular_row, dl_preds_raw.reshape(1, -1), xgb_preds_raw.reshape(1, -1))
         )
         dqn_action = self.mm.dqn_agent.act(dqn_state[0])
-        dqn_p = np.array([0.0, 1.0, 0.0])
-        if dqn_action == 0:
-            dqn_p = np.array([1.0, 0.0, 0.0])
-        elif dqn_action == 2:
-            dqn_p = np.array([0.0, 0.0, 1.0])
+        dqn_p = (
+            np.array([1.0, 0.0, 0.0])
+            if dqn_action == 0
+            else (
+                np.array([0.0, 0.0, 1.0])
+                if dqn_action == 2
+                else np.array([0.0, 1.0, 0.0])
+            )
+        )
 
-        # 4. Meta-Ensemble & Calibration
+        # 4. Meta-Ensemble & Consensus
         base_probs = {
             "LSTM": dl_preds_raw,
             "XGBoost": xgb_preds_raw,
             "LightGBM": lgbm_preds_raw,
             "DQN": dqn_p,
         }
-
-        # Phase 1: Weighted Consensus Engine
         extracted_weights = {
             k: v.get("weight", 0.25) for k, v in model_weights_raw.items()
         }
@@ -165,16 +166,15 @@ class InferenceService:
         calibrated_prob = cal_results["calibrated_prob"]
         calibration_metrics = cal_results["metrics"]
 
-        # 5. Signal Selection & Predictive Timing
+        # 5. Timing & Meta-Selection
         timing_data = self.timing_engine.calculate_timing_features(ticker_df_risk)
-
         regime_id_map = {"BEAR": 0, "NEUTRAL": 1, "BULL": 2}
         regime_id = regime_id_map.get(market_regime, 1)
-        vol_id = 1
-        if tech_snapshot["ATR"] / current_price > 0.04:
-            vol_id = 2
-        elif tech_snapshot["ATR"] / current_price < 0.01:
-            vol_id = 0
+        vol_id = (
+            2
+            if tech_snapshot["ATR"] / current_price > 0.04
+            else (0 if tech_snapshot["ATR"] / current_price < 0.01 else 1)
+        )
 
         final_probs_meta, uncertainty = get_meta_prediction(
             base_probs,
@@ -185,12 +185,11 @@ class InferenceService:
             tech_snapshot["ADX"],
         )
 
-        # 6. Agentic Orchestration & EV
+        # 6. Risk & EV Logic
         beta = calculate_beta(ticker_df_risk["Close"], spy_df_risk["Close"])
         stampede = detect_stampede_risk(vol_ratio, final_prob_raw)
         risk_profile = get_position_sizing(final_prob_raw, self.paper_engine.history)
 
-        # EV Engine
         ev_metrics = self.ev_engine.calculate_ev(
             win_prob=calibrated_prob / 100,
             avg_gain=0.08 if "TREND" in regime_detailed else 0.03,
@@ -205,7 +204,6 @@ class InferenceService:
             "hedge_ratio_spy": f"{beta:.2f}",
         }
 
-        # Run multi-agent consensus with agreement data
         consensus_result = self.orchestrator.run_consensus(
             agreement_data, consensus_risk_input
         )
@@ -213,7 +211,7 @@ class InferenceService:
         signals_map = {0: "SELL", 1: "HOLD", 2: "BUY"}
         pre_signal = signals_map[final_signal_idx]
 
-        # Phase 5: Confidence Decomposition
+        # 7. Quality & Confidence Decomposition
         confidence_data = self.confidence_engine.decompose_confidence(
             regime=regime_detailed,
             volatility_ratio=vol_ratio,
@@ -223,7 +221,6 @@ class InferenceService:
             asset_class=asset_class,
         )
 
-        # Multi-Layer Quality Score
         quality_metrics = self.quality_engine.calculate_score(
             consensus_agreement=float(agreement_data["agreement_score"]),
             calibrated_confidence=calibrated_prob,
@@ -232,10 +229,9 @@ class InferenceService:
             risk_veto=consensus_result["consensus_status"] == "VETOED",
         )
 
-        # Final Signal Logic
+        # Signal Suppression logic
         final_signal = pre_signal
         signal_note = None
-
         if consensus_result["consensus_status"] == "VETOED":
             final_signal = "VETOED"
             signal_note = consensus_result["agent_responses"]["risk"]["veto_reason"]
@@ -246,20 +242,11 @@ class InferenceService:
             final_signal = "HOLD"
             signal_note = "Suppressed: Negative Expected Value"
 
-        # MTF check
-        mtf_consensus = self.mtf_engine.get_mtf_consensus(ticker, final_signal)
-
-        # SHAP Explainability
-        shap_xai = await asyncio.to_thread(
-            compute_shap_explanation, self.mm.lgbm_model, tabular_row, final_signal_idx
-        )
-
-        # Phase 2: Forecast Calibration Engine
+        # 8. Forecast & Trade Construction
         tft_preds = self.mm.tft_model.predict(ts_sequence, verbose=0)[0]
         recent_vol = float(
             tech_snapshot.get("ATR", current_price * 0.02) / current_price
         )
-
         forecast_data = self.forecast_engine.calibrate_forecast(
             raw_forecasts=tft_preds,
             current_price=current_price,
@@ -267,9 +254,11 @@ class InferenceService:
             volatility=recent_vol,
             asset_class=asset_class,
             regime=regime_detailed,
+            volatility_state="HIGH"
+            if vol_id == 2
+            else ("LOW" if vol_id == 0 else "MEDIUM"),
         )
 
-        # Phase 3: Trade Construction Engine
         trade_construction = self.trade_engine.construct_trade(
             current_price=current_price,
             atr=float(tech_snapshot.get("ATR", current_price * 0.02)),
@@ -279,6 +268,20 @@ class InferenceService:
             volatility=recent_vol,
         )
 
+        # Phase 2: Final Execution Authority
+        auth_data = self.execution_authority.determine_execution_state(
+            {
+                "quality": quality_metrics,
+                "expected_value": ev_metrics,
+                "explainable_confidence": confidence_data["explainable_confidence"],
+                "agreement": agreement_data["agreement_score"],
+                "signal": final_signal,
+                "signal_note": signal_note,
+                "uncertainty_score": uncertainty * 100,
+                "calibration": cal_results,
+            }
+        )
+
         # News & Sentiment
         tokenizer = NewsTokenizer(max_length=updated_config["data"]["max_seq_length"])
         _, _, news_text = fetch_live_news(ticker, tokenizer, updated_config)
@@ -286,43 +289,16 @@ class InferenceService:
             self.gemini.analyze_fundamental_alpha, news_text, ticker
         )
 
-        # 7. Risk Metrics (Transparency)
-        signal_data = self.journal.get_all_signals() if self.journal else None
+        # Performance & Metrics
+        signal_df = self.journal.get_all_signals() if self.journal else None
         perf_summary = self.perf_analyzer.analyze(
             self.paper_engine.portfolio_snapshots,
             self.paper_engine.history,
             self.paper_engine.initial_capital,
-            signal_data=signal_data,
-        )
-        perf_data = perf_summary.get("summary", {})
-
-        # Dynamic Risk Metrics from Paper Engine
-        returns_history = [
-            t.get("pnl", 0) / self.paper_engine.initial_capital
-            for t in self.paper_engine.history
-        ]
-        var_95 = self.paper_engine.calculate_var(returns_history)
-        cvar = self.paper_engine.calculate_expected_shortfall(returns_history)
-
-        risk_metrics_obj = RiskMetrics(
-            var_95=float(var_95),
-            cvar=float(cvar),
-            beta=float(beta),
-            kelly_fraction=min(0.05, float(risk_profile["raw_fraction"])),
-            target_size=float(
-                self.paper_engine.capital * float(risk_profile["raw_fraction"])
-            ),
-            max_drawdown=float(perf_data.get("max_drawdown", 0.0)),
-            win_probability=float(calibrated_prob / 100),
-            expected_value=ev_metrics["ev_pct"],
+            signal_data=signal_df,
         )
 
-        def map_model_output(probs):
-            idx = np.argmax(probs)
-            signals = ["SELL", "HOLD", "BUY"]
-            return {"signal": signals[idx], "probability": round(float(probs[idx]), 3)}
-
-        # 8. Final Response Assembly
+        # 9. Final Response Assembly (Phase 3 Semantic Separation)
         response_data = {
             "ticker": ticker,
             "current_price": round(current_price, 2),
@@ -330,39 +306,39 @@ class InferenceService:
             "confidence_score": round(calibrated_prob, 1),
             "uncertainty_score": round(uncertainty * 100, 1),
             "signal_note": signal_note,
-            # Phase 10: Institutional Explainability
-            "signal_reasoning": f"Consensus directional agreement ({agreement_data['dominant_direction']}) crossed confidence threshold with favorable EV.",
-            "veto_reason": signal_note
-            if final_signal in ["VETOED", "HOLD"]
-            else "None",
+            # Phase 3: Semantic Separation
+            "structural_regime": regime_detailed,
+            "signal_bias": forecast_data["forecast_bias"],
+            "execution_state": auth_data["execution_state"],
+            "execution_reasoning": auth_data["decision_reasoning"],
+            # Institutional Logic
+            "signal_reasoning": f"Consensus directional agreement ({agreement_data['dominant_direction']}) crossed confidence threshold.",
             "timing_reason": f"Momentum acc {timing_data['momentum_acceleration']:.2f}, Volatility expansion {timing_data['volatility_expansion']:.2f}",
-            "forecast_reason": f"Bounded by {asset_class} volatility constraints. Recent Vol: {recent_vol:.2f}",
-            "rr_reason": trade_construction.get(
-                "reject_reason",
-                "Dynamic construction via ATR multiples aligned with regime and volatility state.",
-            ),
+            "forecast_interpretation": forecast_data["forecast_interpretation"],
+            "forecast_explanation": forecast_data["interpretation_explanation"],
+            "consensus_intelligence": agreement_data["consensus_interpretation"],
             "market_regime": market_regime,
-            "market_regime_v2": regime_detailed,
             "volatility_state": "HIGH"
             if vol_id == 2
-            else "LOW"
-            if vol_id == 0
-            else "MEDIUM",
+            else ("LOW" if vol_id == 0 else "MEDIUM"),
             "volume_ratio": round(vol_ratio, 2),
-            "is_point_forecast": False,
             "models": {
-                "DL_FUSION": map_model_output(dl_preds_raw),
-                "XGB_AGENT": map_model_output(xgb_preds_raw),
-                "LGBM_AGENT": map_model_output(lgbm_preds_raw),
-                "DQN_AGENT": map_model_output(dqn_p),
-            },
-            "model_weights": {
-                k: ModelWeight(
-                    weight=v["weight"],
-                    reason=v["reason"],
-                    recent_accuracy=v["recent_accuracy"],
-                )
-                for k, v in model_weights_raw.items()
+                "DL_FUSION": {
+                    "signal": signals_map[int(np.argmax(dl_preds_raw))],
+                    "probability": float(np.max(dl_preds_raw)),
+                },
+                "XGB_AGENT": {
+                    "signal": signals_map[int(np.argmax(xgb_preds_raw))],
+                    "probability": float(np.max(xgb_preds_raw)),
+                },
+                "LGBM_AGENT": {
+                    "signal": signals_map[int(np.argmax(lgbm_preds_raw))],
+                    "probability": float(np.max(lgbm_preds_raw)),
+                },
+                "DQN_AGENT": {
+                    "signal": signals_map[int(np.argmax(dqn_p))],
+                    "probability": float(np.max(dqn_p)),
+                },
             },
             "projections": {
                 "p10": round(forecast_data["p10_price"], 2),
@@ -370,44 +346,26 @@ class InferenceService:
                 "p90": round(forecast_data["p90_price"], 2),
                 "confidence": round(forecast_data["forecast_confidence"], 1),
                 "reliability": forecast_data["forecast_reliability"],
-                # Legacy compatibility
-                "floor": round(forecast_data["p10_price"], 2),
-                "median": round(forecast_data["p50_price"], 2),
-                "ceiling": round(forecast_data["p90_price"], 2),
             },
             "trade_parameters": trade_construction,
-            "technical_snapshot": tech_snapshot,
-            "qualitative_alpha": qual_reason,
-            "xai": shap_xai,
-            "sentiment_score": float(sentiment_score),
-            "risk": risk_metrics_obj,
-            "quality": SignalQuality(
-                score=quality_metrics["score"],
-                grade=quality_metrics["grade"],
-                explanation=quality_metrics["explanation"],
-                layers_passed=["CONSENSUS", "REGIME"]
-                if quality_metrics["score"] > 50
-                else [],
-                layers_failed=["EV"] if ev_metrics["ev_pct"] <= 0 else [],
-            ),
-            "calibration": CalibrationMetrics(**calibration_metrics),
+            "quality": SignalQuality(**quality_metrics),
             "expected_value": ExpectedValueMetrics(**ev_metrics),
-            "multi_timeframe_consensus": mtf_consensus,
-            "timing_intelligence": timing_data,
             "confidence_breakdown": confidence_data["confidence_breakdown"],
             "explainable_confidence": confidence_data["explainable_confidence"],
             "asset_class": asset_class,
-            "asset_context": asset_context,
             "metadata": metadata,
+            "governance": self.governance_analytics.analyze_throughput(signal_df)
+            if signal_df is not None
+            else {},
         }
 
-        # Historical Markers & Packaging
+        # Packaging Chart & Historical Markers
         historical_markers, df_full = self.report_gen.generate_historical_markers(
             ticker, ticker_df_risk
         )
         ai_report_stub = {
-            "Models": {"Meta_Model_Status": "Live Consensus V2.1 Active"},
-            "Risk": {"V2_Quality_Score": quality_metrics["score"]},
+            "Models": {"Meta_Model_Status": "Institutional Mesh V2.1"},
+            "Risk": {"Quality": quality_metrics["score"]},
         }
 
         system_signals = None
@@ -426,12 +384,12 @@ class InferenceService:
         response_data["signal_id"] = signal_id
 
         # Paper Trade Execution
-        if final_signal in ["BUY", "SELL"]:
+        if auth_data["execution_state"] in ["EXECUTE LONG", "EXECUTE SHORT"]:
             trade = self.paper_engine.execute_trade(
                 ticker,
                 final_signal,
                 current_price,
-                risk_metrics_obj.kelly_fraction,
+                risk_profile["raw_fraction"],
                 market_regime,
                 currency=metadata["currency"],
                 market=metadata["market"],
@@ -451,26 +409,14 @@ class InferenceService:
                     "signal_id": signal_id,
                     "timestamp": datetime.now().isoformat(),
                     "asset": ticker,
-                    "market": metadata["market"],
-                    "exchange": metadata.get("exchange", "UNKNOWN"),
                     "signal_type": final_signal,
                     "entry_price": current_price,
-                    "position_size": risk_metrics_obj.kelly_fraction,
                     "confidence": calibrated_prob,
-                    "uncertainty": uncertainty * 100,
                     "agreement": agreement_data["agreement_score"],
-                    "market_regime": market_regime,
-                    "market_regime_v2": regime_detailed,
-                    "volatility_regime": "HIGH"
-                    if vol_id == 2
-                    else ("LOW" if vol_id == 0 else "MEDIUM"),
-                    "model_consensus": json.dumps(response_data["models"]),
                     "quality_score": quality_metrics["score"],
-                    "quality_grade": quality_metrics["grade"],
                     "ev_pct": ev_metrics["ev_pct"],
-                    "expected_gain": ev_metrics["avg_gain_pct"],
-                    "expected_loss": ev_metrics["avg_loss_pct"],
                     "asset_class": asset_class,
+                    "execution_state": auth_data["execution_state"],
                 }
             )
 

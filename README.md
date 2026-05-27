@@ -1,7 +1,7 @@
-# 🐉 Hydra Terminal: Universal Multi-Asset Intelligence Platform
+# 🐉 Hydra Terminal: Universal Multi-Asset Intelligence Platform (v2.1.0)
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/release/python-3120/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-009688.svg)](https://fastapi.tiangolo.com)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-009688.svg)](https://api.tiangolo.com)
 [![Next.js 16.2](https://img.shields.io/badge/Next.js-16.2-black.svg)](https://nextjs.org/)
 [![TensorFlow 2.16](https://img.shields.io/badge/TensorFlow-2.16-orange.svg)](https://www.tensorflow.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://www.typescriptlang.org/)
@@ -9,35 +9,34 @@
 
 Hydra Terminal is an institutional-grade quantitative research workstation and universal signal intelligence platform. Built for precision and selectivity, Hydra transforms raw market data into high-conviction trading signals across multiple asset classes using a multi-agent ensemble architecture and rigorous statistical validation.
 
-## 🚀 Key Capabilities
+## 🚀 Key Capabilities (V2.1.0 Upgrade)
 
-### Signal Engine V2.0 (Institutional Grade)
-*   **0–100 Signal Quality Score:** A unified scoring system that evaluates every signal across 7 layers of confirmation. Only scores > 60 reach the workstation.
-*   **Dynamic Model Weighting:** Adaptive rebalancing of model influence (LSTM, XGBoost, LightGBM, DQN) based on current market regime and recent predictive accuracy.
-*   **Confidence Calibration:** A sophisticated engine that aligns predicted probabilities with empirical win rates using Brier Scores and ECE metrics.
-*   **Multi-Timeframe Consensus:** Real-time alignment checks across Daily, 4H, and 1H intervals to prevent "counter-trend" traps.
-*   **Expected Value (EV) Filtering:** Statistical validation where every trade must have a positive mathematical expectancy (`EV > 0`) based on historical average gains and losses.
+### Predictive Signal Intelligence
+*   **Predictive Timing Engine:** Replaces lagging indicators with momentum curvature (2nd derivative of price) and volatility expansion metrics to detect trend transitions *before* they occur.
+*   **Weighted Consensus Engine:** Replaced binary unanimity with weighted directional pressure mapping, enabling granular directional consensus intensity.
+*   **Explainable Confidence Matrix:** Decomposes confidence scores into auditable sub-scores: Trend, Regime, Volatility, Consensus, EV, and Timing.
 
-### Portfolio & Risk Systems
-*   **FX-Normalized Accounting:** Real-time multi-currency support (USD, INR, EUR, GBP) with institutional-grade FX conversion.
-*   **Risk Veto System:** Specialized Risk Agents with absolute power to suppress signals failing VaR, Crowding (Stampede), or Volatility checks.
-*   **Full Kelly Sizing:** Dynamic position sizing optimized for capital preservation and growth.
+### Calibrated Forecasting & Construction
+*   **Forecast Calibration Engine:** Dynamically bounds point forecasts using asset-specific volatility envelopes (P10/P50/P90) and rejects unrealistic projections.
+*   **Trade Construction Engine:** Generates precise Entry, Stop, and Target levels based on ATR multiples aligned with regime mechanics and risk-reward constraints.
+*   **Forecast Interpretation Engine:** Automatically maps distribution skew and spread to semantic biases (e.g., "Bullish Expansion", "Volatility Spike Risk").
 
-### Validation Framework
-*   **Signal Journal V2:** Persistent high-fidelity logging of every generated signal, calibrated probability, and market condition for post-trade analysis.
-*   **Performance Research Hub:** In-depth analytics tracking Win Rate, Profit Factor, and Sharpe ratios segmented by Quality Score buckets.
+### Institutional Risk & Authority
+*   **Execution Authority Layer:** A centralized decision engine that acts as the final arbiter for capital deployment, mapping telemetry to EXECUTE, REDUCE SIZE, or OBSERVE states.
+*   **Risk Metric Validator:** Prevents "Impossible Metrics" (e.g., positive Sharpe with negative returns) and enforces strict 90-day return gates for statistical significance.
+*   **Signal Governance Analytics:** Monitors veto frequency and ensemble entropy to prevent over-defensive paralysis and ensure healthy signal throughput.
 
 ## 📊 Supported Asset Classes
 
-Hydra Terminal provides **Asset-Specific Intelligence**, meaning it applies unique alpha drivers depending on the asset profile:
+Hydra Terminal provides **Asset-Specific Intelligence**, applying unique alpha drivers and risk multipliers depending on the asset profile:
 
 | Class | Highlights | Verified Assets |
 | :--- | :--- | :--- |
-| **Equities** | Earnings Windows, Sector Rotation, Market Breadth | AAPL, TSLA, RELIANCE.NS, NIFTY 50 |
-| **Commodities** | DXY Correlation, Inflation Hedges, Real Yields | Gold (GC=F), Silver, Crude Oil, Copper |
-| **Crypto** | Funding Rates, Stablecoin Flows, Network Activity | BTC, ETH, SOL, BNB, XRP |
-| **Forex** | Interest Rate Differentials, Yield Curves | EURUSD, GBPUSD, USDJPY, USDINR |
-| **Indices** | Global Sentiment, Volatility Clustering | S&P 500, NASDAQ, DAX, FTSE |
+| **Equities** | Earnings Windows, Sector Rotation, Market Breadth | AAPL, TSLA, NVDA, RELIANCE.NS |
+| **Commodities** | DXY Correlation, Real Yield Pressure, Macro Fear | Gold (GC=F), Silver, Crude Oil |
+| **Crypto** | Funding Rates, Volatility Compression, Dominance | BTC, ETH, SOL, BNB |
+| **Forex** | Interest Rate Differentials, Mean Reversion Scales | EURUSD, USDJPY, USDINR |
+| **Indices** | Global Sentiment, Breadth-Aware Volatility | S&P 500, NASDAQ, NIFTY |
 
 ## 🏗 Architecture
 
@@ -51,43 +50,41 @@ graph TD
 
     subgraph "Intelligence Core"
         FE[Feature Engineering]
-        APE[Asset Profile Engine]
+        PTE[Predictive Timing Engine]
         EN[Model Ensemble: DL/XGB/LGBM/RL]
-        AW[Adaptive Weighting Engine]
     end
 
-    subgraph "Signal Engine V2.0"
-        SQE[Signal Quality Engine: 0-100 Score]
-        CCE[Confidence Calibration Engine]
-        EVE[Expected Value Engine]
-        RE2[Regime Engine 2.0: 8 States]
+    subgraph "Decision Mesh V2.1"
+        WCE[Weighted Consensus Engine]
+        FCE[Forecast Calibration Engine]
+        TCE[Trade Construction Engine]
+        EAE[Execution Authority Layer]
     end
 
-    subgraph "Institutional Execution"
+    subgraph "Institutional Governance"
         RA[Risk Agent: Veto Logic]
-        SJ[Signal Journal: Audit Trail]
-        PE[Portfolio Engine: FX-Aware]
+        RMV[Risk Metric Validator]
+        SGA[Signal Governance Analytics]
     end
 
     MD --> FE
-    AD --> APE
+    AD --> PTE
     FE --> EN
-    APE --> EN
-    EN --> AW
-    AW --> SQE
-    SQE --> CCE
-    CCE --> EVE
-    EVE --> RE2
-    RE2 --> RA
-    RA --> SJ
-    SJ --> PE
-    PE --> FD[Frontend Dashboard]
+    PTE --> EN
+    EN --> WCE
+    WCE --> FCE
+    FCE --> TCE
+    TCE --> EAE
+    EAE --> RA
+    RA --> RMV
+    RMV --> SGA
+    SGA --> FD[Institutional Command Center]
 ```
 
 ## 🛠 Installation
 
 ### Prerequisites
-*   **Python 3.12+**
+*   **Python 3.10+**
 *   **Node.js 20+**
 *   **Git**
 
@@ -129,22 +126,16 @@ npm run dev
 ```
 
 ### Institutional Commands
-*   **System Audit:** `python backend/scripts/ops/generate_report.py --audit`
-*   **Signal Learning:** `python backend/scripts/ops/analyze_signals.py`
-*   **Clean Artifacts:** `python backend/scripts/ops/clean_artifacts.py [--full]`
+*   **Institutional Audit:** `python backend/scripts/ops/generate_report.py --audit`
+*   **Governance Review:** `python backend/scripts/ops/analyze_signals.py`
+*   **Forensic Reset:** `python backend/scripts/ops/clean_artifacts.py [--full]`
 
 ## 📁 Repository Structure
-*   `backend/src/execution/`: Core Signal Engine V2.0, Risk, and Portfolio logic.
+*   `backend/src/execution/`: Core V2.1 Engines (Consensus, Forecast, Trade, Authority, Timing).
 *   `backend/src/models/`: Multi-agent ensemble (Neural, Boosting, RL).
 *   `backend/src/data_ingestion/`: Multi-modal data fetching and GNN mappings.
 *   `frontend/app/`: Next.js 16.2 Institutional Command Center.
-*   `docs/`: Detailed technical specifications and implementation reports.
-
-## 🗺 Roadmap
-- [ ] **Signal Quality Optimization:** Refining the 7-layer confirmation thresholds.
-- [ ] **Adaptive Portfolio Construction:** Automated rebalancing based on regime-specific win rates.
-- [ ] **Live Validation Dataset Growth:** Expanding the Signal Journal for 10k+ verified trade outcomes.
-- [ ] **Advanced Regime Research:** Integrating HMM-based volatility clustering for micro-regime detection.
+*   `docs/`: Detailed technical specifications and forensic reports.
 
 ---
-**Hydra Terminal** — built for precision, grounded in data, executed by agents.
+**Hydra Terminal** — built for precision, grounded in data, executed by authority.

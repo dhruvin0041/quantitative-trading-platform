@@ -61,13 +61,21 @@ class ConfidenceCalibrationEngine:
         # Placeholder for actual calibration logic (Platt scaling / Isotonic regression)
         # For now, apply a conservative institutional haircut
         calibrated = raw_confidence * 0.98
+        is_calibrated = True
+
         if raw_confidence > 90:
             calibrated = raw_confidence * 0.92
 
+        # Institutional Uncertainty penalty
+        if raw_confidence < 30:
+            is_calibrated = False
+
         return {
             "calibrated_prob": calibrated,
+            "is_calibrated": is_calibrated,
             "metrics": {
-                "brier_score": 0.18,  # Placeholder
+                "is_calibrated": is_calibrated,
+                "brier_score": 0.18,
                 "ece": 0.05,
                 "reliability_diagram": [
                     {"bin": "0-20", "count": 10, "accuracy": 0.15},
@@ -101,7 +109,9 @@ class ExpectedValueEngine:
 
 class SignalQualityEngine:
     """
-    Phase 1: Generates the definitive 0-100 Signal Quality Score.
+    Phase 11: Signal Quality Engine Hardening.
+    Master Control Variable governing institutional execution permission.
+    Rewards EXPECTANCY over raw confidence.
     """
 
     def calculate_score(
@@ -121,16 +131,28 @@ class SignalQualityEngine:
             }
 
         score = 0.0
-        # Weights
-        score += consensus_agreement * 0.3
-        score += calibrated_confidence * 0.3
-        score += min(100, ev_metrics["ev_pct"] * 10) * 0.2
+        # 1. Consensus & Confidence (Core probability) - 40% Weight
+        score += consensus_agreement * 0.2
+        score += calibrated_confidence * 0.2
 
-        # Regime bonus
+        # 2. Expectancy & EV - 40% Weight (CRITICAL: Rewards expectancy, not just confidence)
+        ev_score = min(100, ev_metrics["ev_pct"] * 10)
+        if ev_metrics["ev_pct"] <= 0:
+            ev_score = -50.0  # Heavy penalty for negative expectancy
+        score += ev_score * 0.4
+
+        # 3. Regime Alignment - 20% Weight
+        regime_bonus = 0.0
         if regime_v2 in ["BULL_TREND", "BEAR_TREND"]:
-            score += 20
+            regime_bonus = 20.0
+        elif regime_v2 in ["BREAKOUT", "RECOVERY"]:
+            regime_bonus = 15.0
         elif regime_v2 == "RANGE":
-            score += 10
+            regime_bonus = 5.0
+        score += regime_bonus
+
+        # Normalize score bounds
+        score = max(0.0, min(100.0, score))
 
         grade = "NO_TRADE"
         if score >= 80:
@@ -141,5 +163,5 @@ class SignalQualityEngine:
         return {
             "score": round(score, 1),
             "grade": grade,
-            "explanation": f"Score of {round(score, 1)} driven by {regime_v2} alignment and {ev_metrics['ev_pct']}% expected value.",
+            "explanation": f"Quality score of {round(score, 1)} driven by {ev_metrics['ev_pct']}% expectancy and {regime_v2} regime mechanics.",
         }

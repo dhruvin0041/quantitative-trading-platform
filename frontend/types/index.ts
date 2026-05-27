@@ -148,26 +148,17 @@ export interface ChartData {
   uncertainty_score?: number;
   sentiment_score?: number;
   signal_note?: string | null;
-  market_regime: string;
-  market_regime_v2?: string;
-  volatility_state: string;
-  volume_ratio: number;
-  is_point_forecast: boolean;
-  model_agreement: number;
-  bullish_models?: number;
-  bearish_models?: number;
-  neutral_models?: number;
-  timestamp: string;
-  metadata: AssetMetadata;
-  models: Record<string, ModelPrediction>;
-  model_weights?: Record<string, ModelWeight>;
-  projections: {
-    floor: number;
-    median?: number;
-    ceiling: number;
-  };
-  technical_snapshot: TechnicalSnapshot;
-  qualitative_alpha?: string | null;
+  
+  // Phase 3: Semantic Separation
+  structural_regime: string;
+  signal_bias: string;
+  execution_state: string;
+  execution_reasoning: string;
+  
+  // Institutional Interpretations
+  forecast_interpretation: string;
+  forecast_explanation: string;
+  consensus_intelligence: string;
   
   // Phase 10: Institutional Explainability
   signal_reasoning?: string;
@@ -180,7 +171,24 @@ export interface ChartData {
   explainable_confidence?: number;
   trade_parameters?: Record<string, unknown>;
   
+  // Governance
+  governance?: {
+    veto_rate: number;
+    approval_rate: number;
+    total_signals: number;
+    governance_status: string;
+    signal_starvation: boolean;
+    throughput_coherence: string;
+  };
+  
   // Signal V2.0 Fields
+  market_regime: string;
+  market_regime_v2?: string;
+  volatility_state: string;
+  volume_ratio: number;
+  is_point_forecast: boolean;
+  model_agreement: number;
+  
   quality?: SignalQuality;
   expected_value?: ExpectedValueMetrics;
   multi_timeframe_consensus?: Record<string, string>;
@@ -215,4 +223,17 @@ export interface ChartData {
   ai_report: AIReport; // Keep for legacy component compatibility
   historical_markers: { time: string; action: string; probability: number; label?: string }[];
   portfolio: Portfolio;
+  timestamp: string;
+  metadata: AssetMetadata;
+  models: Record<string, ModelPrediction>;
+  model_weights?: Record<string, ModelWeight>;
+  projections: {
+    floor: number;
+    median?: number;
+    ceiling: number;
+    confidence?: number;
+    reliability?: string;
+  };
+  technical_snapshot: TechnicalSnapshot;
+  qualitative_alpha?: string | null;
 }

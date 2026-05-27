@@ -3,6 +3,7 @@ import numpy as np
 from datetime import datetime
 from src.execution.signal_learning import SignalPerformanceResearch
 from src.execution.statistical_engine import StatisticalValidityEngine
+from src.execution.forensic_reset import ForensicPortfolioResetEngine
 
 
 class PerformanceAnalyzer:
@@ -15,6 +16,7 @@ class PerformanceAnalyzer:
         self.risk_free_rate = risk_free_rate
         self.signal_research = SignalPerformanceResearch()
         self.stat_engine = StatisticalValidityEngine()
+        self.forensic_reset = ForensicPortfolioResetEngine()
 
     def analyze(self, snapshots, trade_history, initial_capital, signal_data=None):
         if not snapshots:
@@ -46,7 +48,16 @@ class PerformanceAnalyzer:
                 "signal_research": {},
             }
 
-        df_snapshots = pd.DataFrame(snapshots)
+        # Phase 7: Segment pre-repair vs post-repair analytics
+        segmentation = self.forensic_reset.segment_telemetry(snapshots, trade_history)
+        trusted_snapshots = segmentation["validated_snapshots"]
+        trusted_history = segmentation["validated_history"]
+
+        # If no trusted era data yet, still allow analytics but mark as contaminated or insufficient
+        active_snapshots = trusted_snapshots if trusted_snapshots else snapshots
+        active_history = trusted_history if trusted_history else trade_history
+
+        df_snapshots = pd.DataFrame(active_snapshots)
         df_snapshots["time"] = pd.to_datetime(df_snapshots["time"])
         df_snapshots = df_snapshots.set_index("time")
 
@@ -99,7 +110,7 @@ class PerformanceAnalyzer:
         )
 
         # Consistent Trade Metrics (Asset Level)
-        trades_df = pd.DataFrame(trade_history) if trade_history else pd.DataFrame()
+        trades_df = pd.DataFrame(active_history) if active_history else pd.DataFrame()
         win_rate = 0.0
         profit_factor = 0.0
         wins_count = 0
@@ -131,12 +142,18 @@ class PerformanceAnalyzer:
 
                 expectancy = self.calculate_expectancy(win_rate, wins, losses)
 
-        total_trades = len(trade_history) if trade_history else 0
+        total_trades = len(active_history) if active_history else 0
         unrealized_pnl = today_equity - (initial_capital + realized_pnl)
 
         # Phase 12: Signal Quality Research
         quality_research = {}
         if signal_data is not None:
+            # Filter signal data for trusted era if possible
+            if "timestamp" in signal_data.columns:
+                signal_data["timestamp"] = pd.to_datetime(signal_data["timestamp"])
+                signal_data = signal_data[
+                    signal_data["timestamp"] >= self.forensic_reset.validated_start_date
+                ]
             quality_research = self.signal_research.analyze_quality_buckets(signal_data)
 
         summary_metrics = {
@@ -168,11 +185,11 @@ class PerformanceAnalyzer:
 
         stat_validity = self.stat_engine.validate_statistics(
             daily_returns.tolist() if not daily_returns.empty else [],
-            trade_history if trade_history else [],
+            active_history if active_history else [],
             summary_metrics,
         )
 
-        return {
+        res = {
             "summary": stat_validity["validated_metrics"],
             "confidence_intervals": stat_validity["confidence_intervals"],
             "sample_sizes": stat_validity["sample_sizes"],
@@ -182,7 +199,13 @@ class PerformanceAnalyzer:
             },
             "attribution": {"by_regime": {}, "by_sector": {}},
             "signal_research": quality_research,
+            "forensic_audit": {
+                "validated_start_date": segmentation["validated_start_date"],
+                "contaminated_data_isolated": True,
+                "trusted_era_active": segmentation["trusted_era_active"],
+            },
         }
+        return res
 
     def calculate_sharpe(self, returns):
         """Standardized Sharpe: (Mean - RiskFree) / StdDev * sqrt(252)"""

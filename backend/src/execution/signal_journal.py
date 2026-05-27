@@ -44,6 +44,7 @@ class SignalJournal:
                     holding_time INTEGER,
                     realized_pnl REAL,
                     unrealized_pnl REAL,
+                    execution_state TEXT,
                     outcome TEXT -- WIN, LOSS, PENDING, VETOED, HOLD
                 )
             """)
@@ -58,8 +59,8 @@ class SignalJournal:
                     agreement, market_regime, market_regime_v2, volatility_regime, 
                     model_consensus, quality_score, quality_grade, ev_pct, 
                     expected_gain, expected_loss, asset_class,
-                    holding_time, realized_pnl, unrealized_pnl, outcome
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    holding_time, realized_pnl, unrealized_pnl, execution_state, outcome
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     data.get("signal_id"),
@@ -87,6 +88,7 @@ class SignalJournal:
                     data.get("holding_time", 0),
                     data.get("realized_pnl", 0.0),
                     data.get("unrealized_pnl", 0.0),
+                    data.get("execution_state", "UNKNOWN"),
                     data.get("outcome", "PENDING"),
                 ),
             )

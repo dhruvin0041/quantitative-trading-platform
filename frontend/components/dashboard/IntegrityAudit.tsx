@@ -14,9 +14,27 @@ export function IntegrityAudit({ data }: IntegrityAuditProps) {
   const audits = [
     { 
       metric: 'Alpha Signal', 
-      source: 'MetaEnsemble (backend/src/models/ensemble)', 
-      provenance: data?.signal === 'VETOED' ? 'RiskAgent Override' : 'Neural Fusion Consensus',
+      source: 'ConsensusEngine (backend/src/execution/consensus_engine.py)', 
+      provenance: data?.execution_state === 'VETOED' ? 'RiskAgent Override' : 'Weighted Consensus (V2.1)',
       status: !!data?.signal ? 'LIVE' : 'DISCONNECTED'
+    },
+    { 
+      metric: 'Execution Authority', 
+      source: 'ExecutionAuthorityEngine (backend/src/execution/execution_authority.py)', 
+      provenance: data?.execution_state || 'Decision Layer Active',
+      status: !!data?.execution_state ? 'LIVE' : 'DISCONNECTED'
+    },
+    { 
+      metric: 'Forecast Interpretation', 
+      source: 'ForecastInterpretationEngine (backend/src/execution/forecast_engine.py)', 
+      provenance: data?.forecast_interpretation || 'Semantic Mapping Active',
+      status: !!data?.forecast_interpretation ? 'LIVE' : 'DISCONNECTED'
+    },
+    { 
+      metric: 'Statistical Integrity', 
+      source: 'StatisticalValidityEngine (backend/src/execution/statistical_engine.py)', 
+      provenance: '95% CI + Wilson Gating',
+      status: !!data?.portfolio ? 'LIVE' : 'DISCONNECTED'
     },
     { 
       metric: 'Uncertainty', 

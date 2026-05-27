@@ -60,7 +60,7 @@ export default function HydraTerminal() {
         });
         if (!res.ok) throw new Error('Network response was not ok');
         const data = await res.json();
-        if (isMounted) {
+        if (isMounted && data.ticker === ticker) {
           setChartData(data);
           setLoading(false);
         }
