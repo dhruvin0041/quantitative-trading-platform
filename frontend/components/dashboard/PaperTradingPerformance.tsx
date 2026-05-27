@@ -143,7 +143,13 @@ export function PaperTradingPerformance({ currency = '$' }: PaperTradingPerforma
             <div key={m.label} className="flex flex-col items-center justify-center p-2 rounded bg-muted/30 dark:bg-black/20 border border-border relative group/m">
               <span className="text-muted-foreground mb-1">{m.icon}</span>
               <span className="text-[7px] uppercase font-black text-muted-foreground mb-0.5">{m.label}</span>
-              <span className={cn("text-[10px] font-mono font-black transition-colors", getMetricColor(m.label, m.raw))}>{m.value}</span>
+              <span className={cn(
+                "font-mono font-black transition-colors text-center leading-tight break-words max-w-full",
+                typeof m.raw === 'string' ? "text-[7px]" : "text-[10px]",
+                getMetricColor(m.label, m.raw)
+              )}>
+                {m.value}
+              </span>
               
               <div className="absolute bottom-full mb-2 w-32 p-2 rounded bg-black text-white text-[8px] leading-tight opacity-0 group-hover/m:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl border border-white/10 text-center">
                 {m.tooltip}

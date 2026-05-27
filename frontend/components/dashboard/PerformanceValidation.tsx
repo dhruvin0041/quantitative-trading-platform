@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Trophy } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { cn } from '@/lib/utils';
 
 interface ValidationMetric {
   label: string;
@@ -58,11 +59,14 @@ export function PerformanceValidation() {
             transition={{ delay: i * 0.1, duration: 0.3 }}
             className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50 dark:hover:bg-white/5 border border-transparent transition-colors"
           >
-            <div className="flex flex-col">
-              <span className="text-xs font-black text-foreground font-sans">{metric.label}</span>
-              <span className="text-[9px] uppercase tracking-wider text-muted-foreground font-bold">{metric.description}</span>
+            <div className="flex flex-col flex-1 shrink min-w-0 pr-2">
+              <span className="text-xs font-black text-foreground font-sans truncate">{metric.label}</span>
+              <span className="text-[9px] uppercase tracking-wider text-muted-foreground font-bold truncate">{metric.description}</span>
             </div>
-            <span className="text-sm font-mono font-black text-primary dark:text-foreground">
+            <span className={cn(
+              "font-mono font-black text-primary dark:text-foreground text-right shrink-0 break-words leading-tight", 
+              typeof metric.value === 'string' && metric.value.includes('Insufficient') ? "text-[8px] max-w-[120px]" : "text-sm"
+            )}>
               {metric.value}
             </span>
           </motion.div>
