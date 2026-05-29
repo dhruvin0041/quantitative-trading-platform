@@ -120,11 +120,11 @@ app = FastAPI(title="Hydra Terminal API", version="2.1.0")
 try:
     FRONTEND_URLS = os.environ["FRONTEND_URL"].split(",")
 except KeyError:
-    FRONTEND_URLS = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001"]
+    FRONTEND_URLS = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001", "http://192.168.29.189:3000"]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=FRONTEND_URLS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -315,7 +315,7 @@ class InferenceService:
             "execution_reasoning": auth_data["decision_reasoning"],
             # Institutional Logic
             "signal_reasoning": f"Consensus directional agreement ({agreement_data['dominant_direction']}) crossed confidence threshold.",
-            "timing_reason": f"Momentum acc {timing_data['momentum_acceleration']:.2f}, Volatility expansion {timing_data['volatility_expansion']:.2f}",
+            "timing_reason": f"Momentum acc {timing_data.get('momentum_acceleration', 0.0):.2f}, Volatility expansion {timing_data.get('volatility_expansion', 0.0):.2f}",
             "forecast_interpretation": forecast_data["forecast_interpretation"],
             "forecast_explanation": forecast_data["interpretation_explanation"],
             "consensus_intelligence": agreement_data["consensus_interpretation"],

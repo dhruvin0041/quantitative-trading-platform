@@ -3,13 +3,26 @@ import pandas as pd
 import numpy as np
 import ta
 import yfinance as yf
+from typing import Any
 
 
 def clean_multiindex_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Standardizes yfinance MultiIndex columns to a single level."""
     if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
+        # If there's only one ticker, level 1 might be the ticker name
+        if len(df.columns.levels[0]) == 1:
+            df.columns = df.columns.get_level_values(0)
+        else:
+            # Flatten or pick first ticker if multiple present (fallback)
+            df.columns = [f"{col[0]}" for col in df.columns.values]
     return df
+
+
+def ensure_series(data: Any) -> pd.Series:
+    """Ensures input is a pandas Series, picking first column if DataFrame."""
+    if isinstance(data, pd.DataFrame):
+        return data.iloc[:, 0]
+    return data
 
 
 def add_advanced_features(
@@ -49,7 +62,7 @@ def add_advanced_features(
         vix_df = vix_data
 
     # Assign using index alignment and fill gaps
-    df["VIX"] = vix_df["Close"]
+    df["VIX"] = ensure_series(vix_df["Close"])
     df["VIX"] = (
         df["VIX"].ffill().fillna(0)
     )  # Fill gaps and edge cases without lookahead bias
@@ -81,7 +94,7 @@ def add_advanced_features(
     else:
         tnx_df = tnx_data
 
-    df["Treasury_10Y"] = tnx_df["Close"]
+    df["Treasury_10Y"] = ensure_series(tnx_df["Close"])
     df["Treasury_10Y"] = df["Treasury_10Y"].ffill().bfill()
 
     # --- 6. Log Returns (Better for Neural Networks than raw prices) ---

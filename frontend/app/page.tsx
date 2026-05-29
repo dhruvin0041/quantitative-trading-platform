@@ -63,32 +63,71 @@ export default function HydraTerminal() {
   // 2. Fetch AI Predictions
   useEffect(() => {
     let isMounted = true;
+    const controller = new AbortController();
     
     const fetchPrediction = async () => {
+      if (!ticker) return;
+
       setLoading(true);
       setError(null);
-      setChartData(null); // CRITICAL UX FIX: Clear stale data before fetching to prevent mismatched ticker/price rendering
+      setChartData(null); 
+
+      const requestUrl = `${API_URL}/predict?ticker=${ticker}`;
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log("--- SYSTEM TELEMETRY DIAGNOSTICS ---");
+        console.log("Ticker:", ticker);
+        console.log("API_URL:", API_URL);
+        console.log("Request URL:", requestUrl);
+        console.log("Auth Key Hash:", API_KEY?.substring(0, 5) + "...");
+      }
+
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s Timeout
+
       try {
-        const res = await fetch(`${API_URL}/predict?ticker=${ticker}`, {
-          headers: { "X-API-Key": API_KEY }
+        const res = await fetch(requestUrl, {
+          headers: { "X-API-Key": API_KEY },
+          signal: controller.signal,
+          cache: 'no-store'
         });
-        if (!res.ok) throw new Error('Network response was not ok');
+
+        clearTimeout(timeoutId);
+
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.detail || `Server responded with ${res.status}`);
+        }
+
         const data = await res.json();
+
         if (isMounted && data.ticker === ticker) {
           setChartData(data);
           setLoading(false);
         }
-      } catch (err) {
-        console.error("Inference Engine Failed", err);
-        if (isMounted) {
-          setError("Failed to connect to inference engine.");
-          setLoading(false);
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        
+        if (err.name === 'AbortError') {
+          console.error("Telemetry Timeout: Backend took too long to respond.");
+          if (isMounted) setError("Inference Timeout: System is overloaded or initializing.");
+        } else if (err instanceof TypeError) {
+          console.error("Network Layer Failure: Failed to reach backend.", err);
+          if (isMounted) setError(`Network Failure: Confirm backend is alive at ${API_URL}`);
+        } else {
+          console.error("Inference Engine Fault:", err.message);
+          if (isMounted) setError(err.message || "Unknown error in prediction engine.");
         }
+
+        if (isMounted) setLoading(false);
       }
     };
 
     fetchPrediction();
-    return () => { isMounted = false; };
+    
+    return () => { 
+      isMounted = false; 
+      controller.abort(); 
+    };
   }, [ticker, API_URL, API_KEY]); 
 
   const tickerData = useMemo(() => {

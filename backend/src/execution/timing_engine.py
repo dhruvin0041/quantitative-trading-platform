@@ -11,7 +11,14 @@ class PredictiveTimingEngine:
 
     def calculate_timing_features(self, df: pd.DataFrame) -> Dict:
         if len(df) < 20:
-            return {"timing_score": 0.0, "signal_lead_time": 0.0}
+            return {
+                "timing_score": 0.0,
+                "momentum_acceleration": 0.0,
+                "volatility_expansion": 0.0,
+                "volume_surge": 0.0,
+                "structure_break": 0,
+                "signal_lead_time": 0.0,
+            }
 
         close = df["Close"].values
         high = df["High"].values
