@@ -29,7 +29,7 @@ export default function HydraTerminal() {
   
   // 1. Load Universe and Active Ticker
   const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
   useEffect(() => {
     // Fetch Active Ticker from latest training run

@@ -120,13 +120,14 @@ app = FastAPI(title="Hydra Terminal API", version="2.1.0")
 try:
     FRONTEND_URLS = os.environ["FRONTEND_URL"].split(",")
 except KeyError:
-    FRONTEND_URLS = ["http://localhost:3000"]
+    FRONTEND_URLS = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001"]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=FRONTEND_URLS,
-    allow_methods=["GET", "POST"],
-    allow_headers=["X-API-Key", "Content-Type"],
+    allow_origins=FRONTEND_URLS + ["*"] if os.environ.get("DEBUG_CORS") == "1" else FRONTEND_URLS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # --- Middleware: Rate Limiting & Metrics ---
