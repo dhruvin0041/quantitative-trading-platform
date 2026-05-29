@@ -14,126 +14,105 @@ export function RiskDashboard({ data, currency = "$" }: RiskDashboardProps) {
 
   const { risk } = data;
 
-  const getRiskSeverity = (val: number, thresholds: {low: number, high: number}, reverse = false) => {
-    if (reverse) {
-      if (val < thresholds.low) return { level: 'SEVERE', color: 'text-red-500', bg: 'bg-red-500/10 border-red-500/30' };
-      if (val < thresholds.high) return { level: 'ELEVATED', color: 'text-amber-500', bg: 'bg-amber-500/10 border-amber-500/30' };
-      return { level: 'NOMINAL', color: 'text-green-500', bg: 'bg-green-500/10 border-green-500/30' };
-    }
-    if (val > thresholds.high) return { level: 'SEVERE', color: 'text-red-500', bg: 'bg-red-500/10 border-red-500/30' };
-    if (val > thresholds.low) return { level: 'ELEVATED', color: 'text-amber-500', bg: 'bg-amber-500/10 border-amber-500/30' };
-    return { level: 'NOMINAL', color: 'text-green-500', bg: 'bg-green-500/10 border-green-500/30' };
+  const getRegimeColor = (regime: string) => {
+    const r = regime.toUpperCase();
+    if (r.includes('STABLE')) return { color: 'text-emerald-500', bg: 'bg-emerald-500', border: 'border-emerald-500/30', glow: 'shadow-[0_0_15px_rgba(16,185,129,0.3)]' };
+    if (r.includes('ELEVATED')) return { color: 'text-amber-500', bg: 'bg-amber-500', border: 'border-amber-500/30', glow: 'shadow-[0_0_15px_rgba(245,158,11,0.3)]' };
+    if (r.includes('DEFENSIVE')) return { color: 'text-orange-500', bg: 'bg-orange-500', border: 'border-orange-500/30', glow: 'shadow-[0_0_15px_rgba(249,115,22,0.3)]' };
+    if (r.includes('CRITICAL')) return { color: 'text-red-500', bg: 'bg-red-500', border: 'border-red-500/30', glow: 'shadow-[0_0_15px_rgba(239,68,68,0.3)]' };
+    if (r.includes('PANIC')) return { color: 'text-red-600', bg: 'bg-red-600', border: 'border-red-600/30', glow: 'shadow-[0_0_20px_rgba(220,38,38,0.5)]' };
+    return { color: 'text-muted-foreground', bg: 'bg-muted', border: 'border-border', glow: '' };
   };
 
-  const varRisk = getRiskSeverity(Math.abs(risk.var_95), { low: 0.02, high: 0.05 });
-  const cvarRisk = getRiskSeverity(Math.abs(risk.cvar), { low: 0.03, high: 0.08 });
-  const betaRisk = getRiskSeverity(Math.abs(risk.beta), { low: 1.2, high: 2.0 });
-
-  const getBetaInterpretation = (beta: number) => {
-    if (beta > 1.5) return "Hyper-sensitive to market";
-    if (beta > 1) return "Aggressive vs benchmark";
-    if (beta < 0) return "Inverse correlation";
-    if (beta < 0.5) return "Defensive / Uncorrelated";
-    return "Tracks benchmark";
-  };
+  const regime = getRegimeColor(risk.risk_regime);
 
   const riskMetrics = [
-    { 
-      label: 'VaR (95%)', 
-      value: `${(risk.var_95 * 100).toFixed(2)}%`, 
-      interpretation: "1-Day Max Loss",
-      severity: varRisk
-    },
-    { 
-      label: 'CVaR', 
-      value: `${(risk.cvar * 100).toFixed(2)}%`, 
-      interpretation: "Tail Risk Loss",
-      severity: cvarRisk
-    },
-    { 
-      label: 'Beta', 
-      value: risk.beta.toFixed(2), 
-      interpretation: getBetaInterpretation(risk.beta),
-      severity: betaRisk
-    },
-    { 
-      label: 'Kelly Frac.', 
-      value: (risk.kelly_fraction * 100).toFixed(1) + '%', 
-      interpretation: "Optimal sizing limit",
-      severity: { level: 'INFO', color: 'text-blue-500', bg: 'bg-blue-500/10 border-blue-500/30' }
-    },
-    { 
-      label: 'Target Size', 
-      value: `${currency}${risk.target_size.toLocaleString()}`, 
-      interpretation: "Capital at risk",
-      severity: { level: 'ACTION', color: 'text-amber-500', bg: 'bg-amber-500/10 border-amber-500/30' }
-    },
-    { 
-      label: 'Max Drawdown', 
-      value: `${risk.max_drawdown.toFixed(1)}%`, 
-      interpretation: "Historical worst-case",
-      severity: getRiskSeverity(Math.abs(risk.max_drawdown), { low: 15, high: 30 })
-    },
+    { label: 'Beta (10D)', value: risk.beta.toFixed(2), interpretation: risk.beta > 1 ? 'High Volatility' : 'Nominal' },
+    { label: 'Kelly Fraction', value: `${(risk.kelly_fraction * 100).toFixed(1)}%`, interpretation: 'Suggested Sizing' },
+    { label: 'Expected Value', value: `${risk.expected_value?.toFixed(2) ?? 'N/A'}%`, interpretation: 'Statistical Edge' },
+    { label: 'Win Probability', value: `${(risk.win_probability * 100).toFixed(1)}%`, interpretation: 'Confidence' },
   ];
 
   return (
     <div className="glass-panel rounded-xl flex flex-col overflow-hidden group transition-all duration-300">
-      <div className="bg-secondary/50 dark:bg-black/40 border-b border-border px-4 py-2 flex items-center justify-between">
+      <div className="bg-secondary/50 dark:bg-black/40 border-b border-border px-4 py-2.5 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <ShieldAlert className="w-3.5 h-3.5 text-primary" />
-          <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Institutional Risk Context</h3>
+          <ShieldAlert className="w-4 h-4 text-primary" />
+          <h3 className="text-[11px] font-black uppercase tracking-widest text-foreground/80">Risk Context Engine</h3>
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary"></span>
-          </span>
-          <span className="text-[9px] font-mono font-bold opacity-60 uppercase tracking-widest text-primary dark:text-foreground">Armed</span>
+        <div className={cn("text-[9px] font-mono font-bold uppercase tracking-widest px-2 py-0.5 rounded border-2 transition-all duration-500", regime.color, regime.border, regime.glow)}>
+          {risk.risk_regime}
         </div>
       </div>
-      <div className="p-4 grid grid-cols-2 gap-3">
-        {riskMetrics.map((metric, i) => (
-          <motion.div 
-            key={metric.label}
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: i * 0.1, duration: 0.3 }}
-            className={`flex flex-col gap-1.5 p-3 bg-muted/30 dark:bg-black/20 rounded-lg border border-border hover:bg-muted/50 dark:hover:bg-black/40 transition-colors ${metric.label === 'Max Drawdown' ? 'col-span-2' : ''}`}
-          >
-            <div className="flex justify-between items-start">
-               <span className="text-[9px] text-muted-foreground uppercase font-black tracking-wider">{metric.label}</span>
-               <span className={cn("text-[7px] px-1.5 py-0.5 rounded font-black uppercase tracking-widest border", metric.severity.bg, metric.severity.color)}>
-                 {metric.severity.level}
-               </span>
+
+      <div className="p-5 flex flex-col gap-6">
+        {/* Continuous Risk Meter (Phase 9) */}
+        <div className="flex flex-col gap-3">
+          <div className="flex justify-between items-end">
+            <div className="flex flex-col gap-0.5">
+               <span className="text-[9px] text-muted-foreground uppercase font-black tracking-[0.15em]">Institutional Index</span>
+               <span className="text-[7px] text-muted-foreground/60 italic">Multi-weighted risk aggregation</span>
             </div>
-            
-            <div className="flex items-end gap-2">
-               <span className={cn("text-base font-mono font-black", metric.severity.color)}>
-                 {metric.value}
-               </span>
-            </div>
-            
-            <span className="text-[8px] text-muted-foreground italic leading-tight flex items-center gap-1">
-               <Info className="w-2.5 h-2.5 opacity-70" />
-               {metric.interpretation}
+            <span className={cn("text-3xl font-mono font-black tracking-tighter tabular-nums", regime.color)}>
+              {risk.institutional_risk_index.toFixed(1)}
             </span>
-            
-            {metric.label === 'Max Drawdown' && risk.peak_equity > 0 && (
-              <div className="mt-2 pt-2 border-t border-border/50 grid grid-cols-2 gap-4 text-[8px] font-mono">
-                 <div className="flex flex-col">
-                    <span className="text-muted-foreground uppercase mb-0.5">Peak Balance</span>
-                    <span className="font-bold text-foreground">{currency}{risk.peak_equity.toLocaleString()}</span>
-                    <span className="text-[7px] text-muted-foreground opacity-70">({new Date(risk.peak_date).toLocaleDateString()})</span>
-                 </div>
-                 <div className="flex flex-col items-end text-right">
-                    <span className="text-muted-foreground uppercase mb-0.5">Trough Balance</span>
-                    <span className="font-bold text-[var(--signal-sell)]">{currency}{risk.trough_equity.toLocaleString()}</span>
-                    <span className="text-[7px] text-muted-foreground opacity-70">({new Date(risk.trough_date).toLocaleDateString()})</span>
-                 </div>
-              </div>
-            )}
-          </motion.div>
-        ))}
+          </div>
+          <div className="h-3 w-full bg-muted/30 dark:bg-white/5 rounded-sm overflow-hidden flex gap-0.5 p-0.5 border border-white/5 relative">
+            <motion.div 
+              initial={{ width: 0 }}
+              animate={{ width: `${risk.institutional_risk_index}%` }}
+              className={cn("h-full rounded-sm transition-all duration-1000 relative z-10", regime.bg)}
+            />
+            {/* Range markers */}
+            <div className="absolute inset-0 flex justify-between px-1 items-center pointer-events-none opacity-20">
+               {[20, 40, 60, 80].map(m => (
+                 <div key={m} className="w-px h-1.5 bg-foreground" style={{ left: `${m}%` }} />
+               ))}
+            </div>
+          </div>
+          <div className="flex justify-between text-[7px] text-muted-foreground font-mono uppercase tracking-tighter opacity-70 font-bold">
+            <span>Stable</span>
+            <span>Elevated</span>
+            <span>Defensive</span>
+            <span>Critical</span>
+            <span>Panic</span>
+          </div>
+        </div>
+
+
+        <div className="grid grid-cols-2 gap-3">
+          {riskMetrics.map((metric, i) => (
+            <motion.div 
+              key={metric.label}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05 }}
+              className="p-3 bg-muted/20 dark:bg-white/5 rounded-lg border border-border/50 flex flex-col gap-1"
+            >
+              <span className="text-[8px] text-muted-foreground uppercase font-bold tracking-wider">{metric.label}</span>
+              <span className="text-sm font-mono font-black">{metric.value}</span>
+              <span className="text-[7px] text-muted-foreground italic">{metric.interpretation}</span>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Drawdown Section */}
+        <div className="p-3 bg-red-500/5 dark:bg-red-500/10 rounded-lg border border-red-500/20 flex flex-col gap-2">
+          <div className="flex justify-between items-center text-[9px] uppercase font-black tracking-widest text-red-500/80">
+            <span>Historical Max Drawdown</span>
+            <span className="font-mono">{risk.max_drawdown.toFixed(1)}%</span>
+          </div>
+          <div className="grid grid-cols-2 gap-4 text-[8px] font-mono">
+             <div className="flex flex-col">
+                <span className="text-muted-foreground uppercase mb-0.5 opacity-50">Peak Balance</span>
+                <span className="font-bold text-foreground/80">{currency}{risk.peak_equity.toLocaleString()}</span>
+             </div>
+             <div className="flex flex-col items-end text-right">
+                <span className="text-muted-foreground uppercase mb-0.5 opacity-50">Trough Balance</span>
+                <span className="font-bold text-red-400">{currency}{risk.trough_equity.toLocaleString()}</span>
+             </div>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -102,6 +102,19 @@ class WeightedConsensusEngine:
         # representing directional consensus intensity
         agreement_score = pressures[dominant_idx] * 100.0
 
+        # Phase 4: Normalized Model Reliability Metadata
+        model_intelligence = {}
+        for model_name, p in base_probs.items():
+            w = model_weights.get(model_name, 0.25)
+            # Recent reliability is simulated here but could be linked to performance_analyzer history
+            reliability = 0.85 if "XGB" in model_name or "DL" in model_name else 0.75
+            model_intelligence[model_name] = {
+                "weight": float(w / total_weight) if total_weight > 0 else 0.25,
+                "recent_reliability": reliability,
+                "confidence": float(np.max(p)),
+                "is_dominant": int(np.argmax(p)) == dominant_idx
+            }
+
         agreement_res = {
             "agreement_score": agreement_score,
             "bearish_weight": pressures[0],
@@ -109,7 +122,9 @@ class WeightedConsensusEngine:
             "bullish_weight": pressures[2],
             "dominant_direction": dominant_direction,
             "dominant_idx": dominant_idx,
+            "model_intelligence": model_intelligence
         }
+
 
         # Apply Phase 5 Intelligence
         intelligence = self.intelligence.analyze_consensus(base_probs, agreement_res)

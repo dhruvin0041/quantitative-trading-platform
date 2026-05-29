@@ -101,3 +101,91 @@ def get_position_sizing(model_confidence, trade_history=None):
         "suggested_allocation": f"{round(suggested_allocation * 100, 1)}%",
         "raw_fraction": suggested_allocation,
     }
+
+
+def calculate_institutional_risk_index(volatility_annualized, max_drawdown_pct, liquidity_score, exposure_ratio, market_correlation, signal_uncertainty=0.0):
+    """
+    Phase 9: Institutional Risk Index (0-100).
+    Weights: 
+    - Volatility: 25%
+    - Max Drawdown: 25%
+    - Liquidity: 10%
+    - Exposure: 15%
+    - Market Correlation: 10%
+    - Signal Uncertainty: 15%
+    """
+    # Normalize inputs to 0-1 range for calculation
+    norm_vol = min(1.0, volatility_annualized / 0.45)   # 45% vol is high
+    norm_dd = min(1.0, abs(max_drawdown_pct) / 25.0)    # 25% DD is high
+    norm_liq = 1.0 - np.clip(liquidity_score, 0.0, 1.0) # Lower liquidity = higher risk
+    norm_exp = np.clip(exposure_ratio / 0.25, 0.0, 1.0) # 25% exposure is high institutional
+    norm_corr = abs(market_correlation)
+    norm_uncert = np.clip(signal_uncertainty, 0.0, 1.0)
+
+    risk_score = (
+        (norm_vol * 25) +
+        (norm_dd * 25) +
+        (norm_liq * 10) +
+        (norm_exp * 15) +
+        (norm_corr * 10) +
+        (norm_uncert * 15)
+    )
+
+    return float(np.clip(risk_score, 0, 100))
+
+
+def get_risk_regime(risk_score):
+    """
+    Maps risk score to a semantic regime.
+    [0-20] Stable, [21-40] Elevated, [41-60] Defensive, [61-80] Critical, [81-100] Panic
+    """
+    if risk_score <= 20:
+        return "STABLE"
+    elif risk_score <= 40:
+        return "ELEVATED"
+    elif risk_score <= 60:
+        return "DEFENSIVE"
+    elif risk_score <= 80:
+        return "CRITICAL"
+    else:
+        return "PANIC"
+
+
+class InstitutionalRiskArbitrator:
+    """
+    Phase 2: Institutional Risk State Arbitration.
+    Defines hierarchy between Market, Signal, and Portfolio regimes.
+    """
+    
+    def arbitrate(self, market_regime, signal_quality, portfolio_health_score, risk_index):
+        """
+        Determines the Execution Permission State based on all regimes.
+        """
+        risk_regime = get_risk_regime(risk_index)
+        
+        # Default state
+        execution_state = "APPROVED"
+        veto_reason = None
+        
+        if risk_regime in ["CRITICAL", "PANIC"]:
+            execution_state = "VETOED"
+            veto_reason = f"Institutional Risk Index ({risk_index:.1f}) in {risk_regime} territory"
+        elif portfolio_health_score < 40:
+            execution_state = "DEFENSIVE"
+            veto_reason = "Portfolio drawdown / health score requires defensive sizing"
+        elif "BEAR" in market_regime and signal_quality < 70:
+            execution_state = "REDUCED_SIZE"
+            veto_reason = "Bearish structural regime with sub-optimal signal quality"
+            
+        return {
+            "risk_regime": risk_regime,
+            "execution_state": execution_state,
+            "veto_reason": veto_reason,
+            "risk_layers": {
+                "market": market_regime,
+                "signal": "NOMINAL" if signal_quality >= 70 else "WEAK",
+                "portfolio": "HEALTHY" if portfolio_health_score >= 70 else ("STRESSED" if portfolio_health_score >= 40 else "CRITICAL"),
+                "authority": execution_state
+            }
+        }
+

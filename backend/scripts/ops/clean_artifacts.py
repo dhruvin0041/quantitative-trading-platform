@@ -28,6 +28,7 @@ def clean_training_artifacts():
         "artifacts/dqn_model.pth",
         "artifacts/lgbm_agent.joblib",
         "artifacts/macro_kill_switch.joblib",
+        "configs/active_ticker.json",
     ]
     print("--- Cleaning Training Artifacts ---")
     for f in files:

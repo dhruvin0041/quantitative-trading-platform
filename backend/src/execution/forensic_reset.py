@@ -32,7 +32,7 @@ class ForensicPortfolioResetEngine:
             pre_repair_snapshots = []
 
         df_history = pd.DataFrame(history)
-        if not df_history.empty:
+        if not df_history.empty and "entry_time" in df_history.columns:
             # Assuming history has entry_time
             df_history["entry_time"] = pd.to_datetime(df_history["entry_time"])
             post_repair_history = df_history[

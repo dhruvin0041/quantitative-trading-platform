@@ -142,7 +142,9 @@ def objective(trial, df_features):
     # Train XGB
     X_xgb_train = ts_seq[:split, -1, :]
     X_xgb_test = ts_seq[split:, -1, :]
-    xgb_model = xgb.XGBClassifier(**xgb_params, objective="multi:softprob", num_class=3)
+    xgb_model = xgb.XGBClassifier(
+        **xgb_params, objective="multi:softprob", num_class=3, n_jobs=-1
+    )
     xgb_model.fit(X_xgb_train, y_sig[:split])
 
     # Ensemble Validation
@@ -176,7 +178,7 @@ def run_optuna_optimization(ticker, n_trials=50, start="2020-01-01", end=None):
 
     print(f"\nStarting Hybrid 5-Model Optimization for {ticker}...")
     study = optuna.create_study(direction="maximize")
-    study.optimize(lambda t: objective(t, df_features), n_trials=n_trials)
+    study.optimize(lambda t: objective(t, df_features), n_trials=n_trials, n_jobs=-1)
 
     print(f"\nBEST ACCURACY: {study.best_value * 100:.2f}%")
 

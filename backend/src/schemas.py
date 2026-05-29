@@ -57,6 +57,8 @@ class XAIDriver(BaseModel):
     feature: str
     impact: float
     direction: str
+    stability: float = 0.0
+    confidence: float = 0.0
 
 
 class XAIBlock(BaseModel):
@@ -70,6 +72,9 @@ class Projections(BaseModel):
     p90: float
     confidence: float
     reliability: str
+    bias: str = "NEUTRAL"
+    drift: float = 0.0
+    expected_move: float = 0.0
     # Legacy compatibility
     floor: Optional[float] = 0.0
     median: Optional[float] = 0.0
@@ -83,6 +88,10 @@ class RiskMetrics(BaseModel):
     kelly_fraction: float
     target_size: float
     max_drawdown: float
+
+    # Phase 2: Institutional Risk Index
+    institutional_risk_index: float = 0.0
+    risk_regime: str = "STABLE"
 
     # Transparency Fields
     win_probability: float = 0.0
@@ -210,10 +219,10 @@ class BacktestSignal(BaseModel):
 class BacktestSummary(BaseModel):
     ticker: str
     period: str
-    win_rate: float
-    profit_factor: float
-    sharpe_ratio: float
-    max_drawdown: float
+    win_rate: float | str
+    profit_factor: float | str
+    sharpe_ratio: float | str
+    max_drawdown: float | str
     vetoed_rate: float
     coverage: float
     best_signal: Optional[BacktestSignal] = None

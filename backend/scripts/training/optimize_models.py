@@ -137,6 +137,7 @@ def objective_catboost(trial, X_train, y_train):
         "loss_function": "MultiClass",
         "random_seed": 42,
         "verbose": 0,
+        "thread_count": -1,
     }
 
     tscv = TimeSeriesSplit(n_splits=5)
@@ -208,7 +209,7 @@ def run_optimization():
     ]:
         print(f"\nOptimizing {model_name}...")
         study = optuna.create_study(direction="maximize")
-        study.optimize(lambda t: obj_func(t, X_train, y_train), n_trials=50)
+        study.optimize(lambda t: obj_func(t, X_train, y_train), n_trials=50, n_jobs=-1)
         print(f"Best {model_name} AUC: {study.best_value}")
         with open(f"configs/best_{model_name}_params.json", "w") as f:
             json.dump(study.best_params, f, indent=2)

@@ -23,6 +23,7 @@ class MetaEnsemble:
             max_iter=1000,
             random_state=42,
             class_weight="balanced",
+            n_jobs=-1,
         )
 
         self.is_fitted = False

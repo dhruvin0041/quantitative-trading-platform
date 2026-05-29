@@ -301,7 +301,12 @@ def main():
     print("\n--- Training XGBoost Branch ---")
     with mlflow.start_run(run_name=f"XGB_AGENT_{ticker}"):
         # Load best params if they exist
-        xgb_params = {"objective": "multi:softprob", "num_class": 3, "random_state": 42}
+        xgb_params = {
+            "objective": "multi:softprob",
+            "num_class": 3,
+            "random_state": 42,
+            "n_jobs": -1,
+        }
         try:
             with open("configs/best_xgb_params.json") as f:
                 best_params = json.load(f)
@@ -391,7 +396,25 @@ def main():
         mlflow.sklearn.log_model(meta.meta_learner, "meta_ensemble")
         print("Meta-Ensemble saved to artifacts/meta_ensemble.joblib")
 
-    print(f"\n  >>> Step 4 Complete ({time.time() - step_start:.2f}s)")
+    # ==========================================
+    # STEP 5: SAVE ACTIVE TICKER
+    # ==========================================
+    print("\n[5/5] Saving active ticker metadata for frontend...")
+    try:
+        from src.data_ingestion.universes import UNIVERSES_METADATA
+        market = "us"
+        for m_id, m_dict in UNIVERSES_METADATA.items():
+            if ticker in m_dict:
+                market = m_id
+                break
+        
+        with open("configs/active_ticker.json", "w") as f:
+            json.dump({"ticker": ticker, "market": market}, f)
+        print(f"  >>> Active ticker saved: {ticker} ({market})")
+    except Exception as e:
+        print(f"  [ERROR] Could not save active ticker metadata: {e}")
+
+    print(f"\n  >>> Steps Complete ({time.time() - pipeline_start:.2f}s)")
     print(
         f"\n>>> UNIFIED TRAINING PIPELINE COMPLETE ({time.time() - pipeline_start:.2f}s) <<<"
     )

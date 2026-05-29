@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-from datetime import datetime
 from src.execution.signal_learning import SignalPerformanceResearch
 from src.execution.statistical_engine import StatisticalValidityEngine
 from src.execution.forensic_reset import ForensicPortfolioResetEngine
@@ -48,68 +47,36 @@ class PerformanceAnalyzer:
                 "signal_research": {},
             }
 
-        # Phase 7: Segment pre-repair vs post-repair analytics
+        # Segmentation Logic (Phase 7)
         segmentation = self.forensic_reset.segment_telemetry(snapshots, trade_history)
-        trusted_snapshots = segmentation["validated_snapshots"]
-        trusted_history = segmentation["validated_history"]
-
-        # If no trusted era data yet, still allow analytics but mark as contaminated or insufficient
-        active_snapshots = trusted_snapshots if trusted_snapshots else snapshots
-        active_history = trusted_history if trusted_history else trade_history
+        active_snapshots = segmentation["validated_snapshots"] if segmentation["validated_snapshots"] else snapshots
+        active_history = segmentation["validated_history"] if segmentation["validated_history"] else trade_history
 
         df_snapshots = pd.DataFrame(active_snapshots)
         df_snapshots["time"] = pd.to_datetime(df_snapshots["time"])
         df_snapshots = df_snapshots.set_index("time")
 
-        # Daily Returns
+        # Daily Returns & Rolling Metrics (Phase 10)
         daily_equity = df_snapshots["equity"].resample("D").last().ffill()
         daily_returns = daily_equity.pct_change().dropna()
+        
+        rolling_sharpe = daily_returns.rolling(window=60).apply(lambda x: self.calculate_sharpe(x)) if len(daily_returns) >= 60 else pd.Series()
+        rolling_sortino = daily_returns.rolling(window=60).apply(lambda x: self.calculate_sortino(x)) if len(daily_returns) >= 60 else pd.Series()
 
         # Institutional PnL Breakdown
-        today = datetime.now().date()
-        mtd_start = today.replace(day=1)
-        ytd_start = today.replace(month=1, day=1)
-
-        today_equity = (
-            daily_equity.iloc[-1] if not daily_equity.empty else initial_capital
-        )
-        yesterday_equity = (
-            daily_equity.iloc[-2] if len(daily_equity) > 1 else initial_capital
-        )
-
-        mtd_equity_start = (
-            daily_equity.loc[daily_equity.index >= pd.Timestamp(mtd_start)].iloc[0]
-            if not daily_equity.loc[daily_equity.index >= pd.Timestamp(mtd_start)].empty
-            else initial_capital
-        )
-        ytd_equity_start = (
-            daily_equity.loc[daily_equity.index >= pd.Timestamp(ytd_start)].iloc[0]
-            if not daily_equity.loc[daily_equity.index >= pd.Timestamp(ytd_start)].empty
-            else initial_capital
-        )
-
-        today_pnl = today_equity - yesterday_equity
-        mtd_pnl = today_equity - mtd_equity_start
-        ytd_pnl = today_equity - ytd_equity_start
-        inception_pnl = today_equity - initial_capital
-        inception_return_pct = (
-            ((today_equity / initial_capital) - 1) * 100
-            if initial_capital != 0
-            else 0.0
-        )
+        today_equity = daily_equity.iloc[-1] if not daily_equity.empty else initial_capital
+        inception_return_pct = ((today_equity / initial_capital) - 1) * 100 if initial_capital != 0 else 0.0
 
         # Monthly Returns
         monthly_equity = df_snapshots["equity"].resample("ME").last().ffill()
         monthly_returns = monthly_equity.pct_change().dropna()
 
-        # Risk Metrics (Portfolio Level)
+        # Portfolio Level Metrics
         sharpe = self.calculate_sharpe(daily_returns)
         sortino = self.calculate_sortino(daily_returns)
-        max_dd, calmar, peak_info, trough_info = self.calculate_drawdown_metrics(
-            daily_equity, daily_returns
-        )
+        max_dd, calmar, peak_info, trough_info = self.calculate_drawdown_metrics(daily_equity, daily_returns)
 
-        # Consistent Trade Metrics (Asset Level)
+        # Advanced Trade Analytics (Phase 10)
         trades_df = pd.DataFrame(active_history) if active_history else pd.DataFrame()
         win_rate = 0.0
         profit_factor = 0.0
@@ -118,43 +85,35 @@ class PerformanceAnalyzer:
         closed_trades_count = 0
         realized_pnl = 0.0
         expectancy = 0.0
+        mae_avg = 0.0
+        mfe_avg = 0.0
+        avg_hold_duration = 0.0
 
         if not trades_df.empty:
-            if "pnl" in trades_df.columns:
-                realized_pnl = trades_df[trades_df["action"] == "SELL"]["pnl"].sum()
-
             sells = trades_df[trades_df["action"] == "SELL"]
             if not sells.empty:
                 closed_trades_count = len(sells)
                 wins = sells[sells["pnl"] > 0]
                 losses = sells[sells["pnl"] < 0]
                 wins_count = len(wins)
-                losses_count = len(losses)
                 win_rate = wins_count / closed_trades_count
+                realized_pnl = sells["pnl"].sum()
 
                 gross_profit = wins["pnl"].sum()
                 gross_loss = abs(losses["pnl"].sum())
-
-                if gross_loss > 0:
-                    profit_factor = gross_profit / gross_loss
-                else:
-                    profit_factor = 10.0 if wins_count > 0 else 0.0
-
+                profit_factor = gross_profit / gross_loss if gross_loss > 0 else (10.0 if wins_count > 0 else 0.0)
                 expectancy = self.calculate_expectancy(win_rate, wins, losses)
-
-        total_trades = len(active_history) if active_history else 0
-        unrealized_pnl = today_equity - (initial_capital + realized_pnl)
-
-        # Phase 12: Signal Quality Research
-        quality_research = {}
-        if signal_data is not None:
-            # Filter signal data for trusted era if possible
-            if "timestamp" in signal_data.columns:
-                signal_data["timestamp"] = pd.to_datetime(signal_data["timestamp"])
-                signal_data = signal_data[
-                    signal_data["timestamp"] >= self.forensic_reset.validated_start_date
-                ]
-            quality_research = self.signal_research.analyze_quality_buckets(signal_data)
+                
+                # MAE / MFE Calculation (Simulation or Paper History)
+                if "mae" in sells.columns:
+                    mae_avg = sells["mae"].mean()
+                if "mfe" in sells.columns:
+                    mfe_avg = sells["mfe"].mean()
+                
+                # Holding Duration
+                if "entry_time" in sells.columns and "exit_time" in sells.columns:
+                    durations = pd.to_datetime(sells["exit_time"]) - pd.to_datetime(sells["entry_time"])
+                    avg_hold_duration = durations.mean().total_seconds() / 3600 # hours
 
         summary_metrics = {
             "total_return": inception_return_pct,
@@ -164,48 +123,40 @@ class PerformanceAnalyzer:
             "max_drawdown": max_dd * 100,
             "win_rate": win_rate * 100,
             "profit_factor": profit_factor,
-            "today_pnl": today_pnl,
-            "mtd_pnl": mtd_pnl,
-            "ytd_pnl": ytd_pnl,
-            "inception_pnl": inception_pnl,
             "realized_pnl": realized_pnl,
-            "unrealized_pnl": unrealized_pnl,
-            "total_trades": total_trades,
-            "open_trades": total_trades - closed_trades_count,
+            "total_trades": len(active_history),
             "closed_trades": closed_trades_count,
-            "winning_trades": wins_count,
-            "losing_trades": losses_count,
-            "initial_capital": initial_capital,
-            "peak_equity": peak_info["value"],
-            "peak_date": peak_info["date"],
-            "trough_equity": trough_info["value"],
-            "trough_date": trough_info["date"],
             "expectancy": expectancy,
+            "mae_avg": mae_avg,
+            "mfe_avg": mfe_avg,
+            "avg_hold_duration": avg_hold_duration,
         }
 
+        # Unified Statistical Gating (Phase 1)
         stat_validity = self.stat_engine.validate_statistics(
-            daily_returns.tolist() if not daily_returns.empty else [],
-            active_history if active_history else [],
+            daily_returns.tolist(),
+            active_history,
             summary_metrics,
         )
 
-        res = {
+        return {
             "summary": stat_validity["validated_metrics"],
             "confidence_intervals": stat_validity["confidence_intervals"],
             "sample_sizes": stat_validity["sample_sizes"],
+            "rolling": {
+                "sharpe": rolling_sharpe.tail(30).to_dict(),
+                "sortino": rolling_sortino.tail(30).to_dict()
+            },
             "returns": {
                 "daily": daily_returns.tail(30).to_dict(),
                 "monthly": monthly_returns.to_dict(),
             },
-            "attribution": {"by_regime": {}, "by_sector": {}},
-            "signal_research": quality_research,
             "forensic_audit": {
                 "validated_start_date": segmentation["validated_start_date"],
-                "contaminated_data_isolated": True,
                 "trusted_era_active": segmentation["trusted_era_active"],
             },
         }
-        return res
+
 
     def calculate_sharpe(self, returns):
         """Standardized Sharpe: (Mean - RiskFree) / StdDev * sqrt(252)"""

@@ -1,4 +1,5 @@
 from typing import Dict
+from src.execution.governance_engine import SignalGovernanceEngine
 
 
 class AlphaAgent:
@@ -15,33 +16,16 @@ class AlphaAgent:
 class RiskAgent:
     """
     Final Arbiter: Validates signals against VaR and crowding metrics.
-    Has Veto power.
+    Integrates with the Signal Governance Engine for explicit auditing.
     """
 
-    def validate_trade(self, alpha_signal: Dict, risk_metrics: Dict):
-        is_safe = True
-        veto_reason = None
+    def __init__(self):
+        self.governance = SignalGovernanceEngine()
 
-        # institutional veto logic
-        if alpha_signal["signal_idx"] in [0, 2] and risk_metrics.get(
-            "stampede_risk", {}
-        ).get("is_crowded", False):
-            is_safe = False
-            veto_reason = "Stampede Risk (Crowded Trade)"
-
-        if risk_metrics.get("beta", 1.0) > 2.5:
-            is_safe = False
-            veto_reason = "Beta too high (Extreme Volatility)"
-
-        if alpha_signal["confidence"] < 0.65:
-            is_safe = False
-            veto_reason = "Low Confidence Alpha"
-
-        if risk_metrics.get("uncertainty_score", 0.0) > 0.40:
-            is_safe = False
-            veto_reason = f"High Prediction Uncertainty ({risk_metrics.get('uncertainty_score'):.2f})"
-
-        return {"is_safe": is_safe, "veto_reason": veto_reason}
+    def validate_trade(self, alpha_signal: Dict, risk_metrics: Dict, market_regime: str):
+        # Delegate to institutional governance engine for transparent decision tree
+        audit = self.governance.audit_signal(alpha_signal, risk_metrics, market_regime)
+        return audit
 
 
 class ExecutionAgent:
@@ -60,7 +44,7 @@ class ExecutionAgent:
 class InstitutionalOrchestrator:
     """
     SOTA 2026 Agentic Mesh Orchestrator.
-    Coordinates the collaborative intelligence loop.
+    Coordinates the collaborative intelligence loop with full governance transparency.
     """
 
     def __init__(self):
@@ -68,12 +52,12 @@ class InstitutionalOrchestrator:
         self.risk_agent = RiskAgent()
         self.execution_agent = ExecutionAgent()
 
-    def run_consensus(self, agreement_data: Dict, risk_metrics: Dict):
+    def run_consensus(self, agreement_data: Dict, risk_metrics: Dict, market_regime: str):
         # 1. Generate Alpha
         alpha = self.alpha_agent.generate_alpha_signal(agreement_data)
 
-        # 2. Risk Validation (The Veto)
-        risk_check = self.risk_agent.validate_trade(alpha, risk_metrics)
+        # 2. Risk Validation (The Institutional Governance Pass)
+        governance_audit = self.risk_agent.validate_trade(alpha, risk_metrics, market_regime)
 
         # 3. Execution Routing
         execution = self.execution_agent.propose_execution(
@@ -82,16 +66,19 @@ class InstitutionalOrchestrator:
         )
 
         consensus_action = (
-            alpha["signal_idx"] if risk_check["is_safe"] else 1
+            alpha["signal_idx"] if governance_audit["is_safe"] else 1
         )  # Fallback to HOLD
 
         return {
             "final_action_idx": consensus_action,
             "agent_responses": {
                 "alpha": alpha,
-                "risk": risk_check,
+                "governance": governance_audit,
                 "execution": execution,
             },
-            "consensus_status": "APPROVED" if risk_check["is_safe"] else "VETOED",
+            "consensus_status": "APPROVED" if governance_audit["is_safe"] else "VETOED",
             "agreement": agreement_data["agreement_score"],
+            "decision_tree": governance_audit["decision_tree"],
+            "veto_reason": governance_audit["veto_reason"],
+            "execution_state": governance_audit["execution_state"],
         }

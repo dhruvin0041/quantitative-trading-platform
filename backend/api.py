@@ -289,6 +289,17 @@ async def get_stock_universe():
     return universe_data
 
 
+@app.get("/active_ticker", dependencies=[Depends(verify_api_key)])
+async def get_active_ticker():
+    try:
+        with open("configs/active_ticker.json", "r") as f:
+            data = json.load(f)
+            return data
+    except Exception:
+        # Default to Apple if no training run has set an active ticker
+        return {"ticker": "AAPL", "market": "us"}
+
+
 @app.get(
     "/predict", dependencies=[Depends(verify_api_key)], response_model=PredictResponse
 )

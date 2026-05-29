@@ -20,6 +20,7 @@ from src.execution.risk_manager import (
     get_position_sizing,
     calculate_beta,
     detect_stampede_risk,
+    InstitutionalRiskArbitrator,
 )
 from src.data_ingestion.nlp_processor import NewsTokenizer
 from src.execution.signal_intelligence import (
@@ -69,6 +70,7 @@ class InferenceService:
         self.confidence_engine = ConfidenceBreakdownEngine()
         self.execution_authority = ExecutionAuthorityEngine()
         self.governance_analytics = SignalGovernanceAnalytics()
+        self.risk_arbitrator = InstitutionalRiskArbitrator()
         self.paper_engine = paper_engine
         self.perf_analyzer = perf_analyzer
         self.journal = signal_journal

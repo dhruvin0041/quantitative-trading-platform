@@ -27,11 +27,23 @@ export default function HydraTerminal() {
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   const [isBacktestOpen, setBacktestOpen] = useState(false);
   
-  // 1. Load Universe
+  // 1. Load Universe and Active Ticker
   const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   useEffect(() => {
+    // Fetch Active Ticker from latest training run
+    fetch(`${API_URL}/active_ticker`, {
+      headers: { "X-API-Key": API_KEY }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.ticker) setTicker(data.ticker);
+        if (data.market) setMarket(data.market as 'us' | 'india');
+      })
+      .catch(err => console.error("Failed to fetch active ticker", err));
+
+    // Fetch Universe
     fetch(`${API_URL}/universe`, {
       headers: { "X-API-Key": API_KEY }
     })
@@ -326,64 +338,80 @@ export default function HydraTerminal() {
         </motion.aside>
 
         {/* CENTER WORKSPACE - CHART & SIGNALS */}
-        <main className="flex-1 flex flex-col min-w-0 bg-muted/20 dark:bg-background">
+        <main className="flex-1 flex flex-col min-w-0 bg-muted/5 dark:bg-background overflow-y-auto hide-scrollbar">
           
-          {/* Header Status Strip */}
-          <div className="h-16 border-b border-border flex items-center justify-between px-6 bg-background sticky top-[5.5rem] z-30">
-            <div className="flex items-center gap-4 text-foreground">
+          {/* Header Status Strip - Standardized (Phase 8) */}
+          <div className="h-16 border-b border-border flex items-center justify-between px-6 bg-background/50 backdrop-blur-sm sticky top-0 z-30">
+            <div className="flex items-center gap-6 text-foreground">
               <div className="flex flex-col">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-2xl font-black tracking-tight">{ticker}</h2>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-2xl font-black tracking-tighter leading-none">{ticker}</h2>
                   {chartData?.metadata && (
-                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-muted border border-border">
+                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-muted/50 border border-border/50 shadow-sm">
                       <span className="text-[10px] leading-none">{chartData.metadata.market === 'INDIA' ? '🇮🇳' : '🇺🇸'}</span>
-                      <span className="text-[8px] font-black uppercase tracking-tighter opacity-70">
-                        {chartData.metadata.market} | {chartData.metadata.exchange} | {chartData.metadata.currency}
+                      <span className="text-[9px] font-bold uppercase tracking-tight opacity-70 font-mono">
+                        {chartData.metadata.exchange} • {chartData.metadata.currency}
                       </span>
                     </div>
                   )}
                 </div>
-                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">{chartData?.metadata?.name || ticker}</span>
+                <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-[0.2em] mt-0.5">{chartData?.metadata?.name || ticker}</span>
               </div>
+              
               {chartData && !loading && (
-                <div className="flex items-center gap-2">
-                  <span className={cn(
-                    "px-3 py-1 text-xs font-black rounded-full border-2 uppercase tracking-widest shadow-sm",
-                    primaryAction === 'BUY' ? "bg-[var(--signal-buy)] border-[var(--signal-buy)] text-white" :
-                    primaryAction === 'SELL' ? "bg-[var(--signal-sell)] border-[var(--signal-sell)] text-white" :
-                    "bg-[var(--signal-hold)] border-[var(--signal-hold)] text-white"
-                  )}>
-                    {primaryAction}
-                  </span>
-                  <span className="font-mono text-sm font-bold opacity-70">{confidence} CONF</span>
+                <div className="flex items-center gap-3 pl-6 border-l border-border/40">
+                  <div className="flex flex-col">
+                     <span className="text-[8px] font-black text-muted-foreground uppercase tracking-widest leading-none mb-1">Signal Authority</span>
+                     <div className="flex items-center gap-2">
+                        <span className={cn(
+                          "px-2.5 py-0.5 text-[10px] font-black rounded border-2 uppercase tracking-widest shadow-sm",
+                          primaryAction === 'BUY' ? "bg-[var(--signal-buy)]/10 border-[var(--signal-buy)] text-[var(--signal-buy)]" :
+                          primaryAction === 'SELL' ? "bg-[var(--signal-sell)]/10 border-[var(--signal-sell)] text-[var(--signal-sell)]" :
+                          "bg-[var(--signal-hold)]/10 border-[var(--signal-hold)] text-[var(--signal-hold)]"
+                        )}>
+                          {primaryAction}
+                        </span>
+                        <span className="font-mono text-xs font-black opacity-80 tabular-nums">{confidence} <span className="text-[9px] font-bold opacity-50 uppercase">Conf</span></span>
+                     </div>
+                  </div>
                 </div>
               )}
             </div>
-            <div className="text-right text-foreground flex items-center gap-3">
-               <div className="font-mono text-2xl font-bold">{currencySymbol}{chartData?.current_price?.toFixed(2) || '0.00'}</div>
+
+            <div className="text-right text-foreground flex items-center gap-4">
+               <div className="flex flex-col items-end">
+                  <span className="text-[8px] font-black text-muted-foreground uppercase tracking-widest leading-none mb-1">Mark Price</span>
+                  <div className="font-mono text-2xl font-black tracking-tighter tabular-nums leading-none">
+                    <span className="text-muted-foreground/60 mr-0.5">{currencySymbol}</span>
+                    {chartData?.current_price?.toFixed(2) || '0.00'}
+                  </div>
+               </div>
+               
                {chartData && !loading && (
-                  <div className="flex gap-2">
-                     <span className={cn("text-[10px] font-black uppercase px-2 py-1 rounded-full border", 
-                        chartData.market_regime === 'BULL' ? "bg-green-500/20 text-green-500 border-green-500/30" :
-                        chartData.market_regime === 'BEAR' ? "bg-red-500/20 text-red-500 border-red-500/30" :
-                        "bg-zinc-500/20 text-zinc-400 border-zinc-500/30")}>
-                        {chartData.market_regime === 'BULL' ? '🐂' : chartData.market_regime === 'BEAR' ? '🐻' : '⚖️'} {chartData.market_regime}
-                     </span>
-                     <span className={cn("text-[10px] font-black uppercase px-2 py-1 rounded-full border", 
-                        chartData.volatility_state === 'HIGH' ? "bg-red-500/20 text-red-500 border-red-500/30" :
-                        chartData.volatility_state === 'MEDIUM' ? "bg-orange-500/20 text-orange-500 border-orange-500/30" :
-                        "bg-green-500/20 text-green-500 border-green-500/30")}>
-                        ⚡ {chartData.volatility_state} VOL
-                     </span>
-                     {(chartData.uncertainty_score !== undefined && chartData.uncertainty_score > 45) && (
-                         <span className="text-[10px] font-black uppercase px-2 py-1 rounded-full border bg-red-500 text-white border-red-600">
-                             ⚠️ VETOED
-                         </span>
-                     )}
+                  <div className="flex gap-2 pl-4 border-l border-border/40">
+                     <div className="flex flex-col items-center p-1.5 rounded bg-muted/30 border border-border/40">
+                        <span className="text-[7px] font-black uppercase text-muted-foreground/60 mb-0.5">Regime</span>
+                        <span className={cn("text-[9px] font-black uppercase", 
+                           chartData.market_regime === 'BULL' ? "text-emerald-500" :
+                           chartData.market_regime === 'BEAR' ? "text-red-500" :
+                           "text-zinc-500")}>
+                           {chartData.market_regime === 'BULL' ? '🐂' : chartData.market_regime === 'BEAR' ? '🐻' : '⚖️'} {chartData.market_regime}
+                        </span>
+                     </div>
+                     <div className="flex flex-col items-center p-1.5 rounded bg-muted/30 border border-border/40">
+                        <span className="text-[7px] font-black uppercase text-muted-foreground/60 mb-0.5">Volatility</span>
+                        <span className={cn("text-[9px] font-black uppercase", 
+                           chartData.volatility_state === 'HIGH' ? "text-red-500" :
+                           chartData.volatility_state === 'MEDIUM' ? "text-amber-500" :
+                           "text-emerald-500")}>
+                           ⚡ {chartData.volatility_state}
+                        </span>
+                     </div>
                   </div>
                )}
             </div>
           </div>
+
 
           {error && (
             <div className="m-4 bg-destructive/10 border border-destructive/30 text-destructive p-3 rounded-md text-xs font-mono">

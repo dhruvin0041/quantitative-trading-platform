@@ -22,7 +22,10 @@ interface PerformanceSummary {
   winning_trades: number;
   losing_trades: number;
   initial_capital: number;
-  expectancy: number;
+  expectancy: number | string;
+  mae_avg: number;
+  mfe_avg: number;
+  avg_hold_duration: number;
 }
 
 interface PaperTradingPerformanceProps {
@@ -65,7 +68,7 @@ export function PaperTradingPerformance({ currency = '$' }: PaperTradingPerforma
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const summary: PerformanceSummary = (performance as any)?.summary || {
     total_return: 0, sharpe: 0, sortino: 0, calmar: 0, max_drawdown: 0, win_rate: 0, profit_factor: 0, today_pnl: 0, mtd_pnl: 0, ytd_pnl: 0,
-    total_trades: 0, open_trades: 0, closed_trades: 0, winning_trades: 0, losing_trades: 0
+    total_trades: 0, open_trades: 0, closed_trades: 0, winning_trades: 0, losing_trades: 0, expectancy: 0, mae_avg: 0, mfe_avg: 0, avg_hold_duration: 0
   };
 
   const getMetricColor = (label: string, value: number | string) => {
@@ -84,6 +87,10 @@ export function PaperTradingPerformance({ currency = '$' }: PaperTradingPerforma
     if (label === 'Sharpe') {
       if (value > 1.0) return 'text-green-500 shadow-green-500/20';
       if (value >= 0.0) return 'text-amber-500 shadow-amber-500/20';
+      return 'text-red-500 shadow-red-500/20';
+    }
+    if (label === 'Expectancy') {
+      if (value > 0) return 'text-green-500 shadow-green-500/20';
       return 'text-red-500 shadow-red-500/20';
     }
     return 'text-foreground';
@@ -123,6 +130,20 @@ export function PaperTradingPerformance({ currency = '$' }: PaperTradingPerforma
       icon: <BarChart className="w-3 h-3" />,
       tooltip: "Downside risk-adjusted return."
     },
+    { 
+      label: 'Expectancy', 
+      value: formatMetric(summary.expectancy, 2, currency), 
+      raw: summary.expectancy,
+      icon: <Target className="w-3 h-3" />,
+      tooltip: "Average expected profit per trade."
+    },
+    { 
+      label: 'Hold Time', 
+      value: formatMetric(summary.avg_hold_duration, 1, 'H'), 
+      raw: summary.avg_hold_duration,
+      icon: <TrendingUp className="w-3 h-3" />,
+      tooltip: "Average trade holding duration."
+    },
   ];
 
   return (
@@ -138,7 +159,7 @@ export function PaperTradingPerformance({ currency = '$' }: PaperTradingPerforma
       </div>
       
       <div className="p-4 flex flex-col gap-4">
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           {metrics.map(m => (
             <div key={m.label} className="flex flex-col items-center justify-center p-2 rounded bg-muted/30 dark:bg-black/20 border border-border relative group/m">
               <span className="text-muted-foreground mb-1">{m.icon}</span>

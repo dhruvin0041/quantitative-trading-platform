@@ -101,7 +101,7 @@ def add_advanced_features(
     # The most important feature for the AI: "Where are we inside the bands?"
     # 1.0 means touching the absolute top (Sell zone). 0.0 means touching the bottom (Buy zone).
     df["BB_Position"] = (df["Close"] - df["BB_Lower"]) / (
-        df["BB_Upper"] - df["BB_Lower"]
+        df["BB_Upper"] - df["BB_Lower"] + 1e-9
     )
 
     # Fast RSI (Makes the AI highly sensitive to sudden 3-day drops/spikes)
@@ -241,7 +241,7 @@ def add_advanced_features(
     )
 
     # Volatility Expansion / Compression (Bollinger Band Width)
-    df["BB_Width"] = (df["BB_Upper"] - df["BB_Lower"]) / df["BB_Mid"]
+    df["BB_Width"] = (df["BB_Upper"] - df["BB_Lower"]) / (df["BB_Mid"] + 1e-9)
     df["Vol_Expansion"] = (
         df["BB_Width"]
         > df["BB_Width"].rolling(20).mean() + df["BB_Width"].rolling(20).std()
@@ -256,12 +256,12 @@ def add_advanced_features(
 
     # --- Statistical Features ---
     # Z-Score Price and Volume
-    df["Z_Score_Price"] = (df["Close"] - df["Close"].rolling(20).mean()) / df[
-        "Close"
-    ].rolling(20).std()
-    df["Z_Score_Volume"] = (df["Volume"] - df["Volume"].rolling(20).mean()) / df[
-        "Volume"
-    ].rolling(20).std()
+    df["Z_Score_Price"] = (df["Close"] - df["Close"].rolling(20).mean()) / (
+        df["Close"].rolling(20).std() + 1e-9
+    )
+    df["Z_Score_Volume"] = (df["Volume"] - df["Volume"].rolling(20).mean()) / (
+        df["Volume"].rolling(20).std() + 1e-9
+    )
 
     # Rolling Skewness and Kurtosis
     df["Skewness_20"] = df["Log_Ret"].rolling(window=20).skew()
@@ -272,7 +272,9 @@ def add_advanced_features(
     var_5 = df["Log_Ret"].rolling(5).sum().rolling(20).var()
     var_1 = df["Log_Ret"].rolling(20).var()
 
-    df["Hurst_Proxy"] = np.log(var_5 / (5 * var_1 + 1e-9)) / np.log(5) + 0.5
+    # Numerical Stability: log(ratio) can explode if denominator is tiny or numerator is <= 0
+    ratio = var_5 / (5 * var_1 + 1e-9)
+    df["Hurst_Proxy"] = np.log(np.maximum(ratio, 1e-9)) / np.log(5) + 0.5
     df["Hurst_Proxy"] = df["Hurst_Proxy"].fillna(0.5)
 
     # Fractal Dimension Proxy
@@ -303,7 +305,7 @@ def add_advanced_features(
     df["Dollar_Volume"] = df["Close"] * df["Volume"]
 
     # Relative Volume (RVOL)
-    df["Relative_Volume"] = df["Volume"] / df["Volume"].rolling(20).mean()
+    df["Relative_Volume"] = df["Volume"] / (df["Volume"].rolling(20).mean() + 1e-9)
     df["Volume_Shock"] = (df["Relative_Volume"] > 3.0).astype(int)
 
     # Roll Spread Estimate (Roll 1984 effective spread proxy)
@@ -350,6 +352,14 @@ def add_advanced_features(
     # Ensure no trailing NaNs from forward-fillable metrics
     df["VIX"] = df["VIX"].ffill().fillna(0)
     df["Treasury_10Y"] = df["Treasury_10Y"].ffill().fillna(0)
+
+    # ==========================================
+    # FINAL NUMERICAL STABILITY GUARD
+    # ==========================================
+    # Replace inf and -inf with NaN to prevent ML model crashes
+    df.replace([np.inf, -np.inf], np.nan, inplace=True)
+    # Forward fill then zero fill for consistency
+    df = df.ffill().fillna(0)
 
     # Return full dataframe to preserve chart alignment
     return df

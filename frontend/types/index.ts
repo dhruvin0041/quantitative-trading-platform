@@ -159,6 +159,7 @@ export interface ChartData {
   forecast_interpretation: string;
   forecast_explanation: string;
   consensus_intelligence: string;
+  decision_tree?: { node: string; status: string; detail: string }[];
   
   // Phase 10: Institutional Explainability
   signal_reasoning?: string;
@@ -203,6 +204,10 @@ export interface ChartData {
     target_size: number;
     max_drawdown: number;
     
+    // Phase 2: Institutional Risk Index
+    institutional_risk_index: number;
+    risk_regime: string;
+
     // Transparency Fields
     win_probability: number;
     expected_value: number;
@@ -213,7 +218,7 @@ export interface ChartData {
     trough_date: string;
   };
   xai?: {
-    top_drivers: { feature: string; impact: number; direction: string }[];
+    top_drivers: { feature: string; impact: number; direction: string; stability: number; confidence: number; }[];
     explanation: string;
   };
   
@@ -233,6 +238,8 @@ export interface ChartData {
     ceiling: number;
     confidence?: number;
     reliability?: string;
+    drift?: number;
+    expected_move?: number;
   };
   technical_snapshot: TechnicalSnapshot;
   qualitative_alpha?: string | null;

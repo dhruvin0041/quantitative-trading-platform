@@ -114,17 +114,39 @@ class BacktestService:
             rolling_max = cum_ret.cummax()
             drawdowns = (cum_ret - rolling_max) / rolling_max
             max_dd = drawdowns.min() * 100
+            
+            calmar = (returns.mean() * (252 / 5)) / abs(max_dd) if abs(max_dd) > 1e-6 else 0.0
 
             best_row = df_trades.loc[df_trades["actual_5day_return"].idxmax()]
             worst_row = df_trades.loc[df_trades["actual_5day_return"].idxmin()]
+            
+            # Apply Institutional Gating
+            from src.execution.statistical_engine import StatisticalValidityEngine
+            engine = StatisticalValidityEngine()
+            
+            # We construct a mock trades list and metrics to pass into validate_statistics
+            mock_trades = [{"pnl": r} for r in df_trades["actual_5day_return"]]
+            raw_metrics = {
+                "total_return": float((cum_ret.iloc[-1] - 1) * 100) if not cum_ret.empty else 0.0,
+                "sharpe": sharpe,
+                "sortino": sharpe, # Simplified for backtest unless requested
+                "calmar": calmar,
+                "max_drawdown": max_dd,
+                "win_rate": win_rate,
+                "profit_factor": pf,
+                "expectancy": 0.0
+            }
+            
+            validity = engine.validate_statistics(returns.tolist(), mock_trades, raw_metrics)
+            valid_metrics = validity["validated_metrics"]
 
             return BacktestSummary(
                 ticker=ticker,
                 period=period,
-                win_rate=round(win_rate, 1),
-                profit_factor=round(pf, 2),
-                sharpe_ratio=round(sharpe, 2),
-                max_drawdown=round(max_dd, 1),
+                win_rate=valid_metrics.get("win_rate", round(win_rate, 1)),
+                profit_factor=valid_metrics.get("profit_factor", round(pf, 2)),
+                sharpe_ratio=valid_metrics.get("sharpe", round(sharpe, 2)),
+                max_drawdown=valid_metrics.get("max_drawdown", round(max_dd, 1)),
                 vetoed_rate=round(vetoed_rate, 1),
                 coverage=round(coverage, 1),
                 best_signal=BacktestSignal(
