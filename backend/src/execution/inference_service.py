@@ -207,7 +207,7 @@ class InferenceService:
         }
 
         consensus_result = self.orchestrator.run_consensus(
-            agreement_data, consensus_risk_input
+            agreement_data, consensus_risk_input, market_regime=regime_detailed
         )
         final_signal_idx = consensus_result["final_action_idx"]
         signals_map = {0: "SELL", 1: "HOLD", 2: "BUY"}
@@ -236,7 +236,7 @@ class InferenceService:
         signal_note = None
         if consensus_result["consensus_status"] == "VETOED":
             final_signal = "VETOED"
-            signal_note = consensus_result["agent_responses"]["risk"]["veto_reason"]
+            signal_note = consensus_result.get("veto_reason", "Vetoed by Governance")
         elif quality_metrics["grade"] == "NO_TRADE":
             final_signal = "HOLD"
             signal_note = f"Suppressed: Low Signal Quality ({quality_metrics['score']})"

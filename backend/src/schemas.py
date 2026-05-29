@@ -107,8 +107,8 @@ class SignalQuality(BaseModel):
     score: float = Field(ge=0.0, le=100.0)
     grade: str  # INSTITUTIONAL, WATCHLIST, NO_TRADE
     explanation: str
-    layers_passed: List[str]
-    layers_failed: List[str]
+    layers_passed: List[str] = []
+    layers_failed: List[str] = []
 
 
 class CalibrationMetrics(BaseModel):
