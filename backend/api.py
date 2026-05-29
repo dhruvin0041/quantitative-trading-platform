@@ -124,7 +124,7 @@ except KeyError:
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=FRONTEND_URLS + ["*"] if os.environ.get("DEBUG_CORS") == "1" else FRONTEND_URLS,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

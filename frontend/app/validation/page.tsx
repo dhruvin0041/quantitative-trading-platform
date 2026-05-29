@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { API_KEY, getBaseUrl } from '@/lib/config';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Activity, Trophy, LineChart, Layers, Crosshair, CheckCircle2, AlertTriangle, AlertCircle, TrendingDown } from 'lucide-react';
 
@@ -31,9 +32,7 @@ interface ValidationData {
 export default function ValidationDashboard() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<ValidationData | null>(null);
-
-  const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+  const API_URL = getBaseUrl();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -53,7 +52,7 @@ export default function ValidationDashboard() {
     fetchData();
     const interval = setInterval(fetchData, 60000);
     return () => clearInterval(interval);
-  }, [API_KEY, API_URL]);
+  }, [API_URL]);
 
   if (loading) {
     return (

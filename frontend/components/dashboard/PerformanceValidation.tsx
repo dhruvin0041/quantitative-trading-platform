@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Trophy } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { API_KEY, getBaseUrl } from '@/lib/config';
 
 interface ValidationMetric {
   label: string;
@@ -11,11 +12,9 @@ interface ValidationMetric {
 
 export function PerformanceValidation() {
   const [metrics, setMetrics] = useState<ValidationMetric[] | null>(null);
+  const API_URL = getBaseUrl();
 
   useEffect(() => {
-    const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-    
     fetch(`${API_URL}/performance`, {
       headers: { "X-API-Key": API_KEY }
     })

@@ -16,6 +16,7 @@ import { TechnicalSnapshot } from '@/components/dashboard/TechnicalSnapshot';
 import { BacktestPanel } from '@/components/dashboard/BacktestPanel';
 import { IntegrityAudit } from '@/components/dashboard/IntegrityAudit';
 import { PaperTradingPerformance } from '@/components/dashboard/PaperTradingPerformance';
+import { API_KEY, getBaseUrl } from '@/lib/config';
 
 export default function HydraTerminal() {
   const [ticker, setTicker] = useState<string>("AAPL"); 
@@ -26,10 +27,11 @@ export default function HydraTerminal() {
   const [error, setError] = useState<string | null>(null);
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   const [isBacktestOpen, setBacktestOpen] = useState(false);
-  
-  // 1. Load Universe and Active Ticker
-  const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+  const [API_URL, setApiUrl] = useState(getBaseUrl());
+
+  useEffect(() => {
+    setApiUrl(getBaseUrl());
+  }, []);
 
   useEffect(() => {
     // Fetch Active Ticker from latest training run

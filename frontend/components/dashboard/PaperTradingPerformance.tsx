@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 
 import { Target, TrendingUp, BarChart, History, PieChart, Activity, Briefcase } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { API_KEY, getBaseUrl } from '@/lib/config';
 
 interface PerformanceSummary {
   total_return: number;
@@ -36,8 +37,7 @@ export function PaperTradingPerformance({ currency = '$' }: PaperTradingPerforma
   const [performance, setPerformance] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+  const API_URL = getBaseUrl();
 
   useEffect(() => {
     const fetchPerf = async () => {
@@ -57,7 +57,7 @@ export function PaperTradingPerformance({ currency = '$' }: PaperTradingPerforma
     fetchPerf();
     const interval = setInterval(fetchPerf, 60000); // Update every minute
     return () => clearInterval(interval);
-  }, [API_URL, API_KEY]);
+  }, [API_URL]);
 
   if (loading) return (
     <div className="h-32 flex items-center justify-center bg-card/10 rounded-xl border border-border animate-pulse">

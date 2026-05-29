@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { API_KEY, getBaseUrl } from '@/lib/config';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Activity, ShieldAlert, LineChart, Layers, Target } from 'lucide-react';
 
@@ -39,11 +40,9 @@ interface PerfData {
 export default function InstitutionalDashboard() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<PerfData | null>(null);
+  const API_URL = getBaseUrl();
 
   useEffect(() => {
-    const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-
     const fetchStats = async () => {
       try {
         const res = await fetch(`${API_URL}/performance`, {

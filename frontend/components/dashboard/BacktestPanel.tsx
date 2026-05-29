@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Play, Loader2, TrendingUp, BarChart3, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { API_KEY, getBaseUrl } from '@/lib/config';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { BacktestSummary } from '@/types';
 
@@ -21,8 +22,7 @@ export function BacktestPanel({ isOpen, onClose, currentTicker }: BacktestPanelP
   const runBacktest = async () => {
     setLoading(true);
     setError(null);
-    const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+    const API_URL = getBaseUrl();
     
     try {
       const res = await fetch(`${API_URL}/backtest?ticker=${ticker}&period=${period}`, {
