@@ -157,24 +157,21 @@ def run_backtest():
         # Get regime states for the whole dataframe for speed
         regime_states = regime_model.predict(df)
 
-        for i in range(time_steps + 252, len(df)):
-            # Fix Root Cause 3: 60 days ending BEFORE current day
-            window = df.iloc[i - time_steps : i]
+        # Load the global scaler trained during the training phase to match production
+        scaler_global = joblib.load("artifacts/latest_scaler.joblib")
 
-            # Fix Root Cause 1: Fit scaler on training window ONLY (last 252 days before i)
-            train_window = df.iloc[i - time_steps - 252 : i]
-            scaler_t = StandardScaler()
-            scaler_t.fit(train_window[FEATURE_COLUMNS])
+        for i in range(time_steps + 252, len(df)):
+            window = df.iloc[i - time_steps : i]
 
             current_row = df.iloc[i]  # This is day t
             date = df.index[i]
 
             # Features
             features_df = window[FEATURE_COLUMNS].copy()
-            X_flat = scaler_t.transform(features_df.iloc[-1:])
+            X_flat = scaler_global.transform(features_df.iloc[-1:])
 
             # Scaled sequence
-            scaled_window = scaler_t.transform(features_df)
+            scaled_window = scaler_global.transform(features_df)
             X_seq = np.expand_dims(scaled_window, axis=0)  # shape (1, 60, features)
 
             # Predict

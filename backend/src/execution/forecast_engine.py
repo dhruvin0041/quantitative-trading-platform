@@ -107,8 +107,8 @@ class ForecastCalibrationEngine:
         """
         Generates P10/P50/P90 percentile bands with forecast drift and implied bias.
         """
-        avg_forecast = float(np.mean(raw_forecasts))
-        implied_move_pct = (avg_forecast - current_price) / current_price if current_price > 0 else 0
+        # raw_forecasts are now percentage returns
+        implied_move_pct = float(np.mean(raw_forecasts))
 
         # 1. Volatility Cone Parameters (Institutional Standard)
         # Use ATR-based standard deviation for the 10-day forecast horizon

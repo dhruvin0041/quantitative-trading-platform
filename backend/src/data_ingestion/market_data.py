@@ -118,12 +118,12 @@ def apply_dynamic_triple_barrier(
     # We must calculate Range targets for your regression output as well
     df["future_high"] = df["High"].rolling(window=horizon).max().shift(-horizon)
     df["future_low"] = df["Low"].rolling(window=horizon).min().shift(-horizon)
-    df["target_min"] = df["future_low"] - df["Close"]
-    df["target_max"] = df["future_high"] - df["Close"]
+    df["target_min"] = (df["future_low"] - df["Close"]) / df["Close"]
+    df["target_max"] = (df["future_high"] - df["Close"]) / df["Close"]
 
     # Direction is now based on the final horizon day, just to keep the tensor shapes happy
     df["future_close"] = df["Close"].shift(-horizon)
-    df["target_direction"] = (df["future_close"] > df["Close"]).astype(int)
+    df["target_direction"] = (df["future_close"] > df["Close"] * 1.02).astype(int)
 
     # Drop the last 'horizon' rows because we can't look into the future for them
     df = df.iloc[:-horizon].copy()

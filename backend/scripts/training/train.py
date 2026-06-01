@@ -62,18 +62,25 @@ def prepare_data(ticker, config):
     peer_df = add_upgraded_features(peer_df, spy_df, vix_df)
 
     # ROOT CAUSE 4: Fix Target Label Lookahead
-    df["target_direction"] = (df["Close"].shift(-5) > df["Close"] * 1.02).astype(int)
-    df["target_min"] = (df["Low"].rolling(5).min().shift(-5) - df["Close"]) / df[
-        "Close"
-    ]
-    df["target_max"] = (df["High"].rolling(5).max().shift(-5) - df["Close"]) / df[
-        "Close"
-    ]
-    df = apply_dynamic_triple_barrier(df)
+    # Targets are now calculated by apply_dynamic_triple_barrier
+    tp_mult, sl_mult, horizon = 2.0, 1.0, 10
+    opt_path = f"configs/optimized_params_{ticker}.json"
+    if os.path.exists(opt_path):
+        try:
+            with open(opt_path, "r") as f:
+                best_params = json.load(f)
+                tp_mult = best_params.get("tp_atr_multiplier", 2.0)
+                sl_mult = best_params.get("sl_atr_multiplier", 1.0)
+                horizon = best_params.get("horizon", 10)
+        except Exception:
+            pass
 
-    # Drop the last 10 rows (horizon=10) BEFORE sequence generation
-    df = df.iloc[:-10]
-    peer_df = peer_df.iloc[:-10]
+    df = apply_dynamic_triple_barrier(
+        df, tp_atr_multiplier=tp_mult, sl_atr_multiplier=sl_mult, horizon=horizon
+    )
+
+    # Note: apply_dynamic_triple_barrier drops the last horizon rows from df.
+    # The common_idx intersection below will align peer_df automatically.
 
     kept_cols = FEATURE_COLUMNS
 
@@ -264,6 +271,29 @@ def main():
     X_val = [ts_val, ts_val, ts_val, ts_val, ts_val, peer_val]
 
     print("\n--- Training Deep Learning Ensemble ---")
+    try:
+        opt_path = f"configs/optimized_params_{ticker}.json"
+        if os.path.exists(opt_path):
+            with open(opt_path, "r") as f:
+                best_dl = json.load(f)
+            # Map Optuna keys to model keys
+            mapping = {
+                "lstm_u1": "lstm_units_1", "lstm_u2": "lstm_units_2",
+                "lstm_d1": "lstm_dropout_1", "lstm_d2": "lstm_dropout_2",
+                "cnn_f1": "cnn_filters_1", "cnn_f2": "cnn_filters_2",
+                "cnn_k": "cnn_kernel", "cnn_d": "cnn_dense",
+                "tr_hs": "trans_head_size", "tr_h": "trans_heads",
+                "tr_ff": "trans_ff_dim", "tr_d": "trans_dropout",
+                "dense_1": "dense_units_1", "dense_2": "dense_units_2",
+                "dropout": "dropout_rate", "lr": "learning_rate"
+            }
+            for ok, mk in mapping.items():
+                if ok in best_dl:
+                    updated_config["model"][mk] = best_dl[ok]
+            print(f"Loaded optimized DL parameters from {opt_path}")
+    except Exception as e:
+        print(f"Could not load DL optimized params: {e}")
+
     with mlflow.start_run(run_name=f"DL_FUSION_{ticker}"):
         mlflow.log_params(updated_config["model"])
         mlflow.log_param("time_steps", updated_config["data"]["time_steps"])

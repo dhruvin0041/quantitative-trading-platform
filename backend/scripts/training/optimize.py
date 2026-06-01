@@ -1,4 +1,3 @@
-# optimize.py
 import os
 
 os.environ["TF_USE_LEGACY_KERAS"] = "1"
@@ -10,15 +9,13 @@ import argparse
 import optuna
 import numpy as np
 import xgboost as xgb
+import yfinance as yf
 from sklearn.metrics import accuracy_score
 from src.data_ingestion.market_data import (
     fetch_historical_data,
     apply_dynamic_triple_barrier,
 )
-from src.data_ingestion.technical_indicators import (
-    add_advanced_features,
-    feature_deflation,
-)
+from src.execution.live_inference import add_upgraded_features, FEATURE_COLUMNS
 from src.models.neural.fusion_network import build_fusion_model
 from src.features.sequence_builder import create_time_series_sequences
 from datetime import datetime
@@ -86,26 +83,16 @@ def objective(trial, df_features):
         "reg_lambda": trial.suggest_categorical("xgb_lam", [1e-8, 0.1, 1.0, 10.0]),
     }
 
-    # Prepare sequences
-    numerical_cols = [
-        col
-        for col in df_labeled.columns
-        if not col.startswith("target_") and not col.startswith("future_")
-    ]
-    df_deflated = feature_deflation(df_labeled[numerical_cols])
+    # Prepare sequences using exact live inference pipeline
+    from sklearn.preprocessing import StandardScaler
+    df_ready = df_labeled[FEATURE_COLUMNS + ["target_direction", "target_min", "target_max", "target_signal"]].copy()
+    
+    scaler = StandardScaler()
+    df_ready[FEATURE_COLUMNS] = scaler.fit_transform(df_ready[FEATURE_COLUMNS])
 
-    df_ready = pd.concat(
-        [
-            df_deflated,
-            df_labeled[
-                ["target_direction", "target_min", "target_max", "target_signal"]
-            ],
-        ],
-        axis=1,
-    )
     time_steps = 60
     ts_seq, y_dir, y_min, y_max = create_time_series_sequences(df_ready, time_steps)
-    y_sig = df_ready["target_signal"].values[time_steps - 1 :]
+    y_sig = df_ready["target_signal"].values[time_steps - 1 :].astype(int)
 
     split = int(len(ts_seq) * 0.8)
     X_train_dl = [
@@ -114,7 +101,7 @@ def objective(trial, df_features):
         ts_seq[:split],
         ts_seq[:split],
         ts_seq[:split],
-        ts_seq[:split],  # Dummy peer data
+        ts_seq[:split],  # Dummy peer data for optimization
     ]
     Y_train_dl = [
         y_dir[:split],
@@ -140,23 +127,27 @@ def objective(trial, df_features):
     )  # Reduced to 2 epochs for speed
 
     # Train XGB
-    X_xgb_train = ts_seq[:split, -1, :]
-    X_xgb_test = ts_seq[split:, -1, :]
-    xgb_model = xgb.XGBClassifier(
-        **xgb_params, objective="multi:softprob", num_class=3, n_jobs=-1
-    )
-    xgb_model.fit(X_xgb_train, y_sig[:split])
+    try:
+        X_xgb_train = ts_seq[:split, -1, :]
+        X_xgb_test = ts_seq[split:, -1, :]
+        xgb_model = xgb.XGBClassifier(
+            **xgb_params, objective="multi:softprob", num_class=3, n_jobs=-1
+        )
+        xgb_model.fit(X_xgb_train, y_sig[:split])
 
-    # Ensemble Validation
-    dl_preds = model.predict(X_test_dl, verbose=0)[2]
-    xgb_preds = xgb_model.predict_proba(X_xgb_test)
+        # Ensemble Validation
+        dl_preds = model.predict(X_test_dl, verbose=0)[2]
+        xgb_preds = xgb_model.predict_proba(X_xgb_test)
 
-    # Optimize weights
-    w_dl = trial.suggest_float("weight_dl", 0.2, 0.8)
-    ensemble_p = (dl_preds * w_dl) + (xgb_preds * (1 - w_dl))
+        # Optimize weights
+        w_dl = trial.suggest_float("weight_dl", 0.2, 0.8)
+        ensemble_p = (dl_preds * w_dl) + (xgb_preds * (1 - w_dl))
 
-    accuracy = accuracy_score(Y_test_sig, np.argmax(ensemble_p, axis=1))
-    return accuracy
+        accuracy = accuracy_score(Y_test_sig, np.argmax(ensemble_p, axis=1))
+        return accuracy
+    except Exception as e:
+        print(f"Trial failed due to model error: {e}")
+        return 0.0
 
 
 def run_optuna_optimization(ticker, n_trials=50, start="2020-01-01", end=None):
@@ -174,7 +165,15 @@ def run_optuna_optimization(ticker, n_trials=50, start="2020-01-01", end=None):
     # ==========================================
     print(f"--- Preparing Optimization Data for {ticker} ---")
     df_raw = fetch_historical_data(ticker, start_date=start, end_date=end)
-    df_features = add_advanced_features(df_raw.copy())
+    spy_df = yf.download("SPY", start=start, end=end, interval="1d", progress=False)
+    vix_df = yf.download("^VIX", start=start, end=end, interval="1d", progress=False)
+    
+    if isinstance(spy_df.columns, pd.MultiIndex):
+        spy_df.columns = spy_df.columns.droplevel(1)
+    if isinstance(vix_df.columns, pd.MultiIndex):
+        vix_df.columns = vix_df.columns.droplevel(1)
+
+    df_features = add_upgraded_features(df_raw.copy(), spy_df, vix_df)
 
     print(f"\nStarting Hybrid 5-Model Optimization for {ticker}...")
     study = optuna.create_study(direction="maximize")

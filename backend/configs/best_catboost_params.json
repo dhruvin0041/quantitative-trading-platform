@@ -1,10 +1,10 @@
 {
   "iterations": 100,
-  "depth": 8,
+  "depth": 6,
   "learning_rate": 0.1,
-  "l2_leaf_reg": 10,
-  "random_strength": 2.0,
-  "bagging_temperature": 1.0,
-  "border_count": 64,
-  "grow_policy": "Depthwise"
+  "l2_leaf_reg": 1,
+  "random_strength": 5.0,
+  "bagging_temperature": 0.5,
+  "border_count": 32,
+  "grow_policy": "Lossguide"
 }

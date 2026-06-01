@@ -90,19 +90,24 @@ class InferenceService:
         signal_id = f"SIG_{datetime.now().strftime('%Y%m%d%H%M%S')}_{ticker}_{str(uuid.uuid4())[:8]}"
 
         # 1. Fetch live data
-        (
-            ts_sequence,
-            peer_sequence,
-            tabular_row,
-            current_price,
-            updated_config,
-            market_regime,
-            req_conf,
-            vol_ratio,
-            tech_snapshot,
-            ticker_df_risk,
-            spy_df_risk,
-        ) = await asyncio.to_thread(fetch_live_data, ticker, config)
+        try:
+            (
+                ts_sequence,
+                peer_sequence,
+                tabular_row,
+                current_price,
+                updated_config,
+                market_regime,
+                req_conf,
+                vol_ratio,
+                tech_snapshot,
+                ticker_df_risk,
+                spy_df_risk,
+            ) = await asyncio.to_thread(fetch_live_data, ticker, config)
+        except Exception as e:
+            logger.error(f"Error fetching live data for {ticker}: {str(e)}")
+            from fastapi import HTTPException
+            raise HTTPException(status_code=503, detail=f"Market data unavailable or insufficient for {ticker}: {str(e)}")
 
         # 2. Pre-Inference Intelligence
         regime_detailed = self.regime_v2.detect_regime_v2(ticker_df_risk, spy_df_risk)
@@ -343,11 +348,13 @@ class InferenceService:
                 },
             },
             "projections": {
-                "p10": round(forecast_data["p10_price"], 2),
+                "floor": round(forecast_data["p10_price"], 2),
                 "p50": round(forecast_data["p50_price"], 2),
-                "p90": round(forecast_data["p90_price"], 2),
+                "ceiling": round(forecast_data["p90_price"], 2),
                 "confidence": round(forecast_data["forecast_confidence"], 1),
                 "reliability": forecast_data["forecast_reliability"],
+                "drift": forecast_data.get("forecast_drift", 0.0),
+                "expected_move": forecast_data.get("expected_move_10d", 0.0),
             },
             "trade_parameters": trade_construction,
             "quality": SignalQuality(**quality_metrics),

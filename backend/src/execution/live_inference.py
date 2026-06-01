@@ -61,7 +61,8 @@ def is_near_earnings(ticker):
         if earnings_dates is None or len(earnings_dates) == 0:
             return False
         next_earnings = earnings_dates.index[0]
-        days_to_earnings = abs((next_earnings - pd.Timestamp.now()).days)
+        now = pd.Timestamp.now(tz=next_earnings.tz) if next_earnings.tz else pd.Timestamp.now()
+        days_to_earnings = abs((next_earnings - now).days)
         return days_to_earnings <= 2
     except Exception:
         return False
