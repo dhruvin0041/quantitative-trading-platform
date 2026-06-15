@@ -176,10 +176,10 @@ export function StockSearch({ universe, onSelect }: StockSearchProps) {
                     <span className={cn(
                       "text-[8px] font-black uppercase px-1.5 py-0.5 rounded border leading-none shrink-0",
                       stock.market === 'us' 
-                        ? "bg-blue-500/10 text-blue-500 border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-400" 
+                        ? "bg-primary/10 text-primary border-primary/30 dark:bg-primary/10 dark:text-primary" 
                         : "bg-orange-500/10 text-orange-600 border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-400"
                     )}>
-                      {stock.market === 'us' ? '🇺🇸 USA' : '🇮🇳 INDIA'}
+                      {stock.market === 'us' ? '🇺🇸 USA' : stock.market === 'india' ? '🇮🇳 INDIA' : stock.market.toUpperCase()}
                     </span>
                     <span className="text-[10px] text-muted-foreground truncate max-w-[120px] font-medium">
                       {highlightMatch(stock.name, debouncedQuery.trim())}

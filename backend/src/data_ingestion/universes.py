@@ -244,4 +244,64 @@ UNIVERSES_METADATA = {
             "timezone": "Asia/Kolkata",
         },
     },
+    "crypto": {
+        "BTC-USD": {
+            "name": "Bitcoin",
+            "exchange": "CCC",
+            "currency": "USD",
+            "timezone": "UTC",
+        },
+        "ETH-USD": {
+            "name": "Ethereum",
+            "exchange": "CCC",
+            "currency": "USD",
+            "timezone": "UTC",
+        },
+        "SOL-USD": {
+            "name": "Solana",
+            "exchange": "CCC",
+            "currency": "USD",
+            "timezone": "UTC",
+        },
+    },
+    "forex": {
+        "EURUSD=X": {
+            "name": "EUR/USD",
+            "exchange": "CCY",
+            "currency": "USD",
+            "timezone": "UTC",
+        },
+        "GBPUSD=X": {
+            "name": "GBP/USD",
+            "exchange": "CCY",
+            "currency": "USD",
+            "timezone": "UTC",
+        },
+        "JPY=X": {
+            "name": "USD/JPY",
+            "exchange": "CCY",
+            "currency": "JPY",
+            "timezone": "UTC",
+        },
+    },
+    "commodities": {
+        "GC=F": {
+            "name": "Gold",
+            "exchange": "CMX",
+            "currency": "USD",
+            "timezone": "America/New_York",
+        },
+        "CL=F": {
+            "name": "Crude Oil",
+            "exchange": "NYM",
+            "currency": "USD",
+            "timezone": "America/New_York",
+        },
+        "SI=F": {
+            "name": "Silver",
+            "exchange": "CMX",
+            "currency": "USD",
+            "timezone": "America/New_York",
+        },
+    },
 }

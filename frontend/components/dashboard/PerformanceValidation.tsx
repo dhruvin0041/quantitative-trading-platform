@@ -36,7 +36,7 @@ export function PerformanceValidation() {
         }
       })
       .catch(err => console.error("Failed to fetch performance:", err));
-  }, []);
+  }, [API_URL]);
 
   if (!metrics) return null;
 

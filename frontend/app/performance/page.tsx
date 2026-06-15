@@ -91,13 +91,13 @@ export default function InstitutionalDashboard() {
     };
 
     fetchStats();
-  }, []);
+  }, [API_URL]);
 
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <Activity className="w-8 h-8 text-blue-500 animate-pulse" />
+          <Activity className="w-8 h-8 text-primary animate-pulse" />
           <span className="text-xs font-mono tracking-widest text-zinc-500 uppercase">Loading Institutional Telemetry...</span>
         </div>
       </div>
@@ -137,7 +137,7 @@ export default function InstitutionalDashboard() {
             <Card className="bg-[#111] border-zinc-800">
               <CardHeader className="pb-2 border-b border-zinc-800/50">
                 <CardTitle className="text-sm font-bold flex items-center gap-2 text-zinc-300">
-                  <LineChart className="w-4 h-4 text-blue-500" />
+                  <LineChart className="w-4 h-4 text-primary" />
                   Trading Performance
                 </CardTitle>
               </CardHeader>
@@ -216,7 +216,7 @@ export default function InstitutionalDashboard() {
                 </div>
                 <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
                   <span className="text-xs font-mono text-zinc-500">Kelly Allocation Limit</span>
-                  <span className="text-sm font-mono font-bold text-blue-400">{data.risk.kelly}% max</span>
+                  <span className="text-sm font-mono font-bold text-primary">{data.risk.kelly}% max</span>
                 </div>
                 <div className="flex justify-between items-center pb-2">
                   <span className="text-xs font-mono text-zinc-500">Current Exposure</span>
@@ -240,7 +240,7 @@ export default function InstitutionalDashboard() {
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-xs font-mono text-zinc-500">Consensus Rate</span>
-                  <span className="text-lg font-mono font-bold text-blue-500">{data.models.consensus_rate}%</span>
+                  <span className="text-lg font-mono font-bold text-primary">{data.models.consensus_rate}%</span>
                 </div>
               </CardContent>
             </Card>

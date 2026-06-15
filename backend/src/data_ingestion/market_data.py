@@ -35,6 +35,13 @@ def get_sector_peer(ticker_symbol: str) -> str:
         "Energy": "XOM" if ticker_symbol != "XOM" else "CVX",
     }
 
+    if "-" in ticker_symbol and "USD" in ticker_symbol:
+        return "BTC-USD" if ticker_symbol != "BTC-USD" else "ETH-USD"
+    elif "=X" in ticker_symbol:
+        return "EURUSD=X" if ticker_symbol != "EURUSD=X" else "GBPUSD=X"
+    elif "=F" in ticker_symbol:
+        return "GC=F" if ticker_symbol != "GC=F" else "SI=F"
+
     try:
         ticker = yf.Ticker(ticker_symbol)
         info = ticker.info

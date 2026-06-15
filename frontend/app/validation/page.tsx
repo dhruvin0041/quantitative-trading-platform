@@ -128,14 +128,14 @@ export default function ValidationDashboard() {
             <Card className="bg-[#111] border-zinc-800">
               <CardHeader className="pb-2 border-b border-zinc-800/50">
                 <CardTitle className="text-sm font-bold flex items-center gap-2 text-zinc-300">
-                  <Crosshair className="w-4 h-4 text-blue-500" />
+                  <Crosshair className="w-4 h-4 text-primary" />
                   Confidence Calibration Analysis
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-4">
                 <div className="flex items-center justify-between mb-6">
                   <span className="text-xs text-zinc-400">Comparing Model Predicted Confidence vs. Actual Win Rate. Expected Calibration Error (ECE):</span>
-                  <span className="text-lg font-mono font-bold text-blue-400">{c.ece?.toFixed(2)}%</span>
+                  <span className="text-lg font-mono font-bold text-primary">{c.ece?.toFixed(2)}%</span>
                 </div>
                 
                 <div className="space-y-4">
@@ -148,7 +148,7 @@ export default function ValidationDashboard() {
                           <span>Pred: {bin.predicted_conf.toFixed(1)}% | Actual: {bin.actual_win_rate.toFixed(1)}%</span>
                         </div>
                         <div className="h-2 w-full bg-zinc-800 rounded overflow-hidden flex">
-                          <div className="bg-blue-500 h-full" style={{ width: `${bin.predicted_conf}%` }}></div>
+                          <div className="bg-primary h-full" style={{ width: `${bin.predicted_conf}%` }}></div>
                         </div>
                         <div className="h-2 w-full bg-zinc-800 rounded overflow-hidden flex mt-1">
                           <div className="bg-green-500 h-full" style={{ width: `${bin.actual_win_rate}%` }}></div>
@@ -241,7 +241,7 @@ export default function ValidationDashboard() {
             <Card className="bg-[#111] border-zinc-800 h-[300px] flex flex-col">
               <CardHeader className="pb-2 border-b border-zinc-800/50 shrink-0">
                 <CardTitle className="text-sm font-bold flex items-center gap-2 text-zinc-300">
-                  <LineChart className="w-4 h-4 text-emerald-500" />
+                  <LineChart className="w-4 h-4 text-positive" />
                   Recent Signal Journal
                 </CardTitle>
               </CardHeader>

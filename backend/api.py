@@ -170,6 +170,20 @@ async def api_middleware(request: Request, call_next):
 logger.info("Initializing Hydra Ecosystem Components...")
 config = load_config()
 
+try:
+    with open("configs/active_ticker.json", "r") as f:
+        active_ticker_data = json.load(f)
+        active_ticker = active_ticker_data.get("ticker", "AAPL")
+except Exception:
+    active_ticker = "AAPL"
+
+try:
+    with open(f"configs/optimized_params_{active_ticker}.json", "r") as f:
+        optuna_params = json.load(f)
+        config["model"].update(optuna_params)
+except Exception as e:
+    logger.warning(f"Could not load optimized parameters for {active_ticker}: {e}")
+
 with open("configs/kept_features.json", "r") as f:
     kept_features_list = json.load(f)
 

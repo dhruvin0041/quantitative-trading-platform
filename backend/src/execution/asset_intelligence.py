@@ -86,16 +86,16 @@ class AdaptiveWeightingEngine:
         self, regime: str, asset_class: str
     ) -> Dict[str, Dict[str, Any]]:
         # Institutional Defaults
-        base_weights = {"LSTM": 0.30, "XGBoost": 0.25, "LightGBM": 0.25, "DQN": 0.20}
+        base_weights = {"DL_FUSION": 0.30, "XGB_AGENT": 0.25, "LGBM_AGENT": 0.25, "DQN_AGENT": 0.20}
 
         # Adjust for regime
         if "TREND" in regime:
-            base_weights["LSTM"] += 0.10
-            base_weights["DQN"] -= 0.10
+            base_weights["DL_FUSION"] += 0.10
+            base_weights["DQN_AGENT"] -= 0.10
             reason = "LSTM prioritized for trend persistence."
         elif regime == "RANGE":
-            base_weights["DQN"] += 0.10
-            base_weights["LSTM"] -= 0.10
+            base_weights["DQN_AGENT"] += 0.10
+            base_weights["DL_FUSION"] -= 0.10
             reason = "DQN prioritized for mean reversion efficiency."
         else:
             reason = "Standard balanced weights for neutral regime."

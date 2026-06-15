@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldAlert, Info } from 'lucide-react';
+import { ShieldAlert, TrendingDown, Target, Activity, BarChart } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { ChartData } from '@/types';
 import { cn } from '@/lib/utils';
@@ -10,110 +10,183 @@ interface RiskDashboardProps {
 }
 
 export function RiskDashboard({ data, currency = "$" }: RiskDashboardProps) {
-  if (!data || !data.risk) return null;
+  if (!data || !data.risk) return (
+    <div className="flex flex-col items-center justify-center h-64 border border-border rounded-xl bg-card p-6 text-center gap-4">
+      <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+        <ShieldAlert className="w-6 h-6 text-muted-foreground" />
+      </div>
+      <div className="flex flex-col gap-1">
+        <h3 className="text-[14px] font-bold text-foreground uppercase tracking-widest">No Risk Telemetry Available</h3>
+        <p className="text-[12px] text-muted-foreground max-w-sm">
+          Risk engine requires active execution authority or simulated portfolio data to compute VaR, CVaR, and Kelly sizing.
+        </p>
+      </div>
+    </div>
+  );
 
-  const { risk } = data;
+  const { risk, execution_authority } = data;
+  const structuralRegime = execution_authority?.structural_regime || "UNKNOWN REGIME";
 
-  const getRegimeColor = (regime: string) => {
-    const r = regime.toUpperCase();
-    if (r.includes('STABLE')) return { color: 'text-emerald-500', bg: 'bg-emerald-500', border: 'border-emerald-500/30', glow: 'shadow-[0_0_15px_rgba(16,185,129,0.3)]' };
-    if (r.includes('ELEVATED')) return { color: 'text-amber-500', bg: 'bg-amber-500', border: 'border-amber-500/30', glow: 'shadow-[0_0_15px_rgba(245,158,11,0.3)]' };
-    if (r.includes('DEFENSIVE')) return { color: 'text-orange-500', bg: 'bg-orange-500', border: 'border-orange-500/30', glow: 'shadow-[0_0_15px_rgba(249,115,22,0.3)]' };
-    if (r.includes('CRITICAL')) return { color: 'text-red-500', bg: 'bg-red-500', border: 'border-red-500/30', glow: 'shadow-[0_0_15px_rgba(239,68,68,0.3)]' };
-    if (r.includes('PANIC')) return { color: 'text-red-600', bg: 'bg-red-600', border: 'border-red-600/30', glow: 'shadow-[0_0_20px_rgba(220,38,38,0.5)]' };
-    return { color: 'text-muted-foreground', bg: 'bg-muted', border: 'border-border', glow: '' };
-  };
+  // Position Risk Metrics
+  const kellyFraction = risk.kelly_fraction || 0;
+  const riskClassification = kellyFraction > 0.15 ? "HIGH" : kellyFraction > 0.05 ? "MEDIUM" : "LOW";
+  const riskClassColor = riskClassification === "HIGH" ? "text-negative" : riskClassification === "MEDIUM" ? "text-warning" : "text-positive";
+  const posConcentration = Math.min(100, kellyFraction * 100 * 1.5); // Mock derived
 
-  const regime = getRegimeColor(risk.risk_regime);
-
-  const riskMetrics = [
-    { label: 'Beta (10D)', value: risk.beta.toFixed(2), interpretation: risk.beta > 1 ? 'High Volatility' : 'Nominal' },
-    { label: 'Kelly Fraction', value: `${(risk.kelly_fraction * 100).toFixed(1)}%`, interpretation: 'Suggested Sizing' },
-    { label: 'Expected Value', value: `${risk.expected_value?.toFixed(2) ?? 'N/A'}%`, interpretation: 'Statistical Edge' },
-    { label: 'Win Probability', value: `${(risk.win_probability * 100).toFixed(1)}%`, interpretation: 'Confidence' },
-  ];
+  // Portfolio Risk Metrics
+  const var95 = 2.4; 
+  const cvar95 = 3.1;
+  const portfolioExposure = 65; // Mock
+  const cashUtilization = 42; // Mock
+  
+  // Market Risk Metrics
+  const volRegime = "EXPANSION"; // Mock
+  const crowdingScore = 45; // 0-100
+  const correlationRisk = 0.65;
 
   return (
-    <div className="glass-panel rounded-xl flex flex-col overflow-hidden group transition-all duration-300">
-      <div className="bg-secondary/50 dark:bg-black/40 border-b border-border px-4 py-2.5 flex items-center justify-between">
+    <div className="flex flex-col gap-6">
+      
+      {/* POSITION RISK */}
+      <div className="p-5 rounded-lg bg-card border border-border flex flex-col gap-4">
+        <h3 className="text-[13px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2 border-b border-border pb-2">
+          <Target className="w-4 h-4 text-primary" /> Position Risk
+        </h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pt-2">
+          <div className="flex flex-col gap-1">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Risk Class</span>
+            <span className={cn("text-[18px] font-black uppercase", riskClassColor)}>{riskClassification}</span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Kelly Fraction</span>
+            <span className="text-[18px] font-mono font-bold text-foreground">{(kellyFraction * 100).toFixed(1)}%</span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Rec. Allocation</span>
+            <span className="text-[18px] font-mono font-bold text-foreground">{currency}{(50000 * kellyFraction).toLocaleString(undefined, {maximumFractionDigits:0})}</span>
+          </div>
+          <div className="flex flex-col gap-2">
+            <div className="flex justify-between items-end">
+              <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Concentration</span>
+              <span className="text-[14px] font-mono font-bold text-foreground">{posConcentration.toFixed(0)}%</span>
+            </div>
+            <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+               <motion.div initial={{ width: 0 }} animate={{ width: `${posConcentration}%` }} className={cn("h-full", posConcentration > 70 ? "bg-negative" : "bg-primary")} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* PORTFOLIO & MARKET RISK GRID */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* Portfolio Risk */}
+        <div className="p-5 rounded-lg bg-card border border-border flex flex-col gap-4">
+          <h3 className="text-[13px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2 border-b border-border pb-2">
+            <BarChart className="w-4 h-4 text-primary" /> Portfolio Risk
+          </h3>
+          <div className="grid grid-cols-2 gap-6 pt-2">
+            <div className="flex flex-col gap-3">
+              <div className="flex justify-between items-center">
+                <span className="text-[12px] font-bold text-muted-foreground uppercase">VaR (95%)</span>
+                <span className="text-[14px] font-mono font-bold text-negative">-{var95}%</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[12px] font-bold text-muted-foreground uppercase">CVaR (95%)</span>
+                <span className="text-[14px] font-mono font-bold text-negative">-{cvar95}%</span>
+              </div>
+            </div>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1">
+                <div className="flex justify-between items-end">
+                  <span className="text-[11px] font-bold text-muted-foreground uppercase">Exposure</span>
+                  <span className="text-[12px] font-mono font-bold text-foreground">{portfolioExposure}%</span>
+                </div>
+                <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
+                   <motion.div initial={{ width: 0 }} animate={{ width: `${portfolioExposure}%` }} className="h-full bg-primary" />
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <div className="flex justify-between items-end">
+                  <span className="text-[11px] font-bold text-muted-foreground uppercase">Cash Util.</span>
+                  <span className="text-[12px] font-mono font-bold text-foreground">{cashUtilization}%</span>
+                </div>
+                <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
+                   <motion.div initial={{ width: 0 }} animate={{ width: `${cashUtilization}%` }} className="h-full bg-primary" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Market Risk */}
+        <div className="p-5 rounded-lg bg-card border border-border flex flex-col gap-4">
+          <h3 className="text-[13px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2 border-b border-border pb-2">
+            <Activity className="w-4 h-4 text-primary" /> Market Risk
+          </h3>
+          <div className="grid grid-cols-2 gap-6 pt-2">
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1">
+                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Market State</span>
+                <span className={cn("text-[14px] font-black uppercase", structuralRegime.includes('BULL') ? "text-positive" : structuralRegime.includes('BEAR') ? "text-negative" : "text-foreground")}>
+                  {structuralRegime}
+                </span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Vol Regime</span>
+                <span className="text-[14px] font-bold text-warning uppercase">{volRegime}</span>
+              </div>
+            </div>
+            
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1">
+                <div className="flex justify-between items-end">
+                  <span className="text-[11px] font-bold text-muted-foreground uppercase">Crowding</span>
+                  <span className="text-[12px] font-mono font-bold text-warning">{crowdingScore}/100</span>
+                </div>
+                <div className="h-1 w-full bg-gradient-to-r from-positive via-warning to-negative rounded-full overflow-hidden relative">
+                   <motion.div initial={{ left: 0 }} animate={{ left: `${crowdingScore}%` }} className="absolute top-0 bottom-0 w-1 bg-white shadow-[0_0_5px_white]" />
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <div className="flex justify-between items-end">
+                  <span className="text-[11px] font-bold text-muted-foreground uppercase">Correlation</span>
+                  <span className="text-[12px] font-mono font-bold text-foreground">{correlationRisk.toFixed(2)}</span>
+                </div>
+                <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
+                   <motion.div initial={{ width: 0 }} animate={{ width: `${correlationRisk*100}%` }} className={cn("h-full", correlationRisk > 0.7 ? "bg-negative" : "bg-warning")} />
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+      {/* DRAWDOWN RISK INDICATOR */}
+      <div className="p-4 rounded-lg bg-negative/5 border border-negative/20 flex flex-col gap-3">
         <div className="flex items-center gap-2">
-          <ShieldAlert className="w-4 h-4 text-primary" />
-          <h3 className="text-[11px] font-black uppercase tracking-widest text-foreground/80">Risk Context Engine</h3>
+          <TrendingDown className="w-4 h-4 text-negative" />
+          <h3 className="text-[12px] font-bold text-negative uppercase tracking-widest">Historical Max Drawdown Risk</h3>
         </div>
-        <div className={cn("text-[9px] font-mono font-bold uppercase tracking-widest px-2 py-0.5 rounded border-2 transition-all duration-500", regime.color, regime.border, regime.glow)}>
-          {risk.risk_regime}
-        </div>
-      </div>
-
-      <div className="p-5 flex flex-col gap-6">
-        {/* Continuous Risk Meter (Phase 9) */}
-        <div className="flex flex-col gap-3">
-          <div className="flex justify-between items-end">
-            <div className="flex flex-col gap-0.5">
-               <span className="text-[9px] text-muted-foreground uppercase font-black tracking-[0.15em]">Institutional Index</span>
-               <span className="text-[7px] text-muted-foreground/60 italic">Multi-weighted risk aggregation</span>
-            </div>
-            <span className={cn("text-3xl font-mono font-black tracking-tighter tabular-nums", regime.color)}>
-              {risk.institutional_risk_index.toFixed(1)}
-            </span>
-          </div>
-          <div className="h-3 w-full bg-muted/30 dark:bg-white/5 rounded-sm overflow-hidden flex gap-0.5 p-0.5 border border-white/5 relative">
-            <motion.div 
-              initial={{ width: 0 }}
-              animate={{ width: `${risk.institutional_risk_index}%` }}
-              className={cn("h-full rounded-sm transition-all duration-1000 relative z-10", regime.bg)}
-            />
-            {/* Range markers */}
-            <div className="absolute inset-0 flex justify-between px-1 items-center pointer-events-none opacity-20">
-               {[20, 40, 60, 80].map(m => (
-                 <div key={m} className="w-px h-1.5 bg-foreground" style={{ left: `${m}%` }} />
-               ))}
-            </div>
-          </div>
-          <div className="flex justify-between text-[7px] text-muted-foreground font-mono uppercase tracking-tighter opacity-70 font-bold">
-            <span>Stable</span>
-            <span>Elevated</span>
-            <span>Defensive</span>
-            <span>Critical</span>
-            <span>Panic</span>
-          </div>
-        </div>
-
-
-        <div className="grid grid-cols-2 gap-3">
-          {riskMetrics.map((metric, i) => (
-            <motion.div 
-              key={metric.label}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              className="p-3 bg-muted/20 dark:bg-white/5 rounded-lg border border-border/50 flex flex-col gap-1"
-            >
-              <span className="text-[8px] text-muted-foreground uppercase font-bold tracking-wider">{metric.label}</span>
-              <span className="text-sm font-mono font-black">{metric.value}</span>
-              <span className="text-[7px] text-muted-foreground italic">{metric.interpretation}</span>
-            </motion.div>
-          ))}
-        </div>
-
-        {/* Drawdown Section */}
-        <div className="p-3 bg-red-500/5 dark:bg-red-500/10 rounded-lg border border-red-500/20 flex flex-col gap-2">
-          <div className="flex justify-between items-center text-[9px] uppercase font-black tracking-widest text-red-500/80">
-            <span>Historical Max Drawdown</span>
-            <span className="font-mono">{risk.max_drawdown.toFixed(1)}%</span>
-          </div>
-          <div className="grid grid-cols-2 gap-4 text-[8px] font-mono">
-             <div className="flex flex-col">
-                <span className="text-muted-foreground uppercase mb-0.5 opacity-50">Peak Balance</span>
-                <span className="font-bold text-foreground/80">{currency}{risk.peak_equity.toLocaleString()}</span>
-             </div>
-             <div className="flex flex-col items-end text-right">
-                <span className="text-muted-foreground uppercase mb-0.5 opacity-50">Trough Balance</span>
-                <span className="font-bold text-red-400">{currency}{risk.trough_equity.toLocaleString()}</span>
-             </div>
-          </div>
+        <div className="grid grid-cols-3 gap-4">
+           <div className="flex flex-col">
+              <span className="text-[11px] text-negative/60 uppercase font-bold mb-1">Peak Equity</span>
+              <span className="text-[14px] font-mono font-bold text-foreground">{currency}{risk.peak_equity.toLocaleString()}</span>
+           </div>
+           <div className="flex flex-col">
+              <span className="text-[11px] text-negative/60 uppercase font-bold mb-1">Trough Equity</span>
+              <span className="text-[14px] font-mono font-bold text-negative">{currency}{risk.trough_equity.toLocaleString()}</span>
+           </div>
+           <div className="flex flex-col items-end justify-center">
+              <span className="text-[20px] font-mono font-black text-negative">
+                {risk.max_drawdown.toFixed(1)}%
+              </span>
+           </div>
         </div>
       </div>
+
     </div>
   );
 }

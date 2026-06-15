@@ -15,6 +15,7 @@ from src.execution.live_inference import (
     fetch_live_data,
     fetch_live_news,
     get_meta_prediction,
+    compute_shap_explanation,
 )
 from src.execution.risk_manager import (
     get_position_sizing,
@@ -329,6 +330,7 @@ class InferenceService:
             if vol_id == 2
             else ("LOW" if vol_id == 0 else "MEDIUM"),
             "volume_ratio": round(vol_ratio, 2),
+            "model_weights": model_weights_raw,
             "models": {
                 "DL_FUSION": {
                     "signal": signals_map[int(np.argmax(dl_preds_raw))],
@@ -366,6 +368,27 @@ class InferenceService:
             "governance": self.governance_analytics.analyze_throughput(signal_df)
             if signal_df is not None
             else {},
+            "technical_snapshot": tech_snapshot,
+            "qualitative_alpha": qual_reason,
+            "sentiment_score": sentiment_score,
+            "xai": compute_shap_explanation(self.mm.xgb_model, tabular_row, signal_idx=final_signal_idx),
+            "risk": {
+                "var_95": float(risk_profile.get("var_95", beta * 1.5)),
+                "cvar": float(risk_profile.get("cvar", beta * 2.0)),
+                "beta": float(beta),
+                "kelly_fraction": float(risk_profile.get("raw_fraction", 0.0)),
+                "target_size": float(risk_profile.get("raw_fraction", 0.0)) * 100,
+                "max_drawdown": float(risk_profile.get("max_drawdown", 0.0)),
+                "institutional_risk_index": 0.0,
+                "risk_regime": "STABLE",
+                "win_probability": float(calibrated_prob / 100),
+                "expected_value": float(ev_metrics["ev_pct"]),
+                "risk_reward_ratio": float(risk_profile.get("rr_ratio", 0.0)),
+                "peak_equity": float(self.paper_engine.get_portfolio_summary({}).get("peak_equity", self.paper_engine.initial_capital)),
+                "peak_date": "",
+                "trough_equity": float(self.paper_engine.get_portfolio_summary({}).get("trough_equity", self.paper_engine.initial_capital)),
+                "trough_date": ""
+            }
         }
 
         # Packaging Chart & Historical Markers

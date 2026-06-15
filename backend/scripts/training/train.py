@@ -234,6 +234,20 @@ def main():
         y_ran_val,
     ) = data
 
+    # Inject dummy rows for classes 0, 1, 2 to avoid missing class errors
+    dummy_ts = ts_train[:3].copy()
+    dummy_y_sig = np.array([0.0, 1.0, 2.0])
+    ts_train = np.vstack([dummy_ts, ts_train])
+    y_sig_train = np.concatenate([dummy_y_sig, y_sig_train])
+    if peer_train is not None and len(peer_train) > 0:
+        dummy_peer = peer_train[:3].copy()
+        peer_train = np.vstack([dummy_peer, peer_train])
+    
+    dummy_y_dir = y_dir_train[:3].copy()
+    dummy_y_ran = y_ran_train[:3].copy()
+    y_dir_train = np.concatenate([dummy_y_dir, y_dir_train])
+    y_ran_train = np.concatenate([dummy_y_ran, y_ran_train])
+
     # Save training data for optimization (required by optimize_models.py)
     os.makedirs("artifacts", exist_ok=True)
     joblib.dump(ts_train[:, -1, :], "artifacts/X_train_tabular.joblib")

@@ -67,9 +67,9 @@ class XAIBlock(BaseModel):
 
 
 class Projections(BaseModel):
-    p10: float
-    p50: float
-    p90: float
+    p10: Optional[float] = 0.0
+    p50: Optional[float] = 0.0
+    p90: Optional[float] = 0.0
     confidence: float
     reliability: str
     bias: str = "NEUTRAL"
@@ -130,6 +130,15 @@ class ExpectedValueMetrics(BaseModel):
     avg_loss_pct: float
 
 
+class AssetMetadata(BaseModel):
+    ticker: str
+    market: str
+    exchange: str
+    currency: str
+    timezone: str
+
+
+
 class PredictResponse(BaseModel):
     ticker: str
     current_price: float
@@ -185,14 +194,29 @@ class PredictResponse(BaseModel):
     historical_markers: Optional[List[Dict[str, Any]]] = None
     candles: Optional[List[Dict[str, Any]]] = None
     clouds: Optional[List[Dict[str, Any]]] = None
-
-
-class AssetMetadata(BaseModel):
-    ticker: str
-    market: str
-    exchange: str
-    currency: str
-    timezone: str
+    
+    # Missing fields expected by frontend ChartData
+    technical_snapshot: Optional[TechnicalSnapshot] = None
+    metadata: Optional[AssetMetadata] = None
+    ai_report: Optional[Dict[str, Any]] = None
+    
+    # Phase 3: Semantic Separation
+    structural_regime: str = "UNKNOWN"
+    signal_bias: str = "UNKNOWN"
+    execution_state: str = "UNKNOWN"
+    execution_reasoning: str = ""
+    execution_authority: Optional[Dict[str, str]] = None
+    
+    # Institutional Interpretations
+    forecast_interpretation: str = ""
+    forecast_explanation: str = ""
+    consensus_intelligence: str = ""
+    decision_tree: Optional[List[Dict[str, Any]]] = None
+    
+    # Governance
+    governance: Optional[Dict[str, Any]] = None
+    
+    qualitative_citations: Optional[List[Dict[str, Any]]] = None
 
 
 class UniverseStockItem(BaseModel):
@@ -225,6 +249,8 @@ class BacktestSummary(BaseModel):
     max_drawdown: float | str
     vetoed_rate: float
     coverage: float
+    total_trades: int = 0
+    signal_coverage: Optional[float] = None
     best_signal: Optional[BacktestSignal] = None
     worst_signal: Optional[BacktestSignal] = None
     monthly_win_rates: List[Dict[str, Any]] = []

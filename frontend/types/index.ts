@@ -88,6 +88,7 @@ export interface BacktestSummary {
   max_drawdown: number;
   vetoed_rate: number;
   coverage: number;
+  total_trades: number;
   signal_coverage?: number; // Support for alternate field name
   best_signal?: BacktestSignal;
   worst_signal?: BacktestSignal;
@@ -154,6 +155,9 @@ export interface ChartData {
   signal_bias: string;
   execution_state: string;
   execution_reasoning: string;
+  execution_authority?: {
+    structural_regime?: string;
+  };
   
   // Institutional Interpretations
   forecast_interpretation: string;
@@ -189,8 +193,16 @@ export interface ChartData {
   volume_ratio: number;
   is_point_forecast: boolean;
   model_agreement: number;
+  bullish_models?: number;
+  bearish_models?: number;
+  neutral_models?: number;
   
   quality?: SignalQuality;
+  calibration?: {
+    brier_score: number;
+    ece: number;
+    reliability_diagram: Record<string, unknown>[];
+  };
   expected_value?: ExpectedValueMetrics;
   multi_timeframe_consensus?: Record<string, string>;
   asset_class?: string;
@@ -223,8 +235,9 @@ export interface ChartData {
   };
   
   // Chart related
-  candles: { time: string; open: number; high: number; low: number; close: number }[];
+  candles: { time: string; open: number; high: number; low: number; close: number; volume?: number }[];
   clouds: { time: string; ribbon_upper: number; ribbon_lower: number; bb_upper: number; bb_lower: number }[];
+  forecast_fan?: { time: string; p10: number; p50: number; p90: number }[];
   ai_report: AIReport; // Keep for legacy component compatibility
   historical_markers: { time: string; action: string; probability: number; label?: string }[];
   portfolio: Portfolio;
@@ -243,4 +256,11 @@ export interface ChartData {
   };
   technical_snapshot: TechnicalSnapshot;
   qualitative_alpha?: string | null;
+  qualitative_citations?: {
+    source: string;
+    url?: string;
+    sentiment: number;
+    impact: string;
+    snippet: string;
+  }[];
 }

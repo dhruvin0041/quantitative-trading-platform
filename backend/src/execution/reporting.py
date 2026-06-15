@@ -27,7 +27,7 @@ class ReportGenerator:
         lows = df_full["Low"].values
         dates = df_full.index.strftime("%Y-%m-%d").tolist()
 
-        window = 10
+        window = 3
         markers = []
 
         for i in range(window, len(prices) - window):
@@ -83,6 +83,11 @@ class ReportGenerator:
 
         # Clouds: include all timestamps that have at least one indicator to prevent early termination
         df_cloud_json = df_chart.copy()
+        
+        # Replace 0.0 with np.nan for chart indicators (caused by ML fillna)
+        for col in ["ribbon_upper", "ribbon_lower", "bb_upper", "bb_lower"]:
+            df_cloud_json[col] = df_cloud_json[col].replace(0.0, np.nan)
+
         # Only drop if ALL essential indicators are missing
         df_cloud_json = df_cloud_json.dropna(
             subset=["ribbon_upper", "ribbon_lower", "bb_upper", "bb_lower"], how="all"
@@ -90,7 +95,7 @@ class ReportGenerator:
 
         clouds = df_cloud_json[
             ["time", "ribbon_upper", "ribbon_lower", "bb_upper", "bb_lower"]
-        ].to_dict(orient="records")
+        ].replace({np.nan: None}).to_dict(orient="records")
 
         # Merge System Signals (from Journal) with Historical Pivots
         final_markers = historical_markers.copy()
@@ -108,6 +113,10 @@ class ReportGenerator:
                             "probability": sig["confidence"],
                         }
                     )
+                    
+        # Filter out markers that fall before our 150-day chart window
+        min_date = df_chart["time"].min()
+        final_markers = [m for m in final_markers if m["time"] >= min_date]
 
         return {
             "candles": candles,

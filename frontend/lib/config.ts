@@ -1,4 +1,4 @@
-export const API_KEY = "hydra-secure-key-2026";
+export const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "hydra-secure-key-2026"; // TODO: Remove fallback in production
 
 export const getBaseUrl = () => {
   // 1. Priority: Explicit environment variable

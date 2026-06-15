@@ -129,7 +129,6 @@ def run_backtest():
 
     print(f"Starting backtest simulation on {len(tickers)} assets...")
 
-    from sklearn.preprocessing import StandardScaler
 
     def get_calibrated_probs(model, calibrators, X):
         raw_probs = model.predict_proba(X)[0]

@@ -1,4 +1,3 @@
-import sys
 
 with open('src/execution/inference_service.py', 'r') as f:
     content = f.read()
