@@ -26,6 +26,12 @@ Hydra Terminal is an institutional-grade quantitative research workstation and u
 *   **Risk Metric Validator:** Prevents "Impossible Metrics" (e.g., positive Sharpe with negative returns) and enforces strict 90-day return gates for statistical significance.
 *   **Signal Governance Analytics:** Monitors veto frequency and ensemble entropy to prevent over-defensive paralysis and ensure healthy signal throughput.
 
+### Institutional Frontend & UI Architecture
+*   **High-Performance Canvas Charting:** Integrates TradingView's `lightweight-charts` for buttery-smooth, hardware-accelerated rendering of multi-year price histories, volume histograms, and dynamic Bollinger Band/Moving Average overlays.
+*   **Dynamic Layout & Responsive Scaling:** Utilizes `ResizeObserver` patterns and advanced Flexbox mechanics to ensure chart dimensions and aspect ratios adapt perfectly to changing data loads, completely eliminating layout thrashing or CSS voids.
+*   **Contextual Trade Modules:** Features adaptive, scrollable Signal Action cards that present entry targets, stop losses, Kelly sizing fractions, and risk/reward ratios side-by-side with live price action.
+*   **Historical Pivot Detection:** Employs a rapid 3-day look-ahead window for immediate detection of swing highs and lows, allowing the frontend to plot precise Buy/Sell historical markers without lagging the most recent market sessions.
+
 ## 📊 Supported Asset Classes
 
 Hydra Terminal provides **Asset-Specific Intelligence**, applying unique alpha drivers and risk multipliers depending on the asset profile:
