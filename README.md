@@ -7,6 +7,8 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+![Hydra Terminal Command Center](docs/assets/dashboard_preview.png)
+
 ## 📖 Project Overview
 
 Hydra Terminal is an institutional-grade, decentralized Multi-Agent Mesh architecture built for quantitative research, predictive signal generation, and autonomous trading execution. Built for precision and extreme selectivity, Hydra does not simply output "BUY" or "SELL". Instead, it transforms multi-modal raw data (OHLCV, Alternative Data, Global Weather proxies, SEC filings) into high-conviction signals via a rigorous ensemble of Deep Learning models, Generative Stress Testing (TimeGANs), and Reinforcement Learning policies.
