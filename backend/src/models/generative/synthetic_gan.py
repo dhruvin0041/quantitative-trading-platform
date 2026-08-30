@@ -1,6 +1,11 @@
 import tensorflow as tf
 from keras import layers
 import numpy as np
+import logging
+
+from src.utils.gpu_utils import configure_tensorflow_gpu
+
+logger = logging.getLogger(__name__)
 
 
 class MarketTimeGAN:
@@ -12,6 +17,9 @@ class MarketTimeGAN:
     def __init__(self, seq_len=60, n_features=20):
         self.seq_len = seq_len
         self.n_features = n_features
+        configure_tensorflow_gpu()
+        logger.info("MarketTimeGAN initializing on: %s",
+                    'GPU' if tf.config.list_physical_devices('GPU') else 'CPU')
         self.generator = self._build_generator()
         self.discriminator = self._build_discriminator()
 

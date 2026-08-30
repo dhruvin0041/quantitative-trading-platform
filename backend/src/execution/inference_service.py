@@ -10,6 +10,7 @@ from src.execution.timing_engine import PredictiveTimingEngine
 from src.execution.confidence_engine import ConfidenceBreakdownEngine
 from src.execution.execution_authority import ExecutionAuthorityEngine
 from src.execution.governance_engine import SignalGovernanceAnalytics
+from src.models.regime.calibration import ModelCalibrator
 
 from src.execution.live_inference import (
     fetch_live_data,
@@ -76,6 +77,14 @@ class InferenceService:
         self.perf_analyzer = perf_analyzer
         self.journal = signal_journal
 
+        # Isotonic probability calibrator (fitted during training)
+        try:
+            self.model_calibrator = ModelCalibrator.load("artifacts/model_calibrator.joblib")
+            logger.info("Loaded isotonic model calibrator")
+        except Exception as e:
+            logger.warning("No isotonic calibrator found (%s). Raw probs will be used.", e)
+            self.model_calibrator = None
+
         # V2.0 Engines
         self.regime_v2 = RegimeEngineV2()
         self.calibration_engine = ConfidenceCalibrationEngine()
@@ -137,6 +146,13 @@ class InferenceService:
             if self.mm.lgbm_model
             else np.array([0.33, 0.33, 0.33])
         )
+
+        # Apply isotonic calibration (fitted on validation data during training)
+        if self.model_calibrator is not None:
+            dl_preds_raw = self.model_calibrator.calibrate("DL_FUSION", dl_preds_raw)
+            xgb_preds_raw = self.model_calibrator.calibrate("XGB", xgb_preds_raw)
+            lgbm_preds_raw = self.model_calibrator.calibrate("LGBM", lgbm_preds_raw)
+            logger.debug("Applied isotonic calibration to model predictions")
 
         # DQN Prediction
         dqn_state = np.hstack(

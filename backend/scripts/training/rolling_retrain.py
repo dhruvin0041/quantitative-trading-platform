@@ -14,6 +14,7 @@ from src.models.neural.fusion_network import build_fusion_model
 import xgboost as xgb
 from lightgbm import LGBMClassifier
 from sklearn.preprocessing import StandardScaler
+from src.utils.gpu_utils import get_compute_backend, get_xgboost_gpu_params, get_lightgbm_gpu_params
 from src.features.sequence_builder import create_time_series_sequences
 from src.data_ingestion.market_data import (
     fetch_historical_data,
@@ -24,6 +25,7 @@ from src.data_ingestion.market_data import (
 
 def run_rolling_retrain(ticker="MSFT"):
     print(f"=== HYDRA ROLLING RETRAIN: {ticker} ===")
+    get_compute_backend()
     config = load_config()
 
     # 1. Define 24-month rolling window
@@ -97,7 +99,7 @@ def run_rolling_retrain(ticker="MSFT"):
     print("Training models on rolling window...")
 
     # XGBoost
-    xgb_params = {"objective": "multi:softprob", "num_class": 3, "random_state": 42}
+    xgb_params = {"objective": "multi:softprob", "num_class": 3, "random_state": 42, **get_xgboost_gpu_params()}
     if os.path.exists("configs/best_xgb_params.json"):
         with open("configs/best_xgb_params.json") as f:
             best = json.load(f)
@@ -112,7 +114,7 @@ def run_rolling_retrain(ticker="MSFT"):
 
     # LightGBM
     lgbm_model = LGBMClassifier(
-        objective="multiclass", num_class=3, random_state=42, verbose=-1
+        objective="multiclass", num_class=3, random_state=42, verbose=-1, **get_lightgbm_gpu_params()
     )
     lgbm_model.fit(X_tabular, y_sig)
     joblib.dump(lgbm_model, "artifacts/lgbm_agent.joblib")

@@ -33,6 +33,21 @@ FEATURE_COLUMNS = [
     "OBV_Change",
     "Return",
     "Volume_Ratio",
+    # --- Step 2: Rolling Z-Score Features ---
+    "ZScore_RSI_20",
+    "ZScore_RSI_50",
+    "ZScore_RSI_120",
+    "ZScore_BB_Position_20",
+    "ZScore_BB_Position_50",
+    "ZScore_MACD_Hist_20",
+    "ZScore_MACD_Hist_50",
+    "ZScore_Return_20",
+    "ZScore_Return_50",
+    "ZScore_Return_120",
+    "ZScore_Volume_Ratio_20",
+    "ZScore_Volume_Ratio_50",
+    # --- Step 2: ATR Regime Ratio ---
+    "ATR_Regime_Ratio",
 ]
 
 
@@ -204,6 +219,48 @@ def add_upgraded_features(df, spy_df, vix_df):
     df["VIX_Change"] = vix_close.pct_change().reindex(df.index).ffill().fillna(0)
     df["Relative_Strength"] = df["Return"] - df["SPY_Return"]
 
+    # ==========================================
+    # STEP 2: ROLLING Z-SCORE NORMALIZATION
+    # ==========================================
+    # Z-Score = (x - rolling_mean) / (rolling_std + eps)
+    # Strictly backward-looking: no center=True, no future leakage.
+
+    def rolling_zscore(series, window):
+        """Compute backward-looking rolling z-score."""
+        mu = series.rolling(window=window, min_periods=window).mean()
+        sigma = series.rolling(window=window, min_periods=window).std()
+        return (series - mu) / (sigma + 1e-9)
+
+    # RSI Z-Scores (20, 50, 120)
+    df["ZScore_RSI_20"] = rolling_zscore(df["RSI"], 20)
+    df["ZScore_RSI_50"] = rolling_zscore(df["RSI"], 50)
+    df["ZScore_RSI_120"] = rolling_zscore(df["RSI"], 120)
+
+    # BB_Position Z-Scores (20, 50)
+    df["ZScore_BB_Position_20"] = rolling_zscore(df["BB_Position"], 20)
+    df["ZScore_BB_Position_50"] = rolling_zscore(df["BB_Position"], 50)
+
+    # MACD_Hist Z-Scores (20, 50)
+    df["ZScore_MACD_Hist_20"] = rolling_zscore(df["MACD_Hist"], 20)
+    df["ZScore_MACD_Hist_50"] = rolling_zscore(df["MACD_Hist"], 50)
+
+    # Return Z-Scores (20, 50, 120)
+    df["ZScore_Return_20"] = rolling_zscore(df["Return"], 20)
+    df["ZScore_Return_50"] = rolling_zscore(df["Return"], 50)
+    df["ZScore_Return_120"] = rolling_zscore(df["Return"], 120)
+
+    # Volume_Ratio Z-Scores (20, 50)
+    df["ZScore_Volume_Ratio_20"] = rolling_zscore(df["Volume_Ratio"], 20)
+    df["ZScore_Volume_Ratio_50"] = rolling_zscore(df["Volume_Ratio"], 50)
+
+    # ==========================================
+    # STEP 2: ATR REGIME RATIO
+    # ==========================================
+    # current_ATR / rolling_mean_ATR(50)
+    # Values > 1.5 = high vol regime, < 0.7 = low vol regime
+    atr_rolling_mean_50 = df["ATR"].rolling(window=50, min_periods=50).mean()
+    df["ATR_Regime_Ratio"] = df["ATR"] / (atr_rolling_mean_50 + 1e-9)
+
     # Final Numerical Stability Guard
     df.replace([np.inf, -np.inf], np.nan, inplace=True)
     df = df.ffill().fillna(0)
@@ -304,6 +361,7 @@ def fetch_live_data(ticker, config):
         "BB_Position": round(float(df["BB_Position"].iloc[-1]), 2),
         "ADX": round(float(df["ADX"].iloc[-1]), 2),
         "Volume_Ratio": round(float(vol_ratio), 2),
+        "ATR_Regime_Ratio": round(float(df["ATR_Regime_Ratio"].iloc[-1]), 2) if "ATR_Regime_Ratio" in df.columns else 1.0,
     }
 
     return (

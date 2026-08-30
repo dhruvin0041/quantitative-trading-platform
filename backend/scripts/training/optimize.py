@@ -19,7 +19,7 @@ from src.execution.live_inference import add_upgraded_features, FEATURE_COLUMNS
 from src.models.neural.fusion_network import build_fusion_model
 from src.features.sequence_builder import create_time_series_sequences
 from datetime import datetime
-
+from src.utils.gpu_utils import get_compute_backend
 
 # ==========================================
 # OBJECTIVE FUNCTION
@@ -130,9 +130,12 @@ def objective(trial, df_features):
     try:
         X_xgb_train = ts_seq[:split, -1, :]
         X_xgb_test = ts_seq[split:, -1, :]
-        xgb_model = xgb.XGBClassifier(
-            **xgb_params, objective="multi:softprob", num_class=3, n_jobs=-1
-        )
+        from src.utils.gpu_utils import get_xgboost_gpu_params
+        gpu_params = get_xgboost_gpu_params()
+        full_params = {"objective": "multi:softprob", "num_class": 3, "n_jobs": -1}
+        full_params.update(xgb_params)
+        full_params.update(gpu_params)
+        xgb_model = xgb.XGBClassifier(**full_params)
         xgb_model.fit(X_xgb_train, y_sig[:split])
 
         # Ensemble Validation
@@ -155,6 +158,7 @@ def run_optuna_optimization(ticker, n_trials=50, start="2020-01-01", end=None):
         end = datetime.now().strftime("%Y-%m-%d")
 
     ticker = ticker.upper()
+    get_compute_backend()
 
     from scripts.ops.clean_artifacts import clean_optimization_artifacts
 
@@ -177,7 +181,7 @@ def run_optuna_optimization(ticker, n_trials=50, start="2020-01-01", end=None):
 
     print(f"\nStarting Hybrid 5-Model Optimization for {ticker}...")
     study = optuna.create_study(direction="maximize")
-    study.optimize(lambda t: objective(t, df_features), n_trials=n_trials, n_jobs=-1)
+    study.optimize(lambda t: objective(t, df_features), n_trials=n_trials, n_jobs=1)
 
     print(f"\nBEST ACCURACY: {study.best_value * 100:.2f}%")
 

@@ -98,7 +98,17 @@ def build_panel_dataset(tickers, opt_params, start="2018-01-01", end=None):
 
 # --- 3. THE TRAINING SEQUENCE ---
 def train_universal_engine():
+    # 0. GPU Hardware Verification
+    try:
+        from scripts.ops.verify_gpu import main as verify_gpu_main
+        print("Running GPU System Verification...")
+        verify_gpu_main()
+    except Exception as e:
+        print(f"GPU Verification failed: {e}")
+
     # 1. Load Params and Build Data
+    from src.utils.gpu_utils import get_compute_backend
+    get_compute_backend()
     opt_params = load_universal_params()
     tickers = get_sp500_tickers(limit=15)
     master_df = build_panel_dataset(tickers, opt_params)
@@ -136,19 +146,23 @@ def train_universal_engine():
     sample_weights = np.array([class_weight_dict[yi] for yi in y_train])
 
     print("Training Universal Technical Brain (XGBoost)...")
-    xgb_model = xgb.XGBClassifier(
-        objective="multi:softprob",
-        num_class=3,
-        n_estimators=opt_params.get("n_estimators", 300),
-        max_depth=opt_params.get("max_depth", 6),
-        learning_rate=opt_params.get("learning_rate", 0.05),
-        subsample=opt_params.get("subsample", 0.8),
-        colsample_bytree=opt_params.get("colsample_bytree", 0.8),
-        gamma=opt_params.get("gamma", 1.0),
-        min_child_weight=opt_params.get("min_child_weight", 5),
-        n_jobs=-1,
-    )
-    xgb_model.fit(X_train, y_train, sample_weight=sample_weights)
+    from src.utils.gpu_utils import get_xgboost_gpu_params, benchmark_context
+    xgb_params = {
+        "objective": "multi:softprob",
+        "num_class": 3,
+        "n_estimators": opt_params.get("n_estimators", 300),
+        "max_depth": opt_params.get("max_depth", 6),
+        "learning_rate": opt_params.get("learning_rate", 0.05),
+        "subsample": opt_params.get("subsample", 0.8),
+        "colsample_bytree": opt_params.get("colsample_bytree", 0.8),
+        "gamma": opt_params.get("gamma", 1.0),
+        "min_child_weight": opt_params.get("min_child_weight", 5),
+        "n_jobs": -1,
+        **get_xgboost_gpu_params()
+    }
+    xgb_model = xgb.XGBClassifier(**xgb_params)
+    with benchmark_context("Universal XGBoost Training"):
+        xgb_model.fit(X_train, y_train, sample_weight=sample_weights)
 
     print(
         f"XGBoost Accuracy -> Train: {xgb_model.score(X_train, y_train) * 100:.1f}% | Test: {xgb_model.score(X_test, y_test) * 100:.1f}%"

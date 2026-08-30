@@ -5,6 +5,14 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 import tensorflow as tf
+from src.utils.gpu_utils import (
+    configure_tensorflow_gpu,
+    configure_gpu_optimizations,
+    get_xgboost_gpu_params,
+    get_lightgbm_gpu_params,
+    benchmark_context,
+    verify_gpu_utilization,
+)
 import yfinance as yf
 import mlflow
 import mlflow.sklearn
@@ -12,6 +20,7 @@ import mlflow.tensorflow
 import time
 import argparse
 from sklearn.preprocessing import StandardScaler
+from sklearn.utils.class_weight import compute_class_weight
 from src.execution.live_inference import (
     load_config,
     add_upgraded_features,
@@ -26,6 +35,7 @@ from src.data_ingestion.market_data import (
     apply_dynamic_triple_barrier,
     get_sector_peer,
 )
+from src.models.regime.calibration import ModelCalibrator
 
 from scripts.ops.clean_artifacts import main as run_cleanup
 from scripts.training.optimize_models import (
@@ -35,6 +45,11 @@ from scripts.training.optimize import run_optuna_optimization
 
 os.environ["TF_USE_LEGACY_KERAS"] = "1"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+
+from src.utils.gpu_utils import get_compute_backend
+
+# GPU Configuration
+get_compute_backend()
 
 mlflow.set_experiment("hydra_terminal_signals")
 
@@ -201,9 +216,21 @@ def main():
     pipeline_start = time.time()
 
     # ==========================================
+    # STEP 0: GPU HARDWARE VERIFICATION
+    # ==========================================
+    print("\n[0/5] Running Pre-flight GPU Verification...")
+    step_start = time.time()
+    try:
+        from scripts.ops.verify_gpu import main as verify_gpu_main
+        verify_gpu_main()
+        print(f"  >>> Step 0 Complete ({time.time() - step_start:.2f}s)")
+    except Exception as e:
+        print(f"  [WARNING] Pre-flight GPU Verification failed: {e}")
+
+    # ==========================================
     # STEP 1: CLEAN ARTIFACTS
     # ==========================================
-    print(f"\n[1/4] Cleaning artifacts for {ticker}...")
+    print(f"\n[1/5] Cleaning artifacts for {ticker}...")
     step_start = time.time()
     try:
         run_cleanup([])
@@ -215,7 +242,7 @@ def main():
     # ==========================================
     # STEP 2: OPTIMIZE MODELS (Bayesian)
     # ==========================================
-    print("\n[2/4] Optimizing branch models (XGB, LGBM, CatBoost, RF)...")
+    print("\n[2/5] Optimizing branch models (XGB, LGBM, CatBoost, RF)...")
     step_start = time.time()
     config = load_config()
 
@@ -263,7 +290,7 @@ def main():
     # ==========================================
     # STEP 3: OPTUNA OPTIMIZATION
     # ==========================================
-    print(f"\n[3/4] Running Optuna optimization for {ticker}...")
+    print(f"\n[3/5] Running Optuna optimization for {ticker}...")
     step_start = time.time()
     if not run_optuna_optimization(ticker=ticker, n_trials=n_trials):
         print("  [FATAL ERROR] Step 3 Failed.")
@@ -273,7 +300,7 @@ def main():
     # ==========================================
     # STEP 4: FINAL TRAINING
     # ==========================================
-    print(f"\n[4/4] Training final models for {ticker}...")
+    print(f"\n[4/5] Training final models for {ticker}...")
     step_start = time.time()
 
     print(f"Train: {ts_train.shape}, Val: {ts_val.shape}")
@@ -312,13 +339,66 @@ def main():
         mlflow.log_params(updated_config["model"])
         mlflow.log_param("time_steps", updated_config["data"]["time_steps"])
         model = build_fusion_model(updated_config)
-        history = model.fit(
-            x=X_train, y=Y_train, epochs=30, validation_split=0.1, verbose=1
+
+        # ==========================================
+        # STEP 3: CLASS WEIGHT BALANCING
+        # ==========================================
+        # Compute balanced class weights from training label distribution
+        unique_classes = np.array([0, 1, 2])
+        class_weights_array = compute_class_weight(
+            class_weight="balanced",
+            classes=unique_classes,
+            y=y_sig_train.astype(int),
         )
+        class_weight_dict = {
+            int(c): float(w) for c, w in zip(unique_classes, class_weights_array)
+        }
+
+        # Log class distribution and weights to MLflow
+        class_names = {0: "SELL", 1: "HOLD", 2: "BUY"}
+        print("\n  Class Distribution (Train):")
+        for cls_idx in unique_classes:
+            count = int(np.sum(y_sig_train == cls_idx))
+            pct = count / len(y_sig_train) * 100
+            print(f"    {class_names[cls_idx]}: {count} ({pct:.1f}%) -> weight={class_weight_dict[cls_idx]:.4f}")
+            mlflow.log_metric(f"class_count_{class_names[cls_idx]}", count)
+            mlflow.log_metric(f"class_pct_{class_names[cls_idx]}", round(pct, 2))
+            mlflow.log_metric(f"class_weight_{class_names[cls_idx]}", round(class_weight_dict[cls_idx], 4))
+
+        # Convert class weights to per-sample weights for the signal output
+        # For multi-output models, Keras class_weight doesn't work directly.
+        # We pass sample_weight as a dict keyed by output name.
+        signal_sample_weights = np.array(
+            [class_weight_dict[int(label)] for label in y_sig_train]
+        )
+
+        with benchmark_context("DL Fusion Training"):
+            history = model.fit(
+                x=X_train,
+                y=Y_train,
+                epochs=30,
+                validation_split=0.1,
+                verbose=1,
+                sample_weight=[
+                    np.ones(len(y_dir_train)),
+                    np.ones(len(y_ran_train)),
+                    signal_sample_weights,
+                ],
+            )
 
         # Log final metrics
         for metric, values in history.history.items():
             mlflow.log_metric(f"final_{metric}", values[-1])
+
+        # Report predicted label distribution shift
+        train_preds = model.predict(X_train, verbose=0)[2]
+        pred_labels = np.argmax(train_preds, axis=1)
+        print("\n  Predicted Label Distribution (Train, after class weighting):")
+        for cls_idx in unique_classes:
+            pred_count = int(np.sum(pred_labels == cls_idx))
+            pred_pct = pred_count / len(pred_labels) * 100
+            print(f"    {class_names[cls_idx]}: {pred_count} ({pred_pct:.1f}%)")
+            mlflow.log_metric(f"pred_pct_{class_names[cls_idx]}", round(pred_pct, 2))
 
         model.save_weights("artifacts/latest_fusion_weights.weights.h5")
         mlflow.tensorflow.log_model(model, "fusion_model")
@@ -336,9 +416,10 @@ def main():
         tft_model.compile(optimizer="adam", loss=total_quantile_loss(quantiles))
 
         # Train on actual price returns (Regression)
-        tft_model.fit(
-            X_train[0], Y_train[1][:, 1], epochs=30, validation_split=0.1, verbose=1
-        )
+        with benchmark_context("TFT Quantile Training"):
+            tft_model.fit(
+                X_train[0], Y_train[1][:, 1], epochs=30, validation_split=0.1, verbose=1
+            )
         tft_model.save_weights("artifacts/tft_quantile_weights.weights.h5")
         mlflow.tensorflow.log_model(tft_model, "tft_model")
 
@@ -350,6 +431,7 @@ def main():
             "num_class": 3,
             "random_state": 42,
             "n_jobs": -1,
+            **get_xgboost_gpu_params(),
         }
         try:
             with open("configs/best_xgb_params.json") as f:
@@ -363,13 +445,18 @@ def main():
             print("Optimized XGB params not found. Using defaults.")
 
         X_xgb_train = ts_train[:, -1, :]
+        # Compute per-sample weights for XGBoost (same class_weight_dict from Step 3)
+        xgb_sample_weights = np.array(
+            [class_weight_dict[int(label)] for label in y_sig_train]
+        )
         xgb_model = xgb.XGBClassifier(**xgb_params)
-        xgb_model.fit(X_xgb_train, y_sig_train)
+        with benchmark_context("XGBoost Training"):
+            xgb_model.fit(X_xgb_train, y_sig_train, sample_weight=xgb_sample_weights)
         xgb_model.save_model("artifacts/xgb_ensemble.json")
         mlflow.log_metric(
             "train_accuracy", float(xgb_model.score(X_xgb_train, y_sig_train))
         )
-        mlflow.sklearn.log_model(xgb_model, "xgb_model")
+        # mlflow.sklearn.log_model(xgb_model, "xgb_model")
 
     print("\n--- Training LightGBM Branch ---")
     with mlflow.start_run(run_name=f"LGBM_AGENT_{ticker}"):
@@ -378,6 +465,7 @@ def main():
             "num_class": 3,
             "random_state": 42,
             "verbose": -1,
+            **get_lightgbm_gpu_params(),
         }
         try:
             with open("configs/best_lgbm_params.json") as f:
@@ -393,9 +481,10 @@ def main():
         from lightgbm import LGBMClassifier
 
         lgbm_model = LGBMClassifier(**lgbm_params)
-        lgbm_model.fit(X_xgb_train, y_sig_train)
+        with benchmark_context("LightGBM Training"):
+            lgbm_model.fit(X_xgb_train, y_sig_train, sample_weight=xgb_sample_weights)
         joblib.dump(lgbm_model, "artifacts/lgbm_agent.joblib")
-        mlflow.sklearn.log_model(lgbm_model, "lgbm_model")
+        # mlflow.sklearn.log_model(lgbm_model, "lgbm_model")
 
     with mlflow.start_run(run_name=f"DQN_AGENT_{ticker}"):
         dqn_agent = train_dqn(X_val, (y_sig_val,), model, xgb_model, None, None)
@@ -437,8 +526,62 @@ def main():
 
         meta.fit(X_meta_train, y_meta_train)
         meta.save("artifacts/meta_ensemble.joblib")
-        mlflow.sklearn.log_model(meta.meta_learner, "meta_ensemble")
+        # mlflow.sklearn.log_model(meta.meta_learner, "meta_ensemble")
         print("Meta-Ensemble saved to artifacts/meta_ensemble.joblib")
+
+    # ==========================================
+    # STEP 4b: CALIBRATE MODEL PROBABILITIES
+    # ==========================================
+    print("\n--- Calibrating Model Probabilities (Isotonic Regression) ---")
+    print("  Fitting on VALIDATION predictions only (no training data)")
+
+    calibrator = ModelCalibrator()
+
+    # DL Fusion validation predictions
+    dl_val_preds = model.predict(X_val, verbose=0)[2]  # shape (n_val, 3)
+    calibrator.fit("DL_FUSION", y_sig_val, dl_val_preds)
+
+    # XGBoost validation predictions
+    X_xgb_val = ts_val[:, -1, :]
+    xgb_val_preds = xgb_model.predict_proba(X_xgb_val)  # shape (n_val, 3)
+    calibrator.fit("XGB", y_sig_val, xgb_val_preds)
+
+    # LightGBM validation predictions
+    lgbm_val_preds = lgbm_model.predict_proba(X_xgb_val)  # shape (n_val, 3)
+    calibrator.fit("LGBM", y_sig_val, lgbm_val_preds)
+
+    calibrator.save("artifacts/model_calibrator.joblib")
+    print("  Calibrator saved to artifacts/model_calibrator.joblib")
+
+    # Log calibration diagnostics to MLflow
+    with mlflow.start_run(run_name=f"CALIBRATION_{ticker}"):
+        for model_name in ["DL_FUSION", "XGB", "LGBM"]:
+            if model_name == "DL_FUSION":
+                raw_preds = dl_val_preds
+            elif model_name == "XGB":
+                raw_preds = xgb_val_preds
+            else:
+                raw_preds = lgbm_val_preds
+
+            cal_preds = calibrator.calibrate(model_name, raw_preds)
+
+            # Log before/after mean probabilities per class
+            for cls_idx, cls_name in enumerate(["SELL", "HOLD", "BUY"]):
+                mlflow.log_metric(
+                    f"{model_name}_raw_mean_P_{cls_name}",
+                    float(np.mean(raw_preds[:, cls_idx])),
+                )
+                mlflow.log_metric(
+                    f"{model_name}_cal_mean_P_{cls_name}",
+                    float(np.mean(cal_preds[:, cls_idx])),
+                )
+
+            # Accuracy before / after
+            raw_acc = float(np.mean(np.argmax(raw_preds, axis=1) == y_sig_val))
+            cal_acc = float(np.mean(np.argmax(cal_preds, axis=1) == y_sig_val))
+            mlflow.log_metric(f"{model_name}_raw_accuracy", raw_acc)
+            mlflow.log_metric(f"{model_name}_cal_accuracy", cal_acc)
+            print(f"  {model_name}: Raw Acc={raw_acc:.4f} -> Calibrated Acc={cal_acc:.4f}")
 
     # ==========================================
     # STEP 5: SAVE ACTIVE TICKER
@@ -457,6 +600,21 @@ def main():
         print(f"  >>> Active ticker saved: {ticker} ({market})")
     except Exception as e:
         print(f"  [ERROR] Could not save active ticker metadata: {e}")
+
+    # GPU Verification
+    verify_gpu_utilization()
+
+    # ==========================================
+    # STEP 6: QUICK EVALUATION RUN
+    # ==========================================
+    print(f"\n[6/6] Triggering quick evaluation run for {ticker}...")
+    try:
+        from scripts.evaluation.run_backtest import AutomatedBacktester
+        backtester = AutomatedBacktester(tickers=[ticker])
+        backtester.run_pipeline()
+        print("  >>> Quick evaluation run complete. Live metrics populated.")
+    except Exception as e:
+        print(f"  [WARNING] Quick evaluation run failed: {e}")
 
     print(f"\n  >>> Steps Complete ({time.time() - pipeline_start:.2f}s)")
     print(

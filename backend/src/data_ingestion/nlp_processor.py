@@ -108,7 +108,7 @@ class NewsTokenizer:
         if not combined_text:
             combined_text = "No significant financial news or SEC filings today."
 
-        encoded = self.tokenizer.encode_plus(
+        encoded = self.tokenizer(
             combined_text,
             add_special_tokens=True,
             max_length=self.max_length,

@@ -216,11 +216,14 @@ def add_advanced_features(
     # ==========================================
 
     # --- Market Structure ---
-    # Swing Highs and Lows (Window = 5)
-    df["Swing_High"] = df["High"] == df["High"].rolling(window=5, center=True).max()
-    df["Swing_Low"] = df["Low"] == df["Low"].rolling(window=5, center=True).min()
-    df["Swing_High"] = df["Swing_High"].astype(int)
-    df["Swing_Low"] = df["Swing_Low"].astype(int)
+    # Swing Highs and Lows (Confirmed Swing over 5 bars: t-4, t-3, t-2(high), t-1, t)
+    # We only know a swing high is formed at t-2 when we are at time t.
+    rolling_max_5 = df["High"].rolling(window=5).max()
+    rolling_min_5 = df["Low"].rolling(window=5).min()
+    
+    # The high 2 bars ago must equal the 5-bar max to be a swing high.
+    df["Swing_High"] = (df["High"].shift(2) == rolling_max_5).astype(int)
+    df["Swing_Low"] = (df["Low"].shift(2) == rolling_min_5).astype(int)
 
     # Higher Highs / Lower Lows (simplified rolling check)
     rolling_max = df["High"].rolling(20).max()

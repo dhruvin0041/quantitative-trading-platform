@@ -9,6 +9,7 @@ from catboost import CatBoostClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import TimeSeriesSplit
+from src.utils.gpu_utils import get_xgboost_gpu_params, get_lightgbm_gpu_params, get_catboost_gpu_params
 
 # Ensure models dir exists for saving params
 os.makedirs("models", exist_ok=True)
@@ -32,7 +33,7 @@ def objective_xgb(trial, X_train, y_train):
         "gamma": trial.suggest_categorical("gamma", [1e-8, 0.1, 1.0, 5.0]),
         "reg_alpha": trial.suggest_categorical("reg_alpha", [1e-8, 0.1, 1.0, 10.0]),
         "reg_lambda": trial.suggest_categorical("reg_lambda", [1e-8, 0.1, 1.0, 10.0]),
-        "max_bin": trial.suggest_categorical("max_bin", [128, 256, 384, 512]),
+        "max_bin": trial.suggest_categorical("max_bin", [64, 128, 192, 255]),
         "colsample_bylevel": trial.suggest_categorical(
             "colsample_bylevel", [0.5, 0.7, 0.85, 1.0]
         ),
@@ -44,7 +45,7 @@ def objective_xgb(trial, X_train, y_train):
         "num_class": 3,
         "random_state": 42,
         "n_jobs": -1,
-        "tree_method": "hist",
+        **get_xgboost_gpu_params()
     }
 
     tscv = TimeSeriesSplit(n_splits=5)
@@ -84,7 +85,7 @@ def objective_lgbm(trial, X_train, y_train):
         ),
         "reg_alpha": trial.suggest_categorical("reg_alpha", [1e-8, 0.1, 1.0, 10.0]),
         "reg_lambda": trial.suggest_categorical("reg_lambda", [1e-8, 0.1, 1.0, 10.0]),
-        "max_bin": trial.suggest_categorical("max_bin", [128, 256, 384, 512]),
+        "max_bin": trial.suggest_categorical("max_bin", [64, 128, 192, 255]),
         "feature_fraction": trial.suggest_categorical(
             "feature_fraction", [0.5, 0.7, 0.85, 1.0]
         ),
@@ -99,6 +100,7 @@ def objective_lgbm(trial, X_train, y_train):
         "random_state": 42,
         "verbose": -1,
         "n_jobs": -1,
+        **get_lightgbm_gpu_params()
     }
 
     tscv = TimeSeriesSplit(n_splits=5)
@@ -138,6 +140,7 @@ def objective_catboost(trial, X_train, y_train):
         "random_seed": 42,
         "verbose": 0,
         "thread_count": -1,
+        **get_catboost_gpu_params()
     }
 
     tscv = TimeSeriesSplit(n_splits=5)
@@ -189,6 +192,8 @@ def objective_rf(trial, X_train, y_train):
 
 
 def run_optimization():
+    from src.utils.gpu_utils import get_compute_backend
+    get_compute_backend()
     # Load training data saved by train.py
     if not os.path.exists("artifacts/X_train_tabular.joblib") or not os.path.exists(
         "artifacts/y_train_sig.joblib"
@@ -209,7 +214,7 @@ def run_optimization():
     ]:
         print(f"\nOptimizing {model_name}...")
         study = optuna.create_study(direction="maximize")
-        study.optimize(lambda t: obj_func(t, X_train, y_train), n_trials=50, n_jobs=-1)
+        study.optimize(lambda t: obj_func(t, X_train, y_train), n_trials=50, n_jobs=1)
         print(f"Best {model_name} AUC: {study.best_value}")
         with open(f"configs/best_{model_name}_params.json", "w") as f:
             json.dump(study.best_params, f, indent=2)

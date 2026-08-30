@@ -28,6 +28,7 @@ export interface TechnicalSnapshot {
   BB_Position: number;
   ADX: number;
   Volume_Ratio: number;
+  ATR_Regime_Ratio?: number;
 }
 
 export interface AIReport {

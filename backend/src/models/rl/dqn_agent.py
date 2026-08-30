@@ -3,6 +3,11 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import random
+import logging
+
+from src.utils.gpu_utils import get_device, configure_gpu_optimizations, benchmark_context
+
+logger = logging.getLogger(__name__)
 
 
 class DuelingDQNetwork(nn.Module):
@@ -94,7 +99,9 @@ class DQNAgent:
         self.tau = config.get("tau", 0.005)  # Soft update parameter
 
         self.memory = PrioritizedReplayBuffer(capacity=config.get("buffer_size", 10000))
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = get_device()
+        configure_gpu_optimizations()
+        logger.info("DQN Agent initialized on %s", self.device)
 
         # Double DQN architecture
         self.policy_net = DuelingDQNetwork(state_size, action_size).to(self.device)
@@ -103,6 +110,7 @@ class DQNAgent:
         self.target_net.eval()
 
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=self.learning_rate)
+        self.scaler = torch.cuda.amp.GradScaler(enabled=self.device.type == 'cuda')
 
         # Transaction configuration
         self.transaction_cost = config.get("transaction_cost", 0.001)  # 0.1%
@@ -150,27 +158,29 @@ class DQNAgent:
         )
 
         # DDQN: use policy net to select best action, target net to evaluate it
-        with torch.no_grad():
-            next_actions = self.policy_net(next_states).argmax(1).unsqueeze(1)
-            next_q_targets = self.target_net(next_states).gather(1, next_actions)
-            target_q = rewards + (1 - dones) * self.gamma * next_q_targets
+        with torch.cuda.amp.autocast(enabled=self.device.type == 'cuda'):
+            with torch.no_grad():
+                next_actions = self.policy_net(next_states).argmax(1).unsqueeze(1)
+                next_q_targets = self.target_net(next_states).gather(1, next_actions)
+                target_q = rewards + (1 - dones) * self.gamma * next_q_targets
 
-        # Current Q-values
-        current_q = self.policy_net(states).gather(1, actions)
+            # Current Q-values
+            current_q = self.policy_net(states).gather(1, actions)
+
+            # Huber loss with prioritized weights
+            loss = (
+                weights
+                * nn.functional.smooth_l1_loss(current_q, target_q, reduction="none")
+            ).mean()
 
         # Compute TD errors for priority update
-        td_errors = torch.abs(current_q - target_q).detach().cpu().numpy()
+        td_errors = torch.abs(current_q - target_q).detach().cpu().numpy().flatten()
         self.memory.update_priorities(indices, td_errors + 1e-6)
 
-        # Huber loss with prioritized weights
-        loss = (
-            weights
-            * nn.functional.smooth_l1_loss(current_q, target_q, reduction="none")
-        ).mean()
-
         self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
+        self.scaler.scale(loss).backward()
+        self.scaler.step(self.optimizer)
+        self.scaler.update()
 
         # Soft update of target network
         self._soft_update_target_network()
@@ -212,7 +222,7 @@ class DQNAgent:
         )
 
     def load(self, name):
-        checkpoint = torch.load(name)
+        checkpoint = torch.load(name, map_location=self.device, weights_only=False)
         self.policy_net.load_state_dict(checkpoint["policy_net"])
         self.target_net.load_state_dict(checkpoint["target_net"])
         self.optimizer.load_state_dict(checkpoint["optimizer"])

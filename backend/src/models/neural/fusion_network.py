@@ -1,4 +1,5 @@
 import tensorflow as tf
+from src.utils.gpu_utils import configure_tensorflow_gpu
 import keras
 from keras.layers import (
     Dense,
@@ -52,6 +53,7 @@ class CrossModalAttention(Layer):
 
 
 def build_fusion_model(config):
+    configure_tensorflow_gpu()
     m_config = config.get("model", {})
 
     # 1. Build Branches with Granular Config

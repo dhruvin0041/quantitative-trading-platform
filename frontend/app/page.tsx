@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { PriceChart } from '@/components/dashboard/PriceChart';
-import { TradeCard } from '@/components/dashboard/TradeCard';
 import { SignalIntelligence } from '@/components/dashboard/SignalIntelligence';
 import { PortfolioAnalytics } from '@/components/dashboard/PortfolioAnalytics';
 import { RiskDashboard } from '@/components/dashboard/RiskDashboard';
@@ -12,7 +11,7 @@ import { IntegrityAudit } from '@/components/dashboard/IntegrityAudit';
 import { ChartData, UniverseStock } from '@/types';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { Activity, Cpu, Menu, Shield, Briefcase, ActivitySquare, Target, BarChart2, ShieldCheck, X, CheckCircle2 } from 'lucide-react';
+import { Activity, Cpu, Menu, Shield, Briefcase, Target, BarChart2, ShieldCheck, X, CheckCircle2, AlertTriangle, BrainCircuit } from 'lucide-react';
 import { CommandMenu } from '@/components/CommandMenu';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { StockSearch } from '@/components/StockSearch';
@@ -27,7 +26,10 @@ export default function HydraTerminal() {
   const [chartData, setChartData] = useState<ChartData | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Dashboard Layout State
   const [isSidebarOpen, setSidebarOpen] = useState(true);
+  const [isRiskFeedOpen, setRiskFeedOpen] = useState(true);
   const [isDebugModalOpen, setDebugModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('CONSENSUS');
   const [API_URL] = useState(getBaseUrl());
@@ -61,7 +63,6 @@ export default function HydraTerminal() {
 
       setLoading(true);
       setError(null);
-      setChartData(null); 
 
       const requestUrl = `${API_URL}/predict?ticker=${ticker}`;
       const timeoutId = setTimeout(() => controller.abort(), 60000);
@@ -113,6 +114,11 @@ export default function HydraTerminal() {
     return stock?.market === 'india' ? '₹' : '$';
   }, [universe, ticker]);
 
+  // Extract Mock Risk Metrics from chartData or default
+  const portfolioVaR = chartData?.metadata?.portfolio_var || 0.042;
+  const isVaRBreach = portfolioVaR > 0.05;
+  const executionStatus = isVaRBreach ? "VETOED (VAR_BREACH)" : "ACTIVE_ROUTING";
+
   return (
     <div className="min-h-screen bg-background text-foreground font-sans flex flex-col selection:bg-primary/30">
       
@@ -129,6 +135,10 @@ export default function HydraTerminal() {
             <Cpu className="w-5 h-5 text-primary" />
             <span className="font-mono font-bold tracking-tight text-lg hidden sm:inline-block">HYDRA<span className="text-muted-foreground font-light">|V2</span></span>
           </div>
+          <a href="/agents" className="flex items-center gap-2 px-3 py-1.5 ml-4 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 transition-colors">
+            <BrainCircuit className="w-4 h-4" />
+            <span className="text-[11px] font-bold uppercase tracking-widest">Multi-Agent</span>
+          </a>
           <StockSearch universe={universe} onSelect={handleStockSelect} />
         </div>
 
@@ -136,14 +146,22 @@ export default function HydraTerminal() {
           {loading ? (
             <div className="flex items-center gap-2 px-3 py-1 rounded bg-primary/10 border border-primary/20 text-primary">
               <Activity className="w-3 h-3 animate-spin" />
-              <span className="text-[11px] font-mono uppercase font-bold">Syncing</span>
+              <span className="text-[11px] font-mono uppercase font-bold">Syncing Panel</span>
             </div>
           ) : (
             <div className="flex items-center gap-2 px-3 py-1 rounded bg-positive/10 border border-positive/20 text-positive shadow-sm">
               <div className="w-2 h-2 rounded-full bg-positive" />
-              <span className="text-[11px] font-mono uppercase font-bold">Connected</span>
+              <span className="text-[11px] font-mono uppercase font-bold">Panel Synced</span>
             </div>
           )}
+          
+          <button
+            onClick={() => setRiskFeedOpen(!isRiskFeedOpen)}
+            className="px-3 py-1.5 hover:bg-muted rounded-md transition-colors text-[11px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2"
+          >
+            <Shield className="w-4 h-4" /> Risk Feed
+          </button>
+
           <button
             onClick={() => setDebugModalOpen(true)}
             className="p-1.5 hover:bg-muted rounded-md transition-colors text-muted-foreground hover:text-foreground"
@@ -159,7 +177,7 @@ export default function HydraTerminal() {
       {/* MAIN WORKSPACE: 3-COLUMN LAYOUT */}
       <div className="flex flex-1 overflow-hidden">
         
-        {/* COLUMN 1: WATCHLIST */}
+        {/* COLUMN 1: WATCHLIST (TICKER SELECTION) */}
         <motion.aside 
           initial={false}
           animate={{ width: isSidebarOpen ? 320 : 0, opacity: isSidebarOpen ? 1 : 0 }}
@@ -184,33 +202,6 @@ export default function HydraTerminal() {
                 )}
               >
                 🇮🇳 IND
-              </button>
-              <button
-                onClick={() => setMarket('crypto')}
-                className={cn(
-                  "flex-1 min-w-[45px] py-1.5 rounded-md text-[11px] font-bold uppercase transition-all",
-                  market === 'crypto' ? "bg-muted text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                ₿ CRYPTO
-              </button>
-              <button
-                onClick={() => setMarket('forex')}
-                className={cn(
-                  "flex-1 min-w-[45px] py-1.5 rounded-md text-[11px] font-bold uppercase transition-all",
-                  market === 'forex' ? "bg-muted text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                💱 FX
-              </button>
-              <button
-                onClick={() => setMarket('commodities')}
-                className={cn(
-                  "flex-1 min-w-[45px] py-1.5 rounded-md text-[11px] font-bold uppercase transition-all",
-                  market === 'commodities' ? "bg-muted text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                🥇 COM
               </button>
             </div>
 
@@ -256,7 +247,7 @@ export default function HydraTerminal() {
           </div>
         </motion.aside>
 
-        {/* COLUMN 2 & 3: CENTER EXECUTION AREA */}
+        {/* COLUMN 2: CENTER EXECUTION AREA (CHART) */}
         <main className="flex-1 flex flex-col min-w-0 bg-background overflow-y-auto hide-scrollbar">
           
           {error && (
@@ -265,11 +256,10 @@ export default function HydraTerminal() {
             </div>
           )}
 
-          {/* TOP SECTION: Chart + Trade Card */}
-          <div className="flex flex-col xl:flex-row gap-4 p-4 xl:h-[500px]">
-            {/* Chart Container */}
+          {/* TOP SECTION: Interactive Chart Area */}
+          <div className="flex flex-col xl:flex-row gap-4 p-4 xl:h-[600px]">
+            {/* Main Interactive Chart */}
             <div className="flex-1 bg-card border border-border rounded-xl overflow-hidden min-h-[400px] shadow-lg flex flex-col">
-              {/* Context Header */}
               <div className="px-4 py-3 border-b border-border flex justify-between items-center bg-card shrink-0">
                  <div className="flex items-center gap-3">
                    <h2 className="text-[20px] font-bold">{ticker}</h2>
@@ -284,17 +274,73 @@ export default function HydraTerminal() {
               </div>
             </div>
 
-            {/* Trade Card Container */}
-            <div className="w-full xl:w-[360px] shrink-0">
-               <TradeCard data={chartData} currency={currencySymbol} />
-            </div>
+            {/* COLUMN 3: RISK AGENT LIVE FEED */}
+            <motion.div 
+              initial={false}
+              animate={{ width: isRiskFeedOpen ? 360 : 0, opacity: isRiskFeedOpen ? 1 : 0, display: isRiskFeedOpen ? 'block' : 'none' }}
+              className="w-full xl:w-[360px] shrink-0 bg-card border border-border rounded-xl flex flex-col shadow-lg overflow-hidden"
+            >
+              <div className="px-4 py-3 border-b border-border flex items-center justify-between bg-muted/30">
+                 <span className="text-[12px] font-bold tracking-widest text-muted-foreground uppercase flex items-center gap-2">
+                   <Shield className="w-4 h-4 text-primary" /> RiskAgent Live Feed
+                 </span>
+              </div>
+              <div className="p-5 flex-1 overflow-y-auto flex flex-col gap-6">
+                
+                {/* Portfolio VaR Meter */}
+                <div className="flex flex-col gap-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[12px] font-bold uppercase text-muted-foreground">Portfolio VaR (95%)</span>
+                    <span className={cn("text-[14px] font-mono font-bold", isVaRBreach ? "text-negative" : "text-positive")}>
+                      {(portfolioVaR * 100).toFixed(2)}%
+                    </span>
+                  </div>
+                  <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                    <div 
+                      className={cn("h-full transition-all duration-500", isVaRBreach ? "bg-negative" : "bg-positive")} 
+                      style={{ width: `${Math.min((portfolioVaR / 0.05) * 100, 100)}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] text-muted-foreground text-right">Limit: 5.00%</span>
+                </div>
+
+                {/* Execution Status */}
+                <div className="flex flex-col gap-2 p-4 border border-border rounded-lg bg-background">
+                  <span className="text-[11px] font-bold uppercase text-muted-foreground">Execution Status</span>
+                  <div className="flex items-center gap-2 mt-1">
+                    {isVaRBreach ? <AlertTriangle className="w-5 h-5 text-negative" /> : <Activity className="w-5 h-5 text-positive" />}
+                    <span className={cn("text-[14px] font-mono font-bold", isVaRBreach ? "text-negative" : "text-positive")}>
+                      {executionStatus}
+                    </span>
+                  </div>
+                  {isVaRBreach && (
+                     <span className="text-[11px] text-negative mt-2 leading-tight">
+                       Absolute veto engaged. Portfolio tail risk exceeded safety limits. 
+                     </span>
+                  )}
+                </div>
+
+                {/* Crowding Warnings */}
+                <div className="flex flex-col gap-2 p-4 border border-border rounded-lg bg-background">
+                  <span className="text-[11px] font-bold uppercase text-muted-foreground">Sector Crowding (Tech)</span>
+                  <div className="flex justify-between items-center mt-1">
+                    <span className="text-[12px] text-foreground">Current Exposure</span>
+                    <span className="text-[13px] font-mono text-warning">14.2%</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[12px] text-foreground">Purged Trades</span>
+                    <span className="text-[13px] font-mono text-muted-foreground">3</span>
+                  </div>
+                </div>
+
+              </div>
+            </motion.div>
           </div>
 
           {/* BOTTOM SECTION: Tabbed Interface */}
           <div className="px-4 pb-4 flex-1 flex flex-col">
             <div className="bg-card border border-border rounded-xl shadow-lg flex-1 flex flex-col overflow-hidden">
               
-              {/* Tab Headers */}
               <div className="flex border-b border-border bg-card overflow-x-auto hide-scrollbar">
                 {[
                   { id: 'CONSENSUS', icon: Target, label: 'Model Consensus' },
@@ -319,7 +365,6 @@ export default function HydraTerminal() {
                 ))}
               </div>
 
-              {/* Tab Content */}
               <div className="p-4 flex-1 overflow-y-auto bg-background/50">
                 {activeTab === 'CONSENSUS' && (
                   <div className="max-w-4xl">

@@ -1,5 +1,6 @@
-tensorflow
 torch
+torchvision
+tensorflow
 xgboost
 lightgbm
 catboost
@@ -24,6 +25,6 @@ google-genai
 networkx
 shap
 numba
-requests
 beautifulsoup4
 lxml
+nvidia-ml-py3

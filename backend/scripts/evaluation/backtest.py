@@ -23,22 +23,7 @@ from src.models.ensemble.meta_ensemble import MetaEnsemble  # noqa: E402
 from src.models.regime_detector import RegimeDetector  # noqa: E402
 from src.optimization.objective_functions import calculate_sharpe_ratio  # noqa: E402
 
-FEATURE_COLUMNS = [
-    "MA20_vs_MA50",
-    "EMA9_vs_EMA21",
-    "Price_vs_EMA9",
-    "Price_vs_EMA21",
-    "VIX_Level",
-    "BB_Width",
-    "BB_Position",
-    "RSI",
-    "ADX",
-    "MACD_Hist",
-    "Relative_Strength",
-    "OBV_Change",
-    "Return",
-    "Volume_Ratio",
-]
+from src.execution.live_inference import FEATURE_COLUMNS
 
 
 def fetch_data(ticker, spy_df, vix_df, period="2y"):

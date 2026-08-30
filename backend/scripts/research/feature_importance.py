@@ -21,23 +21,7 @@ except Exception:
 
 lgbm_model = joblib.load("artifacts/lgbm_agent.joblib")
 
-FEATURE_COLUMNS = [
-    "MA20",
-    "MA20_vs_MA50",
-    "EMA9_vs_EMA21",
-    "VIX_Level",
-    "BB_Width",
-    "ADX",
-    "BB_Position",
-    "MACD_Hist",
-    "RSI",
-    "Relative_Strength",
-    "OBV_Change",
-    "VIX_Change",
-    "Upper_Shadow",
-    "Lower_Shadow",
-    "Return",
-]
+from src.execution.live_inference import FEATURE_COLUMNS
 
 # XGBoost importances (normalized 0-1)
 xgb_imp_raw = xgb_model.feature_importances_

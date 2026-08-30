@@ -5,7 +5,7 @@ Follow these steps in order to initialize, optimize, and launch the system
 for a specific ticker (Example: RELIANCE.NS).
 
 PREREQUISITES:
-- Python 3.12+
+- Python 3.10+
 - Node.js 20+
 - Valid GOOGLE_API_KEY in backend/.env (optional for alpha research)
 - Valid API_KEY in backend/.env (must match frontend/.env.local)

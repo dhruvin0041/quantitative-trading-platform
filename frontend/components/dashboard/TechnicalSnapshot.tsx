@@ -132,6 +132,14 @@ export function TechnicalSnapshot({ data, currency = '$' }: TechnicalSnapshotPro
               <span className="text-[11px] font-bold text-muted-foreground uppercase">Vol Expansion</span>
               <span className={cn("text-[11px] font-bold uppercase", volExpansion === "EXPANDING" ? "text-warning" : "text-foreground")}>{volExpansion}</span>
             </div>
+            <div className="flex justify-between items-center p-2 bg-background border border-border rounded">
+              <span className="text-[11px] font-bold text-muted-foreground uppercase">ATR Regime</span>
+              <span className={cn("text-[11px] font-bold uppercase", technical_snapshot.ATR_Regime_Ratio && technical_snapshot.ATR_Regime_Ratio > 1.5 ? "text-warning" : technical_snapshot.ATR_Regime_Ratio && technical_snapshot.ATR_Regime_Ratio < 0.7 ? "text-positive" : "text-foreground")}>
+                {technical_snapshot.ATR_Regime_Ratio ? (
+                  technical_snapshot.ATR_Regime_Ratio > 1.5 ? "HIGH VOL" : technical_snapshot.ATR_Regime_Ratio < 0.7 ? "LOW VOL" : "NEUTRAL"
+                ) : "N/A"}
+              </span>
+            </div>
           </div>
         </div>
 

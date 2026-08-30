@@ -61,79 +61,85 @@ def apply_dynamic_triple_barrier(
     - Upper Barrier: Take Profit based on ATR
     - Lower Barrier: Stop Loss based on ATR
     - Vertical Barrier: Time Limit (e.g., 10 days)
+    
+    Refactored to use vectorized Pandas/NumPy operations for massive panel datasets.
     """
     print(
         f"Applying Dynamic Triple Barrier Labeling (TP: {tp_atr_multiplier}x ATR, SL: {sl_atr_multiplier}x ATR, Horizon: {horizon} days)..."
     )
 
-    # Default everything to 1 (Hold/Skip)
-    signals = np.ones(len(df))
-    closes = df["Close"].values
-    highs = df["High"].values
-    lows = df["Low"].values
-
-    # Ensure ATR exists before proceeding
     if "ATR" not in df.columns:
         raise KeyError(
             "ATR column is missing. Ensure add_advanced_features is run before apply_dynamic_triple_barrier."
         )
 
-    atrs = df["ATR"].values
+    # Calculate absolute barrier thresholds
+    upper_barrier = df["Close"] + (df["ATR"] * tp_atr_multiplier)
+    lower_barrier = df["Close"] - (df["ATR"] * sl_atr_multiplier)
 
-    # We must stop the loop before the end of the dataset to have room to "look forward"
-    for i in range(len(closes) - horizon):
-        current_price = closes[i]
-        current_atr = atrs[i]
+    # Detect if dataset is a multi-asset panel (Ticker in index or columns)
+    has_ticker_col = "Ticker" in df.columns
+    has_ticker_idx = "Ticker" in df.index.names
 
-        # Dynamic barrier thresholds (Absolute Price Levels)
-        upper_barrier_price = current_price + (current_atr * tp_atr_multiplier)
-        lower_barrier_price = current_price - (current_atr * sl_atr_multiplier)
+    # Grouping logic for panel datasets
+    if has_ticker_idx:
+        grouped_high = df.groupby(level="Ticker")["High"]
+        grouped_low = df.groupby(level="Ticker")["Low"]
+    elif has_ticker_col:
+        grouped_high = df.groupby("Ticker")["High"]
+        grouped_low = df.groupby("Ticker")["Low"]
+    else:
+        grouped_high = df["High"]
+        grouped_low = df["Low"]
 
-        # Extract the future price path for the next 'horizon' days
-        future_highs = highs[i + 1 : i + 1 + horizon]
-        future_lows = lows[i + 1 : i + 1 + horizon]
+    # Build vectorized future matrices
+    future_highs, future_lows = [], []
+    for h in range(1, horizon + 1):
+        future_highs.append(grouped_high.shift(-h))
+        future_lows.append(grouped_low.shift(-h))
 
-        # Find the exact indices where the barriers are breached
-        upper_hits = np.where(future_highs >= upper_barrier_price)[0]
-        lower_hits = np.where(future_lows <= lower_barrier_price)[0]
+    fh_df = pd.concat(future_highs, axis=1)
+    fl_df = pd.concat(future_lows, axis=1)
 
-        # Scenario 1: Both barriers are hit within the 10 days
-        if len(upper_hits) > 0 and len(lower_hits) > 0:
-            if upper_hits[0] < lower_hits[0]:
-                signals[i] = 2  # Hit Take Profit first -> BUY
-            elif lower_hits[0] < upper_hits[0]:
-                signals[i] = 0  # Hit Stop Loss first -> SELL
-            else:
-                # Extreme Volatility Edge Case: Hit both on the exact same day.
-                # Institutional rule: Always assume the stop-loss hit first to be conservative.
-                signals[i] = 0
+    # Vectorized breach detection across the horizon
+    upper_hits = fh_df.values >= upper_barrier.values[:, None]
+    lower_hits = fl_df.values <= lower_barrier.values[:, None]
 
-        # Scenario 2: Only Take Profit is hit
-        elif len(upper_hits) > 0:
-            signals[i] = 2
+    # Find the earliest step each barrier is hit (horizon + 1 if never hit)
+    upper_hit_steps = np.where(upper_hits.any(axis=1), upper_hits.argmax(axis=1), horizon + 1)
+    lower_hit_steps = np.where(lower_hits.any(axis=1), lower_hits.argmax(axis=1), horizon + 1)
 
-        # Scenario 3: Only Stop Loss is hit
-        elif len(lower_hits) > 0:
-            signals[i] = 0
-
-        # Scenario 4: Neither is hit before the 10 days expire (Vertical Barrier)
-        else:
-            signals[i] = 1  # -> SKIP / HOLD
+    # Consensus Rule: if both hit simultaneously, default to Stop-Loss (0) for safety
+    neither_hit = (upper_hit_steps > horizon) & (lower_hit_steps > horizon)
+    signals = np.where(
+        neither_hit, 1, np.where(upper_hit_steps < lower_hit_steps, 2, 0)
+    )
 
     df["target_signal"] = signals
 
-    # We must calculate Range targets for your regression output as well
-    df["future_high"] = df["High"].rolling(window=horizon).max().shift(-horizon)
-    df["future_low"] = df["Low"].rolling(window=horizon).min().shift(-horizon)
+    # Target calculation logic
+    def get_future_max(s):
+        return s.rolling(window=horizon).max().shift(-horizon)
+
+    def get_future_min(s):
+        return s.rolling(window=horizon).min().shift(-horizon)
+
+    if has_ticker_idx or has_ticker_col:
+        grouped = df.groupby(level="Ticker") if has_ticker_idx else df.groupby("Ticker")
+        df["future_high"] = grouped["High"].transform(get_future_max)
+        df["future_low"] = grouped["Low"].transform(get_future_min)
+        df["future_close"] = grouped["Close"].shift(-horizon)
+    else:
+        df["future_high"] = df["High"].rolling(window=horizon).max().shift(-horizon)
+        df["future_low"] = df["Low"].rolling(window=horizon).min().shift(-horizon)
+        df["future_close"] = df["Close"].shift(-horizon)
+
     df["target_min"] = (df["future_low"] - df["Close"]) / df["Close"]
     df["target_max"] = (df["future_high"] - df["Close"]) / df["Close"]
-
-    # Direction is now based on the final horizon day, just to keep the tensor shapes happy
-    df["future_close"] = df["Close"].shift(-horizon)
     df["target_direction"] = (df["future_close"] > df["Close"] * 1.02).astype(int)
 
-    # Drop the last 'horizon' rows because we can't look into the future for them
-    df = df.iloc[:-horizon].copy()
+    # Drop NaNs that appear at the end of the horizon where future data isn't available
+    df.dropna(subset=["future_close"], inplace=True)
     df.dropna(inplace=True)
 
     return df
