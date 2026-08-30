@@ -471,6 +471,12 @@ async def get_agentic_prediction_stream(ticker: str = "AAPL", mock: bool = False
                     }
                     if "fundamentals_analysis" in state_update:
                         payload["fundamentals_analysis"] = state_update["fundamentals_analysis"]
+                    if "sentiment_analysis" in state_update:
+                        payload["sentiment_analysis"] = state_update["sentiment_analysis"]
+                    if "news_analysis" in state_update:
+                        payload["news_analysis"] = state_update["news_analysis"]
+                    if "technical_analysis" in state_update:
+                        payload["technical_analysis"] = state_update["technical_analysis"]
                     if "bullish_argument" in state_update:
                         payload["bullish_argument"] = state_update["bullish_argument"]
                     if "bearish_argument" in state_update:

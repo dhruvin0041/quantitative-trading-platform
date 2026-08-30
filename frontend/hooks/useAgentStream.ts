@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 export type AgentStreamStatus = 'idle' | 'streaming' | 'completed' | 'error';
 
@@ -27,6 +27,8 @@ export interface ExecutionResult {
   status?: string;
 }
 
+const STORAGE_KEY = 'hydra_agent_stream_state';
+
 export function useAgentStream() {
   const [streamStatus, setStreamStatus] = useState<AgentStreamStatus>('idle');
   const [analystReports, setAnalystReports] = useState<AnalystReports>({});
@@ -36,6 +38,42 @@ export function useAgentStream() {
   const [executionResult, setExecutionResult] = useState<ExecutionResult>({});
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Load from local storage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.analystReports) setAnalystReports(parsed.analystReports);
+        if (parsed.debateHistory) setDebateHistory(parsed.debateHistory);
+        if (parsed.tradeProposal) setTradeProposal(parsed.tradeProposal);
+        if (parsed.riskAssessment) setRiskAssessment(parsed.riskAssessment);
+        if (parsed.executionResult) setExecutionResult(parsed.executionResult);
+        if (parsed.streamStatus === 'completed' || parsed.streamStatus === 'error') {
+            setStreamStatus(parsed.streamStatus);
+        } else if (parsed.streamStatus === 'streaming') {
+            setStreamStatus('idle');
+        }
+      }
+    } catch (e) {}
+  }, []);
+
+  // Save to local storage when state changes
+  useEffect(() => {
+    if (streamStatus !== 'idle' || Object.keys(analystReports).length > 0) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          streamStatus,
+          analystReports,
+          debateHistory,
+          tradeProposal,
+          riskAssessment,
+          executionResult
+        }));
+      } catch (e) {}
+    }
+  }, [streamStatus, analystReports, debateHistory, tradeProposal, riskAssessment, executionResult]);
 
   const startStream = useCallback(async (ticker: string, mock: boolean = false) => {
     if (abortControllerRef.current) {

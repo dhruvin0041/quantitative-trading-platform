@@ -18,35 +18,35 @@ export function RiskExecutionPanel({ proposal, risk, execution, hitlMode = false
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
       {/* Lead Trader Proposal */}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 shadow-lg flex flex-col">
-        <h3 className="text-slate-200 font-semibold mb-3 flex items-center space-x-2 border-b border-slate-800 pb-2">
+      <div className="bg-card border border-border rounded-lg p-4 shadow-lg flex flex-col">
+        <h3 className="text-foreground font-semibold mb-3 flex items-center space-x-2 border-b border-border pb-2">
           <Crosshair className="w-5 h-5 text-indigo-400" />
           <span>Lead Trader</span>
         </h3>
-        <div className="text-slate-300 text-sm flex-1 whitespace-pre-wrap">
-          {proposal.decision ? proposal.decision : <span className="text-slate-600 italic">Awaiting debate consensus...</span>}
+        <div className="text-foreground text-sm flex-1 whitespace-pre-wrap">
+          {proposal.decision ? proposal.decision : <span className="text-muted-foreground italic">Awaiting debate consensus...</span>}
         </div>
       </div>
 
       {/* Risk Manager Assessment */}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 shadow-lg flex flex-col">
-        <h3 className="text-slate-200 font-semibold mb-3 flex items-center space-x-2 border-b border-slate-800 pb-2">
+      <div className="bg-card border border-border rounded-lg p-4 shadow-lg flex flex-col">
+        <h3 className="text-foreground font-semibold mb-3 flex items-center space-x-2 border-b border-border pb-2">
           <ShieldAlert className="w-5 h-5 text-amber-500" />
           <span>Risk Manager</span>
         </h3>
-        <div className="text-slate-300 text-sm flex-1 whitespace-pre-wrap">
-          {risk.decision ? risk.decision : <span className="text-slate-600 italic">Awaiting TimeGAN stress tests...</span>}
+        <div className="text-foreground text-sm flex-1 whitespace-pre-wrap">
+          {risk.decision ? risk.decision : <span className="text-muted-foreground italic">Awaiting TimeGAN stress tests...</span>}
         </div>
       </div>
 
       {/* Portfolio Manager Execution */}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 shadow-lg flex flex-col items-center justify-center text-center">
-        <h3 className="text-slate-200 font-semibold mb-4 w-full flex justify-center items-center space-x-2 border-b border-slate-800 pb-2">
+      <div className="bg-card border border-border rounded-lg p-4 shadow-lg flex flex-col items-center justify-center text-center">
+        <h3 className="text-foreground font-semibold mb-4 w-full flex justify-center items-center space-x-2 border-b border-border pb-2">
           <span>Portfolio Manager</span>
         </h3>
         
         {!finalStatus ? (
-          <span className="text-slate-600 italic text-sm">Awaiting risk approval...</span>
+          <span className="text-muted-foreground italic text-sm">Awaiting risk approval...</span>
         ) : needsHitlApproval ? (
           <div className="flex flex-col items-center space-y-4 w-full px-2">
             <div className="flex items-center space-x-2 text-amber-400 font-semibold animate-pulse">

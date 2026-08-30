@@ -3,6 +3,7 @@ import { createChart, ColorType, CrosshairMode, CandlestickSeries, LineSeries, H
 import { ChartData } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTheme } from 'next-themes';
+import { cn } from '@/lib/utils';
 
 interface PriceChartProps {
   data: ChartData | null;

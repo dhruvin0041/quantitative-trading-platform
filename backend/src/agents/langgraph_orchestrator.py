@@ -168,10 +168,10 @@ def news_analyst_node(state: AgentState):
     return {"news_analysis": extract_text(msg.content)}
 
 def technical_analyst_node(state: AgentState):
-    prompt = SystemMessage(content="You are the Technical Quantitative Analyst. You MUST use the `technical_prediction_tool`.")
-    # Here we use invoke_llm with with_tools=True
-    msg = invoke_llm([prompt, HumanMessage(content=f"Analyze technicals and use tools for {state['ticker']}")], with_tools=True)
-    return {"messages": [msg], "technical_analysis": extract_text(msg.content)}
+    tool_output = technical_prediction_tool.invoke({"ticker": state["ticker"]})
+    prompt = SystemMessage(content="You are the Technical Quantitative Analyst.")
+    msg = invoke_llm([prompt, HumanMessage(content=f"Analyze technicals for {state['ticker']}. Tool output: {tool_output}")])
+    return {"technical_analysis": extract_text(msg.content)}
 
 def bullish_researcher_node(state: AgentState):
     context = f"Fundamentals: {state.get('fundamentals_analysis')}\nSentiment: {state.get('sentiment_analysis')}\nNews: {state.get('news_analysis')}\nTechnicals: {state.get('technical_analysis')}"
@@ -194,12 +194,13 @@ def lead_trader_node(state: AgentState):
     return {"trader_decision": extract_text(msg.content)}
 
 def risk_manager_node(state: AgentState):
-    prompt = SystemMessage(content="You are the Risk Manager. You have VETO power. You MUST use the `timegan_stress_test_tool`. If Max Drawdown < -20%, VETO.")
-    msg = invoke_llm([prompt, HumanMessage(content=f"Assess risk for {state['ticker']} trade: {state.get('trader_decision')}")], with_tools=True)
+    tool_output = timegan_stress_test_tool.invoke({"ticker": state["ticker"]})
+    prompt = SystemMessage(content="You are the Risk Manager. You have VETO power. If Max Drawdown < -20%, VETO.")
+    msg = invoke_llm([prompt, HumanMessage(content=f"Assess risk for {state['ticker']} trade: {state.get('trader_decision')}. Tool output: {tool_output}")])
     
     text_decision = extract_text(msg.content)
     decision = "VETO" if "VETO" in text_decision.upper() else "PASS"
-    return {"messages": [msg], "risk_decision": decision}
+    return {"risk_decision": decision}
 
 def portfolio_manager_node(state: AgentState):
     # In a real app, this could pause and wait for Human-in-the-Loop input.
