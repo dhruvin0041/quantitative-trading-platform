@@ -111,11 +111,29 @@ def timegan_stress_test_tool(ticker: str) -> str:
     })
 
 # ---------------------------------------------------------
-# 3. LLM INITIALIZATION
+# 3. LLM INITIALIZATION & QUOTA RESILIENCE
 # ---------------------------------------------------------
-# Using Gemini 3.6 Flash for high-performance reasoning and debate
-llm = ChatGoogleGenerativeAI(model="gemini-3.6-flash")
-llm_with_tools = llm.bind_tools([technical_prediction_tool, timegan_stress_test_tool])
+MODELS = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-flash-lite-latest", "gemini-3.6-flash"]
+
+def invoke_llm(messages, with_tools=False):
+    """Invokes Gemini with automatic cascade fallback across models upon 429 or 503 errors."""
+    last_err = None
+    for model_name in MODELS:
+        try:
+            instance = ChatGoogleGenerativeAI(model=model_name)
+            if with_tools:
+                instance = instance.bind_tools([technical_prediction_tool, timegan_stress_test_tool])
+            return instance.invoke(messages)
+        except Exception as e:
+            err_str = str(e)
+            last_err = e
+            if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "503" in err_str:
+                logger.warning(f"Model {model_name} rate-limited or busy, attempting fallback to next model...")
+                continue
+            else:
+                logger.error(f"Error calling {model_name}: {e}")
+                raise e
+    raise last_err
 
 def extract_text(content) -> str:
     """Safely extracts plain string from string or block-list LLM content."""
@@ -136,29 +154,29 @@ def extract_text(content) -> str:
 # ---------------------------------------------------------
 def fundamentals_analyst_node(state: AgentState):
     prompt = SystemMessage(content="You are the Fundamentals Analyst. Evaluate SEC filings, P/E ratios, and EPS. Output concise analysis.")
-    msg = llm.invoke([prompt, HumanMessage(content=f"Analyze {state['ticker']}")])
+    msg = invoke_llm([prompt, HumanMessage(content=f"Analyze {state['ticker']}")])
     return {"fundamentals_analysis": extract_text(msg.content)}
 
 def sentiment_analyst_node(state: AgentState):
     prompt = SystemMessage(content="You are the Sentiment Analyst. Gauge market mood from social media and headlines.")
-    msg = llm.invoke([prompt, HumanMessage(content=f"Analyze sentiment for {state['ticker']}")])
+    msg = invoke_llm([prompt, HumanMessage(content=f"Analyze sentiment for {state['ticker']}")])
     return {"sentiment_analysis": extract_text(msg.content)}
 
 def news_analyst_node(state: AgentState):
     prompt = SystemMessage(content="You are the Macro/News Analyst. Interpret global news and macro indicators.")
-    msg = llm.invoke([prompt, HumanMessage(content=f"Analyze news for {state['ticker']}")])
+    msg = invoke_llm([prompt, HumanMessage(content=f"Analyze news for {state['ticker']}")])
     return {"news_analysis": extract_text(msg.content)}
 
 def technical_analyst_node(state: AgentState):
     prompt = SystemMessage(content="You are the Technical Quantitative Analyst. You MUST use the `technical_prediction_tool`.")
-    # Here we use llm_with_tools so the agent can call the XGBoost/SVM wrappers
-    msg = llm_with_tools.invoke([prompt, HumanMessage(content=f"Analyze technicals and use tools for {state['ticker']}")])
+    # Here we use invoke_llm with with_tools=True
+    msg = invoke_llm([prompt, HumanMessage(content=f"Analyze technicals and use tools for {state['ticker']}")], with_tools=True)
     return {"messages": [msg], "technical_analysis": extract_text(msg.content)}
 
 def bullish_researcher_node(state: AgentState):
     context = f"Fundamentals: {state.get('fundamentals_analysis')}\nSentiment: {state.get('sentiment_analysis')}\nNews: {state.get('news_analysis')}\nTechnicals: {state.get('technical_analysis')}"
     prompt = SystemMessage(content="You are the Bullish Researcher. Construct the strongest LONG argument. Rebut any bearish points if they exist.")
-    msg = llm.invoke([prompt, HumanMessage(content=f"Context: {context}\nBearish Argument: {state.get('bearish_argument', 'None yet')}\nArgue for {state['ticker']}.")])
+    msg = invoke_llm([prompt, HumanMessage(content=f"Context: {context}\nBearish Argument: {state.get('bearish_argument', 'None yet')}\nArgue for {state['ticker']}.")])
     
     # Increment debate iterations
     current_iterations = state.get("debate_iterations", 0) + 1
@@ -167,17 +185,17 @@ def bullish_researcher_node(state: AgentState):
 def bearish_researcher_node(state: AgentState):
     context = f"Fundamentals: {state.get('fundamentals_analysis')}\nSentiment: {state.get('sentiment_analysis')}\nNews: {state.get('news_analysis')}\nTechnicals: {state.get('technical_analysis')}"
     prompt = SystemMessage(content="You are the Bearish Researcher. Construct the strongest SHORT argument. Rebut bullish points.")
-    msg = llm.invoke([prompt, HumanMessage(content=f"Context: {context}\nBullish Argument: {state.get('bullish_argument', 'None yet')}\nArgue against {state['ticker']}.")])
+    msg = invoke_llm([prompt, HumanMessage(content=f"Context: {context}\nBullish Argument: {state.get('bullish_argument', 'None yet')}\nArgue against {state['ticker']}.")])
     return {"bearish_argument": extract_text(msg.content)}
 
 def lead_trader_node(state: AgentState):
     prompt = SystemMessage(content="You are the Lead Trader. Synthesize the debate and make a decision (LONG, SHORT, PASS).")
-    msg = llm.invoke([prompt, HumanMessage(content=f"Bullish: {state.get('bullish_argument')}\nBearish: {state.get('bearish_argument')}")])
+    msg = invoke_llm([prompt, HumanMessage(content=f"Bullish: {state.get('bullish_argument')}\nBearish: {state.get('bearish_argument')}")])
     return {"trader_decision": extract_text(msg.content)}
 
 def risk_manager_node(state: AgentState):
     prompt = SystemMessage(content="You are the Risk Manager. You have VETO power. You MUST use the `timegan_stress_test_tool`. If Max Drawdown < -20%, VETO.")
-    msg = llm_with_tools.invoke([prompt, HumanMessage(content=f"Assess risk for {state['ticker']} trade: {state.get('trader_decision')}")])
+    msg = invoke_llm([prompt, HumanMessage(content=f"Assess risk for {state['ticker']} trade: {state.get('trader_decision')}")], with_tools=True)
     
     text_decision = extract_text(msg.content)
     decision = "VETO" if "VETO" in text_decision.upper() else "PASS"
