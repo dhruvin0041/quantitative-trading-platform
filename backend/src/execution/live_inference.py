@@ -4,17 +4,19 @@ import os
 os.environ["TF_USE_LEGACY_KERAS"] = "1"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
-import yaml
-import joblib
+import json
 import logging
+
+import joblib
 import numpy as np
 import pandas as pd
 import xgboost as xgb
+import yaml
 import yfinance as yf
-import shap
-from src.models.neural.fusion_network import build_fusion_model
-from src.models.ensemble.meta_ensemble import MetaEnsemble
+
 from src.data_ingestion.market_data import fetch_historical_data, get_sector_peer
+from src.models.ensemble.meta_ensemble import MetaEnsemble
+from src.models.neural.fusion_network import build_fusion_model
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +53,63 @@ FEATURE_COLUMNS = [
 ]
 
 
-def load_config():
+def apply_optimized_model_params(config, ticker=None):
+    """
+    Applies Optuna-optimized hyperparameters to config['model'] to ensure
+    neural network layer dimensions match trained weights in artifacts/.
+    """
+    mapping = {
+        "lstm_u1": "lstm_units_1",
+        "lstm_u2": "lstm_units_2",
+        "lstm_d1": "lstm_dropout_1",
+        "lstm_d2": "lstm_dropout_2",
+        "cnn_f1": "cnn_filters_1",
+        "cnn_f2": "cnn_filters_2",
+        "cnn_k": "cnn_kernel",
+        "cnn_d": "cnn_dense",
+        "tr_hs": "trans_head_size",
+        "tr_h": "trans_heads",
+        "tr_ff": "trans_ff_dim",
+        "tr_d": "trans_dropout",
+        "dense_1": "dense_units_1",
+        "dense_2": "dense_units_2",
+        "dropout": "dropout_rate",
+        "lr": "learning_rate",
+    }
+    candidates = []
+    if ticker:
+        candidates.append(f"configs/optimized_params_{ticker}.json")
+    if os.path.exists("configs/active_ticker.json"):
+        try:
+            with open("configs/active_ticker.json") as f:
+                act = json.load(f).get("ticker")
+                if act:
+                    candidates.append(f"configs/optimized_params_{act}.json")
+        except Exception:
+            pass
+    if os.path.exists("configs"):
+        for fn in os.listdir("configs"):
+            if fn.startswith("optimized_params_") and fn.endswith(".json"):
+                candidates.append(os.path.join("configs", fn))
+
+    for path in candidates:
+        if os.path.exists(path):
+            try:
+                with open(path, "r") as f:
+                    best_dl = json.load(f)
+                for ok, mk in mapping.items():
+                    if ok in best_dl:
+                        config["model"][mk] = best_dl[ok]
+                break
+            except Exception:
+                pass
+    return config
+
+
+def load_config(ticker=None):
     with open("configs/model_params.yaml", "r") as file:
-        return yaml.safe_load(file)
+        config = yaml.safe_load(file)
+    return apply_optimized_model_params(config, ticker=ticker)
 
 
 def detect_regime(spy_data):
@@ -387,28 +443,28 @@ def compute_shap_explanation(model, X_flat, signal_idx=2):
     try:
         # Get global feature importances
         importances = model.feature_importances_
-        
+
         # Calculate directional impact based on feature value vs mean (mocking marginal contribution)
         # Assuming X_flat is already scaled around 0
         X_array = np.array(X_flat).flatten()
-        
+
         drivers = []
         feature_impacts = []
-        
+
         for i, feat in enumerate(FEATURE_COLUMNS):
             val = X_array[i] if i < len(X_array) else 0
             importance = importances[i] if i < len(importances) else 0
-            
+
             # Simulated directional impact: importance * sign of feature value
             # If signal_idx == 0 (SELL), invert the direction
             direction_mult = -1 if signal_idx == 0 else 1
             impact = importance * val * direction_mult
-            
+
             feature_impacts.append((feat, impact, importance))
-            
+
         # Sort by absolute impact
         top_features = sorted(feature_impacts, key=lambda x: abs(x[1]), reverse=True)[:5]
-        
+
         for feat, impact, importance in top_features:
             stability = 0.92 if "MA" in feat or "EMA" in feat else 0.78
             drivers.append({

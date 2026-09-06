@@ -1,18 +1,20 @@
 # train_universal.py
-import yfinance as yf
-import pandas as pd
-import numpy as np
-import xgboost as xgb
-import joblib
 import json
-import requests
 import os
+
+import joblib
+import numpy as np
+import pandas as pd
+import requests
+import xgboost as xgb
+import yfinance as yf
 from sklearn.preprocessing import StandardScaler
-from src.execution.live_inference import add_upgraded_features, FEATURE_COLUMNS
+
 from src.data_ingestion.market_data import (
     apply_dynamic_triple_barrier,
     fetch_historical_data,
 )
+from src.execution.live_inference import FEATURE_COLUMNS, add_upgraded_features
 from src.models.boosting.lgbm_agent import train_lgbm_agent
 
 
@@ -146,7 +148,7 @@ def train_universal_engine():
     sample_weights = np.array([class_weight_dict[yi] for yi in y_train])
 
     print("Training Universal Technical Brain (XGBoost)...")
-    from src.utils.gpu_utils import get_xgboost_gpu_params, benchmark_context
+    from src.utils.gpu_utils import benchmark_context, get_xgboost_gpu_params
     xgb_params = {
         "objective": "multi:softprob",
         "num_class": 3,

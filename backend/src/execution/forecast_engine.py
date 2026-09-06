@@ -1,5 +1,6 @@
+from typing import Any, Dict
+
 import numpy as np
-from typing import Dict, Any
 
 
 class ForecastInterpretationEngine:
@@ -115,27 +116,28 @@ class ForecastCalibrationEngine:
         atr_pct = (atr / current_price) if current_price > 0 else 0.02
         # Sigma is roughly ATR * sqrt(horizon) / current_price
         sigma_10d = atr_pct * 3.16  # sqrt(10) days
-        
+
         # 2. Sanity Validation & Clipping
         max_allowed = self.asset_bounds.get(asset_class, 0.10)
-        if "TREND" in regime: max_allowed *= 1.25
-        
+        if "TREND" in regime:
+            max_allowed *= 1.25
+
         is_valid = abs(implied_move_pct) < max_allowed * 2.0
         safe_move = np.clip(implied_move_pct, -max_allowed, max_allowed)
-        
+
         # 3. Percentile Band Generation (Confidence Cone)
         # P50 is the median expectation (calibrated point forecast)
         p50 = current_price * (1 + safe_move)
-        
+
         # P10/P90 based on normal distribution approximation (1.28 z-score)
         p10 = p50 - (1.28 * sigma_10d * current_price)
         p90 = p50 + (1.28 * sigma_10d * current_price)
-        
+
         # 4. Reliability & Bias
         spread_pct = (p90 - p10) / current_price
         # Reliability drops as volatility/spread increases
         reliability_score = max(0.0, min(100.0, 100.0 - (spread_pct * 150)))
-        
+
         forecast_res = {
             "is_valid": is_valid,
             "p10_price": p10,

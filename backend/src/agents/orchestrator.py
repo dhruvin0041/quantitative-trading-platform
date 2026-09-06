@@ -1,5 +1,7 @@
 from typing import Dict, List
+
 import pandas as pd
+
 from src.execution.governance_engine import SignalGovernanceEngine
 
 
@@ -13,7 +15,7 @@ class AlphaAgent:
         confidence = agreement_data["agreement_score"] / 100.0
         return {
             "ticker": agreement_data.get("ticker", "UNKNOWN"),
-            "signal_idx": signal_idx, 
+            "signal_idx": signal_idx,
             "confidence": confidence
         }
 
@@ -33,12 +35,11 @@ class RiskAgent:
         """
         Takes independent signals from AlphaAgent for the panel and evaluates them collectively.
         """
-        approved_trades = []
         rejected_trades = []
-        
+
         # 1. Filter out non-actionable signals (Hold) and low confidence floor
         active_signals = [s for s in alpha_signals if s["signal_idx"] in [0, 2] and s["confidence"] >= 0.65]
-        
+
         if not active_signals:
             return {"status": "NO_TRADES", "approved_allocations": {}, "rejected_trades": []}
 
@@ -52,7 +53,7 @@ class RiskAgent:
             atr = max(atr, 1e-4) # Prevent division by zero
             sig["inv_atr"] = 1.0 / atr
             inv_vol_sum += sig["inv_atr"]
-            
+
         for sig in active_signals:
             sig["target_weight"] = sig["inv_atr"] / inv_vol_sum
 
@@ -69,14 +70,14 @@ class RiskAgent:
             if exposure > self.max_sector_exposure:
                 # Sort sector signals by lowest confidence first
                 sector_sigs = sorted([s for s in active_signals if s["sector"] == sector], key=lambda x: x["confidence"])
-                
+
                 while exposure > self.max_sector_exposure and sector_sigs:
                     dropped_sig = sector_sigs.pop(0)
                     exposure -= dropped_sig["target_weight"]
                     active_signals.remove(dropped_sig)
                     rejected_trades.append({
-                        "ticker": dropped_sig["ticker"], 
-                        "veto_reason": f"Sector Crowding (Exceeded {self.max_sector_exposure*100}%)", 
+                        "ticker": dropped_sig["ticker"],
+                        "veto_reason": f"Sector Crowding (Exceeded {self.max_sector_exposure*100}%)",
                         "veto_code": "CROWDING_VETO"
                     })
 
@@ -151,15 +152,15 @@ class InstitutionalOrchestrator:
     def run_consensus(self, agreement_data: Dict, risk_data: Dict, market_regime: str):
         """Fallback for single-asset inference."""
         alpha = self.alpha_agent.generate_alpha_signal(agreement_data)
-        
+
         gov_result = self.risk_agent.governance.audit_signal(
             alpha_signal=alpha,
             risk_metrics={"expected_value": risk_data},
             market_regime=market_regime
         )
-        
+
         final_action_idx = alpha["signal_idx"] if gov_result["is_safe"] else 1
-        
+
         return {
             "final_action_idx": final_action_idx,
             "consensus_status": gov_result["execution_state"],

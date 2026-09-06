@@ -1,6 +1,7 @@
+from typing import Any, Dict
+
 import pandas as pd
 import yfinance as yf
-from typing import Dict, Any
 
 
 class AssetProfileEngine:

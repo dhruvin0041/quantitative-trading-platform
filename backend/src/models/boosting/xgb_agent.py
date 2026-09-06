@@ -3,7 +3,7 @@ import logging
 import joblib
 from xgboost import XGBClassifier
 
-from src.utils.gpu_utils import get_xgboost_gpu_params, benchmark_context
+from src.utils.gpu_utils import benchmark_context, get_xgboost_gpu_params
 
 logger = logging.getLogger(__name__)
 

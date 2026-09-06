@@ -1,5 +1,5 @@
-import requests
 import numpy as np
+import requests
 
 
 class PhysicalEdgeAnalyzer:

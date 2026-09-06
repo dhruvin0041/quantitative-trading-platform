@@ -1,7 +1,7 @@
 # src/data_ingestion/market_data.py
-import yfinance as yf
-import pandas as pd
 import numpy as np
+import pandas as pd
+import yfinance as yf
 
 
 def fetch_historical_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
@@ -61,7 +61,7 @@ def apply_dynamic_triple_barrier(
     - Upper Barrier: Take Profit based on ATR
     - Lower Barrier: Stop Loss based on ATR
     - Vertical Barrier: Time Limit (e.g., 10 days)
-    
+
     Refactored to use vectorized Pandas/NumPy operations for massive panel datasets.
     """
     print(

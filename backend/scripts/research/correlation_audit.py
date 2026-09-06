@@ -1,6 +1,7 @@
 import pandas as pd
 import yfinance as yf
-from src.execution.live_inference import add_upgraded_features, FEATURE_COLUMNS
+
+from src.execution.live_inference import FEATURE_COLUMNS, add_upgraded_features
 
 
 def analyze_correlations():

@@ -1,7 +1,8 @@
 import os
 from datetime import datetime
-from src.execution.performance_analyzer import PerformanceAnalyzer
+
 from src.execution.paper_trading import PaperTradingEngine
+from src.execution.performance_analyzer import PerformanceAnalyzer
 
 
 def generate_performance_report():

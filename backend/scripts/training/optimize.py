@@ -3,23 +3,26 @@ import os
 os.environ["TF_USE_LEGACY_KERAS"] = "1"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
-import json
-import pandas as pd
 import argparse
-import optuna
+import json
+from datetime import datetime
+
 import numpy as np
+import optuna
+import pandas as pd
 import xgboost as xgb
 import yfinance as yf
 from sklearn.metrics import accuracy_score
+
 from src.data_ingestion.market_data import (
-    fetch_historical_data,
     apply_dynamic_triple_barrier,
+    fetch_historical_data,
 )
-from src.execution.live_inference import add_upgraded_features, FEATURE_COLUMNS
-from src.models.neural.fusion_network import build_fusion_model
+from src.execution.live_inference import FEATURE_COLUMNS, add_upgraded_features
 from src.features.sequence_builder import create_time_series_sequences
-from datetime import datetime
+from src.models.neural.fusion_network import build_fusion_model
 from src.utils.gpu_utils import get_compute_backend
+
 
 # ==========================================
 # OBJECTIVE FUNCTION
@@ -86,7 +89,7 @@ def objective(trial, df_features):
     # Prepare sequences using exact live inference pipeline
     from sklearn.preprocessing import StandardScaler
     df_ready = df_labeled[FEATURE_COLUMNS + ["target_direction", "target_min", "target_max", "target_signal"]].copy()
-    
+
     scaler = StandardScaler()
     df_ready[FEATURE_COLUMNS] = scaler.fit_transform(df_ready[FEATURE_COLUMNS])
 
@@ -171,7 +174,7 @@ def run_optuna_optimization(ticker, n_trials=50, start="2020-01-01", end=None):
     df_raw = fetch_historical_data(ticker, start_date=start, end_date=end)
     spy_df = yf.download("SPY", start=start, end=end, interval="1d", progress=False)
     vix_df = yf.download("^VIX", start=start, end=end, interval="1d", progress=False)
-    
+
     if isinstance(spy_df.columns, pd.MultiIndex):
         spy_df.columns = spy_df.columns.droplevel(1)
     if isinstance(vix_df.columns, pd.MultiIndex):

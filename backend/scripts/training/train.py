@@ -1,47 +1,45 @@
-import os
+import argparse
 import json
+import os
+import time
+
 import joblib
-import numpy as np
-import pandas as pd
-import xgboost as xgb
-import tensorflow as tf
-from src.utils.gpu_utils import (
-    configure_tensorflow_gpu,
-    configure_gpu_optimizations,
-    get_xgboost_gpu_params,
-    get_lightgbm_gpu_params,
-    benchmark_context,
-    verify_gpu_utilization,
-)
-import yfinance as yf
 import mlflow
 import mlflow.sklearn
 import mlflow.tensorflow
-import time
-import argparse
+import numpy as np
+import pandas as pd
+import tensorflow as tf
+import xgboost as xgb
+import yfinance as yf
 from sklearn.preprocessing import StandardScaler
 from sklearn.utils.class_weight import compute_class_weight
-from src.execution.live_inference import (
-    load_config,
-    add_upgraded_features,
-    FEATURE_COLUMNS,
-)
-
-from src.models.neural.fusion_network import build_fusion_model
-from src.models.rl.dqn_agent import DQNAgent
-from src.features.sequence_builder import create_time_series_sequences
-from src.data_ingestion.market_data import (
-    fetch_historical_data,
-    apply_dynamic_triple_barrier,
-    get_sector_peer,
-)
-from src.models.regime.calibration import ModelCalibrator
 
 from scripts.ops.clean_artifacts import main as run_cleanup
+from scripts.training.optimize import run_optuna_optimization
 from scripts.training.optimize_models import (
     run_optimization as run_bayesian_optimization,
 )
-from scripts.training.optimize import run_optuna_optimization
+from src.data_ingestion.market_data import (
+    apply_dynamic_triple_barrier,
+    fetch_historical_data,
+    get_sector_peer,
+)
+from src.execution.live_inference import (
+    FEATURE_COLUMNS,
+    add_upgraded_features,
+    load_config,
+)
+from src.features.sequence_builder import create_time_series_sequences
+from src.models.neural.fusion_network import build_fusion_model
+from src.models.regime.calibration import ModelCalibrator
+from src.models.rl.dqn_agent import DQNAgent
+from src.utils.gpu_utils import (
+    benchmark_context,
+    get_lightgbm_gpu_params,
+    get_xgboost_gpu_params,
+    verify_gpu_utilization,
+)
 
 os.environ["TF_USE_LEGACY_KERAS"] = "1"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
@@ -269,7 +267,7 @@ def main():
     if peer_train is not None and len(peer_train) > 0:
         dummy_peer = peer_train[:3].copy()
         peer_train = np.vstack([dummy_peer, peer_train])
-    
+
     dummy_y_dir = y_dir_train[:3].copy()
     dummy_y_ran = y_ran_train[:3].copy()
     y_dir_train = np.concatenate([dummy_y_dir, y_dir_train])
@@ -594,7 +592,7 @@ def main():
             if ticker in m_dict:
                 market = m_id
                 break
-        
+
         with open("configs/active_ticker.json", "w") as f:
             json.dump({"ticker": ticker, "market": market}, f)
         print(f"  >>> Active ticker saved: {ticker} ({market})")

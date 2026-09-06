@@ -1,6 +1,7 @@
 import json
 import os
 from datetime import datetime
+
 import numpy as np
 
 from src.execution.fx_engine import FXEngine

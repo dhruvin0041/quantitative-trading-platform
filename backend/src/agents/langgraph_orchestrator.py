@@ -1,13 +1,14 @@
-import os
 import json
 import operator
-from typing import TypedDict, Annotated, Sequence, Dict, Any
+import os
+from typing import Annotated, Sequence, TypedDict
 
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.tools import tool
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langgraph.graph import StateGraph, END
+from langgraph.graph import END, StateGraph
 from langgraph.prebuilt import ToolNode
+
 
 # ---------------------------------------------------------
 # 1. STATE DEFINITION
@@ -15,18 +16,18 @@ from langgraph.prebuilt import ToolNode
 class AgentState(TypedDict):
     ticker: str
     messages: Annotated[Sequence[BaseMessage], operator.add]
-    
+
     # Analyst Reports
     fundamentals_analysis: str
     sentiment_analysis: str
     news_analysis: str
     technical_analysis: str
-    
+
     # Debate State
     debate_iterations: int
     bullish_argument: str
     bearish_argument: str
-    
+
     # Decisions
     trader_decision: str
     risk_decision: str
@@ -36,8 +37,9 @@ class AgentState(TypedDict):
 # 2. TOOLS INTEGRATION
 # ---------------------------------------------------------
 # These wrap existing models (XGBoost/SVM/TimeGAN)
-import joblib
 import logging
+
+import joblib
 
 logger = logging.getLogger(__name__)
 
@@ -49,15 +51,14 @@ def technical_prediction_tool(ticker: str) -> str:
     """
     artifacts_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "artifacts")
     meta_path = os.path.join(artifacts_dir, "meta_ensemble.joblib")
-    xgb_path = os.path.join(artifacts_dir, "xgb_ensemble.json")
-    
+
     xgb_prob = 0.65
     svm_prob = 0.62
-    
+
     try:
         if os.path.exists(meta_path):
             try:
-                meta_model = joblib.load(meta_path)
+                joblib.load(meta_path)
                 # Mock prediction for now since we don't have the live feature array
                 xgb_prob = 0.71
                 svm_prob = 0.68
@@ -67,7 +68,7 @@ def technical_prediction_tool(ticker: str) -> str:
             logger.warning(f"Model artifacts not found at {meta_path}. Training might be in progress. Using fallback weights.")
     except Exception as e:
         logger.warning(f"Error accessing model artifacts: {e}")
-        
+
     return json.dumps({
         "ticker": ticker,
         "xgboost_bullish_probability": xgb_prob,
@@ -83,14 +84,13 @@ def timegan_stress_test_tool(ticker: str) -> str:
     """
     artifacts_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "artifacts")
     timegan_path = os.path.join(artifacts_dir, "timegan_generator.h5")
-    
+
     max_drawdown = -24.5
     var_99 = -12.3
-    
+
     try:
         if os.path.exists(timegan_path):
             try:
-                import tensorflow as tf
                 # In a full implementation, you'd load the full model graph
                 # model = tf.keras.models.load_model(timegan_path)
                 logger.info(f"TimeGAN weights found at {timegan_path}. Simulating paths...")
@@ -103,7 +103,7 @@ def timegan_stress_test_tool(ticker: str) -> str:
             logger.warning(f"TimeGAN artifacts not found at {timegan_path}. Training might be in progress. Using synthetic fallback paths.")
     except Exception as e:
         logger.warning(f"Error accessing TimeGAN artifacts: {e}")
-        
+
     return json.dumps({
         "synthetic_max_drawdown_percent": max_drawdown,
         "value_at_risk_99_percent": var_99,
@@ -177,7 +177,7 @@ def bullish_researcher_node(state: AgentState):
     context = f"Fundamentals: {state.get('fundamentals_analysis')}\nSentiment: {state.get('sentiment_analysis')}\nNews: {state.get('news_analysis')}\nTechnicals: {state.get('technical_analysis')}"
     prompt = SystemMessage(content="You are the Bullish Researcher. Construct the strongest LONG argument. Rebut any bearish points if they exist.")
     msg = invoke_llm([prompt, HumanMessage(content=f"Context: {context}\nBearish Argument: {state.get('bearish_argument', 'None yet')}\nArgue for {state['ticker']}.")])
-    
+
     # Increment debate iterations
     current_iterations = state.get("debate_iterations", 0) + 1
     return {"bullish_argument": extract_text(msg.content), "debate_iterations": current_iterations}
@@ -197,7 +197,7 @@ def risk_manager_node(state: AgentState):
     tool_output = timegan_stress_test_tool.invoke({"ticker": state["ticker"]})
     prompt = SystemMessage(content="You are the Risk Manager. You have VETO power. If Max Drawdown < -20%, VETO.")
     msg = invoke_llm([prompt, HumanMessage(content=f"Assess risk for {state['ticker']} trade: {state.get('trader_decision')}. Tool output: {tool_output}")])
-    
+
     text_decision = extract_text(msg.content)
     decision = "VETO" if "VETO" in text_decision.upper() else "PASS"
     return {"risk_decision": decision}
@@ -224,7 +224,7 @@ def check_veto(state: AgentState):
 
 def build_graph():
     workflow = StateGraph(AgentState)
-    
+
     # Add Nodes
     workflow.add_node("fundamentals_analyst", fundamentals_analyst_node)
     workflow.add_node("sentiment_analyst", sentiment_analyst_node)
@@ -235,39 +235,39 @@ def build_graph():
     workflow.add_node("lead_trader", lead_trader_node)
     workflow.add_node("risk_manager", risk_manager_node)
     workflow.add_node("portfolio_manager", portfolio_manager_node)
-    
+
     # Tool Execution Node
     tool_node = ToolNode(tools=[technical_prediction_tool, timegan_stress_test_tool])
     workflow.add_node("tools", tool_node)
-    
+
     # Add Edges
     workflow.set_entry_point("fundamentals_analyst")
-    
-    # To simulate parallel execution in LangGraph, we can just run them sequentially 
+
+    # To simulate parallel execution in LangGraph, we can just run them sequentially
     # for simplicity in this script, or use Fan-out/Fan-in.
     workflow.add_edge("fundamentals_analyst", "sentiment_analyst")
     workflow.add_edge("sentiment_analyst", "news_analyst")
     workflow.add_edge("news_analyst", "technical_analyst")
-    
+
     # Tools loop for technical analyst
     workflow.add_edge("technical_analyst", "bullish_researcher")
-    
+
     # Debate Cycle
     workflow.add_edge("bullish_researcher", "bearish_researcher")
     workflow.add_conditional_edges("bearish_researcher", should_continue_debate, {
         "lead_trader": "lead_trader",
         "bearish_researcher": "bullish_researcher" # Cycle back to bullish
     })
-    
+
     # Execution
     workflow.add_edge("lead_trader", "risk_manager")
     workflow.add_conditional_edges("risk_manager", check_veto, {
         END: END,
         "portfolio_manager": "portfolio_manager"
     })
-    
+
     workflow.add_edge("portfolio_manager", END)
-    
+
     return workflow.compile()
 
 if __name__ == "__main__":

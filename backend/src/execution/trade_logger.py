@@ -1,7 +1,8 @@
-import sqlite3
-import pandas as pd
-from datetime import datetime
 import os
+import sqlite3
+from datetime import datetime
+
+import pandas as pd
 
 
 class TradeLogger:

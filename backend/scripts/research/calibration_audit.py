@@ -1,8 +1,9 @@
+import json
+
 import joblib
 import numpy as np
-import json
-from sklearn.metrics import brier_score_loss
 from sklearn.calibration import calibration_curve
+from sklearn.metrics import brier_score_loss
 
 
 def calculate_ece(y_true, y_prob, n_bins=10):

@@ -1,15 +1,15 @@
+import numpy as np
 import tensorflow as tf
 from keras.layers import (
-    Input,
+    Add,
     Dense,
     Dropout,
-    MultiHeadAttention,
-    LayerNormalization,
     GlobalAveragePooling1D,
-    Add,
+    Input,
     Layer,
+    LayerNormalization,
+    MultiHeadAttention,
 )
-import numpy as np
 
 
 class PositionalEncoding(Layer):

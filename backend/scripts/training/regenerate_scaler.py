@@ -1,11 +1,13 @@
 # regenerate_scaler.py
-import joblib
 import json
+
+import joblib
 import pandas as pd
 import yfinance as yf
 from sklearn.preprocessing import StandardScaler
-from src.execution.live_inference import add_upgraded_features, FEATURE_COLUMNS
+
 from src.data_ingestion.market_data import fetch_historical_data
+from src.execution.live_inference import FEATURE_COLUMNS, add_upgraded_features
 
 
 def regenerate():

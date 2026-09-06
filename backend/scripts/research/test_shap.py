@@ -1,7 +1,7 @@
-import xgboost as xgb
-import shap
-import pandas as pd
 import numpy as np
+import pandas as pd
+import shap
+import xgboost as xgb
 
 from src.execution.live_inference import FEATURE_COLUMNS
 

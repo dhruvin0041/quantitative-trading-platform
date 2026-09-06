@@ -1,7 +1,8 @@
+import logging
+
+import numpy as np
 import tensorflow as tf
 from keras import layers
-import numpy as np
-import logging
 
 from src.utils.gpu_utils import configure_tensorflow_gpu
 

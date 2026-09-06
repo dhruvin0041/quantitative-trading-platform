@@ -5,18 +5,20 @@ os.environ["TF_USE_LEGACY_KERAS"] = "1"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
 import json
-import yaml
+from datetime import datetime, timedelta
+
 import joblib
 import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta
 import xgboost as xgb
+import yaml
+
+from src.data_ingestion.market_data import fetch_historical_data, get_sector_peer
+from src.data_ingestion.nlp_processor import NewsTokenizer
+from src.data_ingestion.technical_indicators import add_advanced_features
+from src.execution.risk_manager import calculate_full_kelly
 from src.models.neural.fusion_network import build_fusion_model
 from src.models.rl.dqn_agent import DQNAgent
-from src.data_ingestion.market_data import fetch_historical_data, get_sector_peer
-from src.data_ingestion.technical_indicators import add_advanced_features
-from src.data_ingestion.nlp_processor import NewsTokenizer
-from src.execution.risk_manager import calculate_full_kelly
 
 
 def run_backtest(ticker="AAPL", start_date="2023-01-01", end_date=None):

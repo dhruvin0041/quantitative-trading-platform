@@ -1,26 +1,28 @@
-import os
 import json
-import joblib
-import pandas as pd
-import numpy as np
-import yfinance as yf
+import os
 from datetime import datetime, timedelta
-from src.execution.live_inference import (
-    load_config,
-    add_upgraded_features,
-    FEATURE_COLUMNS,
-)
-from src.models.neural.fusion_network import build_fusion_model
+
+import joblib
+import numpy as np
+import pandas as pd
 import xgboost as xgb
+import yfinance as yf
 from lightgbm import LGBMClassifier
 from sklearn.preprocessing import StandardScaler
-from src.utils.gpu_utils import get_compute_backend, get_xgboost_gpu_params, get_lightgbm_gpu_params
-from src.features.sequence_builder import create_time_series_sequences
+
 from src.data_ingestion.market_data import (
-    fetch_historical_data,
     apply_dynamic_triple_barrier,
+    fetch_historical_data,
     get_sector_peer,
 )
+from src.execution.live_inference import (
+    FEATURE_COLUMNS,
+    add_upgraded_features,
+    load_config,
+)
+from src.features.sequence_builder import create_time_series_sequences
+from src.models.neural.fusion_network import build_fusion_model
+from src.utils.gpu_utils import get_compute_backend, get_lightgbm_gpu_params, get_xgboost_gpu_params
 
 
 def run_rolling_retrain(ticker="MSFT"):

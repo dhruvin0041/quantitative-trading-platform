@@ -1,6 +1,7 @@
-import numpy as np
-from typing import Dict, List, Any
 import logging
+from typing import Any, Dict, List
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ class StatisticalSufficiencyEngine:
         n_trades = len(trades)
         n_returns = len(returns)
         total_return = summary.get("total_return", 0.0)
-        
+
         valid_metrics = summary.copy()
         confidence_intervals = {}
 
@@ -62,14 +63,14 @@ class StatisticalSufficiencyEngine:
             valid_metrics["calmar"] = "Insufficient Sample"  # Dependency: Calmar follows Sharpe
         else:
             sharpe = summary.get("sharpe", 0.0)
-            
+
             # Logic Consistency: Positive Sharpe requires positive total return
             if total_return <= 0 and sharpe > 0:
                 sharpe = 0.0
-                
+
             valid_metrics["sharpe"] = f"{sharpe:.2f}"
             valid_metrics["sortino"] = f"{summary.get('sortino', 0.0):.2f}"
-            
+
             # Sharpe Confidence Interval
             se_sharpe = np.sqrt((1 + (sharpe**2) / 2) / n_returns)
             lower_s = sharpe - 1.96 * se_sharpe

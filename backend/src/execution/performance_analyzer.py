@@ -1,8 +1,9 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
+
+from src.execution.forensic_reset import ForensicPortfolioResetEngine
 from src.execution.signal_learning import SignalPerformanceResearch
 from src.execution.statistical_engine import StatisticalValidityEngine
-from src.execution.forensic_reset import ForensicPortfolioResetEngine
 
 
 class PerformanceAnalyzer:
@@ -59,7 +60,7 @@ class PerformanceAnalyzer:
         # Daily Returns & Rolling Metrics (Phase 10)
         daily_equity = df_snapshots["equity"].resample("D").last().ffill()
         daily_returns = daily_equity.pct_change().dropna()
-        
+
         rolling_sharpe = daily_returns.rolling(window=60).apply(lambda x: self.calculate_sharpe(x)) if len(daily_returns) >= 60 else pd.Series()
         rolling_sortino = daily_returns.rolling(window=60).apply(lambda x: self.calculate_sortino(x)) if len(daily_returns) >= 60 else pd.Series()
 
@@ -81,7 +82,6 @@ class PerformanceAnalyzer:
         win_rate = 0.0
         profit_factor = 0.0
         wins_count = 0
-        losses_count = 0
         closed_trades_count = 0
         realized_pnl = 0.0
         expectancy = 0.0
@@ -103,13 +103,13 @@ class PerformanceAnalyzer:
                 gross_loss = abs(losses["pnl"].sum())
                 profit_factor = gross_profit / gross_loss if gross_loss > 0 else (10.0 if wins_count > 0 else 0.0)
                 expectancy = self.calculate_expectancy(win_rate, wins, losses)
-                
+
                 # MAE / MFE Calculation (Simulation or Paper History)
                 if "mae" in sells.columns:
                     mae_avg = sells["mae"].mean()
                 if "mfe" in sells.columns:
                     mfe_avg = sells["mfe"].mean()
-                
+
                 # Holding Duration
                 if "entry_time" in sells.columns and "exit_time" in sells.columns:
                     durations = pd.to_datetime(sells["exit_time"]) - pd.to_datetime(sells["entry_time"])

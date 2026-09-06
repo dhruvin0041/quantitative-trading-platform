@@ -15,16 +15,18 @@ class ConfidenceBreakdownEngine:
         ev_pct: float,
         timing_score: float,
         asset_class: str,
+        direction: str = "BUY",
     ) -> Dict:
 
         # Base scoring out of 100 max composite
 
-        # 1. Trend Score (-20 to +20)
+        # 1. Trend Score (-20 to +20): Direction-consistent trend-following reward
         trend_score = 0.0
+        is_short = str(direction).upper() in ["SELL", "SHORT", "0"]
         if "BULL_TREND" in regime:
-            trend_score = 20.0
+            trend_score = -20.0 if is_short else 20.0
         elif "BEAR_TREND" in regime:
-            trend_score = -20.0
+            trend_score = 20.0 if is_short else -20.0
         elif "RANGE" in regime:
             trend_score = 0.0
 
@@ -46,7 +48,8 @@ class ConfidenceBreakdownEngine:
             consensus_score *= -1  # Lack of consensus is negative
 
         # 5. EV Score (-15 to +15)
-        ev_score = min(15.0, ev_pct * 100 * 2)  # e.g. 5% EV -> +10
+        # ev_pct is in percentage units (e.g. 5.0 for 5% EV -> +10)
+        ev_score = min(15.0, ev_pct * 2.0)
         if ev_pct <= 0:
             ev_score = -15.0
 

@@ -1,19 +1,20 @@
-import tensorflow as tf
-from src.utils.gpu_utils import configure_tensorflow_gpu
 import keras
+import tensorflow as tf
 from keras.layers import (
+    BatchNormalization,
     Dense,
     Dropout,
-    BatchNormalization,
-    MultiHeadAttention,
-    LayerNormalization,
     Layer,
+    LayerNormalization,
+    MultiHeadAttention,
 )
-from src.models.neural.lstm_branch import build_lstm_branch
+
 from src.models.neural.cnn_branch import build_cnn_branch
-from src.models.neural.transformer_branch import build_transformer_branch
-from src.models.neural.tcn_agent import build_tcn_branch
+from src.models.neural.lstm_branch import build_lstm_branch
 from src.models.neural.patchtst_agent import build_patchtst_branch
+from src.models.neural.tcn_agent import build_tcn_branch
+from src.models.neural.transformer_branch import build_transformer_branch
+from src.utils.gpu_utils import configure_tensorflow_gpu
 
 
 class CrossModalAttention(Layer):

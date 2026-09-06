@@ -1,6 +1,7 @@
-import numpy as np
-import joblib
 import logging
+
+import joblib
+import numpy as np
 from sklearn.isotonic import IsotonicRegression
 
 logger = logging.getLogger(__name__)

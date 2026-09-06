@@ -1,9 +1,10 @@
 # src/data_ingestion/technical_indicators.py
-import pandas as pd
+from typing import Any
+
 import numpy as np
+import pandas as pd
 import ta
 import yfinance as yf
-from typing import Any
 
 
 def clean_multiindex_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -95,7 +96,7 @@ def add_advanced_features(
         tnx_df = tnx_data
 
     df["Treasury_10Y"] = ensure_series(tnx_df["Close"])
-    df["Treasury_10Y"] = df["Treasury_10Y"].ffill().bfill()
+    df["Treasury_10Y"] = df["Treasury_10Y"].ffill().fillna(0)
 
     # --- 6. Log Returns (Better for Neural Networks than raw prices) ---
     df["Log_Ret"] = np.log(df["Close"] / df["Close"].shift(1))
@@ -220,7 +221,7 @@ def add_advanced_features(
     # We only know a swing high is formed at t-2 when we are at time t.
     rolling_max_5 = df["High"].rolling(window=5).max()
     rolling_min_5 = df["Low"].rolling(window=5).min()
-    
+
     # The high 2 bars ago must equal the 5-bar max to be a swing high.
     df["Swing_High"] = (df["High"].shift(2) == rolling_max_5).astype(int)
     df["Swing_Low"] = (df["Low"].shift(2) == rolling_min_5).astype(int)

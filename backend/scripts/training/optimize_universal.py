@@ -1,19 +1,21 @@
 # optimize_universal.py
+import argparse
+import contextlib
 import json
 import os
-import argparse
-import optuna
+from datetime import datetime
+
 import numpy as np
+import optuna
 from sklearn.metrics import accuracy_score
+
 from src.data_ingestion.market_data import (
-    fetch_historical_data,
     apply_dynamic_triple_barrier,
+    fetch_historical_data,
 )
 from src.data_ingestion.technical_indicators import add_advanced_features
-from src.models.neural.fusion_network import build_fusion_model
 from src.features.sequence_builder import create_time_series_sequences
-from datetime import datetime
-import contextlib
+from src.models.neural.fusion_network import build_fusion_model
 
 # A diverse set of tickers for universal optimization
 UNIVERSAL_TICKERS = [

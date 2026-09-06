@@ -106,7 +106,7 @@ def get_position_sizing(model_confidence, trade_history=None):
 def calculate_institutional_risk_index(volatility_annualized, max_drawdown_pct, liquidity_score, exposure_ratio, market_correlation, signal_uncertainty=0.0):
     """
     Phase 9: Institutional Risk Index (0-100).
-    Weights: 
+    Weights:
     - Volatility: 25%
     - Max Drawdown: 25%
     - Liquidity: 10%
@@ -156,17 +156,17 @@ class InstitutionalRiskArbitrator:
     Phase 2: Institutional Risk State Arbitration.
     Defines hierarchy between Market, Signal, and Portfolio regimes.
     """
-    
+
     def arbitrate(self, market_regime, signal_quality, portfolio_health_score, risk_index):
         """
         Determines the Execution Permission State based on all regimes.
         """
         risk_regime = get_risk_regime(risk_index)
-        
+
         # Default state
         execution_state = "APPROVED"
         veto_reason = None
-        
+
         if risk_regime in ["CRITICAL", "PANIC"]:
             execution_state = "VETOED"
             veto_reason = f"Institutional Risk Index ({risk_index:.1f}) in {risk_regime} territory"
@@ -176,7 +176,7 @@ class InstitutionalRiskArbitrator:
         elif "BEAR" in market_regime and signal_quality < 70:
             execution_state = "REDUCED_SIZE"
             veto_reason = "Bearish structural regime with sub-optimal signal quality"
-            
+
         return {
             "risk_regime": risk_regime,
             "execution_state": execution_state,

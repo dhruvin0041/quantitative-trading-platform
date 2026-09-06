@@ -1,6 +1,7 @@
+import asyncio
 import json
 import os
-import asyncio
+
 from src.execution.fx_engine import FXEngine
 
 

@@ -1,8 +1,10 @@
 import os
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 from fastapi import HTTPException
-from src.schemas import BacktestSummary, BacktestSignal
+
+from src.schemas import BacktestSignal, BacktestSummary
 
 
 class BacktestService:
@@ -114,16 +116,16 @@ class BacktestService:
             rolling_max = cum_ret.cummax()
             drawdowns = (cum_ret - rolling_max) / rolling_max
             max_dd = drawdowns.min() * 100
-            
+
             calmar = (returns.mean() * (252 / 5)) / abs(max_dd) if abs(max_dd) > 1e-6 else 0.0
 
             best_row = df_trades.loc[df_trades["actual_5day_return"].idxmax()]
             worst_row = df_trades.loc[df_trades["actual_5day_return"].idxmin()]
-            
+
             # Apply Institutional Gating
             from src.execution.statistical_engine import StatisticalValidityEngine
             engine = StatisticalValidityEngine()
-            
+
             # We construct a mock trades list and metrics to pass into validate_statistics
             mock_trades = [{"pnl": r} for r in df_trades["actual_5day_return"]]
             raw_metrics = {
@@ -136,7 +138,7 @@ class BacktestService:
                 "profit_factor": pf,
                 "expectancy": 0.0
             }
-            
+
             validity = engine.validate_statistics(returns.tolist(), mock_trades, raw_metrics)
             valid_metrics = validity["validated_metrics"]
 

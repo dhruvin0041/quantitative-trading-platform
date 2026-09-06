@@ -1,17 +1,17 @@
+import keras
 import tensorflow as tf
 from keras.layers import (
-    Input,
-    Dense,
     LSTM,
-    Multiply,
     Add,
+    Concatenate,
+    Dense,
     Dropout,
+    Input,
+    Lambda,
     LayerNormalization,
     MultiHeadAttention,
-    Concatenate,
-    Lambda,
+    Multiply,
 )
-import keras
 
 
 class GatedResidualNetwork(keras.layers.Layer):

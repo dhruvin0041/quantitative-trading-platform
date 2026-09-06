@@ -1,6 +1,6 @@
 # src/models/finbert_branch.py
 import tensorflow as tf
-from keras.layers import Input, Dense, Lambda
+from keras.layers import Dense, Input, Lambda
 from transformers import TFBertModel
 
 # Load pre-trained FinBERT ONCE at module level to save memory and speed up optimization

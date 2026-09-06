@@ -15,17 +15,17 @@ old_logic = '''        # Apply Dynamic Weights
         ensemble_p = np.zeros(3)
         for model_name, p in base_probs.items():
             w = model_weights_raw.get(model_name, {\
-weight\: 0.25})[\weight\]
+weight\\: 0.25})[\\weight\\]
             ensemble_p += p * w
 
         final_prob_raw = float(np.max(ensemble_p))'''
 
 new_logic = '''        # Apply Dynamic Weights via WeightedConsensusEngine
-        extracted_weights = {k: v.get(\weight\, 0.25) for k, v in model_weights_raw.items()}
+        extracted_weights = {k: v.get(\\weight\\, 0.25) for k, v in model_weights_raw.items()}
         agreement_data = self.consensus_engine.compute_agreement(base_probs, extracted_weights)
-        
-        final_prob_raw = agreement_data[\agreement_score\] / 100.0'''
-        
+
+        final_prob_raw = agreement_data[\agreement_score\\] / 100.0'''
+
 content = content.replace(old_logic, new_logic)
 
 # Replace run_consensus call
@@ -39,12 +39,12 @@ new_run = '''        consensus_result = self.orchestrator.run_consensus(
 content = content.replace(old_run, new_run)
 
 # Replace agreement retrieval in inference_service
-old_agree = 'consensus_agreement=float(consensus_result.get(\agreement\, 66.0)),'
-new_agree = 'consensus_agreement=float(agreement_data.get(\agreement_score\, 66.0)),'
+old_agree = 'consensus_agreement=float(consensus_result.get(\agreement\\, 66.0)),'
+new_agree = 'consensus_agreement=float(agreement_data.get(\agreement_score\\, 66.0)),'
 content = content.replace(old_agree, new_agree)
 
-old_agree2 = '\agreement\: consensus_result.get(\agreement\, 0),'
-new_agree2 = '\agreement\: agreement_data.get(\agreement_score\, 0),'
+old_agree2 = '\agreement\\: consensus_result.get(\agreement\\, 0),'
+new_agree2 = '\agreement\\: agreement_data.get(\agreement_score\\, 0),'
 content = content.replace(old_agree2, new_agree2)
 
 with open('src/execution/inference_service.py', 'w') as f:

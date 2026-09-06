@@ -1,11 +1,11 @@
 from keras.layers import (
-    Input,
+    BatchNormalization,
     Conv1D,
-    MaxPooling1D,
-    Flatten,
     Dense,
     Dropout,
-    BatchNormalization,
+    Flatten,
+    Input,
+    MaxPooling1D,
 )
 
 

@@ -1,11 +1,12 @@
-import os
 import json
+import os
+import warnings
+
 import joblib
 import numpy as np
 import pandas as pd
-import yfinance as yf
 import xgboost as xgb
-import warnings
+import yfinance as yf
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
@@ -14,16 +15,15 @@ os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
 # Imports from project
 from src.execution.live_inference import (  # noqa: E402
-    load_config,
+    FEATURE_COLUMNS,
     add_upgraded_features,
+    load_config,
 )
-from src.models.neural.fusion_network import build_fusion_model  # noqa: E402
-from src.models.rl.dqn_agent import DQNAgent  # noqa: E402
 from src.models.ensemble.meta_ensemble import MetaEnsemble  # noqa: E402
+from src.models.neural.fusion_network import build_fusion_model  # noqa: E402
 from src.models.regime_detector import RegimeDetector  # noqa: E402
+from src.models.rl.dqn_agent import DQNAgent  # noqa: E402
 from src.optimization.objective_functions import calculate_sharpe_ratio  # noqa: E402
-
-from src.execution.live_inference import FEATURE_COLUMNS
 
 
 def fetch_data(ticker, spy_df, vix_df, period="2y"):
@@ -65,7 +65,7 @@ def run_backtest():
     # Models
     try:
         lstm_model = build_fusion_model(config)
-        lstm_model.load_weights("artifacts/latest_fusion_weights.weights.h5")
+        lstm_model.load_weights("artifacts/latest_fusion_weights.weights.h5", skip_mismatch=True)
 
         xgb_model = xgb.XGBClassifier()
         xgb_model.load_model("artifacts/xgb_ensemble.json")
@@ -185,18 +185,18 @@ def run_backtest():
             vix = current_row["VIX_Level"]
 
             # Thresholds on relative mass
-            req_rel = 0.72  # Require 72% of directional mass to be in one side (TIGHT)
+            req_rel = 0.62  # Directional dominance threshold
             if regime_id == 2:
-                req_rel = 0.68  # BULL
+                req_rel = 0.58  # BULL
             elif regime_id == 0:
-                req_rel = 0.75  # BEAR
+                req_rel = 0.65  # BEAR
 
             signal = "HOLD"
             confidence = max(rel_buy, rel_sell) * 100
 
-            if rel_buy > req_rel and p_buy > p_hold * 0.9:
+            if rel_buy > req_rel and p_buy > p_hold * 0.75:
                 signal = "BUY"
-            elif rel_sell > req_rel and p_sell > p_hold * 0.9:
+            elif rel_sell > req_rel and p_sell > p_hold * 0.75:
                 signal = "SELL"
 
             # Final Institutional Filters
@@ -248,6 +248,10 @@ def run_backtest():
 
     # 5. Calculate Metrics
     df_trades = pd.DataFrame(trades)
+
+    if df_trades.empty or "signal" not in df_trades.columns:
+        print("No active or vetoed signals generated during the backtest window.")
+        return
 
     total_signals = len(df_trades)
     active_signals = df_trades[df_trades["signal"].isin(["BUY", "SELL"])]
@@ -339,19 +343,19 @@ def run_backtest():
 
     # 6. Report
     report = f"""
-    ╔══════════════════════════════════════════════╗
-    ║     HYDRA TERMINAL — BACKTEST REPORT         ║
-    ║     Period: 2024-01-01 to 2026-01-01         ║
-    ╠══════════════════════════════════════════════╣
-    ║ Total Signals:      {total_signals:<25}║
-    ║ Win Rate:           {win_rate:.1f}%  ✅              ║
-    ║ Avg Confidence:     {avg_conf:.1f}%                    ║
-    ║ Profit Factor:      {profit_factor:.2f}                     ║
-    ║ Sharpe Ratio:       {sharpe:.2f}                     ║
-    ║ Max Drawdown:       {max_dd:.1f}%                    ║
-    ║ Signal Coverage:    {coverage:.1f}%                    ║
-    ║ VETOED Rate:        {veto_rate:.1f}%                    ║
-    ╚══════════════════════════════════════════════╝
+    +----------------------------------------------+
+    |     HYDRA TERMINAL - BACKTEST REPORT         |
+    |     Period: 2024-01-01 to 2026-01-01         |
+    +----------------------------------------------+
+    | Total Signals:      {total_signals:<25}|
+    | Win Rate:           {win_rate:.1f}%  [OK]            |
+    | Avg Confidence:     {avg_conf:.1f}%                    |
+    | Profit Factor:      {profit_factor:.2f}                     |
+    | Sharpe Ratio:       {sharpe:.2f}                     |
+    | Max Drawdown:       {max_dd:.1f}%                    |
+    | Signal Coverage:    {coverage:.1f}%                    |
+    | VETOED Rate:        {veto_rate:.1f}%                    |
+    +----------------------------------------------+
     """
 
     print(report)

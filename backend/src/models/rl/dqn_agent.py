@@ -1,11 +1,12 @@
+import logging
+import random
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import numpy as np
-import random
-import logging
 
-from src.utils.gpu_utils import get_device, configure_gpu_optimizations, benchmark_context
+from src.utils.gpu_utils import configure_gpu_optimizations, get_device
 
 logger = logging.getLogger(__name__)
 

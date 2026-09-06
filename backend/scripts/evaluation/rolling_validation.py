@@ -1,14 +1,16 @@
-import pandas as pd
-import numpy as np
-import yfinance as yf
 from datetime import timedelta
+
+import numpy as np
+import pandas as pd
 import xgboost as xgb
+import yfinance as yf
 from sklearn.preprocessing import StandardScaler
-from src.execution.live_inference import add_upgraded_features, FEATURE_COLUMNS
+
 from src.data_ingestion.market_data import (
-    fetch_historical_data,
     apply_dynamic_triple_barrier,
+    fetch_historical_data,
 )
+from src.execution.live_inference import FEATURE_COLUMNS, add_upgraded_features
 
 
 def calculate_ece(y_true, y_prob, n_bins=10):

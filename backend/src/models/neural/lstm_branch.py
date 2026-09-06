@@ -1,5 +1,5 @@
 # src/models/lstm_branch.py
-from keras.layers import Input, LSTM, Dropout, BatchNormalization
+from keras.layers import LSTM, BatchNormalization, Dropout, Input
 
 
 def build_lstm_branch(

@@ -24,7 +24,7 @@ new_auth_code = '''        is_risk_vetoed = (consensus_result["consensus_status"
             regime_v2=regime_detailed,
             risk_veto=is_risk_vetoed
         )
-        
+
         portfolio_health_score = 100.0 - abs(mdd_pct)
         arbitration = self.risk_arbitrator.arbitrate(
             market_regime=regime_detailed,
@@ -32,7 +32,7 @@ new_auth_code = '''        is_risk_vetoed = (consensus_result["consensus_status"
             portfolio_health_score=portfolio_health_score,
             risk_index=risk_index
         )
-        
+
         execution_state = arbitration["execution_state"]
 
         if arbitration["execution_state"] == "VETOED" or is_risk_vetoed:

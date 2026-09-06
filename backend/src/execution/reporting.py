@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+
 from src.data_ingestion.technical_indicators import (
     add_advanced_features,
     clean_multiindex_columns,
@@ -83,7 +84,7 @@ class ReportGenerator:
 
         # Clouds: include all timestamps that have at least one indicator to prevent early termination
         df_cloud_json = df_chart.copy()
-        
+
         # Replace 0.0 with np.nan for chart indicators (caused by ML fillna)
         for col in ["ribbon_upper", "ribbon_lower", "bb_upper", "bb_lower"]:
             df_cloud_json[col] = df_cloud_json[col].replace(0.0, np.nan)
@@ -113,7 +114,7 @@ class ReportGenerator:
                             "probability": sig["confidence"],
                         }
                     )
-                    
+
         # Filter out markers that fall before our 150-day chart window
         min_date = df_chart["time"].min()
         final_markers = [m for m in final_markers if m["time"] >= min_date]

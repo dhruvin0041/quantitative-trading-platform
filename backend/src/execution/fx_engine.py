@@ -1,10 +1,11 @@
 # src/execution/fx_engine.py
-import yfinance as yf
-import pandas as pd
-import logging
 import asyncio
+import logging
 from datetime import datetime
 from typing import Dict, Optional
+
+import pandas as pd
+import yfinance as yf
 
 logger = logging.getLogger(__name__)
 

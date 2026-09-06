@@ -1,9 +1,9 @@
 # src/models/regime_detector.py
-import yfinance as yf
-import pandas as pd
-import numpy as np
-from sklearn.mixture import GaussianMixture
 import joblib
+import numpy as np
+import pandas as pd
+import yfinance as yf
+from sklearn.mixture import GaussianMixture
 
 
 def train_macro_regime_model():

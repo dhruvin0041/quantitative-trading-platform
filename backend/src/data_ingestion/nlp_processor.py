@@ -1,14 +1,13 @@
 # src/features/nlp_processor.py
-from transformers import BertTokenizer
-import requests
-import xml.etree.ElementTree as ET
-import os
-from google import genai
-
-
-import time
 import json
+import os
 import re
+import time
+import xml.etree.ElementTree as ET
+
+import requests
+from google import genai
+from transformers import BertTokenizer
 
 
 class GeminiAnalyzer:

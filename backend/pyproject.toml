@@ -1,0 +1,25 @@
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = [
+    ".git",
+    "venv",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "scripts/ops/modify_*.py",
+    "scripts/ops/patch.py",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # Pyflakes
+    "I",    # isort
+]
+ignore = [
+    "E501",  # line too long
+    "E402",  # module level import not at top of file (GPU/TF setup)
+]

@@ -1,55 +1,54 @@
-import os
+import asyncio
 import json
 import logging
-import asyncio
-import time
+import os
 import re
+import time
 from datetime import datetime
-from dotenv import load_dotenv
 
-from fastapi import FastAPI, Depends, HTTPException, Security, Request
-from fastapi.security.api_key import APIKeyHeader
+import pandas as pd
+import yfinance as yf
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, HTTPException, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+from fastapi.security.api_key import APIKeyHeader
 from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    REGISTRY,
     Counter,
     Histogram,
     generate_latest,
-    CONTENT_TYPE_LATEST,
-    REGISTRY,
 )
-from fastapi.responses import Response
 
-import yfinance as yf
-import pandas as pd
+from src.agents.orchestrator import InstitutionalOrchestrator
+from src.data_ingestion.alternative_data import PhysicalEdgeAnalyzer
+from src.data_ingestion.nlp_processor import GeminiAnalyzer
+from src.data_ingestion.sector_mapper import SectorMapper
+from src.data_ingestion.supply_chain_graph import SupplyChainGraph
 
 # Core System Imports
 from src.data_ingestion.universes import UNIVERSES_METADATA
-from src.models.model_loader import ModelManager
-from src.execution.inference_service import InferenceService
+from src.execution.alerts import AlertSystem
 from src.execution.backtest_service import BacktestService
-from src.utils.cache import SimpleCache
-
-from src.execution.live_inference import load_config
-from src.data_ingestion.nlp_processor import GeminiAnalyzer
-from src.data_ingestion.alternative_data import PhysicalEdgeAnalyzer
-from src.data_ingestion.supply_chain_graph import SupplyChainGraph
-from src.agents.orchestrator import InstitutionalOrchestrator
-from src.execution.smart_router import PredictiveSmartRouter
-from src.execution.reporting import ReportGenerator
-from src.execution.paper_trading import PaperTradingEngine
+from src.execution.empirical_validation import ValidationAnalytics
 from src.execution.fx_engine import FXEngine
+from src.execution.inference_service import InferenceService
+from src.execution.live_inference import load_config
+from src.execution.paper_trading import PaperTradingEngine
+from src.execution.performance_analyzer import PerformanceAnalyzer
+from src.execution.reporting import ReportGenerator
+from src.execution.signal_journal import SignalJournal
+from src.execution.smart_router import PredictiveSmartRouter
+from src.models.model_loader import ModelManager
 from src.models.monitoring.drift_monitor import DriftMonitor
 from src.schemas import (
+    BacktestSummary,
     PredictResponse,
     UniverseResponse,
     UniverseStockItem,
-    BacktestSummary,
 )
-from src.execution.performance_analyzer import PerformanceAnalyzer
-from src.execution.alerts import AlertSystem
-from src.data_ingestion.sector_mapper import SectorMapper
-from src.execution.signal_journal import SignalJournal
-from src.execution.empirical_validation import ValidationAnalytics
+from src.utils.cache import SimpleCache
 
 
 # --- Structured Logging ---
@@ -270,13 +269,13 @@ async def get_stock_universe():
 
             data = yf.download(all_tickers, period="5d", interval="1d", progress=False)
             results = []
-            
+
             # Vectorized price extraction: ffill() drops intermediate NaNs safely, then we take the last 2 rows
             if isinstance(data["Close"], pd.DataFrame):
                 closes = data["Close"].ffill().iloc[-2:]
             else:
                 closes = pd.DataFrame({all_tickers[0]: data["Close"]}).ffill().iloc[-2:]
-                
+
             curr_prices = closes.iloc[-1].to_dict() if len(closes) >= 1 else {}
             prev_prices = closes.iloc[-2].to_dict() if len(closes) >= 2 else curr_prices
 
@@ -286,7 +285,7 @@ async def get_stock_universe():
                     prev = float(prev_prices.get(t, curr))
                     # Prevent division by zero and handle NA seamlessly
                     pct = ((curr / prev) - 1) * 100 if prev != 0 and pd.notna(curr) and pd.notna(prev) else 0.0
-                    
+
                     results.append(
                         UniverseStockItem(
                             ticker=t,
@@ -354,6 +353,7 @@ async def get_prediction(ticker: str = "AAPL"):
 
 import math
 
+
 @app.get("/performance", dependencies=[Depends(verify_api_key)])
 async def get_performance():
     analysis = perf_analyzer.analyze(
@@ -378,7 +378,7 @@ async def get_performance():
         "historical": len(paper_engine.history),
         "regime": "LIVE EXECUTION",
     }
-    
+
     # Fast recursive replacement of NaN/Infinity for JSON compliance
     def sanitize_floats(obj):
         if isinstance(obj, float):
@@ -423,16 +423,18 @@ async def set_base_currency(request: Request):
     paper_engine.set_base_currency(new_currency)
     return {"status": "SUCCESS", "base_currency": new_currency}
 
-from fastapi.responses import StreamingResponse
-from src.agents.langgraph_orchestrator import build_graph
 import json
+
+from fastapi.responses import StreamingResponse
+
+from src.agents.langgraph_orchestrator import build_graph
 
 agentic_app = build_graph()
 
 @app.get("/predict/agentic/stream", dependencies=[Depends(verify_api_key)])
 async def get_agentic_prediction_stream(ticker: str = "AAPL", mock: bool = False):
     ticker = sanitize_ticker(ticker)
-    
+
     async def event_generator():
         if mock:
             # Provide mock SSE responses to test UI
@@ -457,7 +459,7 @@ async def get_agentic_prediction_stream(ticker: str = "AAPL", mock: bool = False
             return
 
         inputs = {"ticker": ticker, "debate_iterations": 0}
-        
+
         # We use asyncio.to_thread to not block the main event loop since .stream is sync
         # In a fully async app, we would use .astream()
         try:
@@ -487,11 +489,11 @@ async def get_agentic_prediction_stream(ticker: str = "AAPL", mock: bool = False
                         payload["risk_decision"] = state_update["risk_decision"]
                     if "portfolio_status" in state_update:
                         payload["portfolio_status"] = state_update["portfolio_status"]
-                        
+
                     yield f"data: {json.dumps(payload)}\n\n"
                     # Add a small delay for frontend rendering effect
                     await asyncio.sleep(0.5)
-            
+
             yield f"data: {json.dumps({'node': 'END', 'status': 'DONE'})}\n\n"
         except Exception as e:
             logger.error(f"Agentic Stream Error: {e}")

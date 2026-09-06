@@ -1,7 +1,8 @@
+import os
+
+import joblib
 import numpy as np
 from sklearn.linear_model import LogisticRegression
-import joblib
-import os
 
 
 class MetaEnsemble:

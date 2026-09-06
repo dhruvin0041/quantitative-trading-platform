@@ -1,9 +1,10 @@
+import os
+
+import joblib
 import numpy as np
 import pandas as pd
-from sklearn.mixture import GaussianMixture
 from hmmlearn import hmm
-import joblib
-import os
+from sklearn.mixture import GaussianMixture
 
 
 class RegimeDetector:

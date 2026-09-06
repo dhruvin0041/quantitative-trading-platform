@@ -3,7 +3,7 @@ import logging
 import joblib
 from lightgbm import LGBMClassifier
 
-from src.utils.gpu_utils import get_lightgbm_gpu_params, benchmark_context
+from src.utils.gpu_utils import benchmark_context, get_lightgbm_gpu_params
 
 logger = logging.getLogger(__name__)
 

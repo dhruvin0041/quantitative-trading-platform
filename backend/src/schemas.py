@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field
-from typing import Dict, List, Optional, Any
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, Field
 
 
 class ModelPrediction(BaseModel):
@@ -194,28 +195,28 @@ class PredictResponse(BaseModel):
     historical_markers: Optional[List[Dict[str, Any]]] = None
     candles: Optional[List[Dict[str, Any]]] = None
     clouds: Optional[List[Dict[str, Any]]] = None
-    
+
     # Missing fields expected by frontend ChartData
     technical_snapshot: Optional[TechnicalSnapshot] = None
     metadata: Optional[AssetMetadata] = None
     ai_report: Optional[Dict[str, Any]] = None
-    
+
     # Phase 3: Semantic Separation
     structural_regime: str = "UNKNOWN"
     signal_bias: str = "UNKNOWN"
     execution_state: str = "UNKNOWN"
     execution_reasoning: str = ""
     execution_authority: Optional[Dict[str, str]] = None
-    
+
     # Institutional Interpretations
     forecast_interpretation: str = ""
     forecast_explanation: str = ""
     consensus_intelligence: str = ""
     decision_tree: Optional[List[Dict[str, Any]]] = None
-    
+
     # Governance
     governance: Optional[Dict[str, Any]] = None
-    
+
     qualitative_citations: Optional[List[Dict[str, Any]]] = None
 
 

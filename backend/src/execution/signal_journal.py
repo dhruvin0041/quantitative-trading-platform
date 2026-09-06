@@ -1,7 +1,8 @@
-import sqlite3
-import pandas as pd
-from datetime import datetime
 import os
+import sqlite3
+from datetime import datetime
+
+import pandas as pd
 
 
 class SignalJournal:
@@ -56,8 +57,8 @@ class SignalJournal:
                 INSERT OR REPLACE INTO signals (
                     signal_id, timestamp, asset, market, exchange, signal_type,
                     entry_price, exit_price, position_size, confidence, uncertainty,
-                    agreement, market_regime, market_regime_v2, volatility_regime, 
-                    model_consensus, quality_score, quality_grade, ev_pct, 
+                    agreement, market_regime, market_regime_v2, volatility_regime,
+                    model_consensus, quality_score, quality_grade, ev_pct,
                     expected_gain, expected_loss, asset_class,
                     holding_time, realized_pnl, unrealized_pnl, execution_state, outcome
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -102,7 +103,7 @@ class SignalJournal:
         with self.conn:
             self.conn.execute(
                 """
-                UPDATE signals 
+                UPDATE signals
                 SET exit_price = ?, realized_pnl = ?, outcome = ?, holding_time = ?
                 WHERE signal_id = ?
             """,

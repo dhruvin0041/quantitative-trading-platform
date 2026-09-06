@@ -3,7 +3,7 @@ import logging
 import joblib
 from catboost import CatBoostClassifier
 
-from src.utils.gpu_utils import get_catboost_gpu_params, benchmark_context
+from src.utils.gpu_utils import benchmark_context, get_catboost_gpu_params
 
 logger = logging.getLogger(__name__)
 

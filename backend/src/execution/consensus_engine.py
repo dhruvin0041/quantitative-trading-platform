@@ -1,5 +1,6 @@
+from typing import Any, Dict
+
 import numpy as np
-from typing import Dict, Any
 
 
 class ConsensusIntelligenceEngine:
@@ -68,6 +69,19 @@ class WeightedConsensusEngine:
     Outputs: agreement_score, bullish_weight, bearish_weight, neutral_weight, dominant_direction
     """
 
+    ALIAS_MAP = {
+        "LSTM": "DL_FUSION",
+        "DL_FUSION": "DL_FUSION",
+        "XGBOOST": "XGB_AGENT",
+        "XGB": "XGB_AGENT",
+        "XGB_AGENT": "XGB_AGENT",
+        "LIGHTGBM": "LGBM_AGENT",
+        "LGBM": "LGBM_AGENT",
+        "LGBM_AGENT": "LGBM_AGENT",
+        "DQN": "DQN_AGENT",
+        "DQN_AGENT": "DQN_AGENT",
+    }
+
     def __init__(self):
         # Indices: 0=SELL, 1=HOLD, 2=BUY
         self.idx_to_dir = {0: "SELL", 1: "HOLD", 2: "BUY"}
@@ -80,39 +94,44 @@ class WeightedConsensusEngine:
         total_weight = 0.0
 
         for model_name, p in base_probs.items():
-            w = model_weights.get(model_name, 0.25)
-            # Find the primary direction for this model
-            signal_idx = int(np.argmax(p))
-            confidence = float(p[signal_idx])
+            canonical_key = self.ALIAS_MAP.get(model_name.upper(), model_name)
+            w = model_weights.get(canonical_key, model_weights.get(model_name, 0.25))
+            p_arr = np.array(p, dtype=float)
 
-            # The pressure added is the weight * confidence in that direction
-            pressures[signal_idx] += w * confidence
+            # Soften discrete one-hot vectors (e.g., DQN action) so discrete agents do not overwhelm calibrated models
+            if np.max(p_arr) >= 0.99 and np.count_nonzero(p_arr) == 1:
+                action_idx = int(np.argmax(p_arr))
+                p_soft = np.full(3, 0.20)
+                p_soft[action_idx] = 0.60
+                p_arr = p_soft
+
+            for k in range(3):
+                pressures[k] += w * float(p_arr[k])
             total_weight += w
 
-        # Normalize
+        # Normalize across classes
         if total_weight > 0:
             for k in pressures:
                 pressures[k] /= total_weight
 
-        # Dominant direction
+        # Dominant direction from full soft consensus distribution
         dominant_idx = max(pressures, key=pressures.get)
         dominant_direction = self.idx_to_dir[dominant_idx]
 
-        # Agreement score is the pressure of the dominant direction * 100
-        # representing directional consensus intensity
+        # Agreement score is the probability of the dominant direction * 100
         agreement_score = pressures[dominant_idx] * 100.0
 
-        # Phase 4: Normalized Model Reliability Metadata
+        # Normalized Model Reliability Metadata
         model_intelligence = {}
         for model_name, p in base_probs.items():
-            w = model_weights.get(model_name, 0.25)
-            # Recent reliability is simulated here but could be linked to performance_analyzer history
-            reliability = 0.85 if "XGB" in model_name or "DL" in model_name else 0.75
+            canonical_key = self.ALIAS_MAP.get(model_name.upper(), model_name)
+            w = model_weights.get(canonical_key, model_weights.get(model_name, 0.25))
+            reliability = 0.85 if ("XGB" in canonical_key or "DL" in canonical_key) else 0.75
             model_intelligence[model_name] = {
                 "weight": float(w / total_weight) if total_weight > 0 else 0.25,
                 "recent_reliability": reliability,
                 "confidence": float(np.max(p)),
-                "is_dominant": int(np.argmax(p)) == dominant_idx
+                "is_dominant": int(np.argmax(p)) == dominant_idx,
             }
 
         agreement_res = {
@@ -122,9 +141,8 @@ class WeightedConsensusEngine:
             "bullish_weight": pressures[2],
             "dominant_direction": dominant_direction,
             "dominant_idx": dominant_idx,
-            "model_intelligence": model_intelligence
+            "model_intelligence": model_intelligence,
         }
-
 
         # Apply Phase 5 Intelligence
         intelligence = self.intelligence.analyze_consensus(base_probs, agreement_res)

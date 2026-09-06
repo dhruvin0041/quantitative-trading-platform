@@ -1,13 +1,13 @@
 import tensorflow as tf
 from keras.layers import (
-    Input,
+    Add,
     Dense,
     Dropout,
-    LayerNormalization,
-    Add,
     Flatten,
-    MultiHeadAttention,
+    Input,
     Lambda,
+    LayerNormalization,
+    MultiHeadAttention,
 )
 
 

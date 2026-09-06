@@ -1,7 +1,8 @@
+import keras
 import numpy as np
 import pandas as pd
-import keras
 from keras import layers
+
 
 class MarketTimeGAN:
     """
@@ -65,14 +66,14 @@ class MarketTimeGAN:
         """
         # 1. Massive Volatility Spike (ATR explosion)
         volatility_shock = np.random.normal(0, 0.15, num_assets)  # 15% daily volatility
-        
+
         # 2. Systemic Correlation Breakdown (The Crash)
         # Force a uniform -10% to -25% drift across ALL assets simultaneously
         systemic_drift = np.random.uniform(-0.25, -0.10, num_assets)
-        
+
         # Combine shock and drift
         catastrophic_returns = systemic_drift - np.abs(volatility_shock)
-        
+
         return self._format_as_panel(catastrophic_returns, num_assets)
 
     def _format_as_panel(self, returns_array: np.ndarray, num_assets: int) -> pd.DataFrame:
@@ -81,15 +82,15 @@ class MarketTimeGAN:
         the risk metrics our RiskAgent requires (ATR, VaR_95).
         """
         tickers = [f"SYNTH_{i}" for i in range(num_assets)]
-        
+
         # Approximate VaR and ATR based on the generated synthetic returns
         # A massive negative return results in a massive calculated historical VaR
         var_95 = np.abs(returns_array) * 1.65
         atr = np.abs(returns_array) * 100
-        
+
         # Assign random sectors to allow the RiskAgent to check for crowding
         sectors = np.random.choice(["Technology", "Finance", "Healthcare", "Energy"], size=num_assets)
-        
+
         df = pd.DataFrame({
             "Ticker": tickers,
             "Sector": sectors,

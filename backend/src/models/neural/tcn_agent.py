@@ -1,12 +1,12 @@
 import tensorflow as tf
 from keras.layers import (
-    Input,
-    Conv1D,
-    Dense,
-    SpatialDropout1D,
-    BatchNormalization,
     Activation,
     Add,
+    BatchNormalization,
+    Conv1D,
+    Dense,
+    Input,
+    SpatialDropout1D,
 )
 
 

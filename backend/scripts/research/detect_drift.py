@@ -1,10 +1,11 @@
+import json
+import os
+
 import joblib
-import pandas as pd
 import numpy as np
+import pandas as pd
 import yfinance as yf
 from scipy.stats import ks_2samp
-import os
-import json
 
 
 def calculate_psi(expected, actual, bins=10):

@@ -4,10 +4,8 @@ Run: python -m scripts.ops.verify_gpu
 This script verifies that all model components are correctly using GPU
 and runs micro-benchmarks to measure speedup vs CPU.
 """
-import sys
-import os
-import time
 import logging
+import time
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(name)s | %(message)s")
 logger = logging.getLogger("gpu_verify")
@@ -117,8 +115,8 @@ def verify_tensorflow():
 
 def verify_xgboost():
     """Verify XGBoost GPU capability."""
-    import xgboost as xgb
     import numpy as np
+    import xgboost as xgb
     print("\n" + "=" * 60)
     print("XGBOOST GPU VERIFICATION")
     print("=" * 60)
@@ -149,13 +147,13 @@ def verify_xgboost():
         print(f"  Speedup: {cpu_time/gpu_time:.1f}x")
     except Exception as e:
         print(f"  GPU Training Failed: {e}")
-        print(f"  Falling back to CPU")
+        print("  Falling back to CPU")
 
 
 def verify_catboost():
     """Verify CatBoost GPU capability."""
-    from catboost import CatBoostClassifier
     import numpy as np
+    from catboost import CatBoostClassifier
     print("\n" + "=" * 60)
     print("CATBOOST GPU VERIFICATION")
     print("=" * 60)

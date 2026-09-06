@@ -1,44 +1,44 @@
 import asyncio
 import logging
-import numpy as np
 from datetime import datetime
 
-from src.execution.consensus_engine import WeightedConsensusEngine
-from src.execution.forecast_engine import ForecastCalibrationEngine
-from src.execution.trade_engine import TradeConstructionEngine
-from src.execution.timing_engine import PredictiveTimingEngine
-from src.execution.confidence_engine import ConfidenceBreakdownEngine
-from src.execution.execution_authority import ExecutionAuthorityEngine
-from src.execution.governance_engine import SignalGovernanceAnalytics
-from src.models.regime.calibration import ModelCalibrator
+import numpy as np
 
+from src.data_ingestion.nlp_processor import NewsTokenizer
+from src.execution.asset_intelligence import (
+    AdaptiveWeightingEngine,
+    AssetProfileEngine,
+    MultiTimeframeEngine,
+)
+from src.execution.confidence_engine import ConfidenceBreakdownEngine
+from src.execution.consensus_engine import WeightedConsensusEngine
+from src.execution.execution_authority import ExecutionAuthorityEngine
+from src.execution.forecast_engine import ForecastCalibrationEngine
+from src.execution.governance_engine import SignalGovernanceAnalytics
 from src.execution.live_inference import (
+    compute_shap_explanation,
     fetch_live_data,
     fetch_live_news,
     get_meta_prediction,
-    compute_shap_explanation,
 )
 from src.execution.risk_manager import (
-    get_position_sizing,
+    InstitutionalRiskArbitrator,
     calculate_beta,
     detect_stampede_risk,
-    InstitutionalRiskArbitrator,
+    get_position_sizing,
 )
-from src.data_ingestion.nlp_processor import NewsTokenizer
 from src.execution.signal_intelligence import (
-    RegimeEngineV2,
     ConfidenceCalibrationEngine,
     ExpectedValueEngine,
+    RegimeEngineV2,
     SignalQualityEngine,
 )
-from src.execution.asset_intelligence import (
-    AssetProfileEngine,
-    AdaptiveWeightingEngine,
-    MultiTimeframeEngine,
-)
+from src.execution.timing_engine import PredictiveTimingEngine
+from src.execution.trade_engine import TradeConstructionEngine
+from src.models.regime.calibration import ModelCalibrator
 from src.schemas import (
-    SignalQuality,
     ExpectedValueMetrics,
+    SignalQuality,
 )
 
 logger = logging.getLogger(__name__)
@@ -122,7 +122,7 @@ class InferenceService:
         # 2. Pre-Inference Intelligence
         regime_detailed = self.regime_v2.detect_regime_v2(ticker_df_risk, spy_df_risk)
         asset_class = self.asset_engine.get_asset_class(ticker)
-        asset_context = self.asset_engine.enrich_context(ticker, ticker_df_risk)
+        self.asset_engine.enrich_context(ticker, ticker_df_risk)
         model_weights_raw = self.weight_engine.calculate_weights(
             regime_detailed, asset_class
         )
@@ -188,7 +188,7 @@ class InferenceService:
             final_prob_raw * 100, ticker, asset_class
         )
         calibrated_prob = cal_results["calibrated_prob"]
-        calibration_metrics = cal_results["metrics"]
+        cal_results["metrics"]
 
         # 5. Timing & Meta-Selection
         timing_data = self.timing_engine.calculate_timing_features(ticker_df_risk)
@@ -243,6 +243,7 @@ class InferenceService:
             ev_pct=ev_metrics["ev_pct"],
             timing_score=timing_data["timing_score"],
             asset_class=asset_class,
+            direction=pre_signal,
         )
 
         quality_metrics = self.quality_engine.calculate_score(
@@ -315,7 +316,7 @@ class InferenceService:
 
         # Performance & Metrics
         signal_df = self.journal.get_all_signals() if self.journal else None
-        perf_summary = self.perf_analyzer.analyze(
+        self.perf_analyzer.analyze(
             self.paper_engine.portfolio_snapshots,
             self.paper_engine.history,
             self.paper_engine.initial_capital,

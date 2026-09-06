@@ -1,7 +1,8 @@
-import time
-import requests
 import os
+import time
 from datetime import datetime
+
+import requests
 from dotenv import load_dotenv
 
 # Load env vars

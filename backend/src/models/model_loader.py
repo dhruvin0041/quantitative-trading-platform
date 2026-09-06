@@ -1,18 +1,20 @@
 import json
-import joblib
 import logging
+
+import joblib
+import keras
 import numpy as np
 import pandas as pd
 import xgboost as xgb
-from sklearn.svm import SVC
-from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import TimeSeriesSplit
-import keras
-from src.utils.gpu_utils import configure_tensorflow_gpu, get_device, verify_gpu_utilization
-from src.models.neural.fusion_network import build_fusion_model
-from src.models.rl.dqn_agent import DQNAgent
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+
 from src.models.ensemble.meta_ensemble import MetaEnsemble
+from src.models.neural.fusion_network import build_fusion_model
 from src.models.neural.tft_agent import build_tft_branch
+from src.models.rl.dqn_agent import DQNAgent
+from src.utils.gpu_utils import configure_tensorflow_gpu, get_device
 
 logger = logging.getLogger(__name__)
 
@@ -31,20 +33,20 @@ class PurgedGroupTimeSeriesSplit:
         # Assumes df has a DatetimeIndex or is sorted chronologically
         dates = df.index.get_level_values(0) if isinstance(df.index, pd.MultiIndex) else df.index
         unique_dates = np.unique(dates)
-        
+
         tscv = TimeSeriesSplit(n_splits=self.n_splits)
         for train_idx, test_idx in tscv.split(unique_dates):
             train_dates = unique_dates[train_idx]
             test_dates = unique_dates[test_idx]
-            
+
             # Apply embargo: drop the last 'embargo' dates from the training set
             # This ensures the forward-looking Triple Barrier horizon doesn't bleed into the test set
             if self.embargo > 0 and len(train_dates) > self.embargo:
                 train_dates = train_dates[:-self.embargo]
-                
+
             train_mask = np.isin(dates, train_dates)
             test_mask = np.isin(dates, test_dates)
-            
+
             yield np.where(train_mask)[0], np.where(test_mask)[0]
 
 
@@ -70,12 +72,12 @@ class ModelManager:
         self._load_accuracies()
         self._load_lstm()
         self._load_tft()
-        
+
         # Load Core Classifiers
         self._load_xgb()
         self._load_svm()
         self._load_knn()
-        
+
         self._load_lgbm()
         self._load_dqn()
         self._load_meta_ensemble()
@@ -90,7 +92,7 @@ class ModelManager:
 
         # 1. Temporal & Group-Aware Split
         pg_tscv = PurgedGroupTimeSeriesSplit(n_splits=3, embargo=10)
-        
+
         # We'll use the last split for final training/validation representation
         train_idx, val_idx = list(pg_tscv.split(df))[-1]
         X_train, y_train = X[train_idx], y[train_idx]
@@ -120,9 +122,9 @@ class ModelManager:
 
     def get_bundled_predictions(self, X: np.ndarray) -> dict:
         """
-        Runs inference across the core classifiers and bundles the probabilistic 
+        Runs inference across the core classifiers and bundles the probabilistic
         consensus payload for the AlphaAgent handoff.
-        
+
         Triple Barrier Classes: 0 (Sell/Stop Loss), 1 (Hold/Time), 2 (Buy/Take Profit)
         """
         if self.xgb_model is None or self.svm_model is None or self.knn_model is None:
@@ -135,7 +137,7 @@ class ModelManager:
 
         # Equal-weighted ensemble probability matrix
         ensemble_probs = (xgb_probs + svm_probs + knn_probs) / 3.0
-        
+
         # Generate predictions for the batch
         dominant_indices = np.argmax(ensemble_probs, axis=1)
         confidence_scores = np.max(ensemble_probs, axis=1) * 100.0
@@ -167,7 +169,7 @@ class ModelManager:
     def _load_lstm(self):
         try:
             self.lstm_model = build_fusion_model(self.config)
-            self.lstm_model.load_weights("artifacts/latest_fusion_weights.weights.h5")
+            self.lstm_model.load_weights("artifacts/latest_fusion_weights.weights.h5", skip_mismatch=True)
         except Exception as e:
             logger.warning(f"Could not load LSTM weights: {e}")
 

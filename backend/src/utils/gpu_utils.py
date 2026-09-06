@@ -1,12 +1,11 @@
 """Centralized GPU device management and benchmarking utilities."""
 import logging
+import os
+import platform
 import time
 from contextlib import contextmanager
 
 import torch
-import numpy as np
-import os
-import platform
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +16,7 @@ def get_device() -> torch.device:
         device = torch.device("cpu") # FORCE CPU due to RTX 5070 Kernel incompatibility in current Torch build
         gpu_name = torch.cuda.get_device_name(0)
         vram_total = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-        vram_free = (torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated(0)) / (1024**3)
+        (torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated(0)) / (1024**3)
         logger.info(
             "GPU Detected: %s | VRAM: %.2f GB total. FORCING PyTorch to CPU to bypass RTX 5070 kernel error. Ensembles will still use GPU.",
             gpu_name, vram_total
@@ -52,7 +51,7 @@ def get_compute_backend() -> dict:
     """Detects available hardware and configures the optimal execution backend."""
     cpu_count = os.cpu_count() or 4
     cpu_name = platform.processor() or "Unknown CPU"
-    
+
     if torch.cuda.is_available():
         backend = "CUDA"
         gpu_name = torch.cuda.get_device_name(0)
@@ -63,9 +62,9 @@ def get_compute_backend() -> dict:
         gpu_name = "None"
         vram_gb = 0.0
         cuda_version = "None"
-        
+
     configure_gpu_optimizations()
-    
+
     report = {
         "CPU": cpu_name,
         "Cores": cpu_count, # Hardware threads
@@ -75,14 +74,14 @@ def get_compute_backend() -> dict:
         "VRAM": f"{vram_gb} GB",
         "Backend Selected": backend
     }
-    
+
     print("-" * 40)
     print("COMPUTE BACKEND REPORT")
     print("-" * 40)
     for k, v in report.items():
         print(f"{k}: {v}")
     print("-" * 40)
-    
+
     return report
 
 

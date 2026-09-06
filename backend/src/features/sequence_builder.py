@@ -1,6 +1,7 @@
 # src/features/sequence_builder.py
-import numpy as np
 import logging
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -21,13 +22,13 @@ def create_time_series_sequences(data_df, time_steps):
         col for col in data_df.columns
         if not col.startswith("target_") and not col.startswith("future_")
     ]
-    
+
     data_array = data_df[feature_columns].values
     n_samples = len(data_array) - time_steps + 1
-    
+
     if n_samples <= 0:
         return np.array([]), np.array([]), np.array([]), np.array([])
-        
+
     # GPU Accelerated sliding window if CuPy is available
     if HAS_CUPY:
         try:
@@ -44,11 +45,11 @@ def create_time_series_sequences(data_df, time_steps):
         shape = (n_samples, time_steps, data_array.shape[1])
         strides = (data_array.strides[0], data_array.strides[0], data_array.strides[1])
         sequences = np.lib.stride_tricks.as_strided(data_array, shape=shape, strides=strides)
-        
+
     sequences = sequences.copy()
-    
+
     target_idx = np.arange(time_steps - 1, len(data_array))
-    
+
     targets_direction = data_df["target_direction"].values[target_idx] if "target_direction" in data_df.columns else np.zeros(n_samples)
     targets_range_min = data_df["target_min"].values[target_idx] if "target_min" in data_df.columns else np.zeros(n_samples)
     targets_range_max = data_df["target_max"].values[target_idx] if "target_max" in data_df.columns else np.zeros(n_samples)

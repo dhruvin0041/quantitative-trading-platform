@@ -1,5 +1,6 @@
-import sqlite3
 import os
+import sqlite3
+
 
 def migrate():
     db_path = "data/empirical_validation.db"
@@ -9,10 +10,10 @@ def migrate():
 
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    
+
     cursor.execute("PRAGMA table_info(signals)")
     columns = [col[1] for col in cursor.fetchall()]
-    
+
     expected_columns = [
         ("market_regime_v2", "TEXT"),
         ("quality_score", "REAL"),
@@ -22,12 +23,12 @@ def migrate():
         ("expected_loss", "REAL"),
         ("asset_class", "TEXT")
     ]
-    
+
     for col_name, col_type in expected_columns:
         if col_name not in columns:
             print(f"Adding column {col_name}...")
             cursor.execute(f"ALTER TABLE signals ADD COLUMN {col_name} {col_type}")
-    
+
     conn.commit()
     conn.close()
     print("Migration complete.")

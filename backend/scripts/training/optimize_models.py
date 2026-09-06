@@ -1,15 +1,21 @@
-import optuna
-import joblib
-import numpy as np
 import json
 import os
-from xgboost import XGBClassifier
-from lightgbm import LGBMClassifier
+
+import joblib
+import numpy as np
+import optuna
 from catboost import CatBoostClassifier
+from lightgbm import LGBMClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import TimeSeriesSplit
-from src.utils.gpu_utils import get_xgboost_gpu_params, get_lightgbm_gpu_params, get_catboost_gpu_params
+from xgboost import XGBClassifier
+
+from src.utils.gpu_utils import (
+    get_catboost_gpu_params,
+    get_lightgbm_gpu_params,
+    get_xgboost_gpu_params,
+)
 
 # Ensure models dir exists for saving params
 os.makedirs("models", exist_ok=True)
