@@ -169,3 +169,139 @@ class WeightedConsensusEngine:
         agreement_res.update(intelligence)
 
         return agreement_res
+
+    def compute_asymmetric_veto(
+        self,
+        base_probs: Dict[str, np.ndarray],
+        primary_key: str = "XGB_AGENT",
+        primary_threshold: float = 0.60,
+        veto_threshold: float = 0.65,
+        veto_short: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Lead Driver + Asymmetric Veto Architecture.
+
+        - Primary Driver: Designated alpha generator (default: XGB_AGENT) is the sole trade generator
+          when conviction >= primary_threshold (default: 0.60).
+        - Asymmetric Veto Filter: Secondary models (LightGBM, DQN) do NOT add positive directional weight;
+          they are only consulted to veto high-risk entries:
+          * If primary signals BUY, but any secondary model assigns P(SELL) >= veto_threshold (0.65),
+            the entry is vetoed and downgraded to HOLD.
+          * If veto_short is True and primary signals SELL, but secondary assigns P(BUY) >= veto_threshold,
+            the short entry is vetoed and downgraded to HOLD.
+          * Otherwise, the primary signal passes through unmuted.
+        - DL_FUSION is quarantined and excluded from veto authority.
+        """
+        canon_probs: Dict[str, np.ndarray] = {}
+        for k, v in base_probs.items():
+            canon_k = self.ALIAS_MAP.get(k.upper(), k)
+            p_arr = np.array(v, dtype=float)
+            if np.max(p_arr) >= 0.99 and np.count_nonzero(p_arr) == 1:
+                action_idx = int(np.argmax(p_arr))
+                alpha = self._get_empirical_accuracy(canon_k)
+                p_soft = np.full(3, (1.0 - alpha) / 2.0)
+                p_soft[action_idx] = alpha
+                p_arr = p_soft
+            canon_probs[canon_k] = p_arr
+
+        primary_canonical = self.ALIAS_MAP.get(primary_key.upper(), primary_key)
+        p_primary = canon_probs.get(primary_canonical)
+        if p_primary is None:
+            p_primary = np.array([0.0, 1.0, 0.0])
+
+        primary_conviction = float(np.max(p_primary))
+        primary_idx = int(np.argmax(p_primary))
+        primary_dir = self.idx_to_dir[primary_idx]
+
+        is_vetoed = False
+        vetoed_by = None
+        veto_reason = None
+
+        if primary_conviction < primary_threshold or primary_idx == 1:
+            dominant_idx = 1
+            dominant_direction = "HOLD"
+            agreement_score = primary_conviction * 100.0
+        else:
+            dominant_idx = primary_idx
+            dominant_direction = primary_dir
+            agreement_score = primary_conviction * 100.0
+
+            # Consult active secondary models for asymmetric veto
+            # DL_FUSION is strictly quarantined and excluded from veto checks
+            veto_candidates = ["LGBM_AGENT", "DQN_AGENT"]
+            for sec_key in veto_candidates:
+                if sec_key in canon_probs:
+                    p_sec = canon_probs[sec_key]
+                    if primary_idx == 2:  # BUY signal
+                        if p_sec[0] >= veto_threshold:  # Opposing SELL conviction
+                            is_vetoed = True
+                            vetoed_by = sec_key
+                            veto_reason = (
+                                f"Vetoed by {sec_key}: Bearish conviction "
+                                f"({p_sec[0]:.2f} >= {veto_threshold:.2f})"
+                            )
+                            dominant_idx = 1
+                            dominant_direction = "HOLD"
+                            break
+                    elif primary_idx == 0 and veto_short:  # SELL signal
+                        if p_sec[2] >= veto_threshold:  # Opposing BUY conviction
+                            is_vetoed = True
+                            vetoed_by = sec_key
+                            veto_reason = (
+                                f"Vetoed by {sec_key}: Counter-trend bullish conviction "
+                                f"({p_sec[2]:.2f} >= {veto_threshold:.2f})"
+                            )
+                            dominant_idx = 1
+                            dominant_direction = "HOLD"
+                            break
+
+        model_intelligence = {}
+        for m_name, p in canon_probs.items():
+            if m_name == primary_canonical:
+                role = "PRIMARY_ALPHA_DRIVER"
+            elif m_name == "DL_FUSION":
+                role = "QUARANTINED"
+            else:
+                role = "SECONDARY_VETO"
+            model_intelligence[m_name] = {
+                "role": role,
+                "confidence": float(np.max(p)),
+                "direction": self.idx_to_dir[int(np.argmax(p))],
+                "is_dominant": int(np.argmax(p)) == dominant_idx,
+            }
+
+        pressures = {
+            0: float(p_primary[0]),
+            1: float(p_primary[1]),
+            2: float(p_primary[2]),
+        }
+
+        coherence = "Lead Driver"
+        disagreement_severity = "HIGH" if is_vetoed else "LOW"
+        interpretation = f"Lead Driver: {primary_canonical} ({primary_dir})"
+        if is_vetoed:
+            interpretation += f" | [VETOED by {vetoed_by}]"
+
+        return {
+            "agreement_score": agreement_score,
+            "bearish_weight": pressures[0],
+            "neutral_weight": pressures[1],
+            "bullish_weight": pressures[2],
+            "dominant_direction": dominant_direction,
+            "dominant_idx": dominant_idx,
+            "primary_driver": primary_canonical,
+            "primary_conviction": primary_conviction,
+            "is_vetoed": is_vetoed,
+            "vetoed_by": vetoed_by,
+            "veto_reason": veto_reason,
+            "model_intelligence": model_intelligence,
+            "consensus_interpretation": interpretation,
+            "ensemble_coherence": coherence,
+            "disagreement_severity": disagreement_severity,
+            "directional_entropy": 0.0,
+            "vote_distribution": {
+                "BUY": 1 if dominant_direction == "BUY" else 0,
+                "SELL": 1 if dominant_direction == "SELL" else 0,
+                "HOLD": 1 if dominant_direction == "HOLD" else 0,
+            },
+        }

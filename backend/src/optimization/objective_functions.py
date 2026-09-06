@@ -61,6 +61,47 @@ def calculate_max_drawdown(returns):
     return np.min(drawdown)
 
 
+def calculate_calmar_ratio(returns, max_drawdown=None, sim_years=None):
+    """
+    Calculate annualized Calmar ratio (Annualized Return / |Max Drawdown|).
+
+    Strict sign preservation:
+    - If annualized return is negative, Calmar is strictly negative.
+    - No abs() is applied to the numerator or the final result.
+    - If max drawdown is zero (< 1e-7), returns 0.0.
+
+    Parameters:
+    -----------
+    returns : np.ndarray or list
+        Array of period/trade returns.
+    max_drawdown : float, optional
+        Maximum drawdown (decimal or percentage). If None, computed from returns.
+    sim_years : float, optional
+        Simulation period length in years. If None, derived from len(returns)/252.
+    """
+    if len(returns) == 0:
+        return 0.0
+
+    if sim_years is None or sim_years <= 0:
+        sim_years = max(1.0 / 252.0, len(returns) / 252.0)
+
+    ann_return = float(np.sum(returns) / sim_years)
+
+    if max_drawdown is None:
+        max_dd = abs(float(calculate_max_drawdown(np.array(returns))))
+    else:
+        max_dd = abs(float(max_drawdown))
+        # Handle percentage format (> 1.0) when returns are decimal (<= 1.0)
+        max_ret_abs = float(np.max(np.abs(returns))) if len(returns) > 0 else 1.0
+        if max_dd > 1.0 and max_ret_abs <= 1.0:
+            max_dd = max_dd / 100.0
+
+    if max_dd < 1e-7:
+        return 0.0
+
+    return float(ann_return / max_dd)
+
+
 def simulate_strategy_returns(y_true, y_pred_probs, true_returns, threshold=0.6):
     """
     Simulate trading returns based on model predictions.

@@ -29,6 +29,7 @@ from src.execution.live_inference import add_upgraded_features, load_config
 from src.models.neural.fusion_network import build_fusion_model
 from src.models.rl.dqn_agent import DQNAgent
 from src.optimization.objective_functions import (
+    calculate_calmar_ratio,
     calculate_max_drawdown,
     calculate_profit_factor,
     calculate_sharpe_ratio,
@@ -385,9 +386,8 @@ def compute_strategy_metrics(results_list: list, sim_years: float = 2.33) -> dic
     sharpe = float(calculate_sharpe_ratio(returns))
     max_dd = float(calculate_max_drawdown(returns) * 100)
 
-    # Calmar Ratio: Annualized Return / |Max Drawdown|
-    ann_ret = float(np.sum(returns) / sim_years)
-    calmar = float(abs(ann_ret / (abs(max_dd) / 100.0))) if abs(max_dd) > 0 else 0.0
+    # Calmar Ratio: Annualized Return / |Max Drawdown| (Strict sign preservation)
+    calmar = float(calculate_calmar_ratio(returns, max_drawdown=max_dd, sim_years=sim_years))
 
     # 1,000 Trial Monte Carlo Bootstrap
     pfs = []
@@ -444,7 +444,7 @@ def evaluate_ablation(
         chunk_df = hist_df[hist_df["date"].isin(chunk_dates)]
 
         # Determine weights based on mode
-        if mode == "pure_xgb":
+        if mode in ["pure_xgb", "asymmetric_veto", "asymmetric_veto_bidirectional"]:
             weights = {"XGB_AGENT": 1.0, "LGBM_AGENT": 0.0}
         elif mode == "pure_lgbm":
             weights = {"XGB_AGENT": 0.0, "LGBM_AGENT": 1.0}
@@ -542,6 +542,30 @@ def evaluate_ablation(
                     results.append(
                         {"pnl_ret": vol_size * short_ret, "correct": short_ret > 0}
                     )
+            elif mode in ["asymmetric_veto", "asymmetric_veto_bidirectional"]:
+                veto_short = (mode == "asymmetric_veto_bidirectional")
+                base_probs = {
+                    "XGB_AGENT": p_xgb,
+                    "LGBM_AGENT": p_lgb,
+                    "DQN_AGENT": row["p_dqn"],
+                }
+                cons = consensus_engine.compute_asymmetric_veto(
+                    base_probs,
+                    primary_key="XGB_AGENT",
+                    primary_threshold=thresh_prob,
+                    veto_threshold=0.65,
+                    veto_short=veto_short,
+                )
+                if not cons["is_vetoed"] and cons["agreement_score"] >= threshold:
+                    direction = cons["dominant_direction"]
+                    if direction == "BUY" and long_allowed:
+                        results.append(
+                            {"pnl_ret": vol_size * long_ret, "correct": long_ret > 0}
+                        )
+                    elif direction == "SELL":
+                        results.append(
+                            {"pnl_ret": vol_size * short_ret, "correct": short_ret > 0}
+                        )
             else:
                 base_probs = {"XGB_AGENT": p_xgb_g, "LGBM_AGENT": p_lgb_g}
                 cons = consensus_engine.compute_agreement(base_probs, weights)
@@ -575,6 +599,8 @@ def main():
             "pure_dqn",
             "static_consensus",
             "dynamic_consensus",
+            "asymmetric_veto",
+            "asymmetric_veto_bidirectional",
             "xgb_zero",
             "lgbm_zero",
         ],
@@ -626,6 +652,8 @@ def main():
             ("Pre-trained DQN Agent", "pure_dqn"),
             ("Static 50/50 Ensemble", "static_consensus"),
             ("Tightened Dynamic Consensus", "dynamic_consensus"),
+            ("Asymmetric Veto (XGB + Veto)", "asymmetric_veto"),
+            ("Asymmetric Veto (Bidirectional)", "asymmetric_veto_bidirectional"),
         ]
 
         print("\n" + "=" * 115)
@@ -655,6 +683,8 @@ def main():
             "pure_dqn": "Pre-trained DQN Agent",
             "static_consensus": "Static Equal 50/50 Ensemble",
             "dynamic_consensus": "Multi-Model Dynamic Performance Consensus",
+            "asymmetric_veto": "Asymmetric Veto (XGB + Secondary Veto)",
+            "asymmetric_veto_bidirectional": "Asymmetric Veto (Bidirectional)",
         }
         name = labels.get(ablation_mode, ablation_mode)
         print(f"\nEvaluating Configuration: {name} (Threshold: {args.threshold:.1f}%)\n")

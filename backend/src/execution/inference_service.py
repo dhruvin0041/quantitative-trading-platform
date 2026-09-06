@@ -176,21 +176,22 @@ class InferenceService:
         if np.max(dqn_p) < 0.60:
             dqn_p = np.array([0.0, 1.0, 0.0])
 
-        # 4. Meta-Ensemble & Consensus
+        # 4. Asymmetric Veto Consensus Architecture
+        # Primary Driver: XGB_AGENT (Alpha generator when conviction >= 0.60)
+        # Secondary Veto: LGBM_AGENT, DQN_AGENT (Asymmetric risk gate)
+        # DL_FUSION: QUARANTINED (0.0 weight, disabled from signal generation)
         base_probs = {
             "LSTM": dl_preds_raw,
             "XGBoost": xgb_preds_raw,
             "LightGBM": lgbm_preds_raw,
             "DQN": dqn_p,
         }
-        extracted_weights = {
-            k: v.get("weight", 0.25) for k, v in model_weights_raw.items()
-        }
-        # Completely disable DL Fusion from live consensus until retrained with symmetric labels
-        extracted_weights["DL_FUSION"] = 0.0
-        extracted_weights["LSTM"] = 0.0
-        agreement_data = self.consensus_engine.compute_agreement(
-            base_probs, extracted_weights
+        agreement_data = self.consensus_engine.compute_asymmetric_veto(
+            base_probs,
+            primary_key="XGB_AGENT",
+            primary_threshold=0.60,
+            veto_threshold=0.65,
+            veto_short=True,
         )
 
         final_prob_raw = agreement_data["agreement_score"] / 100.0
@@ -270,6 +271,9 @@ class InferenceService:
         if consensus_result["consensus_status"] == "VETOED":
             final_signal = "VETOED"
             signal_note = consensus_result.get("veto_reason", "Vetoed by Governance")
+        elif agreement_data.get("is_vetoed"):
+            final_signal = "HOLD"
+            signal_note = agreement_data.get("veto_reason", "Vetoed by secondary model risk gate")
         elif quality_metrics["grade"] == "NO_TRADE":
             final_signal = "HOLD"
             signal_note = f"Suppressed: Low Signal Quality ({quality_metrics['score']})"
@@ -360,18 +364,26 @@ class InferenceService:
             "model_weights": model_weights_raw,
             "models": {
                 "DL_FUSION": {
+                    "role": "QUARANTINED",
+                    "status": "QUARANTINED",
                     "signal": signals_map[int(np.argmax(dl_preds_raw))],
                     "probability": float(np.max(dl_preds_raw)),
                 },
                 "XGB_AGENT": {
+                    "role": "PRIMARY_ALPHA_DRIVER",
+                    "status": "ACTIVE",
                     "signal": signals_map[int(np.argmax(xgb_preds_raw))],
                     "probability": float(np.max(xgb_preds_raw)),
                 },
                 "LGBM_AGENT": {
+                    "role": "SECONDARY_VETO",
+                    "status": "ACTIVE",
                     "signal": signals_map[int(np.argmax(lgbm_preds_raw))],
                     "probability": float(np.max(lgbm_preds_raw)),
                 },
                 "DQN_AGENT": {
+                    "role": "SECONDARY_VETO",
+                    "status": "ACTIVE",
                     "signal": signals_map[int(np.argmax(dqn_p))],
                     "probability": float(np.max(dqn_p)),
                 },

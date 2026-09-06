@@ -78,31 +78,79 @@ class AssetProfileEngine:
         return context
 
 
+from enum import Enum
+
+
+class ModelRole(str, Enum):
+    PRIMARY_ALPHA_DRIVER = "PRIMARY_ALPHA_DRIVER"
+    SECONDARY_VETO = "SECONDARY_VETO"
+    FORECAST_ORACLE = "FORECAST_ORACLE"
+    QUARANTINED = "QUARANTINED"
+
+
+MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
+    "XGB_AGENT": {
+        "role": ModelRole.PRIMARY_ALPHA_DRIVER,
+        "status": "ACTIVE",
+        "description": "Primary alpha trade generator for equity universe.",
+        "conviction_threshold": 0.60,
+    },
+    "LGBM_AGENT": {
+        "role": ModelRole.SECONDARY_VETO,
+        "status": "ACTIVE",
+        "description": "Asymmetric downside/counter-trend risk veto filter.",
+        "veto_threshold": 0.65,
+    },
+    "DQN_AGENT": {
+        "role": ModelRole.SECONDARY_VETO,
+        "status": "ACTIVE",
+        "description": "Sequential policy veto filter for execution safety.",
+        "veto_threshold": 0.65,
+    },
+    "DL_FUSION": {
+        "role": ModelRole.QUARANTINED,
+        "status": "QUARANTINED",
+        "description": "Quarantined pending retraining with symmetric labels.",
+        "conviction_threshold": 0.0,
+    },
+    "TFT_AGENT": {
+        "role": ModelRole.FORECAST_ORACLE,
+        "status": "ACTIVE",
+        "description": "Quantile volatility & price trajectory projections.",
+    },
+}
+
+
 class AdaptiveWeightingEngine:
     """
     Phase 4: Dynamically rebalances model influence based on regime and accuracy.
+    Formalizes the institutional hierarchy:
+    - XGB_AGENT is the PRIMARY_ALPHA_DRIVER.
+    - LGBM_AGENT and DQN_AGENT act strictly as SECONDARY_VETO filters.
+    - DL_FUSION is QUARANTINED (weight 0.0).
     """
 
     def calculate_weights(
         self, regime: str, asset_class: str
     ) -> Dict[str, Dict[str, Any]]:
-        # Institutional Defaults: DL_FUSION disabled (0.0) pending symmetric retraining
-        base_weights = {"DL_FUSION": 0.0, "XGB_AGENT": 0.60, "LGBM_AGENT": 0.40, "DQN_AGENT": 0.0}
+        # Formalized Model Hierarchy: Lead Driver (XGB_AGENT) with Asymmetric Secondary Vetoes
+        base_weights = {
+            "DL_FUSION": 0.0,
+            "XGB_AGENT": 1.0,
+            "LGBM_AGENT": 0.0,
+            "DQN_AGENT": 0.0,
+        }
 
-        # Adjust for regime
-        if "TREND" in regime:
-            base_weights["XGB_AGENT"] = 0.70
-            base_weights["LGBM_AGENT"] = 0.30
-            reason = "XGBoost prioritized for trend persistence."
-        elif regime == "RANGE":
-            base_weights["XGB_AGENT"] = 0.50
-            base_weights["LGBM_AGENT"] = 0.50
-            reason = "Balanced tree consensus for mean reversion efficiency."
-        else:
-            reason = "Standard balanced weights for neutral regime."
+        reason = "Primary alpha driver (XGBoost) with asymmetric veto gates."
 
         return {
-            k: {"weight": v, "reason": reason, "recent_accuracy": 0.65}
+            k: {
+                "weight": v,
+                "role": str(MODEL_REGISTRY.get(k, {}).get("role", ModelRole.SECONDARY_VETO)),
+                "status": MODEL_REGISTRY.get(k, {}).get("status", "ACTIVE"),
+                "reason": reason,
+                "recent_accuracy": 0.65 if k == "XGB_AGENT" else 0.50,
+            }
             for k, v in base_weights.items()
         }
 
