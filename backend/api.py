@@ -247,7 +247,7 @@ async def metrics():
 async def health_check():
     return {
         "status": "HEALTHY",
-        "models_ready": model_manager.lstm_model is not None,
+        "models_ready": model_manager.xgb_model is not None,
         "timestamp": datetime.now().isoformat(),
     }
 

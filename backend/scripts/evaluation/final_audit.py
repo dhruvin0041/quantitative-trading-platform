@@ -419,6 +419,9 @@ def evaluate_ablation(
     mode: str,
     threshold: float = 60.0,
     use_risk_overlays: bool = True,
+    slippage_bps: float = 5.0,
+    fee_bps: float = 1.0,
+    apply_friction: bool = True,
 ) -> dict:
     """
     Evaluates a specific model configuration or consensus weighting across the walk-forward history.
@@ -427,9 +430,16 @@ def evaluate_ablation(
     - 2.5 * ATR Daily Ratcheting Trailing Stop
     - Macro Regime Filter (SMA_200 & SPY SMA_50)
     - Tightened Consensus Sharpe Gating (Trailing 90-day PF >= 1.25, Sharpe > 0)
+    - Parameterized Execution Friction:
+      * Slippage: slippage_bps per side (entry & exit)
+      * Commission / Exchange Fees: fee_bps per side (entry & exit)
     """
     consensus_engine = WeightedConsensusEngine()
     results = []
+
+    # Round-trip friction drag in decimal
+    # e.g., 5.0 bps slippage/side (10 bps RT) + 1.0 bps fee/side (2 bps RT) = 12.0 bps = 0.0012
+    round_trip_friction = (2.0 * (slippage_bps + fee_bps) / 10000.0) if apply_friction else 0.0
 
     # Calculate time span in years for Calmar calculation
     sim_days = (hist_df["date"].max() - hist_df["date"].min()).days
@@ -457,10 +467,6 @@ def evaluate_ablation(
             weights = {"XGB_AGENT": 0.50, "LGBM_AGENT": 0.50}
         elif mode == "dynamic_consensus":
             # Priority 1: Tightened consensus alpha hurdles & Sharpe gating
-            # Minimum admission hurdle: Trailing 90-day PF >= 1.25 AND Trailing Sharpe > 0
-            # Scale weight strictly by: w_m = max(0.0, Sharpe_m - 1.0)
-            # If no secondary model exceeds the hurdle, allocate 100% weight to XGBoost.
-            # DL Fusion is completely disabled from live signal generation (w_dl = 0.0).
             recent_lgbm = [
                 t
                 for t in model_trades["LGBM_AGENT"]
@@ -499,8 +505,12 @@ def evaluate_ablation(
             d = row["date"]
             vol_size = row["vol_size"] if use_risk_overlays else 1.0
             long_allowed = row["long_allowed"] if use_risk_overlays else True
-            long_ret = row["long_ret"] if use_risk_overlays else row["raw_ret"]
-            short_ret = row["short_ret"] if use_risk_overlays else -row["raw_ret"]
+            raw_long_ret = row["long_ret"] if use_risk_overlays else row["raw_ret"]
+            raw_short_ret = row["short_ret"] if use_risk_overlays else -row["raw_ret"]
+
+            # Deduct execution friction from gross trade returns
+            net_long_ret = raw_long_ret - round_trip_friction
+            net_short_ret = raw_short_ret - round_trip_friction
 
             p_xgb = row["p_xgb"]
             p_lgb = row["p_lgbm"]
@@ -517,16 +527,16 @@ def evaluate_ablation(
                     model_trades[m_key].append(
                         {
                             "date": d,
-                            "pnl_ret": vol_size * long_ret,
-                            "correct": long_ret > 0,
+                            "pnl_ret": vol_size * net_long_ret,
+                            "correct": net_long_ret > 0,
                         }
                     )
                 elif a == 0:
                     model_trades[m_key].append(
                         {
                             "date": d,
-                            "pnl_ret": vol_size * short_ret,
-                            "correct": short_ret > 0,
+                            "pnl_ret": vol_size * net_short_ret,
+                            "correct": net_short_ret > 0,
                         }
                     )
 
@@ -536,11 +546,11 @@ def evaluate_ablation(
                 a = np.argmax(p_g)
                 if a == 2 and long_allowed:
                     results.append(
-                        {"pnl_ret": vol_size * long_ret, "correct": long_ret > 0}
+                        {"pnl_ret": vol_size * net_long_ret, "correct": net_long_ret > 0}
                     )
                 elif a == 0:
                     results.append(
-                        {"pnl_ret": vol_size * short_ret, "correct": short_ret > 0}
+                        {"pnl_ret": vol_size * net_short_ret, "correct": net_short_ret > 0}
                     )
             elif mode in ["asymmetric_veto", "asymmetric_veto_bidirectional"]:
                 veto_short = (mode == "asymmetric_veto_bidirectional")
@@ -560,11 +570,11 @@ def evaluate_ablation(
                     direction = cons["dominant_direction"]
                     if direction == "BUY" and long_allowed:
                         results.append(
-                            {"pnl_ret": vol_size * long_ret, "correct": long_ret > 0}
+                            {"pnl_ret": vol_size * net_long_ret, "correct": net_long_ret > 0}
                         )
                     elif direction == "SELL":
                         results.append(
-                            {"pnl_ret": vol_size * short_ret, "correct": short_ret > 0}
+                            {"pnl_ret": vol_size * net_short_ret, "correct": net_short_ret > 0}
                         )
             else:
                 base_probs = {"XGB_AGENT": p_xgb_g, "LGBM_AGENT": p_lgb_g}
@@ -575,11 +585,11 @@ def evaluate_ablation(
                 if score >= threshold:
                     if direction == "BUY" and long_allowed:
                         results.append(
-                            {"pnl_ret": vol_size * long_ret, "correct": long_ret > 0}
+                            {"pnl_ret": vol_size * net_long_ret, "correct": net_long_ret > 0}
                         )
                     elif direction == "SELL":
                         results.append(
-                            {"pnl_ret": vol_size * short_ret, "correct": short_ret > 0}
+                            {"pnl_ret": vol_size * net_short_ret, "correct": net_short_ret > 0}
                         )
 
     return compute_strategy_metrics(results, sim_years=sim_years)
@@ -618,6 +628,23 @@ def main():
         action="store_true",
         help="Disable ATR volatility sizing and trailing stops (for raw benchmarking)",
     )
+    parser.add_argument(
+        "--slippage-bps",
+        type=float,
+        default=5.0,
+        help="Slippage per side in basis points (default: 5.0 bps = 10 bps round-trip)",
+    )
+    parser.add_argument(
+        "--fee-bps",
+        type=float,
+        default=1.0,
+        help="Commission / exchange fees per side in basis points (default: 1.0 bps = 2 bps round-trip)",
+    )
+    parser.add_argument(
+        "--no-friction",
+        action="store_true",
+        help="Disable transaction friction (for raw gross benchmarking)",
+    )
     args = parser.parse_args()
 
     # Map legacy aliases
@@ -630,6 +657,15 @@ def main():
     print("\n" + "=" * 95)
     print("=== QUANTITATIVE STABILITY AUDIT (WALK-FORWARD MULTI-MODEL ENSEMBLE) ===")
     print("=" * 95)
+
+    apply_friction = not args.no_friction
+    if apply_friction:
+        rt_slip = args.slippage_bps * 2.0
+        rt_fee = args.fee_bps * 2.0
+        tot_bps = rt_slip + rt_fee
+        print(f"Execution Friction: ENABLED ({rt_slip:.1f} bps Round-Trip Slippage + {rt_fee:.1f} bps Fees = {tot_bps:.1f} bps / trade)")
+    else:
+        print("Execution Friction: DISABLED (Gross Return Benchmarking)")
 
     # Check for pre-computed history cache or generate from live market data
     cache_path = BACKEND_DIR / "artifacts" / "risk_managed_walkforward.pkl"
@@ -656,9 +692,15 @@ def main():
             ("Asymmetric Veto (Bidirectional)", "asymmetric_veto_bidirectional"),
         ]
 
+        wr_hdr = "Net WR" if apply_friction else "Win Rate"
+        pf_hdr = "Net PF" if apply_friction else "PF"
+        sh_hdr = "Net Sharpe" if apply_friction else "Sharpe"
+        dd_hdr = "Net MaxDD" if apply_friction else "MaxDD"
+        cal_hdr = "Net Calmar" if apply_friction else "Calmar"
+
         print("\n" + "=" * 115)
         print(
-            f"{'Strategy / Ablation':<32} | {'Signals':<7} | {'Win Rate':<9} | {'PF':<5} | {'Sharpe':<6} | {'MaxDD':<7} | {'Calmar':<6} | {'95% CI PF':<13} | {'P(PF>1.2)':<9}"
+            f"{'Strategy / Ablation':<32} | {'Signals':<7} | {wr_hdr:<9} | {pf_hdr:<5} | {sh_hdr:<10} | {dd_hdr:<10} | {cal_hdr:<10} | {'95% CI PF':<13} | {'P(PF>1.2)':<9}"
         )
         print("-" * 115)
 
@@ -668,10 +710,13 @@ def main():
                 m_key,
                 threshold=args.threshold,
                 use_risk_overlays=use_risk_overlays,
+                slippage_bps=args.slippage_bps,
+                fee_bps=args.fee_bps,
+                apply_friction=apply_friction,
             )
             ci_str = f"[{m['ci_lower']:.2f}, {m['ci_upper']:.2f}]"
             print(
-                f"{label:<32} | {m['signals']:<7d} | {m['win_rate']:<8.1f}% | {m['profit_factor']:<5.2f} | {m['sharpe']:<6.2f} | {m['max_dd']:<6.1f}% | {m['calmar']:<6.2f} | {ci_str:<13} | {m['prob_pf_12']:<8.1f}%"
+                f"{label:<32} | {m['signals']:<7d} | {m['win_rate']:<8.1f}% | {m['profit_factor']:<5.2f} | {m['sharpe']:<10.2f} | {m['max_dd']:<9.1f}% | {m['calmar']:<10.2f} | {ci_str:<13} | {m['prob_pf_12']:<8.1f}%"
             )
         print("=" * 115 + "\n")
 
@@ -687,21 +732,25 @@ def main():
             "asymmetric_veto_bidirectional": "Asymmetric Veto (Bidirectional)",
         }
         name = labels.get(ablation_mode, ablation_mode)
+        prefix = "Net " if apply_friction else ""
         print(f"\nEvaluating Configuration: {name} (Threshold: {args.threshold:.1f}%)\n")
         m = evaluate_ablation(
             hist_df,
             ablation_mode,
             threshold=args.threshold,
             use_risk_overlays=use_risk_overlays,
+            slippage_bps=args.slippage_bps,
+            fee_bps=args.fee_bps,
+            apply_friction=apply_friction,
         )
 
         print("AUDIT RESULTS:")
         print(f"Total Signals: {m['signals']}")
-        print(f"Win Rate:      {m['win_rate']:.1f}%")
-        print(f"Profit Factor: {m['profit_factor']:.2f}")
-        print(f"Sharpe Ratio:  {m['sharpe']:.2f}")
-        print(f"Max Drawdown:  {m['max_dd']:.1f}%")
-        print(f"Calmar Ratio:  {m['calmar']:.2f}")
+        print(f"{prefix}Win Rate:      {m['win_rate']:.1f}%")
+        print(f"{prefix}Profit Factor: {m['profit_factor']:.2f}")
+        print(f"{prefix}Sharpe Ratio:  {m['sharpe']:.2f}")
+        print(f"{prefix}Max Drawdown:  {m['max_dd']:.1f}%")
+        print(f"{prefix}Calmar Ratio:  {m['calmar']:.2f}")
         print("\n--- PHASE 6: MONTE CARLO BOOTSTRAP (1000 trials) ---")
         print(f"PF 95% Confidence Interval: [{m['ci_lower']:.2f}, {m['ci_upper']:.2f}]")
         print(f"Probability PF > 1.2:       {m['prob_pf_12']:.1f}%\n")

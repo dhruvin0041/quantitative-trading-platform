@@ -217,6 +217,9 @@ class PredictResponse(BaseModel):
     # Governance
     governance: Optional[Dict[str, Any]] = None
 
+    # Macro Regime Circuit Breakers
+    macro_regime_filter: Optional[Dict[str, Any]] = None
+
     qualitative_citations: Optional[List[Dict[str, Any]]] = None
 
 

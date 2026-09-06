@@ -167,6 +167,14 @@ class ModelManager:
             }
 
     def _load_lstm(self):
+        from src.execution.asset_intelligence import MODEL_REGISTRY, ModelRole
+
+        dl_entry = MODEL_REGISTRY.get("DL_FUSION", {})
+        if dl_entry.get("role") == ModelRole.QUARANTINED or dl_entry.get("status") == "QUARANTINED":
+            logger.info("DL_FUSION is permanently QUARANTINED in MODEL_REGISTRY; bypassing neural weight loading and tensor allocations.")
+            self.lstm_model = None
+            return
+
         try:
             from src.execution.live_inference import apply_optimized_model_params
 

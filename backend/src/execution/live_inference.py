@@ -354,33 +354,37 @@ def fetch_live_data(ticker, config):
     df = add_upgraded_features(df, spy_df, vix_df)
     # Institutional Fix: Remove duplicate columns before reindexing to prevent crash
     df = df.loc[:, ~df.columns.duplicated()].copy()
-
-    peer_ticker = get_sector_peer(ticker)
-    peer_df = fetch_historical_data(
-        peer_ticker,
-        start_date="2022-01-01",
-        end_date=(pd.Timestamp.now() + pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
-    )
-    peer_df = add_upgraded_features(peer_df, spy_df, vix_df)
-
     df_filtered = df.reindex(columns=FEATURE_COLUMNS).dropna()
-    peer_filtered = peer_df.reindex(columns=FEATURE_COLUMNS).dropna()
 
-    common_idx = df_filtered.index.intersection(peer_filtered.index)
+    from src.execution.asset_intelligence import MODEL_REGISTRY, ModelRole
 
-    # Institutional Fallback: If assets are from different markets (e.g. India vs US),
-    # the intersection will be empty. We fall back to using the primary ticker's
-    # own timeline as the context if the overlap is insufficient (< 30 days).
-    if len(common_idx) < 30:
-        logger.warning(
-            f"Insufficient market overlap between {ticker} and peer {peer_ticker}. Falling back to self-context."
+    is_dl_quarantined = (
+        MODEL_REGISTRY.get("DL_FUSION", {}).get("role") == ModelRole.QUARANTINED
+        or MODEL_REGISTRY.get("DL_FUSION", {}).get("status") == "QUARANTINED"
+    )
+
+    if not is_dl_quarantined:
+        peer_ticker = get_sector_peer(ticker)
+        peer_df = fetch_historical_data(
+            peer_ticker,
+            start_date="2022-01-01",
+            end_date=(pd.Timestamp.now() + pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
         )
-        df_filtered = df.reindex(columns=FEATURE_COLUMNS).dropna()
-        peer_filtered = df_filtered.copy()
-        common_idx = df_filtered.index
+        peer_df = add_upgraded_features(peer_df, spy_df, vix_df)
+        peer_filtered = peer_df.reindex(columns=FEATURE_COLUMNS).dropna()
+
+        common_idx = df_filtered.index.intersection(peer_filtered.index)
+        if len(common_idx) < 30:
+            logger.warning(
+                f"Insufficient market overlap between {ticker} and peer {peer_ticker}. Falling back to self-context."
+            )
+            peer_filtered = df_filtered.copy()
+        else:
+            df_filtered = df_filtered.loc[common_idx]
+            peer_filtered = peer_filtered.loc[common_idx]
     else:
-        df_filtered = df_filtered.loc[common_idx]
-        peer_filtered = peer_filtered.loc[common_idx]
+        # DL_FUSION is permanently QUARANTINED: eliminate peer network calls and sequence transforms
+        peer_filtered = None
 
     if df_filtered.empty:
         raise ValueError(
@@ -391,7 +395,7 @@ def fetch_live_data(ticker, config):
     time_steps = config["data"]["time_steps"]
 
     recent_data = df_filtered.tail(time_steps).values
-    peer_recent = peer_filtered.tail(time_steps).values
+    peer_recent = peer_filtered.tail(time_steps).values if peer_filtered is not None else None
 
     if len(recent_data) < time_steps:
         # Pad with first available row if not enough history
@@ -399,17 +403,20 @@ def fetch_live_data(ticker, config):
         if len(recent_data) > 0:
             padding = np.tile(recent_data[0], (padding_len, 1))
             recent_data = np.vstack([padding, recent_data])
-            peer_recent = np.vstack([padding, peer_recent])
+            if peer_recent is not None:
+                peer_recent = np.vstack([padding, peer_recent])
         else:
             raise ValueError(
                 f"Not enough data points for {ticker} to generate a prediction."
             )
 
     scaled_data = scaler.transform(recent_data)
-    peer_scaled = scaler.transform(peer_recent)
-
     ts_sequence = scaled_data.reshape(1, time_steps, -1)
-    peer_sequence = peer_scaled.reshape(1, time_steps, -1)
+    if peer_recent is not None:
+        peer_scaled = scaler.transform(peer_recent)
+        peer_sequence = peer_scaled.reshape(1, time_steps, -1)
+    else:
+        peer_sequence = ts_sequence
     tabular_row = scaled_data[-1].reshape(1, -1)
 
     price_series = df["Close"].squeeze()

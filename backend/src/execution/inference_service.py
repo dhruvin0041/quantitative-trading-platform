@@ -3,6 +3,7 @@ import logging
 from datetime import datetime
 
 import numpy as np
+import pandas as pd
 
 from src.data_ingestion.nlp_processor import NewsTokenizer
 from src.execution.asset_intelligence import (
@@ -128,18 +129,31 @@ class InferenceService:
         )
 
         # 3. Model Predictions
-        dl_outputs = self.mm.lstm_model.predict(
-            x=[
-                ts_sequence,
-                ts_sequence,
-                ts_sequence,
-                ts_sequence,
-                ts_sequence,
-                peer_sequence,
-            ],
-            verbose=0,
+        from src.execution.asset_intelligence import MODEL_REGISTRY, ModelRole
+
+        is_dl_quarantined = (
+            MODEL_REGISTRY.get("DL_FUSION", {}).get("role") == ModelRole.QUARANTINED
+            or MODEL_REGISTRY.get("DL_FUSION", {}).get("status") == "QUARANTINED"
+            or self.mm.lstm_model is None
         )
-        dl_preds_raw = dl_outputs[2][0]
+
+        if not is_dl_quarantined and self.mm.lstm_model is not None:
+            dl_outputs = self.mm.lstm_model.predict(
+                x=[
+                    ts_sequence,
+                    ts_sequence,
+                    ts_sequence,
+                    ts_sequence,
+                    ts_sequence,
+                    peer_sequence if peer_sequence is not None else ts_sequence,
+                ],
+                verbose=0,
+            )
+            dl_preds_raw = dl_outputs[2][0]
+        else:
+            # DL_FUSION is permanently QUARANTINED: bypass tensor execution and assign neutral output
+            dl_preds_raw = np.array([0.0, 1.0, 0.0])
+
         xgb_preds_raw = self.mm.xgb_model.predict_proba(tabular_row)[0]
         lgbm_preds_raw = (
             self.mm.lgbm_model.predict_proba(tabular_row)[0]
@@ -149,7 +163,8 @@ class InferenceService:
 
         # Apply isotonic calibration (fitted on validation data during training)
         if self.model_calibrator is not None:
-            dl_preds_raw = self.model_calibrator.calibrate("DL_FUSION", dl_preds_raw)
+            if not is_dl_quarantined:
+                dl_preds_raw = self.model_calibrator.calibrate("DL_FUSION", dl_preds_raw)
             xgb_preds_raw = self.model_calibrator.calibrate("XGB", xgb_preds_raw)
             lgbm_preds_raw = self.model_calibrator.calibrate("LGBM", lgbm_preds_raw)
             logger.debug("Applied isotonic calibration to model predictions")
@@ -246,6 +261,29 @@ class InferenceService:
         signals_map = {0: "SELL", 1: "HOLD", 2: "BUY"}
         pre_signal = signals_map[final_signal_idx]
 
+        # Macro Regime Filter: 200-day SMA on underlying & 50-day SMA on SPY
+        try:
+            close_s = ticker_df_risk["Close"].dropna()
+            spy_close_s = spy_df_risk["Close"].dropna()
+            curr_close = float(close_s.iloc[-1])
+            curr_spy_close = float(spy_close_s.iloc[-1])
+            sma_200 = float(close_s.rolling(window=200, min_periods=20).mean().iloc[-1])
+            spy_sma_50 = float(spy_close_s.rolling(window=50, min_periods=10).mean().iloc[-1])
+            long_allowed = bool((curr_close >= sma_200) and (curr_spy_close >= spy_sma_50))
+        except Exception as e:
+            logger.warning(f"Error computing macro regime filter: {e}")
+            long_allowed = True
+            sma_200, spy_sma_50 = current_price, 1.0
+            curr_close, curr_spy_close = current_price, 1.0
+
+        macro_filter_data = {
+            "underlying_close": round(curr_close, 2),
+            "underlying_sma_200": round(sma_200, 2),
+            "spy_close": round(curr_spy_close, 2),
+            "spy_sma_50": round(spy_sma_50, 2),
+            "long_allowed": long_allowed,
+        }
+
         # 7. Quality & Confidence Decomposition
         confidence_data = self.confidence_engine.decompose_confidence(
             regime=regime_detailed,
@@ -274,6 +312,12 @@ class InferenceService:
         elif agreement_data.get("is_vetoed"):
             final_signal = "HOLD"
             signal_note = agreement_data.get("veto_reason", "Vetoed by secondary model risk gate")
+        elif pre_signal == "BUY" and not long_allowed:
+            final_signal = "HOLD"
+            signal_note = (
+                f"Suppressed by Macro Regime Filter: Close ({curr_close:.2f} < SMA200 {sma_200:.2f}) "
+                f"or SPY ({curr_spy_close:.2f} < SMA50 {spy_sma_50:.2f})"
+            )
         elif quality_metrics["grade"] == "NO_TRADE":
             final_signal = "HOLD"
             signal_note = f"Suppressed: Low Signal Quality ({quality_metrics['score']})"
@@ -408,6 +452,7 @@ class InferenceService:
             if signal_df is not None
             else {},
             "technical_snapshot": tech_snapshot,
+            "macro_regime_filter": macro_filter_data,
             "qualitative_alpha": qual_reason,
             "sentiment_score": sentiment_score,
             "xai": compute_shap_explanation(self.mm.xgb_model, tabular_row, signal_idx=final_signal_idx),
@@ -441,8 +486,9 @@ class InferenceService:
 
         system_signals = None
         if self.journal:
-            system_signals = self.journal.get_all_signals()
-            system_signals = system_signals[system_signals["asset"] == ticker].head(30)
+            raw_sigs = self.journal.get_all_signals()
+            if raw_sigs is not None and isinstance(raw_sigs, pd.DataFrame) and not raw_sigs.empty and "asset" in raw_sigs.columns:
+                system_signals = raw_sigs[raw_sigs["asset"] == ticker].head(30)
 
         reporting_data = self.report_gen.package_chart_data(
             ticker,
