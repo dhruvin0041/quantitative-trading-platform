@@ -109,6 +109,15 @@ def apply_optimized_model_params(config, ticker=None):
 def load_config(ticker=None):
     with open("configs/model_params.yaml", "r") as file:
         config = yaml.safe_load(file)
+    if os.path.exists("configs/kept_features.json"):
+        try:
+            with open("configs/kept_features.json", "r") as f:
+                kf = json.load(f)
+                config["data"]["num_features"] = len(kf)
+        except Exception:
+            config["data"]["num_features"] = len(FEATURE_COLUMNS)
+    else:
+        config["data"]["num_features"] = len(FEATURE_COLUMNS)
     return apply_optimized_model_params(config, ticker=ticker)
 
 
@@ -270,9 +279,11 @@ def add_upgraded_features(df, spy_df, vix_df):
     vix_close = get_series(vix_df, "Close")
 
     # Market Context Features - CROSS MARKET ALIGNMENT
-    df["SPY_Return"] = spy_close.pct_change().reindex(df.index).ffill().fillna(0)
-    df["VIX_Level"] = vix_close.reindex(df.index).ffill().fillna(0)
-    df["VIX_Change"] = vix_close.pct_change().reindex(df.index).ffill().fillna(0)
+    # Forward fill valid historical market prints and trim start date to valid overlap window
+    df["SPY_Return"] = spy_close.pct_change().reindex(df.index).ffill()
+    df["VIX_Level"] = vix_close.reindex(df.index).ffill()
+    df["VIX_Change"] = vix_close.pct_change().reindex(df.index).ffill()
+    df = df.dropna(subset=["VIX_Level", "SPY_Return"])
     df["Relative_Strength"] = df["Return"] - df["SPY_Return"]
 
     # ==========================================

@@ -1,7 +1,7 @@
 # configs/model_params.yaml
 data:
   time_steps: 60
-  num_features: 12
+  num_features: 27
   max_seq_length: 128
   batch_size: 32
 

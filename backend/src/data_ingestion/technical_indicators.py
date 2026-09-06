@@ -62,11 +62,8 @@ def add_advanced_features(
     else:
         vix_df = vix_data
 
-    # Assign using index alignment and fill gaps
-    df["VIX"] = ensure_series(vix_df["Close"])
-    df["VIX"] = (
-        df["VIX"].ffill().fillna(0)
-    )  # Fill gaps and edge cases without lookahead bias
+    # Assign using index alignment and forward-fill valid market prints
+    df["VIX"] = ensure_series(vix_df["Close"]).reindex(df.index).ffill()
 
     # --- ALTERNATIVE DATA: Institutional Volume Metrics ---
     # VWAP (Volume Weighted Average Price) - The institutional baseline
@@ -95,8 +92,10 @@ def add_advanced_features(
     else:
         tnx_df = tnx_data
 
-    df["Treasury_10Y"] = ensure_series(tnx_df["Close"])
-    df["Treasury_10Y"] = df["Treasury_10Y"].ffill().fillna(0)
+    df["Treasury_10Y"] = ensure_series(tnx_df["Close"]).reindex(df.index).ffill()
+    # Synchronize data alignment by trimming dataset to earliest valid macro overlap window
+    # Eliminates artificial 0.0 step-jumps (e.g., 0.0% -> 4.0%+) that corrupt rolling Z-scores
+    df = df.dropna(subset=["Treasury_10Y", "VIX"])
 
     # --- 6. Log Returns (Better for Neural Networks than raw prices) ---
     df["Log_Ret"] = np.log(df["Close"] / df["Close"].shift(1))
@@ -367,8 +366,8 @@ def add_advanced_features(
         df["Rel_Perf_SPY_20"] = 0.0
 
     # Ensure no trailing NaNs from forward-fillable metrics
-    df["VIX"] = df["VIX"].ffill().fillna(0)
-    df["Treasury_10Y"] = df["Treasury_10Y"].ffill().fillna(0)
+    df["VIX"] = df["VIX"].ffill()
+    df["Treasury_10Y"] = df["Treasury_10Y"].ffill()
 
     # ==========================================
     # FINAL NUMERICAL STABILITY GUARD

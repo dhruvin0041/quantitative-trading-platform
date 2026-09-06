@@ -65,7 +65,8 @@ def run_backtest():
     # Models
     try:
         lstm_model = build_fusion_model(config)
-        lstm_model.load_weights("artifacts/latest_fusion_weights.weights.h5", skip_mismatch=True)
+        lstm_model.load_weights("artifacts/latest_fusion_weights.weights.h5", skip_mismatch=False)
+        assert len(lstm_model.weights) > 0, "No weights found in LSTM model"
 
         xgb_model = xgb.XGBClassifier()
         xgb_model.load_model("artifacts/xgb_ensemble.json")

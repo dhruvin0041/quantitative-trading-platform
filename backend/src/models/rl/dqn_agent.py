@@ -131,6 +131,27 @@ class DQNAgent:
 
         return torch.argmax(act_values[0]).item()
 
+    def predict_q_values(self, state):
+        """Extract continuous Q-values Q(s, a) for all actions."""
+        self.policy_net.eval()
+        with torch.no_grad():
+            state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+            act_values = self.policy_net(state_tensor)
+        self.policy_net.train()
+        return act_values[0].cpu().numpy()
+
+    def predict_proba(self, state, temperature=1.5):
+        """
+        Convert continuous Q-values into a well-calibrated soft probability distribution
+        via temperature-scaled softmax:
+        P(a) = exp(Q(s, a) / tau) / sum_j exp(Q(s, j) / tau)
+        """
+        q_vals = self.predict_q_values(state)
+        tau = max(float(temperature), 1e-4)
+        scaled = q_vals / tau
+        exp_vals = np.exp(scaled - np.max(scaled))
+        return exp_vals / np.sum(exp_vals)
+
     def replay(self):
         if len(self.memory.buffer) < self.batch_size:
             return

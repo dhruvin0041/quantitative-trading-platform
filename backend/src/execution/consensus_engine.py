@@ -1,3 +1,4 @@
+import json
 from typing import Any, Dict
 
 import numpy as np
@@ -87,6 +88,23 @@ class WeightedConsensusEngine:
         self.idx_to_dir = {0: "SELL", 1: "HOLD", 2: "BUY"}
         self.intelligence = ConsensusIntelligenceEngine()
 
+    def _get_empirical_accuracy(self, model_key: str) -> float:
+        """Anchor smoothing probability strictly to empirical out-of-sample validation accuracy."""
+        try:
+            with open("configs/model_accuracies.json", "r") as f:
+                accs = json.load(f)
+            if "DQN" in model_key.upper():
+                return float(accs.get("dqn_accuracy", 0.50))
+            elif "XGB" in model_key.upper():
+                return float(accs.get("xgb_accuracy", 0.55))
+            elif "LGBM" in model_key.upper():
+                return float(accs.get("lgbm_accuracy", 0.53))
+            elif "DL" in model_key.upper():
+                return float(accs.get("dl_accuracy", 0.50))
+        except Exception:
+            pass
+        return 0.50
+
     def compute_agreement(
         self, base_probs: Dict[str, np.ndarray], model_weights: Dict[str, float]
     ) -> Dict:
@@ -98,11 +116,13 @@ class WeightedConsensusEngine:
             w = model_weights.get(canonical_key, model_weights.get(model_name, 0.25))
             p_arr = np.array(p, dtype=float)
 
-            # Soften discrete one-hot vectors (e.g., DQN action) so discrete agents do not overwhelm calibrated models
+            # Soften discrete one-hot vectors by anchoring primary probability alpha
+            # strictly to empirical out-of-sample directional accuracy (e.g., 50% for DQN)
             if np.max(p_arr) >= 0.99 and np.count_nonzero(p_arr) == 1:
                 action_idx = int(np.argmax(p_arr))
-                p_soft = np.full(3, 0.20)
-                p_soft[action_idx] = 0.60
+                alpha = self._get_empirical_accuracy(canonical_key)
+                p_soft = np.full(3, (1.0 - alpha) / 2.0)
+                p_soft[action_idx] = alpha
                 p_arr = p_soft
 
             for k in range(3):

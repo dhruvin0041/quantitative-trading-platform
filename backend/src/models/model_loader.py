@@ -169,7 +169,11 @@ class ModelManager:
     def _load_lstm(self):
         try:
             self.lstm_model = build_fusion_model(self.config)
-            self.lstm_model.load_weights("artifacts/latest_fusion_weights.weights.h5", skip_mismatch=True)
+            self.lstm_model.load_weights(
+                "artifacts/latest_fusion_weights.weights.h5", skip_mismatch=False
+            )
+            assert len(self.lstm_model.weights) > 0, "No weights found in LSTM model"
+            logger.info("Successfully loaded 100% of LSTM fusion weights (skip_mismatch=False)")
         except Exception as e:
             logger.warning(f"Could not load LSTM weights: {e}")
 

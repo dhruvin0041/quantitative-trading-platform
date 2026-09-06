@@ -154,20 +154,17 @@ class InferenceService:
             lgbm_preds_raw = self.model_calibrator.calibrate("LGBM", lgbm_preds_raw)
             logger.debug("Applied isotonic calibration to model predictions")
 
-        # DQN Prediction
+        # DQN Probabilistic Prediction (Soft Temperature-Scaled Calibration)
         dqn_state = np.hstack(
             (tabular_row, dl_preds_raw.reshape(1, -1), xgb_preds_raw.reshape(1, -1))
         )
-        dqn_action = self.mm.dqn_agent.act(dqn_state[0])
-        dqn_p = (
-            np.array([1.0, 0.0, 0.0])
-            if dqn_action == 0
-            else (
-                np.array([0.0, 0.0, 1.0])
-                if dqn_action == 2
-                else np.array([0.0, 1.0, 0.0])
-            )
-        )
+        if hasattr(self.mm.dqn_agent, "predict_proba"):
+            dqn_p = self.mm.dqn_agent.predict_proba(dqn_state[0], temperature=1.5)
+        else:
+            dqn_action = self.mm.dqn_agent.act(dqn_state[0])
+            acc = self.mm.accuracies.get("dqn_accuracy", 0.50)
+            dqn_p = np.full(3, (1.0 - acc) / 2.0)
+            dqn_p[dqn_action] = acc
 
         # 4. Meta-Ensemble & Consensus
         base_probs = {
