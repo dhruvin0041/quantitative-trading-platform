@@ -66,6 +66,7 @@ backend/artifacts/*.joblib
 backend/artifacts/*.pth
 backend/artifacts/*.h5
 backend/artifacts/*.json
+backend/artifacts/*.pkl
 backend/data/*.db
 backend/mlflow.db
 backend/mlruns/

@@ -2,6 +2,8 @@ import json
 import os
 import unittest
 
+os.environ["MLFLOW_ALLOW_FILE_STORE"] = "true"
+
 import numpy as np
 import pandas as pd
 
@@ -49,11 +51,21 @@ class TestInstitutionalExcellence(unittest.TestCase):
 
     def test_model_calibrator(self):
         calibrator = ModelCalibrator()
-        y_true = np.array([0, 1, 0, 1, 0, 1])
-        y_prob = np.array([0.1, 0.9, 0.2, 0.8, 0.3, 0.7])
+        y_true = np.array([0, 1, 2, 0, 1, 2])
+        y_prob = np.array(
+            [
+                [0.8, 0.1, 0.1],
+                [0.1, 0.8, 0.1],
+                [0.1, 0.1, 0.8],
+                [0.7, 0.2, 0.1],
+                [0.2, 0.7, 0.1],
+                [0.1, 0.2, 0.7],
+            ]
+        )
         calibrator.fit("test_model", y_true, y_prob)
-        calibrated = calibrator.calibrate("test_model", np.array([0.15, 0.85]))
-        self.assertTrue(calibrated[0] < calibrated[1])
+        calibrated = calibrator.calibrate("test_model", np.array([0.1, 0.1, 0.8]))
+        self.assertEqual(len(calibrated), 3)
+        self.assertTrue(calibrated[2] > calibrated[0])
 
     def test_factor_model(self):
         fm = FactorModel(n_factors=2)

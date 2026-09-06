@@ -86,18 +86,18 @@ class AdaptiveWeightingEngine:
     def calculate_weights(
         self, regime: str, asset_class: str
     ) -> Dict[str, Dict[str, Any]]:
-        # Institutional Defaults
-        base_weights = {"DL_FUSION": 0.30, "XGB_AGENT": 0.25, "LGBM_AGENT": 0.25, "DQN_AGENT": 0.20}
+        # Institutional Defaults: DL_FUSION disabled (0.0) pending symmetric retraining
+        base_weights = {"DL_FUSION": 0.0, "XGB_AGENT": 0.60, "LGBM_AGENT": 0.40, "DQN_AGENT": 0.0}
 
         # Adjust for regime
         if "TREND" in regime:
-            base_weights["DL_FUSION"] += 0.10
-            base_weights["DQN_AGENT"] -= 0.10
-            reason = "LSTM prioritized for trend persistence."
+            base_weights["XGB_AGENT"] = 0.70
+            base_weights["LGBM_AGENT"] = 0.30
+            reason = "XGBoost prioritized for trend persistence."
         elif regime == "RANGE":
-            base_weights["DQN_AGENT"] += 0.10
-            base_weights["DL_FUSION"] -= 0.10
-            reason = "DQN prioritized for mean reversion efficiency."
+            base_weights["XGB_AGENT"] = 0.50
+            base_weights["LGBM_AGENT"] = 0.50
+            reason = "Balanced tree consensus for mean reversion efficiency."
         else:
             reason = "Standard balanced weights for neutral regime."
 

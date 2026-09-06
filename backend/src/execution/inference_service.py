@@ -166,6 +166,16 @@ class InferenceService:
             dqn_p = np.full(3, (1.0 - acc) / 2.0)
             dqn_p[dqn_action] = acc
 
+        # Enforce conviction threshold: if max(P_sell, P_hold, P_buy) < 0.60, model outputs HOLD ([0, 1, 0])
+        if np.max(dl_preds_raw) < 0.60:
+            dl_preds_raw = np.array([0.0, 1.0, 0.0])
+        if np.max(xgb_preds_raw) < 0.60:
+            xgb_preds_raw = np.array([0.0, 1.0, 0.0])
+        if np.max(lgbm_preds_raw) < 0.60:
+            lgbm_preds_raw = np.array([0.0, 1.0, 0.0])
+        if np.max(dqn_p) < 0.60:
+            dqn_p = np.array([0.0, 1.0, 0.0])
+
         # 4. Meta-Ensemble & Consensus
         base_probs = {
             "LSTM": dl_preds_raw,
@@ -176,6 +186,9 @@ class InferenceService:
         extracted_weights = {
             k: v.get("weight", 0.25) for k, v in model_weights_raw.items()
         }
+        # Completely disable DL Fusion from live consensus until retrained with symmetric labels
+        extracted_weights["DL_FUSION"] = 0.0
+        extracted_weights["LSTM"] = 0.0
         agreement_data = self.consensus_engine.compute_agreement(
             base_probs, extracted_weights
         )
