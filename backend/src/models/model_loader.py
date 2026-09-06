@@ -168,6 +168,9 @@ class ModelManager:
 
     def _load_lstm(self):
         try:
+            from src.execution.live_inference import apply_optimized_model_params
+
+            self.config = apply_optimized_model_params(self.config)
             self.lstm_model = build_fusion_model(self.config)
             self.lstm_model.load_weights(
                 "artifacts/latest_fusion_weights.weights.h5", skip_mismatch=False
