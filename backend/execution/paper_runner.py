@@ -44,10 +44,16 @@ class DailyPaperRunner:
         benchmark_tickers: Optional[List[str]] = None,
         target_risk_pct: float = 0.01,
         initial_capital: float = 100000.0,
+        use_veto: bool = False,
+        max_concurrent_positions: int = 2,
+        max_portfolio_allocation: float = 0.80,
     ):
         self.universe = universe or ["AAPL", "MSFT", "NVDA"]
         self.benchmark_tickers = benchmark_tickers or ["SPY", "^VIX", "^TNX"]
         self.target_risk_pct = target_risk_pct
+        self.use_veto = use_veto
+        self.max_concurrent_positions = max_concurrent_positions
+        self.max_portfolio_allocation = max_portfolio_allocation
 
         if state_db_path is None:
             artifacts_dir = BACKEND_DIR / "artifacts"
@@ -222,11 +228,12 @@ class DailyPaperRunner:
         return filters
 
     def update_existing_positions(
-        self, data: Dict[str, pd.DataFrame]
+        self, data: Dict[str, pd.DataFrame], dry_run: bool = False
     ) -> List[Dict[str, Any]]:
         """
         Inspects active positions, ratchets volatility-adaptive trailing stops,
         and triggers stop exits if the stop price is breached.
+        In dry-run mode, logs intended stop orders without broker submission or DB mutation.
         """
         closed_orders: List[Dict[str, Any]] = []
         positions = self.broker.get_positions()
@@ -256,9 +263,10 @@ class DailyPaperRunner:
                 stop_price = (
                     peak_trough - stop_dist if side == "LONG" else peak_trough + stop_dist
                 )
-                self._save_trailing_stop_state(
-                    sym, side, pos["avg_entry_price"], peak_trough, stop_price, m, atr
-                )
+                if not dry_run:
+                    self._save_trailing_stop_state(
+                        sym, side, pos["avg_entry_price"], peak_trough, stop_price, m, atr
+                    )
             else:
                 peak_trough = stop_state["peak_trough_price"]
                 stop_price = stop_state["stop_price"]
@@ -271,28 +279,48 @@ class DailyPaperRunner:
                     # Check stop breach
                     if curr_low <= stop_price:
                         fill_p = min(curr_close, stop_price)
-                        logger.info(
-                            "Trailing Stop Hit for %s LONG at %.2f (Stop: %.2f)",
-                            sym,
-                            fill_p,
-                            stop_price,
-                        )
-                        order = self.broker.submit_order(
-                            symbol=sym,
-                            qty=qty,
-                            side="SELL",
-                            current_price=fill_p,
-                        )
-                        closed_orders.append(order)
-                        self._delete_trailing_stop_state(sym)
-                        # Record trade into expectancy filter
-                        pnl_ret = (fill_p - pos["avg_entry_price"]) / pos["avg_entry_price"]
-                        self.expectancy_filter.record_trade(sym, datetime.now(), pnl_ret)
+                        if dry_run:
+                            logger.info(
+                                "[DRY-RUN] Trailing Stop Hit for %s LONG at %.2f (Stop: %.2f)",
+                                sym,
+                                fill_p,
+                                stop_price,
+                            )
+                            closed_orders.append(
+                                {
+                                    "order_id": f"DRY_STOP_{sym}",
+                                    "symbol": sym,
+                                    "qty": qty,
+                                    "side": "SELL",
+                                    "fill_price": fill_p,
+                                    "status": "DRY_RUN",
+                                    "dry_run": True,
+                                }
+                            )
+                        else:
+                            logger.info(
+                                "Trailing Stop Hit for %s LONG at %.2f (Stop: %.2f)",
+                                sym,
+                                fill_p,
+                                stop_price,
+                            )
+                            order = self.broker.submit_order(
+                                symbol=sym,
+                                qty=qty,
+                                side="SELL",
+                                current_price=fill_p,
+                            )
+                            closed_orders.append(order)
+                            self._delete_trailing_stop_state(sym)
+                            # Record trade into expectancy filter (realized exit date)
+                            pnl_ret = (fill_p - pos["avg_entry_price"]) / pos["avg_entry_price"]
+                            self.expectancy_filter.record_trade(sym, datetime.now(), pnl_ret)
                         continue
                     else:
-                        self._save_trailing_stop_state(
-                            sym, side, pos["avg_entry_price"], peak_trough, stop_price, m, atr
-                        )
+                        if not dry_run:
+                            self._save_trailing_stop_state(
+                                sym, side, pos["avg_entry_price"], peak_trough, stop_price, m, atr
+                            )
 
                 elif side == "SHORT":
                     if curr_low < peak_trough:
@@ -301,28 +329,48 @@ class DailyPaperRunner:
                     # Check stop breach
                     if curr_high >= stop_price:
                         fill_p = max(curr_close, stop_price)
-                        logger.info(
-                            "Trailing Stop Hit for %s SHORT at %.2f (Stop: %.2f)",
-                            sym,
-                            fill_p,
-                            stop_price,
-                        )
-                        order = self.broker.submit_order(
-                            symbol=sym,
-                            qty=qty,
-                            side="BUY",
-                            current_price=fill_p,
-                        )
-                        closed_orders.append(order)
-                        self._delete_trailing_stop_state(sym)
-                        # Record trade into expectancy filter
-                        pnl_ret = (pos["avg_entry_price"] - fill_p) / pos["avg_entry_price"]
-                        self.expectancy_filter.record_trade(sym, datetime.now(), pnl_ret)
+                        if dry_run:
+                            logger.info(
+                                "[DRY-RUN] Trailing Stop Hit for %s SHORT at %.2f (Stop: %.2f)",
+                                sym,
+                                fill_p,
+                                stop_price,
+                            )
+                            closed_orders.append(
+                                {
+                                    "order_id": f"DRY_STOP_{sym}",
+                                    "symbol": sym,
+                                    "qty": qty,
+                                    "side": "BUY",
+                                    "fill_price": fill_p,
+                                    "status": "DRY_RUN",
+                                    "dry_run": True,
+                                }
+                            )
+                        else:
+                            logger.info(
+                                "Trailing Stop Hit for %s SHORT at %.2f (Stop: %.2f)",
+                                sym,
+                                fill_p,
+                                stop_price,
+                            )
+                            order = self.broker.submit_order(
+                                symbol=sym,
+                                qty=qty,
+                                side="BUY",
+                                current_price=fill_p,
+                            )
+                            closed_orders.append(order)
+                            self._delete_trailing_stop_state(sym)
+                            # Record trade into expectancy filter (realized exit date)
+                            pnl_ret = (pos["avg_entry_price"] - fill_p) / pos["avg_entry_price"]
+                            self.expectancy_filter.record_trade(sym, datetime.now(), pnl_ret)
                         continue
                     else:
-                        self._save_trailing_stop_state(
-                            sym, side, pos["avg_entry_price"], peak_trough, stop_price, m, atr
-                        )
+                        if not dry_run:
+                            self._save_trailing_stop_state(
+                                sym, side, pos["avg_entry_price"], peak_trough, stop_price, m, atr
+                            )
 
         return closed_orders
 
@@ -361,18 +409,33 @@ class DailyPaperRunner:
                     "DQN_AGENT": np.array([0.25, 0.50, 0.25]),
                 }
 
-            cons = self.consensus_engine.compute_asymmetric_veto(
-                base_probs,
-                primary_key="XGB_AGENT",
-                primary_threshold=0.60,
-                veto_threshold=0.65,
-                veto_short=True,
-            )
+            if not self.use_veto:
+                # Production Flagship Default: Pure XGBoost Alpha Driver
+                p_xgb = base_probs.get("XGB_AGENT", np.array([0.0, 1.0, 0.0]))
+                thresh_prob = 0.60
+                a = int(np.argmax(p_xgb))
+                max_p = float(np.max(p_xgb))
+                agreement_score = max_p * 100.0
+                is_vetoed = False
+                veto_reason = None
 
-            raw_direction = cons["dominant_direction"]
-            agreement_score = cons["agreement_score"]
-            is_vetoed = cons["is_vetoed"]
-            veto_reason = cons.get("veto_reason")
+                if max_p >= thresh_prob:
+                    raw_direction = "BUY" if a == 2 else ("SELL" if a == 0 else "HOLD")
+                else:
+                    raw_direction = "HOLD"
+            else:
+                # Optional Secondary Asymmetric Veto Consensus
+                cons = self.consensus_engine.compute_asymmetric_veto(
+                    base_probs,
+                    primary_key="XGB_AGENT",
+                    primary_threshold=0.60,
+                    veto_threshold=0.65,
+                    veto_short=True,
+                )
+                raw_direction = cons["dominant_direction"]
+                agreement_score = cons["agreement_score"]
+                is_vetoed = cons["is_vetoed"]
+                veto_reason = cons.get("veto_reason")
 
             final_signal = "HOLD"
             signal_note = "Neutral"
@@ -401,7 +464,8 @@ class DailyPaperRunner:
                         signal_note = exp_reason
                     else:
                         final_signal = raw_direction
-                        signal_note = f"Approved by Asymmetric Consensus ({agreement_score:.1f}%)"
+                        mode_label = "Asymmetric Consensus" if self.use_veto else "Pure XGBoost Alpha"
+                        signal_note = f"Approved by {mode_label} ({agreement_score:.1f}%)"
 
             signals[sym] = {
                 "signal": final_signal,
@@ -419,76 +483,179 @@ class DailyPaperRunner:
         self,
         signals: Dict[str, Dict[str, Any]],
         data: Dict[str, pd.DataFrame],
+        dry_run: bool = False,
     ) -> List[Dict[str, Any]]:
         """
-        Computes ATR volatility position sizing and submits new orders to MockPaperBroker.
+        Computes ATR volatility position sizing with institutional multi-signal capital allocation
+        and submits new orders to MockPaperBroker (or simulates in dry-run mode).
+
+        Institutional Multi-Signal Allocation Mandates:
+        1. Max Concurrent Positions: Enforces maximum simultaneous positions (default 2).
+        2. Proportional Cash Allocation: Available deployable cash is split equally among candidate signals.
+        3. Buying Power Safety: Verifies notional trade values do not breach portfolio buying power.
+        4. Dry-Run Isolation: In dry-run mode, logs all intended orders without executing or mutating database.
         """
         executed_orders: List[Dict[str, Any]] = []
         open_positions = {p["symbol"]: p for p in self.broker.get_positions()}
         balance = self.broker.get_account_balance()
         equity = balance["equity"]
+        cash = balance["cash"]
 
+        # 1. Identify actionable entry signals
+        candidate_signals = []
         for sym, sig_info in signals.items():
+            sig = sig_info["signal"]
+            if sig in ["BUY", "SELL"]:
+                existing_pos = open_positions.get(sym)
+                if existing_pos:
+                    # Same direction: avoid pyramiding
+                    if (sig == "BUY" and existing_pos["side"] == "LONG") or (
+                        sig == "SELL" and existing_pos["side"] == "SHORT"
+                    ):
+                        logger.info("Already holding %s position in %s; skipping new entry.", sig, sym)
+                        continue
+                    else:
+                        # Conflicting direction: close conflicting position first
+                        opp_side = "SELL" if existing_pos["side"] == "LONG" else "BUY"
+                        if dry_run:
+                            logger.info(
+                                "[DRY-RUN] CLOSING CONFLICTING POSITION: %s %d shares of %s",
+                                opp_side,
+                                existing_pos["qty"],
+                                sym,
+                            )
+                            executed_orders.append(
+                                {
+                                    "order_id": f"DRY_CLOSE_{sym}",
+                                    "symbol": sym,
+                                    "qty": existing_pos["qty"],
+                                    "side": opp_side,
+                                    "status": "DRY_RUN",
+                                    "dry_run": True,
+                                }
+                            )
+                        else:
+                            close_order = self.broker.submit_order(
+                                symbol=sym,
+                                qty=existing_pos["qty"],
+                                side=opp_side,
+                                current_price=sig_info["current_price"],
+                            )
+                            executed_orders.append(close_order)
+                            self._delete_trailing_stop_state(sym)
+                            del open_positions[sym]
+                candidate_signals.append((sym, sig_info))
+
+        if not candidate_signals:
+            return executed_orders
+
+        # 2. Enforce Maximum Concurrent Positions
+        active_positions_count = len(self.broker.get_positions() if not dry_run else open_positions)
+        available_slots = max(0, self.max_concurrent_positions - active_positions_count)
+
+        if available_slots <= 0:
+            logger.info(
+                "Max concurrent positions (%d) already reached. Skipping %d new signal(s).",
+                self.max_concurrent_positions,
+                len(candidate_signals),
+            )
+            return executed_orders
+
+        # Sort candidate signals by conviction (agreement_score) descending
+        candidate_signals.sort(
+            key=lambda item: item[1].get("agreement_score", 0.0), reverse=True
+        )
+
+        admitted_candidates = candidate_signals[:available_slots]
+        rejected_candidates = candidate_signals[available_slots:]
+        for sym, _ in rejected_candidates:
+            logger.info(
+                "Skipping signal for %s: concurrent position limit (%d) reached.",
+                sym,
+                self.max_concurrent_positions,
+            )
+
+        # 3. Proportional Cash Allocation
+        current_invested = sum(
+            p["qty"] * p["current_price"]
+            for p in (self.broker.get_positions() if not dry_run else open_positions.values())
+        )
+        max_portfolio_invested = equity * self.max_portfolio_allocation
+        available_capital_pool = max(0.0, min(cash, max_portfolio_invested - current_invested))
+
+        capital_per_candidate = (
+            available_capital_pool / len(admitted_candidates)
+            if admitted_candidates
+            else 0.0
+        )
+
+        for sym, sig_info in admitted_candidates:
             sig = sig_info["signal"]
             curr_p = sig_info["current_price"]
             atr = sig_info["atr"]
             ts_mult = sig_info["ts_mult"]
 
-            if sig not in ["BUY", "SELL"]:
-                continue
-
             # Position Sizing: Target Risk 1% via normalized ATR
             norm_atr = atr / (curr_p + 1e-9)
             vol_size = float(np.clip(self.target_risk_pct / (norm_atr + 1e-9), 0.1, 1.0))
-            allocated_capital = equity * vol_size
-            qty = max(1, int(allocated_capital / (curr_p + 1e-9)))
+            vol_capital = equity * vol_size
 
-            # If already holding this position, avoid pyramiding
-            existing_pos = open_positions.get(sym)
-            if existing_pos:
-                if (sig == "BUY" and existing_pos["side"] == "LONG") or (
-                    sig == "SELL" and existing_pos["side"] == "SHORT"
-                ):
-                    logger.info("Already holding %s position in %s; skipping new entry.", sig, sym)
-                    continue
-                else:
-                    # Close conflicting position first
-                    opp_side = "SELL" if existing_pos["side"] == "LONG" else "BUY"
-                    close_order = self.broker.submit_order(
-                        symbol=sym,
-                        qty=existing_pos["qty"],
-                        side=opp_side,
-                        current_price=curr_p,
-                    )
-                    executed_orders.append(close_order)
-                    self._delete_trailing_stop_state(sym)
+            # Constrain by equal cash split of available pool
+            allocated_capital = min(vol_capital, capital_per_candidate)
+            qty = int(allocated_capital / (curr_p + 1e-9))
+
+            # Cash buying power sanity check
+            if qty * curr_p > cash:
+                qty = int(cash / (curr_p + 1e-9))
+
+            if qty <= 0:
+                logger.warning("Insufficient cash to allocate shares for %s; skipping.", sym)
+                continue
 
             # Trailing stop parameters
             stop_dist = ts_mult * atr
             if sig == "BUY":
                 stop_loss = curr_p - stop_dist
                 take_profit = curr_p + 2.0 * stop_dist
-                order = self.broker.submit_order(
-                    symbol=sym,
-                    qty=qty,
-                    side="BUY",
-                    stop_loss=stop_loss,
-                    take_profit=take_profit,
-                    current_price=curr_p,
-                )
-                executed_orders.append(order)
-                if order["status"] == "FILLED":
-                    fill_p = order["fill_price"]
-                    self._save_trailing_stop_state(
-                        sym, "LONG", fill_p, fill_p, fill_p - stop_dist, ts_mult, atr
-                    )
-            elif sig == "SELL":
+            else:  # SELL
                 stop_loss = curr_p + stop_dist
                 take_profit = curr_p - 2.0 * stop_dist
+
+            if dry_run:
+                notional = qty * curr_p
+                pct_equity = (notional / equity) * 100.0 if equity > 0 else 0.0
+                logger.info(
+                    "[DRY-RUN] INTENDED ORDER: %s %s | Qty: %d | Price: $%.2f | Notional: $%.2f (%.1f%% equity) | StopLoss: $%.2f | TakeProfit: $%.2f | TsMult: %.1fx",
+                    sig,
+                    sym,
+                    qty,
+                    curr_p,
+                    notional,
+                    pct_equity,
+                    stop_loss,
+                    take_profit,
+                    ts_mult,
+                )
+                executed_orders.append(
+                    {
+                        "order_id": f"DRY_{sym}_{sig}",
+                        "symbol": sym,
+                        "qty": qty,
+                        "side": sig,
+                        "status": "DRY_RUN",
+                        "fill_price": curr_p,
+                        "stop_loss": stop_loss,
+                        "take_profit": take_profit,
+                        "ts_mult": ts_mult,
+                        "atr": atr,
+                        "dry_run": True,
+                    }
+                )
+            else:
                 order = self.broker.submit_order(
                     symbol=sym,
                     qty=qty,
-                    side="SELL",
+                    side=sig,
                     stop_loss=stop_loss,
                     take_profit=take_profit,
                     current_price=curr_p,
@@ -496,9 +663,14 @@ class DailyPaperRunner:
                 executed_orders.append(order)
                 if order["status"] == "FILLED":
                     fill_p = order["fill_price"]
-                    self._save_trailing_stop_state(
-                        sym, "SHORT", fill_p, fill_p, fill_p + stop_dist, ts_mult, atr
+                    side_label = "LONG" if sig == "BUY" else "SHORT"
+                    initial_stop = (
+                        fill_p - stop_dist if sig == "BUY" else fill_p + stop_dist
                     )
+                    self._save_trailing_stop_state(
+                        sym, side_label, fill_p, fill_p, initial_stop, ts_mult, atr
+                    )
+                    cash = max(0.0, cash - qty * fill_p)
 
         return executed_orders
 
@@ -506,12 +678,21 @@ class DailyPaperRunner:
         self,
         mock_data: Optional[Dict[str, pd.DataFrame]] = None,
         mock_predictions: Optional[Dict[str, Dict[str, np.ndarray]]] = None,
+        dry_run: bool = False,
     ) -> Dict[str, Any]:
         """
         Executes one complete institutional daily execution cycle.
+        If dry_run is True, simulates data, macro regime, signals, and order sizing
+        without broker order submission or SQLite database persistence.
         """
-        run_id = f"RUN_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        logger.info("Executing Daily Paper Cycle: %s", run_id)
+        run_id = f"{'DRY_RUN' if dry_run else 'RUN'}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        mode_desc = "Asymmetric Veto" if self.use_veto else "Pure XGBoost Flagship"
+        logger.info(
+            "Executing Daily Paper Cycle: %s [Mode: %s | Dry-Run: %s]",
+            run_id,
+            mode_desc,
+            dry_run,
+        )
 
         # 1. Fetch market data
         data = mock_data or self.fetch_market_data()
@@ -520,13 +701,13 @@ class DailyPaperRunner:
         macro_filters = self.evaluate_macro_filters(data)
 
         # 3. Update Existing Positions & Trailing Stops
-        closed_orders = self.update_existing_positions(data)
+        closed_orders = self.update_existing_positions(data, dry_run=dry_run)
 
         # 4. Generate & Filter Signals
         signals = self.generate_and_filter_signals(data, macro_filters, mock_predictions)
 
-        # 5. Position Sizing & Order Execution
-        new_orders = self.size_and_execute_orders(signals, data)
+        # 5. Position Sizing & Order Execution (with Multi-Signal Capital Allocation)
+        new_orders = self.size_and_execute_orders(signals, data, dry_run=dry_run)
 
         # 6. Build EOD Report & Persist
         balance = self.broker.get_account_balance()
@@ -536,6 +717,8 @@ class DailyPaperRunner:
             "run_id": run_id,
             "run_date": datetime.now().strftime("%Y-%m-%d"),
             "timestamp": datetime.now().isoformat(),
+            "execution_mode": mode_desc,
+            "dry_run": dry_run,
             "macro_filters": macro_filters,
             "signals": signals,
             "closed_orders": closed_orders,
@@ -544,7 +727,11 @@ class DailyPaperRunner:
             "positions": positions,
         }
 
-        self._persist_run_to_sqlite(summary)
+        if not dry_run:
+            self._persist_run_to_sqlite(summary)
+        else:
+            logger.info("[DRY-RUN] Cycle completed successfully. Zero SQLite mutations performed.")
+
         return summary
 
     def _persist_run_to_sqlite(self, summary: Dict[str, Any]) -> None:
@@ -657,8 +844,13 @@ class DailyPaperRunner:
 
     def print_eod_summary(self, summary: Dict[str, Any]) -> None:
         """Prints formatted institutional execution summary to console."""
+        dry_run = summary.get("dry_run", False)
+        title_prefix = "DRY-RUN" if dry_run else "END-OF-DAY"
+        mode_desc = summary.get("execution_mode", "Pure XGBoost Flagship")
+
         print("\n" + "=" * 95)
-        print(f"=== END-OF-DAY EXECUTION REPORT: {summary['run_id']} ({summary['run_date']}) ===")
+        print(f"=== {title_prefix} EXECUTION REPORT: {summary['run_id']} ({summary['run_date']}) ===")
+        print(f"=== Mode: {mode_desc} | Dry-Run: {dry_run} ===")
         print("=" * 95)
 
         bal = summary["balance"]
@@ -684,7 +876,8 @@ class DailyPaperRunner:
             )
 
         orders = summary["closed_orders"] + summary["new_orders"]
-        print(f"\nEXECUTED ORDERS ({len(orders)}):")
+        order_title = "INTENDED / SIMULATED ORDERS (DRY-RUN)" if dry_run else "EXECUTED ORDERS"
+        print(f"\n{order_title} ({len(orders)}):")
         if orders:
             print(f"{'Order ID':<16} | {'Symbol':<8} | {'Side':<6} | {'Qty':<6} | {'Fill Price':<12} | {'Status'}")
             print("-" * 70)
@@ -694,7 +887,7 @@ class DailyPaperRunner:
                     f"${o['fill_price']:<11.2f} | {o['status']}"
                 )
         else:
-            print("No orders executed in this cycle.")
+            print("No orders generated or executed in this cycle.")
 
         positions = summary["positions"]
         print(f"\nACTIVE POSITIONS ({len(positions)}):")
@@ -726,12 +919,42 @@ def main():
         default=100000.0,
         help="Initial capital for paper broker (default: 100000.0)",
     )
+    parser.add_argument(
+        "--use-veto",
+        action="store_true",
+        default=False,
+        help="Enable secondary asymmetric veto consensus (default: False, runs Pure XGBoost flagship)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Execute in dry-run mode (logs intended signals and orders without executing trades or mutating DB)",
+    )
+    parser.add_argument(
+        "--max-positions",
+        type=int,
+        default=2,
+        help="Maximum concurrent portfolio positions (default: 2)",
+    )
+    parser.add_argument(
+        "--max-allocation",
+        type=float,
+        default=0.80,
+        help="Maximum total portfolio allocation ratio (default: 0.80)",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
-    runner = DailyPaperRunner(state_db_path=args.db_path, initial_capital=args.capital)
-    summary = runner.run_daily_cycle()
+    runner = DailyPaperRunner(
+        state_db_path=args.db_path,
+        initial_capital=args.capital,
+        use_veto=args.use_veto,
+        max_concurrent_positions=args.max_positions,
+        max_portfolio_allocation=args.max_allocation,
+    )
+    summary = runner.run_daily_cycle(dry_run=args.dry_run)
     runner.print_eod_summary(summary)
 
 

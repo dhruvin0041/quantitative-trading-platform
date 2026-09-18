@@ -58,7 +58,9 @@ class InferenceService:
         paper_engine,
         perf_analyzer,
         signal_journal=None,
+        use_veto: bool = False,
     ):
+        self.use_veto = use_veto
         self.mm = model_manager
         self.gemini = gemini_analyzer
         self.physical = physical_edge
@@ -191,23 +193,34 @@ class InferenceService:
         if np.max(dqn_p) < 0.60:
             dqn_p = np.array([0.0, 1.0, 0.0])
 
-        # 4. Asymmetric Veto Consensus Architecture
-        # Primary Driver: XGB_AGENT (Alpha generator when conviction >= 0.60)
-        # Secondary Veto: LGBM_AGENT, DQN_AGENT (Asymmetric risk gate)
-        # DL_FUSION: QUARANTINED (0.0 weight, disabled from signal generation)
+        # 4. Consensus & Decision Architecture
+        # Flagship Default: Pure XGBoost as primary alpha generator
+        # Secondary Option: Asymmetric Veto Consensus (when use_veto=True)
         base_probs = {
             "LSTM": dl_preds_raw,
             "XGBoost": xgb_preds_raw,
             "LightGBM": lgbm_preds_raw,
             "DQN": dqn_p,
         }
-        agreement_data = self.consensus_engine.compute_asymmetric_veto(
-            base_probs,
-            primary_key="XGB_AGENT",
-            primary_threshold=0.60,
-            veto_threshold=0.65,
-            veto_short=True,
-        )
+
+        if not getattr(self, "use_veto", False):
+            # Production Flagship Default: Pure XGBoost Primary Alpha Driver (Secondary Veto Disabled)
+            agreement_data = self.consensus_engine.compute_asymmetric_veto(
+                base_probs,
+                primary_key="XGB_AGENT",
+                primary_threshold=0.60,
+                veto_threshold=1.01,  # Veto hurdle > 1.0 ensures secondary models cannot veto XGBoost
+                veto_short=False,
+            )
+        else:
+            # Secondary Asymmetric Veto Consensus Architecture Enabled
+            agreement_data = self.consensus_engine.compute_asymmetric_veto(
+                base_probs,
+                primary_key="XGB_AGENT",
+                primary_threshold=0.60,
+                veto_threshold=0.65,
+                veto_short=True,
+            )
 
         final_prob_raw = agreement_data["agreement_score"] / 100.0
         cal_results = self.calibration_engine.calibrate(
@@ -409,6 +422,7 @@ class InferenceService:
             "forecast_interpretation": forecast_data["forecast_interpretation"],
             "forecast_explanation": forecast_data["interpretation_explanation"],
             "consensus_intelligence": agreement_data["consensus_interpretation"],
+            "agreement_data": agreement_data,
             "market_regime": market_regime,
             "volatility_state": "HIGH"
             if vol_id == 2

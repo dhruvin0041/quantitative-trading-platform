@@ -88,7 +88,8 @@ class TestDailyPaperRunner(unittest.TestCase):
         self.assertTrue(filters["NVDA"]["short_allowed"])
 
     def test_asymmetric_veto_signal_filtering(self):
-        """Verify model predictions flow through Asymmetric Veto and macro filters."""
+        """Verify model predictions flow through Asymmetric Veto and macro filters when enabled."""
+        self.runner.use_veto = True
         spy_df = self._create_mock_df(450.0, 420.0, 455.0, 445.0, 4.0, 2.5)
         spy_df["SPY_SMA_50"] = 420.0
         aapl_df = self._create_mock_df(160.0, 140.0, 162.0, 158.0, 2.5, 3.0)
@@ -119,6 +120,30 @@ class TestDailyPaperRunner(unittest.TestCase):
 
         self.assertEqual(signals["NVDA"]["signal"], "HOLD")
         self.assertIn("Vetoed", signals["NVDA"]["signal_note"])
+
+    def test_pure_xgboost_default_mode(self):
+        """Verify default production mode (use_veto=False) executes XGBoost alpha without secondary veto."""
+        self.assertFalse(self.runner.use_veto)
+        spy_df = self._create_mock_df(450.0, 420.0, 455.0, 445.0, 4.0, 2.5)
+        spy_df["SPY_SMA_50"] = 420.0
+        nvda_df = self._create_mock_df(140.0, 130.0, 142.0, 138.0, 4.0, 4.0)
+
+        mock_data = {"SPY": spy_df, "NVDA": nvda_df}
+        macro_filters = self.runner.evaluate_macro_filters(mock_data)
+
+        # NVDA: XGB predicts strong BUY (P=0.75), DQN predicts strong SELL (P=0.70)
+        # In default mode, XGBoost is the unvetoed primary alpha driver
+        mock_preds = {
+            "NVDA": {
+                "XGB_AGENT": np.array([0.10, 0.15, 0.75]),
+                "LGBM_AGENT": np.array([0.30, 0.40, 0.30]),
+                "DQN_AGENT": np.array([0.70, 0.15, 0.15]),
+            },
+        }
+
+        signals = self.runner.generate_and_filter_signals(mock_data, macro_filters, mock_preds)
+        self.assertEqual(signals["NVDA"]["signal"], "BUY")
+        self.assertNotIn("Vetoed", signals["NVDA"]["signal_note"])
 
     def test_asset_expectancy_filter_suspends_underperforming_symbol(self):
         """Verify AssetExpectancyFilter suspends new entries when trailing PF < 1.15."""
@@ -239,6 +264,94 @@ class TestDailyPaperRunner(unittest.TestCase):
             row = cur.fetchone()
             self.assertIsNotNone(row)
             self.assertEqual(row[0], summary["run_id"])
+        finally:
+            conn.close()
+
+    def test_multi_signal_capital_allocation_concurrent_limit(self):
+        """Verify candidate BUY signals are capped by max_concurrent_positions and sorted by conviction."""
+        self.runner.universe = ["AAPL", "NVDA", "MSFT"]
+        self.runner.max_concurrent_positions = 2
+
+        aapl_df = self._create_mock_df(150.0, 140.0, 152.0, 148.0, 2.0, 2.5)
+        nvda_df = self._create_mock_df(120.0, 110.0, 122.0, 118.0, 2.0, 2.5)
+        msft_df = self._create_mock_df(400.0, 380.0, 405.0, 395.0, 4.0, 2.5)
+
+        mock_data = {"AAPL": aapl_df, "NVDA": nvda_df, "MSFT": msft_df}
+
+        signals = {
+            "AAPL": {"signal": "BUY", "current_price": 150.0, "atr": 2.0, "ts_mult": 2.5, "agreement_score": 85.0},
+            "NVDA": {"signal": "BUY", "current_price": 120.0, "atr": 2.0, "ts_mult": 2.5, "agreement_score": 70.0},
+            "MSFT": {"signal": "BUY", "current_price": 400.0, "atr": 4.0, "ts_mult": 2.5, "agreement_score": 60.0},
+        }
+
+        orders = self.runner.size_and_execute_orders(signals, mock_data)
+        # Max concurrent positions is 2, so only 2 highest conviction orders should be filled
+        self.assertEqual(len(orders), 2)
+        symbols = [o["symbol"] for o in orders]
+        self.assertIn("AAPL", symbols)  # 85.0 conviction
+        self.assertIn("NVDA", symbols)  # 70.0 conviction
+        self.assertNotIn("MSFT", symbols)  # 60.0 conviction (omitted due to slot cap)
+
+    def test_multi_signal_proportional_cash_split(self):
+        """Verify available capital is split proportionally among candidate signals without exceeding buying power."""
+        self.runner.universe = ["AAPL", "NVDA"]
+        self.runner.max_concurrent_positions = 2
+        self.runner.max_portfolio_allocation = 0.80
+
+        aapl_df = self._create_mock_df(100.0, 90.0, 102.0, 98.0, 0.5, 2.5)
+        nvda_df = self._create_mock_df(100.0, 90.0, 102.0, 98.0, 0.5, 2.5)
+        mock_data = {"AAPL": aapl_df, "NVDA": nvda_df}
+
+        # Available capital pool = 100,000 * 0.80 = 80,000.
+        # Two candidates -> capital_per_candidate = 40,000 each.
+        signals = {
+            "AAPL": {"signal": "BUY", "current_price": 100.0, "atr": 0.5, "ts_mult": 2.5, "agreement_score": 80.0},
+            "NVDA": {"signal": "BUY", "current_price": 100.0, "atr": 0.5, "ts_mult": 2.5, "agreement_score": 80.0},
+        }
+
+        orders = self.runner.size_and_execute_orders(signals, mock_data)
+        self.assertEqual(len(orders), 2)
+        total_invested = sum(o["qty"] * o["fill_price"] for o in orders)
+        self.assertLessEqual(total_invested, 80000.0 * 1.01)
+        for o in orders:
+            # Each candidate should receive at most roughly 40,000
+            notional = o["qty"] * o["fill_price"]
+            self.assertLessEqual(notional, 40000.0 * 1.01)
+
+    def test_dry_run_zero_mutations(self):
+        """Verify dry-run mode computes signals, sizes, and stops without broker execution or SQLite DB writes."""
+        spy_df = self._create_mock_df(450.0, 420.0, 455.0, 445.0, 4.0, 2.5)
+        spy_df["SPY_SMA_50"] = 420.0
+        aapl_df = self._create_mock_df(160.0, 140.0, 162.0, 158.0, 2.5, 3.0)
+        mock_data = {"SPY": spy_df, "AAPL": aapl_df}
+
+        mock_preds = {
+            "AAPL": {
+                "XGB_AGENT": np.array([0.05, 0.15, 0.80]),
+                "LGBM_AGENT": np.array([0.10, 0.20, 0.70]),
+                "DQN_AGENT": np.array([0.10, 0.20, 0.70]),
+            },
+        }
+
+        summary = self.runner.run_daily_cycle(mock_data, mock_preds, dry_run=True)
+
+        self.assertTrue(summary["dry_run"])
+        self.assertIn("DRY_RUN", summary["run_id"])
+        self.assertEqual(len(summary["new_orders"]), 1)
+        self.assertTrue(summary["new_orders"][0].get("dry_run"))
+
+        # Verify broker state has zero mutations
+        self.assertEqual(len(self.broker.get_positions()), 0)
+        self.assertEqual(self.broker.get_account_balance()["cash"], 100000.0)
+
+        # Verify SQLite state has zero rows written
+        self.assertIsNone(self.runner._get_trailing_stop_state("AAPL"))
+        conn = sqlite3.connect(self.db_path)
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT COUNT(*) FROM daily_execution_runs")
+            count = cur.fetchone()[0]
+            self.assertEqual(count, 0)
         finally:
             conn.close()
 

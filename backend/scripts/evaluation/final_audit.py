@@ -507,6 +507,9 @@ def evaluate_ablation(
     )
     results = []
 
+    # Sort hist_df strictly by date and ticker to enforce chronological causal order
+    hist_df = hist_df.sort_values(["date", "ticker"]).reset_index(drop=True)
+
     # Round-trip friction drag in decimal
     # e.g., 5.0 bps slippage/side (10 bps RT) + 1.0 bps fee/side (2 bps RT) = 12.0 bps = 0.0012
     round_trip_friction = (2.0 * (slippage_bps + fee_bps) / 10000.0) if apply_friction else 0.0
@@ -515,15 +518,30 @@ def evaluate_ablation(
     sim_days = (hist_df["date"].max() - hist_df["date"].min()).days
     sim_years = max(0.5, sim_days / 365.25)
 
-    dates = sorted(hist_df["date"].unique())
-    step_size = 20
+    dates_unique = sorted(hist_df["date"].unique())
+    date_to_idx = {d: i for i, d in enumerate(dates_unique)}
+
+    pending_exits = []
     model_trades = {"XGB_AGENT": [], "LGBM_AGENT": []}
+    results = []
 
-    for i in range(0, len(dates), step_size):
-        chunk_dates = dates[i : i + step_size]
-        chunk_df = hist_df[hist_df["date"].isin(chunk_dates)]
+    for d in dates_unique:
+        curr_ts = pd.Timestamp(d)
+        curr_idx = date_to_idx[d]
 
-        # Determine weights based on mode
+        # 1. Realize and close any pending trades whose exit_date <= curr_ts (Strict Causal Mandate)
+        still_pending = []
+        for exit_ts, tkr, pnl in pending_exits:
+            if exit_ts <= curr_ts:
+                if expectancy_filter is not None:
+                    expectancy_filter.record_trade(tkr, exit_ts, pnl)
+            else:
+                still_pending.append((exit_ts, tkr, pnl))
+        pending_exits = still_pending
+
+        day_df = hist_df[hist_df["date"] == d]
+
+        # 2. Determine consensus weights based on mode
         if mode in ["pure_xgb", "asymmetric_veto", "asymmetric_veto_bidirectional"]:
             weights = {"XGB_AGENT": 1.0, "LGBM_AGENT": 0.0}
         elif mode == "pure_lgbm":
@@ -536,11 +554,11 @@ def evaluate_ablation(
             # 50/50 Equal Consensus between regularized trees
             weights = {"XGB_AGENT": 0.50, "LGBM_AGENT": 0.50}
         elif mode == "dynamic_consensus":
-            # Priority 1: Tightened consensus alpha hurdles & Sharpe gating
+            # Priority 1: Tightened consensus alpha hurdles & Sharpe gating (Strictly Causal)
             recent_lgbm = [
                 t
                 for t in model_trades["LGBM_AGENT"]
-                if (chunk_dates[0] - t["date"]).days <= 90
+                if t["exit_date"] <= curr_ts and (curr_ts - t["exit_date"]).days <= 90
             ]
             if len(recent_lgbm) >= 8:
                 rets_lgb = np.array([t["pnl_ret"] for t in recent_lgbm])
@@ -559,7 +577,7 @@ def evaluate_ablation(
                 recent_xgb = [
                     t
                     for t in model_trades["XGB_AGENT"]
-                    if (chunk_dates[0] - t["date"]).days <= 90
+                    if t["exit_date"] <= curr_ts and (curr_ts - t["exit_date"]).days <= 90
                 ]
                 if len(recent_xgb) >= 8:
                     sh_xgb = calculate_sharpe_ratio(
@@ -571,8 +589,8 @@ def evaluate_ablation(
                 tot = w_xgb + w_lgb
                 weights = {"XGB_AGENT": w_xgb / tot, "LGBM_AGENT": w_lgb / tot}
 
-        for _, row in chunk_df.iterrows():
-            d = row["date"]
+        # 3. Evaluate ticker signals for today
+        for _, row in day_df.iterrows():
             ticker = row.get("ticker", "UNKNOWN")
             vol_size = row["vol_size"] if use_risk_overlays else 1.0
             long_allowed = row["long_allowed"] if use_risk_overlays else True
@@ -598,23 +616,19 @@ def evaluate_ablation(
             p_xgb_g = np.array([0.0, 1.0, 0.0]) if np.max(p_xgb) < thresh_prob else p_xgb
             p_lgb_g = np.array([0.0, 1.0, 0.0]) if np.max(p_lgb) < thresh_prob else p_lgb
 
-            # Record model trades for trailing performance tracking
-            for m_key, p_arr in [("XGB_AGENT", p_xgb_g), ("LGBM_AGENT", p_lgb_g)]:
+            # Record model trades for trailing performance tracking (indexed by exit date)
+            for m_key, p_arr, ret_val, h_val, is_allow in [
+                ("XGB_AGENT", p_xgb_g, net_long_ret, long_hold, long_allowed),
+                ("LGBM_AGENT", p_lgb_g, net_long_ret, long_hold, long_allowed),
+            ]:
                 a = np.argmax(p_arr)
-                if a == 2 and long_allowed:
+                if a == 2 and is_allow:
+                    ex_idx = min(len(dates_unique) - 1, curr_idx + int(h_val))
                     model_trades[m_key].append(
                         {
-                            "date": d,
-                            "pnl_ret": vol_size * net_long_ret,
-                            "correct": net_long_ret > 0,
-                        }
-                    )
-                elif a == 0 and short_allowed:
-                    model_trades[m_key].append(
-                        {
-                            "date": d,
-                            "pnl_ret": vol_size * net_short_ret,
-                            "correct": net_short_ret > 0,
+                            "exit_date": pd.Timestamp(dates_unique[ex_idx]),
+                            "pnl_ret": vol_size * ret_val,
+                            "correct": ret_val > 0,
                         }
                     )
 
@@ -663,9 +677,12 @@ def evaluate_ablation(
                 dir_label, pnl_val, is_correct, h_days = trade_candidate
                 # Dynamic Asset Expectancy Filter: suspend entries if trailing 90-day PF < 1.15
                 if expectancy_filter is not None:
-                    allowed, _ = expectancy_filter.is_entry_allowed(ticker, d)
+                    allowed, _ = expectancy_filter.is_entry_allowed(ticker, curr_ts)
                     if not allowed:
                         continue
+
+                ex_idx = min(len(dates_unique) - 1, curr_idx + int(h_days))
+                exit_ts = pd.Timestamp(dates_unique[ex_idx])
 
                 results.append(
                     {
@@ -676,8 +693,7 @@ def evaluate_ablation(
                         "direction": dir_label,
                     }
                 )
-                if expectancy_filter is not None:
-                    expectancy_filter.record_trade(ticker, d, pnl_val)
+                pending_exits.append((exit_ts, ticker, pnl_val))
 
     return compute_strategy_metrics(results, sim_years=sim_years)
 
@@ -821,11 +837,11 @@ def main():
             )
         print("=" * 115 + "\n")
 
-        # Detailed Trade Execution Profile & Per-Ticker Breakdown for Flagship Strategy
-        flagship_m = evaluated_modes.get("asymmetric_veto_bidirectional")
+        # Detailed Trade Execution Profile & Per-Ticker Breakdown for Flagship Production Strategy (Pure XGBoost)
+        flagship_m = evaluated_modes.get("pure_xgb")
         if flagship_m and flagship_m.get("per_ticker"):
             print("=" * 100)
-            print("=== TRADE EXECUTION PROFILE & PER-TICKER BREAKDOWN (FLAGSHIP: BIDIRECTIONAL ASYMMETRIC VETO) ===")
+            print("=== TRADE EXECUTION PROFILE & PER-TICKER BREAKDOWN (FLAGSHIP: PURE XGBOOST BENCHMARK) ===")
             print("=" * 100)
             print(f"Total Round-Trip Trades:      {flagship_m['signals']}")
             print(f"Average Trade Holding Period: {flagship_m['avg_holding_days']:.1f} days")

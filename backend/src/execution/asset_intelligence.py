@@ -190,18 +190,39 @@ class AssetExpectancyFilter:
         self.trade_history: Dict[str, list] = {}
         self.suspended_status: Dict[str, bool] = {}
 
-    def record_trade(self, ticker: str, date: Any, pnl_ret: float) -> None:
-        """Records a realized trade return for the given ticker."""
+    def record_trade(
+        self,
+        ticker: str,
+        date: Any,
+        pnl_ret: float,
+        entry_date: Any = None,
+    ) -> None:
+        """
+        Records a realized closed trade return for the given ticker.
+        Strict Causal Mandate: 'date' represents the trade's exit/realization date
+        (when the trade actually closes). If entry_date is also supplied, both are stored,
+        and date is preserved as exit_date for strict causal filtering.
+        """
         if ticker not in self.trade_history:
             self.trade_history[ticker] = []
-        ts = pd.Timestamp(date)
-        self.trade_history[ticker].append({"date": ts, "pnl_ret": float(pnl_ret)})
+        exit_ts = pd.Timestamp(date)
+        entry_ts = pd.Timestamp(entry_date) if entry_date is not None else exit_ts
+        self.trade_history[ticker].append(
+            {
+                "date": exit_ts,
+                "exit_date": exit_ts,
+                "entry_date": entry_ts,
+                "pnl_ret": float(pnl_ret),
+            }
+        )
 
     def get_trailing_profit_factor(
         self, ticker: str, current_date: Any
     ) -> tuple[float, int]:
         """
         Computes the trailing 90-day realized Profit Factor for a ticker.
+        Strict Causal Mandate: Only closed trades whose realization exit_date <= current_date
+        AND within trailing lookback_days are considered.
         Returns:
             (trailing_pf, trade_count)
         """
@@ -213,7 +234,8 @@ class AssetExpectancyFilter:
         recent = [
             t
             for t in trades
-            if 0 <= (curr_ts - t["date"]).days <= self.lookback_days
+            if t["exit_date"] <= curr_ts
+            and 0 <= (curr_ts - t["exit_date"]).days <= self.lookback_days
         ]
         if not recent:
             return 1.5, 0

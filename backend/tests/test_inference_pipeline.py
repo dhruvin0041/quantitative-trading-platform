@@ -201,8 +201,9 @@ class TestInferencePipelineIntegration(unittest.IsolatedAsyncioTestCase):
     async def test_live_inference_veto_suppression(self, mock_news, mock_data):
         """
         Integration test verifying that a live inference call suppresses a SELL signal
-        to HOLD when a secondary model issues a high-conviction BUY veto.
+        to HOLD when secondary asymmetric veto is enabled (use_veto=True).
         """
+        self.service.use_veto = True
         mock_data.return_value = self._generate_mock_market_data()
         mock_news.return_value = (None, None, "Market update")
 
@@ -221,6 +222,35 @@ class TestInferencePipelineIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Vetoed", response["signal_note"])
         self.assertEqual(response["models"]["XGB_AGENT"]["signal"], "SELL")
         self.assertEqual(response["models"]["LGBM_AGENT"]["signal"], "BUY")
+
+    @patch("src.execution.inference_service.fetch_live_data")
+    @patch("src.execution.inference_service.fetch_live_news")
+    async def test_live_inference_pure_xgboost_default(self, mock_news, mock_data):
+        """
+        Integration test verifying that default production mode (use_veto=False)
+        is driven directly by Pure XGBoost alpha without secondary veto dilution.
+        """
+        self.service.use_veto = False
+        mock_data.return_value = self._generate_mock_market_data(
+            curr_close=160.0, sma_200=140.0, spy_close=450.0, spy_sma_50=420.0
+        )
+        mock_news.return_value = (None, None, "Market update")
+
+        # Configure XGB to strong BUY (0.80), LightGBM to dissenting SELL (0.70)
+        self.mock_xgb.predict_proba.return_value = np.array([[0.05, 0.15, 0.80]])
+        self.mock_lgbm.predict_proba.return_value = np.array([[0.70, 0.15, 0.15]])
+        self.mock_dqn.predict_proba.return_value = np.array([0.20, 0.40, 0.40])
+
+        config = {"data": {"max_seq_length": 128, "time_steps": 60}}
+        metadata = {"ticker": "AAPL", "currency": "USD", "market": "US"}
+
+        response = await self.service.get_prediction("AAPL", config, metadata)
+
+        # In Pure XGBoost flagship mode, secondary models (LightGBM SELL 0.70) do NOT veto XGBoost
+        self.assertFalse(response["agreement_data"]["is_vetoed"])
+        self.assertIsNone(response["agreement_data"]["veto_reason"])
+        self.assertEqual(response["models"]["XGB_AGENT"]["signal"], "BUY")
+        self.assertNotIn("Vetoed", response.get("signal_note") or "")
 
     @patch("src.execution.inference_service.fetch_live_data")
     @patch("src.execution.inference_service.fetch_live_news")
