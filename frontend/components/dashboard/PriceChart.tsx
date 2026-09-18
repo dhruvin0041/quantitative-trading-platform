@@ -116,10 +116,11 @@ export function PriceChart({ data, loading }: PriceChartProps) {
       }
     });
 
-    if (chartContainerRef.current) resizeObserver.observe(chartContainerRef.current);
+    const container = chartContainerRef.current;
+    if (container) resizeObserver.observe(container);
 
     return () => {
-      if (chartContainerRef.current) resizeObserver.unobserve(chartContainerRef.current);
+      if (container) resizeObserver.unobserve(container);
       resizeObserver.disconnect();
       chart.remove();
       chartRef.current = null;

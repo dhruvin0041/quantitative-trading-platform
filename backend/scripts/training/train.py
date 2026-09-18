@@ -1,7 +1,14 @@
 import argparse
 import json
 import os
+import sys
 import time
+from pathlib import Path
+
+# Ensure backend root is in sys.path
+BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
 
 import joblib
 import mlflow
@@ -43,6 +50,7 @@ from src.utils.gpu_utils import (
 
 os.environ["TF_USE_LEGACY_KERAS"] = "1"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+os.environ["MLFLOW_ALLOW_FILE_STORE"] = "true"
 
 from src.utils.gpu_utils import get_compute_backend
 
@@ -169,6 +177,7 @@ def prepare_data(ticker, config):
         y_sig_val,
         y_dir_val,
         y_ran_val,
+        scaler,
     ), config
 
 
@@ -257,6 +266,7 @@ def main():
         y_sig_val,
         y_dir_val,
         y_ran_val,
+        scaler,
     ) = data
 
     # Inject dummy rows for classes 0, 1, 2 to avoid missing class errors
@@ -526,6 +536,10 @@ def main():
         meta.save("artifacts/meta_ensemble.joblib")
         # mlflow.sklearn.log_model(meta.meta_learner, "meta_ensemble")
         print("Meta-Ensemble saved to artifacts/meta_ensemble.joblib")
+
+        # Persist scaler fitted strictly on train split
+        joblib.dump(scaler, "artifacts/latest_scaler.joblib")
+        print("Scaler saved to artifacts/latest_scaler.joblib")
 
     # ==========================================
     # STEP 4b: CALIBRATE MODEL PROBABILITIES

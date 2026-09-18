@@ -5,6 +5,7 @@ export interface AssetMetadata {
   exchange: string;
   currency: string;
   timezone: string;
+  portfolio_var?: number;
 }
 
 export interface UniverseStock {

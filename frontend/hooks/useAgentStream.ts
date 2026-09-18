@@ -29,35 +29,43 @@ export interface ExecutionResult {
 
 const STORAGE_KEY = 'hydra_agent_stream_state';
 
+interface StoredStreamState {
+  streamStatus?: AgentStreamStatus;
+  analystReports?: AnalystReports;
+  debateHistory?: DebateTurn[];
+  tradeProposal?: TradeProposal;
+  riskAssessment?: RiskAssessment;
+  executionResult?: ExecutionResult;
+}
+
+function getInitialStoredState(): StoredStreamState | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      return JSON.parse(stored) as StoredStreamState;
+    }
+  } catch {
+    // ignore localStorage read failure
+  }
+  return null;
+}
+
 export function useAgentStream() {
-  const [streamStatus, setStreamStatus] = useState<AgentStreamStatus>('idle');
-  const [analystReports, setAnalystReports] = useState<AnalystReports>({});
-  const [debateHistory, setDebateHistory] = useState<DebateTurn[]>([]);
-  const [tradeProposal, setTradeProposal] = useState<TradeProposal>({});
-  const [riskAssessment, setRiskAssessment] = useState<RiskAssessment>({});
-  const [executionResult, setExecutionResult] = useState<ExecutionResult>({});
+  const [streamStatus, setStreamStatus] = useState<AgentStreamStatus>(() => {
+    const initial = getInitialStoredState();
+    if (initial?.streamStatus === 'completed' || initial?.streamStatus === 'error') {
+      return initial.streamStatus;
+    }
+    return 'idle';
+  });
+  const [analystReports, setAnalystReports] = useState<AnalystReports>(() => getInitialStoredState()?.analystReports || {});
+  const [debateHistory, setDebateHistory] = useState<DebateTurn[]>(() => getInitialStoredState()?.debateHistory || []);
+  const [tradeProposal, setTradeProposal] = useState<TradeProposal>(() => getInitialStoredState()?.tradeProposal || {});
+  const [riskAssessment, setRiskAssessment] = useState<RiskAssessment>(() => getInitialStoredState()?.riskAssessment || {});
+  const [executionResult, setExecutionResult] = useState<ExecutionResult>(() => getInitialStoredState()?.executionResult || {});
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-
-  // Load from local storage on mount
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed.analystReports) setAnalystReports(parsed.analystReports);
-        if (parsed.debateHistory) setDebateHistory(parsed.debateHistory);
-        if (parsed.tradeProposal) setTradeProposal(parsed.tradeProposal);
-        if (parsed.riskAssessment) setRiskAssessment(parsed.riskAssessment);
-        if (parsed.executionResult) setExecutionResult(parsed.executionResult);
-        if (parsed.streamStatus === 'completed' || parsed.streamStatus === 'error') {
-            setStreamStatus(parsed.streamStatus);
-        } else if (parsed.streamStatus === 'streaming') {
-            setStreamStatus('idle');
-        }
-      }
-    } catch (e) {}
-  }, []);
 
   // Save to local storage when state changes
   useEffect(() => {
@@ -71,7 +79,9 @@ export function useAgentStream() {
           riskAssessment,
           executionResult
         }));
-      } catch (e) {}
+      } catch {
+        // ignore localStorage write failure
+      }
     }
   }, [streamStatus, analystReports, debateHistory, tradeProposal, riskAssessment, executionResult]);
 
@@ -142,8 +152,22 @@ export function useAgentStream() {
 
               // Update states based on node output
               // Using a simple fallback random conviction for UI demonstration if not provided by backend
-              const getConviction = (val: any) => val?.conviction ?? Math.floor(Math.random() * 30 + 70);
-              const getText = (val: any) => typeof val === 'string' ? val : val?.text;
+              const getConviction = (val: unknown): number => {
+                if (val && typeof val === 'object' && 'conviction' in val) {
+                  const conv = (val as { conviction: unknown }).conviction;
+                  if (typeof conv === 'number') return conv;
+                }
+                return Math.floor(Math.random() * 30 + 70);
+              };
+
+              const getText = (val: unknown): string => {
+                if (typeof val === 'string') return val;
+                if (val && typeof val === 'object' && 'text' in val) {
+                  const txt = (val as { text: unknown }).text;
+                  if (typeof txt === 'string') return txt;
+                }
+                return '';
+              };
 
               if (data.fundamentals_analysis) {
                 setAnalystReports(prev => ({ ...prev, fundamentals: { text: getText(data.fundamentals_analysis), conviction: getConviction(data.fundamentals_analysis) } }));
@@ -177,7 +201,7 @@ export function useAgentStream() {
                 setExecutionResult({ status: data.portfolio_status });
               }
               
-            } catch (err) {
+            } catch {
               console.error('Failed to parse SSE data', dataStr);
             }
           }
@@ -187,13 +211,14 @@ export function useAgentStream() {
       if (!controller.signal.aborted) {
         setStreamStatus('completed');
       }
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
+    } catch (err: unknown) {
+      const error = err as Error;
+      if (error?.name === 'AbortError') {
         console.log('Stream aborted');
         return;
       }
-      console.error('Stream error:', err);
-      setErrorMsg(err.message || 'Stream failed');
+      console.error('Stream error:', error);
+      setErrorMsg(error?.message || 'Stream failed');
       setStreamStatus('error');
     }
   }, []);
