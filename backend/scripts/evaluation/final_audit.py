@@ -24,6 +24,7 @@ warnings.filterwarnings("ignore")
 os.environ["TF_USE_LEGACY_KERAS"] = "1"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
+from src.execution.asset_intelligence import AssetExpectancyFilter
 from src.execution.consensus_engine import WeightedConsensusEngine
 from src.execution.live_inference import add_upgraded_features, load_config
 from src.models.neural.fusion_network import build_fusion_model
@@ -84,7 +85,16 @@ def fetch_data_clean(
     df.loc[df["forward_5d_ret"] > 0.02, "target_signal"] = 2
     df.loc[df["forward_5d_ret"] < -0.015, "target_signal"] = 0
 
-    # Pre-calculate 2.5 * ATR trailing stop trade returns ratcheting over 5-day horizon
+    # Volatility-Adaptive Trailing Stop Multiplier:
+    # ts_mult = min(4.0, max(2.5, 2.5 * (sigma_asset / sigma_SPY)))
+    asset_ret = df["Close"].pct_change()
+    spy_ret = df["SPY_Close"].pct_change()
+    vol_asset = asset_ret.rolling(20, min_periods=5).std()
+    vol_spy = spy_ret.rolling(20, min_periods=5).std()
+    vol_ratio = (vol_asset / (vol_spy + 1e-9)).fillna(1.0)
+    ts_mult = np.clip(2.5 * vol_ratio, 2.5, 4.0).values
+
+    # Pre-calculate Volatility-Adaptive trailing stop trade returns ratcheting over 5-day horizon
     close = df["Close"].values
     high = df["High"].values
     low = df["Low"].values
@@ -99,9 +109,10 @@ def fetch_data_clean(
     for i in range(n - 5):
         p0 = close[i]
         a0 = atr[i]
+        m0 = ts_mult[i]
 
-        # BUY: trailing stop at 2.5 * ATR ratcheting with new peaks
-        stop_p = p0 - 2.5 * a0
+        # BUY: trailing stop at m0 * ATR ratcheting with new peaks
+        stop_p = p0 - m0 * a0
         peak_p = p0
         exit_l = None
         hold_l = 5
@@ -112,15 +123,15 @@ def fetch_data_clean(
                 break
             else:
                 peak_p = max(peak_p, high[i + d])
-                stop_p = max(stop_p, peak_p - 2.5 * a0)
+                stop_p = max(stop_p, peak_p - m0 * a0)
         if exit_l is None:
             exit_l = close[i + 5]
             hold_l = 5
         long_ts_ret[i] = (exit_l - p0) / p0
         long_hold_days[i] = hold_l
 
-        # SELL: trailing stop at 2.5 * ATR ratcheting with new troughs
-        stop_s = p0 + 2.5 * a0
+        # SELL: trailing stop at m0 * ATR ratcheting with new troughs
+        stop_s = p0 + m0 * a0
         trough_p = p0
         exit_s = None
         hold_s = 5
@@ -131,12 +142,14 @@ def fetch_data_clean(
                 break
             else:
                 trough_p = min(trough_p, low[i + d])
-                stop_s = min(stop_s, trough_p + 2.5 * a0)
+                stop_s = min(stop_s, trough_p + m0 * a0)
         if exit_s is None:
             exit_s = close[i + 5]
             hold_s = 5
         short_ts_ret[i] = (p0 - exit_s) / p0
         short_hold_days[i] = hold_s
+
+    df["ts_mult"] = ts_mult
 
     df["long_ts_ret"] = long_ts_ret
     df["short_ts_ret"] = short_ts_ret
@@ -467,19 +480,31 @@ def evaluate_ablation(
     slippage_bps: float = 5.0,
     fee_bps: float = 1.0,
     apply_friction: bool = True,
+    use_expectancy_gate: bool = True,
 ) -> dict:
     """
     Evaluates a specific model configuration or consensus weighting across the walk-forward history.
     Enforces conviction threshold gating (< 0.60 -> HOLD) and systemic risk circuit breakers:
     - ATR Volatility Sizing (Target Risk 1%)
-    - 2.5 * ATR Daily Ratcheting Trailing Stop
+    - Volatility-Adaptive Daily Ratcheting Trailing Stop
     - Macro Regime Filter (SMA_200 & SPY SMA_50)
     - Tightened Consensus Sharpe Gating (Trailing 90-day PF >= 1.25, Sharpe > 0)
+    - Dynamic Asset Expectancy Filter (Trailing 90-day PF < 1.15 suspension / 1.20 recovery)
     - Parameterized Execution Friction:
       * Slippage: slippage_bps per side (entry & exit)
       * Commission / Exchange Fees: fee_bps per side (entry & exit)
     """
     consensus_engine = WeightedConsensusEngine()
+    expectancy_filter = (
+        AssetExpectancyFilter(
+            suspension_threshold=1.15,
+            recovery_threshold=1.20,
+            lookback_days=90,
+            min_trades=3,
+        )
+        if (use_expectancy_gate and use_risk_overlays)
+        else None
+    )
     results = []
 
     # Round-trip friction drag in decimal
@@ -593,30 +618,15 @@ def evaluate_ablation(
                         }
                     )
 
+            trade_candidate = None
             if mode in ["pure_dl", "pure_dqn"]:
                 p_col = row["p_dl"] if mode == "pure_dl" else row["p_dqn"]
                 p_g = np.array([0.0, 1.0, 0.0]) if np.max(p_col) < thresh_prob else p_col
                 a = np.argmax(p_g)
                 if a == 2 and long_allowed:
-                    results.append(
-                        {
-                            "ticker": ticker,
-                            "pnl_ret": vol_size * net_long_ret,
-                            "correct": net_long_ret > 0,
-                            "hold_days": long_hold,
-                            "direction": "BUY",
-                        }
-                    )
+                    trade_candidate = ("BUY", vol_size * net_long_ret, net_long_ret > 0, long_hold)
                 elif a == 0 and short_allowed:
-                    results.append(
-                        {
-                            "ticker": ticker,
-                            "pnl_ret": vol_size * net_short_ret,
-                            "correct": net_short_ret > 0,
-                            "hold_days": short_hold,
-                            "direction": "SELL",
-                        }
-                    )
+                    trade_candidate = ("SELL", vol_size * net_short_ret, net_short_ret > 0, short_hold)
             elif mode in ["asymmetric_veto", "asymmetric_veto_bidirectional"]:
                 veto_short = (mode == "asymmetric_veto_bidirectional")
                 base_probs = {
@@ -634,25 +644,9 @@ def evaluate_ablation(
                 if not cons["is_vetoed"] and cons["agreement_score"] >= threshold:
                     direction = cons["dominant_direction"]
                     if direction == "BUY" and long_allowed:
-                        results.append(
-                            {
-                                "ticker": ticker,
-                                "pnl_ret": vol_size * net_long_ret,
-                                "correct": net_long_ret > 0,
-                                "hold_days": long_hold,
-                                "direction": "BUY",
-                            }
-                        )
+                        trade_candidate = ("BUY", vol_size * net_long_ret, net_long_ret > 0, long_hold)
                     elif direction == "SELL" and short_allowed:
-                        results.append(
-                            {
-                                "ticker": ticker,
-                                "pnl_ret": vol_size * net_short_ret,
-                                "correct": net_short_ret > 0,
-                                "hold_days": short_hold,
-                                "direction": "SELL",
-                            }
-                        )
+                        trade_candidate = ("SELL", vol_size * net_short_ret, net_short_ret > 0, short_hold)
             else:
                 base_probs = {"XGB_AGENT": p_xgb_g, "LGBM_AGENT": p_lgb_g}
                 cons = consensus_engine.compute_agreement(base_probs, weights)
@@ -661,25 +655,29 @@ def evaluate_ablation(
 
                 if score >= threshold:
                     if direction == "BUY" and long_allowed:
-                        results.append(
-                            {
-                                "ticker": ticker,
-                                "pnl_ret": vol_size * net_long_ret,
-                                "correct": net_long_ret > 0,
-                                "hold_days": long_hold,
-                                "direction": "BUY",
-                            }
-                        )
+                        trade_candidate = ("BUY", vol_size * net_long_ret, net_long_ret > 0, long_hold)
                     elif direction == "SELL" and short_allowed:
-                        results.append(
-                            {
-                                "ticker": ticker,
-                                "pnl_ret": vol_size * net_short_ret,
-                                "correct": net_short_ret > 0,
-                                "hold_days": short_hold,
-                                "direction": "SELL",
-                            }
-                        )
+                        trade_candidate = ("SELL", vol_size * net_short_ret, net_short_ret > 0, short_hold)
+
+            if trade_candidate is not None:
+                dir_label, pnl_val, is_correct, h_days = trade_candidate
+                # Dynamic Asset Expectancy Filter: suspend entries if trailing 90-day PF < 1.15
+                if expectancy_filter is not None:
+                    allowed, _ = expectancy_filter.is_entry_allowed(ticker, d)
+                    if not allowed:
+                        continue
+
+                results.append(
+                    {
+                        "ticker": ticker,
+                        "pnl_ret": pnl_val,
+                        "correct": is_correct,
+                        "hold_days": h_days,
+                        "direction": dir_label,
+                    }
+                )
+                if expectancy_filter is not None:
+                    expectancy_filter.record_trade(ticker, d, pnl_val)
 
     return compute_strategy_metrics(results, sim_years=sim_years)
 
@@ -734,6 +732,11 @@ def main():
         action="store_true",
         help="Disable transaction friction (for raw gross benchmarking)",
     )
+    parser.add_argument(
+        "--no-expectancy-gate",
+        action="store_true",
+        help="Disable Dynamic Asset-Level Expectancy Gating (trailing 90-day PF < 1.15)",
+    )
     args = parser.parse_args()
 
     # Map legacy aliases
@@ -755,6 +758,12 @@ def main():
         print(f"Execution Friction: ENABLED ({rt_slip:.1f} bps Round-Trip Slippage + {rt_fee:.1f} bps Fees = {tot_bps:.1f} bps / trade)")
     else:
         print("Execution Friction: DISABLED (Gross Return Benchmarking)")
+
+    use_expectancy_gate = not args.no_expectancy_gate
+    if use_expectancy_gate:
+        print("Asset Expectancy Gate: ENABLED (Trailing 90-day PF < 1.15 Suspension / >= 1.20 Recovery)")
+    else:
+        print("Asset Expectancy Gate: DISABLED (No Expectancy Gating)")
 
     # Check for pre-computed history cache or generate from live market data
     cache_path = BACKEND_DIR / "artifacts" / "risk_managed_walkforward.pkl"
@@ -803,6 +812,7 @@ def main():
                 slippage_bps=args.slippage_bps,
                 fee_bps=args.fee_bps,
                 apply_friction=apply_friction,
+                use_expectancy_gate=use_expectancy_gate,
             )
             evaluated_modes[m_key] = m
             ci_str = f"[{m['ci_lower']:.2f}, {m['ci_upper']:.2f}]"
@@ -855,6 +865,7 @@ def main():
             slippage_bps=args.slippage_bps,
             fee_bps=args.fee_bps,
             apply_friction=apply_friction,
+            use_expectancy_gate=use_expectancy_gate,
         )
 
         print("AUDIT RESULTS:")

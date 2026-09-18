@@ -163,3 +163,117 @@ class MultiTimeframeEngine:
     def get_mtf_consensus(self, ticker: str, daily_signal: str) -> Dict[str, str]:
         # Mocking MTF checks - in prod these would fetch 1H/4H data
         return {"1H": daily_signal, "4H": daily_signal, "1D": daily_signal}
+
+
+class AssetExpectancyFilter:
+    """
+    Dynamic Asset-Level Expectancy Gating.
+    Prevents capital bleed by tracking trailing 90-day realized Profit Factor per ticker.
+    Hysteresis Band:
+    - Suspension: If trailing 90-day PF < 1.15 (with >= min_trades trades),
+      suspend new entries for that symbol.
+    - Recovery: If suspended, the symbol remains suspended until its trailing 90-day PF
+      recovers >= 1.20 (or when unprofitable trades roll off past 90 days).
+    """
+
+    def __init__(
+        self,
+        suspension_threshold: float = 1.15,
+        recovery_threshold: float = 1.20,
+        lookback_days: int = 90,
+        min_trades: int = 4,
+    ):
+        self.suspension_threshold = suspension_threshold
+        self.recovery_threshold = recovery_threshold
+        self.lookback_days = lookback_days
+        self.min_trades = min_trades
+        self.trade_history: Dict[str, list] = {}
+        self.suspended_status: Dict[str, bool] = {}
+
+    def record_trade(self, ticker: str, date: Any, pnl_ret: float) -> None:
+        """Records a realized trade return for the given ticker."""
+        if ticker not in self.trade_history:
+            self.trade_history[ticker] = []
+        ts = pd.Timestamp(date)
+        self.trade_history[ticker].append({"date": ts, "pnl_ret": float(pnl_ret)})
+
+    def get_trailing_profit_factor(
+        self, ticker: str, current_date: Any
+    ) -> tuple[float, int]:
+        """
+        Computes the trailing 90-day realized Profit Factor for a ticker.
+        Returns:
+            (trailing_pf, trade_count)
+        """
+        trades = self.trade_history.get(ticker, [])
+        if not trades:
+            return 1.5, 0
+
+        curr_ts = pd.Timestamp(current_date)
+        recent = [
+            t
+            for t in trades
+            if 0 <= (curr_ts - t["date"]).days <= self.lookback_days
+        ]
+        if not recent:
+            return 1.5, 0
+
+        gains = sum(t["pnl_ret"] for t in recent if t["pnl_ret"] > 0)
+        losses = abs(sum(t["pnl_ret"] for t in recent if t["pnl_ret"] < 0))
+
+        if losses == 0.0:
+            trailing_pf = 3.0 if gains > 0 else 1.0
+        else:
+            trailing_pf = gains / losses
+
+        return float(trailing_pf), len(recent)
+
+    def is_entry_allowed(
+        self, ticker: str, current_date: Any
+    ) -> tuple[bool, str]:
+        """
+        Evaluates whether a new entry is allowed for the ticker under the hysteresis expectancy gate.
+        Returns:
+            (is_allowed, reason)
+        """
+        trailing_pf, count = self.get_trailing_profit_factor(ticker, current_date)
+        is_currently_suspended = self.suspended_status.get(ticker, False)
+
+        # Require a minimum sample size of recent trades before gating triggers
+        if count < self.min_trades:
+            if is_currently_suspended and count == 0:
+                self.suspended_status[ticker] = False
+                return True, f"Expectancy gate cleared: 0 active losses in trailing {self.lookback_days}d"
+            elif is_currently_suspended:
+                return (
+                    False,
+                    f"Suspended: Trailing {self.lookback_days}d PF {trailing_pf:.2f} (< {self.recovery_threshold:.2f} recovery threshold, {count} trades)",
+                )
+            return True, f"Sufficient expectancy (sample size {count} < {self.min_trades})"
+
+        # Evaluate hysteresis transitions
+        if is_currently_suspended:
+            if trailing_pf >= self.recovery_threshold:
+                self.suspended_status[ticker] = False
+                return (
+                    True,
+                    f"Expectancy recovered: Trailing {self.lookback_days}d PF {trailing_pf:.2f} >= {self.recovery_threshold:.2f}",
+                )
+            else:
+                return (
+                    False,
+                    f"Suspended by Expectancy Gate: Trailing {self.lookback_days}d PF {trailing_pf:.2f} < {self.recovery_threshold:.2f} recovery hurdle ({count} trades)",
+                )
+        else:
+            if trailing_pf < self.suspension_threshold:
+                self.suspended_status[ticker] = True
+                return (
+                    False,
+                    f"Suspended by Expectancy Gate: Trailing {self.lookback_days}d PF {trailing_pf:.2f} dropped below {self.suspension_threshold:.2f} ({count} trades)",
+                )
+            else:
+                return (
+                    True,
+                    f"Expectancy approved: Trailing {self.lookback_days}d PF {trailing_pf:.2f} >= {self.suspension_threshold:.2f} ({count} trades)",
+                )
+
