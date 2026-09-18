@@ -94,6 +94,8 @@ def fetch_data_clean(
 
     long_ts_ret = np.zeros(n)
     short_ts_ret = np.zeros(n)
+    long_hold_days = np.full(n, 5, dtype=int)
+    short_hold_days = np.full(n, 5, dtype=int)
     for i in range(n - 5):
         p0 = close[i]
         a0 = atr[i]
@@ -102,42 +104,57 @@ def fetch_data_clean(
         stop_p = p0 - 2.5 * a0
         peak_p = p0
         exit_l = None
+        hold_l = 5
         for d in range(1, 6):
             if low[i + d] <= stop_p:
                 exit_l = min(open_p[i + d], stop_p)
+                hold_l = d
                 break
             else:
                 peak_p = max(peak_p, high[i + d])
                 stop_p = max(stop_p, peak_p - 2.5 * a0)
         if exit_l is None:
             exit_l = close[i + 5]
+            hold_l = 5
         long_ts_ret[i] = (exit_l - p0) / p0
+        long_hold_days[i] = hold_l
 
         # SELL: trailing stop at 2.5 * ATR ratcheting with new troughs
         stop_s = p0 + 2.5 * a0
         trough_p = p0
         exit_s = None
+        hold_s = 5
         for d in range(1, 6):
             if high[i + d] >= stop_s:
                 exit_s = max(open_p[i + d], stop_s)
+                hold_s = d
                 break
             else:
                 trough_p = min(trough_p, low[i + d])
                 stop_s = min(stop_s, trough_p + 2.5 * a0)
         if exit_s is None:
             exit_s = close[i + 5]
+            hold_s = 5
         short_ts_ret[i] = (p0 - exit_s) / p0
+        short_hold_days[i] = hold_s
 
     df["long_ts_ret"] = long_ts_ret
     df["short_ts_ret"] = short_ts_ret
+    df["long_hold_days"] = long_hold_days
+    df["short_hold_days"] = short_hold_days
     df["norm_atr"] = df["ATR"] / (df["Close"] + 1e-9)
 
     # ATR Volatility Sizing (Target Risk: 1%, position capped between 0.1 and 1.0)
     df["vol_size"] = np.clip(0.01 / (df["norm_atr"] + 1e-9), 0.1, 1.0)
 
-    # Portfolio Stop / Macro Regime Filter: halt longs if Close < SMA_200 or SPY < SPY_SMA_50
+    # Symmetric Portfolio Stop & Macro Regime Filter:
+    # Long allowed if confirmed healthy: Close >= SMA_200 and SPY >= SPY_SMA_50
+    # Short allowed if confirmed non-bull / breakdown: Close < SMA_200 or SPY < SPY_SMA_50
     df["long_allowed"] = (df["Close"] >= df["SMA_200"]) & (
         df["SPY_Close"] >= df["SPY_SMA_50"]
+    )
+    df["short_allowed"] = (df["Close"] < df["SMA_200"]) | (
+        df["SPY_Close"] < df["SPY_SMA_50"]
     )
 
     return df.dropna()
@@ -348,8 +365,11 @@ def run_walk_forward_simulation(
                         "raw_ret": fwd_ret[i],
                         "long_ret": test_chunk["long_ts_ret"].iloc[i],
                         "short_ret": test_chunk["short_ts_ret"].iloc[i],
+                        "long_hold_days": test_chunk["long_hold_days"].iloc[i] if "long_hold_days" in test_chunk.columns else 5,
+                        "short_hold_days": test_chunk["short_hold_days"].iloc[i] if "short_hold_days" in test_chunk.columns else 5,
                         "vol_size": test_chunk["vol_size"].iloc[i],
                         "long_allowed": test_chunk["long_allowed"].iloc[i],
+                        "short_allowed": test_chunk["short_allowed"].iloc[i] if "short_allowed" in test_chunk.columns else (not test_chunk["long_allowed"].iloc[i]),
                         "p_xgb": probs_xgb[i],
                         "p_lgbm": probs_lgbm[i],
                         "p_dl": probs_dl[i],
@@ -377,6 +397,8 @@ def compute_strategy_metrics(results_list: list, sim_years: float = 2.33) -> dic
             "ci_lower": 0.0,
             "ci_upper": 0.0,
             "prob_pf_12": 0.0,
+            "avg_holding_days": 0.0,
+            "per_ticker": {},
         }
 
     res_df = pd.DataFrame(results_list)
@@ -388,6 +410,27 @@ def compute_strategy_metrics(results_list: list, sim_years: float = 2.33) -> dic
 
     # Calmar Ratio: Annualized Return / |Max Drawdown| (Strict sign preservation)
     calmar = float(calculate_calmar_ratio(returns, max_drawdown=max_dd, sim_years=sim_years))
+
+    # Average holding period in days
+    avg_holding = float(res_df["hold_days"].mean()) if "hold_days" in res_df.columns else 5.0
+
+    # Per-ticker breakdown
+    per_ticker = {}
+    if "ticker" in res_df.columns:
+        for t in sorted(res_df["ticker"].unique()):
+            sub = res_df[res_df["ticker"] == t]
+            sub_rets = sub["pnl_ret"].values
+            sub_wr = float(sub["correct"].mean() * 100) if len(sub) > 0 else 0.0
+            sub_pf = float(calculate_profit_factor(sub_rets))
+            sub_pnl_pct = float(np.sum(sub_rets) * 100)
+            sub_hold = float(sub["hold_days"].mean()) if "hold_days" in sub.columns else 5.0
+            per_ticker[t] = {
+                "signals": len(sub),
+                "win_rate": sub_wr,
+                "profit_factor": sub_pf,
+                "net_pnl_pct": sub_pnl_pct,
+                "avg_holding_days": sub_hold,
+            }
 
     # 1,000 Trial Monte Carlo Bootstrap
     pfs = []
@@ -411,6 +454,8 @@ def compute_strategy_metrics(results_list: list, sim_years: float = 2.33) -> dic
         "ci_lower": ci_lower,
         "ci_upper": ci_upper,
         "prob_pf_12": prob_pf_12,
+        "avg_holding_days": avg_holding,
+        "per_ticker": per_ticker,
     }
 
 
@@ -503,10 +548,18 @@ def evaluate_ablation(
 
         for _, row in chunk_df.iterrows():
             d = row["date"]
+            ticker = row.get("ticker", "UNKNOWN")
             vol_size = row["vol_size"] if use_risk_overlays else 1.0
             long_allowed = row["long_allowed"] if use_risk_overlays else True
+            short_allowed = (
+                row["short_allowed"]
+                if ("short_allowed" in row and use_risk_overlays)
+                else ((not long_allowed) if use_risk_overlays else True)
+            )
             raw_long_ret = row["long_ret"] if use_risk_overlays else row["raw_ret"]
             raw_short_ret = row["short_ret"] if use_risk_overlays else -row["raw_ret"]
+            long_hold = row.get("long_hold_days", 5)
+            short_hold = row.get("short_hold_days", 5)
 
             # Deduct execution friction from gross trade returns
             net_long_ret = raw_long_ret - round_trip_friction
@@ -531,7 +584,7 @@ def evaluate_ablation(
                             "correct": net_long_ret > 0,
                         }
                     )
-                elif a == 0:
+                elif a == 0 and short_allowed:
                     model_trades[m_key].append(
                         {
                             "date": d,
@@ -546,11 +599,23 @@ def evaluate_ablation(
                 a = np.argmax(p_g)
                 if a == 2 and long_allowed:
                     results.append(
-                        {"pnl_ret": vol_size * net_long_ret, "correct": net_long_ret > 0}
+                        {
+                            "ticker": ticker,
+                            "pnl_ret": vol_size * net_long_ret,
+                            "correct": net_long_ret > 0,
+                            "hold_days": long_hold,
+                            "direction": "BUY",
+                        }
                     )
-                elif a == 0:
+                elif a == 0 and short_allowed:
                     results.append(
-                        {"pnl_ret": vol_size * net_short_ret, "correct": net_short_ret > 0}
+                        {
+                            "ticker": ticker,
+                            "pnl_ret": vol_size * net_short_ret,
+                            "correct": net_short_ret > 0,
+                            "hold_days": short_hold,
+                            "direction": "SELL",
+                        }
                     )
             elif mode in ["asymmetric_veto", "asymmetric_veto_bidirectional"]:
                 veto_short = (mode == "asymmetric_veto_bidirectional")
@@ -570,11 +635,23 @@ def evaluate_ablation(
                     direction = cons["dominant_direction"]
                     if direction == "BUY" and long_allowed:
                         results.append(
-                            {"pnl_ret": vol_size * net_long_ret, "correct": net_long_ret > 0}
+                            {
+                                "ticker": ticker,
+                                "pnl_ret": vol_size * net_long_ret,
+                                "correct": net_long_ret > 0,
+                                "hold_days": long_hold,
+                                "direction": "BUY",
+                            }
                         )
-                    elif direction == "SELL":
+                    elif direction == "SELL" and short_allowed:
                         results.append(
-                            {"pnl_ret": vol_size * net_short_ret, "correct": net_short_ret > 0}
+                            {
+                                "ticker": ticker,
+                                "pnl_ret": vol_size * net_short_ret,
+                                "correct": net_short_ret > 0,
+                                "hold_days": short_hold,
+                                "direction": "SELL",
+                            }
                         )
             else:
                 base_probs = {"XGB_AGENT": p_xgb_g, "LGBM_AGENT": p_lgb_g}
@@ -585,11 +662,23 @@ def evaluate_ablation(
                 if score >= threshold:
                     if direction == "BUY" and long_allowed:
                         results.append(
-                            {"pnl_ret": vol_size * net_long_ret, "correct": net_long_ret > 0}
+                            {
+                                "ticker": ticker,
+                                "pnl_ret": vol_size * net_long_ret,
+                                "correct": net_long_ret > 0,
+                                "hold_days": long_hold,
+                                "direction": "BUY",
+                            }
                         )
-                    elif direction == "SELL":
+                    elif direction == "SELL" and short_allowed:
                         results.append(
-                            {"pnl_ret": vol_size * net_short_ret, "correct": net_short_ret > 0}
+                            {
+                                "ticker": ticker,
+                                "pnl_ret": vol_size * net_short_ret,
+                                "correct": net_short_ret > 0,
+                                "hold_days": short_hold,
+                                "direction": "SELL",
+                            }
                         )
 
     return compute_strategy_metrics(results, sim_years=sim_years)
@@ -704,6 +793,7 @@ def main():
         )
         print("-" * 115)
 
+        evaluated_modes = {}
         for label, m_key in modes:
             m = evaluate_ablation(
                 hist_df,
@@ -714,11 +804,34 @@ def main():
                 fee_bps=args.fee_bps,
                 apply_friction=apply_friction,
             )
+            evaluated_modes[m_key] = m
             ci_str = f"[{m['ci_lower']:.2f}, {m['ci_upper']:.2f}]"
             print(
                 f"{label:<32} | {m['signals']:<7d} | {m['win_rate']:<8.1f}% | {m['profit_factor']:<5.2f} | {m['sharpe']:<10.2f} | {m['max_dd']:<9.1f}% | {m['calmar']:<10.2f} | {ci_str:<13} | {m['prob_pf_12']:<8.1f}%"
             )
         print("=" * 115 + "\n")
+
+        # Detailed Trade Execution Profile & Per-Ticker Breakdown for Flagship Strategy
+        flagship_m = evaluated_modes.get("asymmetric_veto_bidirectional")
+        if flagship_m and flagship_m.get("per_ticker"):
+            print("=" * 100)
+            print("=== TRADE EXECUTION PROFILE & PER-TICKER BREAKDOWN (FLAGSHIP: BIDIRECTIONAL ASYMMETRIC VETO) ===")
+            print("=" * 100)
+            print(f"Total Round-Trip Trades:      {flagship_m['signals']}")
+            print(f"Average Trade Holding Period: {flagship_m['avg_holding_days']:.1f} days")
+            print(f"{sh_hdr}:                    {flagship_m['sharpe']:.2f}")
+            print(f"{pf_hdr}:                        {flagship_m['profit_factor']:.2f}")
+            print(f"{dd_hdr}:                    {flagship_m['max_dd']:.1f}%\n")
+            print("PER-TICKER BREAKDOWN:")
+            print(
+                f"{'Ticker':<8} | {'Trades':<8} | {wr_hdr:<10} | {pf_hdr:<14} | {'Net PnL %':<12} | {'Avg Holding (Days)':<18}"
+            )
+            print("-" * 80)
+            for t, pt in flagship_m["per_ticker"].items():
+                print(
+                    f"{t:<8} | {pt['signals']:<8d} | {pt['win_rate']:<9.1f}% | {pt['profit_factor']:<14.2f} | {pt['net_pnl_pct']:<+11.2f}% | {pt['avg_holding_days']:<18.1f}"
+                )
+            print("=" * 100 + "\n")
 
     else:
         labels = {
@@ -745,15 +858,30 @@ def main():
         )
 
         print("AUDIT RESULTS:")
-        print(f"Total Signals: {m['signals']}")
-        print(f"{prefix}Win Rate:      {m['win_rate']:.1f}%")
-        print(f"{prefix}Profit Factor: {m['profit_factor']:.2f}")
-        print(f"{prefix}Sharpe Ratio:  {m['sharpe']:.2f}")
-        print(f"{prefix}Max Drawdown:  {m['max_dd']:.1f}%")
-        print(f"{prefix}Calmar Ratio:  {m['calmar']:.2f}")
+        print(f"Total Round-Trip Trades:      {m['signals']}")
+        print(f"Average Trade Holding Period: {m['avg_holding_days']:.1f} days")
+        print(f"{prefix}Win Rate:                  {m['win_rate']:.1f}%")
+        print(f"{prefix}Profit Factor:             {m['profit_factor']:.2f}")
+        print(f"{prefix}Sharpe Ratio:              {m['sharpe']:.2f}")
+        print(f"{prefix}Max Drawdown:              {m['max_dd']:.1f}%")
+        print(f"{prefix}Calmar Ratio:              {m['calmar']:.2f}")
         print("\n--- PHASE 6: MONTE CARLO BOOTSTRAP (1000 trials) ---")
         print(f"PF 95% Confidence Interval: [{m['ci_lower']:.2f}, {m['ci_upper']:.2f}]")
         print(f"Probability PF > 1.2:       {m['prob_pf_12']:.1f}%\n")
+
+        if m.get("per_ticker"):
+            wr_label = prefix + "Win Rate"
+            pf_label = prefix + "Profit Factor"
+            print("PER-TICKER BREAKDOWN:")
+            print(
+                f"{'Ticker':<8} | {'Trades':<8} | {wr_label:<10} | {pf_label:<14} | {'Net PnL %':<12} | {'Avg Holding (Days)':<18}"
+            )
+            print("-" * 80)
+            for t, pt in m["per_ticker"].items():
+                print(
+                    f"{t:<8} | {pt['signals']:<8d} | {pt['win_rate']:<9.1f}% | {pt['profit_factor']:<14.2f} | {pt['net_pnl_pct']:<+11.2f}% | {pt['avg_holding_days']:<18.1f}"
+                )
+            print("-" * 80 + "\n")
 
 
 if __name__ == "__main__":

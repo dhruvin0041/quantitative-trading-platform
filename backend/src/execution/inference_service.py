@@ -270,9 +270,11 @@ class InferenceService:
             sma_200 = float(close_s.rolling(window=200, min_periods=20).mean().iloc[-1])
             spy_sma_50 = float(spy_close_s.rolling(window=50, min_periods=10).mean().iloc[-1])
             long_allowed = bool((curr_close >= sma_200) and (curr_spy_close >= spy_sma_50))
+            short_allowed = bool((curr_close < sma_200) or (curr_spy_close < spy_sma_50))
         except Exception as e:
             logger.warning(f"Error computing macro regime filter: {e}")
             long_allowed = True
+            short_allowed = True
             sma_200, spy_sma_50 = current_price, 1.0
             curr_close, curr_spy_close = current_price, 1.0
 
@@ -282,6 +284,7 @@ class InferenceService:
             "spy_close": round(curr_spy_close, 2),
             "spy_sma_50": round(spy_sma_50, 2),
             "long_allowed": long_allowed,
+            "short_allowed": short_allowed,
         }
 
         # 7. Quality & Confidence Decomposition
@@ -317,6 +320,12 @@ class InferenceService:
             signal_note = (
                 f"Suppressed by Macro Regime Filter: Close ({curr_close:.2f} < SMA200 {sma_200:.2f}) "
                 f"or SPY ({curr_spy_close:.2f} < SMA50 {spy_sma_50:.2f})"
+            )
+        elif pre_signal == "SELL" and not short_allowed:
+            final_signal = "HOLD"
+            signal_note = (
+                f"Suppressed by Macro Regime Filter: Counter-trend SHORT forbidden in confirmed bull regime "
+                f"(Close {curr_close:.2f} >= SMA200 {sma_200:.2f} and SPY {curr_spy_close:.2f} >= SMA50 {spy_sma_50:.2f})"
             )
         elif quality_metrics["grade"] == "NO_TRADE":
             final_signal = "HOLD"
