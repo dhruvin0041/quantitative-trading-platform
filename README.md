@@ -10,7 +10,7 @@
 An institutional-grade systematic algorithmic trading and risk management platform designed for US equity markets. The system couples multi-modal data ingestion, stationarized feature engineering, machine learning signal generation, symmetric macro regime filtering, dynamic asset expectancy gating, and volatility-adaptive trailing stop ratchets with an automated end-of-day (EOD) paper execution engine.
 
 <p align="center">
-  <img src="docs/screenshots/Screenshot%202026-09-18%20183035.png" alt="HYDRA V2 Institutional Command Center (Dark Mode)" width="100%" />
+  <img src="docs/screenshots/Screenshot%202026-09-18%20182855.png" alt="HYDRA V2 Institutional Command Center (Light Mode)" width="100%" />
 </p>
 
 ---
