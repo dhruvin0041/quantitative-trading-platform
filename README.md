@@ -9,6 +9,10 @@
 
 An institutional-grade systematic algorithmic trading and risk management platform designed for US equity markets. The system couples multi-modal data ingestion, stationarized feature engineering, machine learning signal generation, symmetric macro regime filtering, dynamic asset expectancy gating, and volatility-adaptive trailing stop ratchets with an automated end-of-day (EOD) paper execution engine.
 
+<p align="center">
+  <img src="docs/screenshots/Screenshot%202026-09-18%20183035.png" alt="HYDRA V2 Institutional Command Center (Dark Mode)" width="100%" />
+</p>
+
 ---
 
 ## 1. Executive Summary & Production Philosophy
@@ -294,7 +298,32 @@ Financial time series are non-stationary; training ML models directly on raw pri
 
 ---
 
-## 8. Repository Structure
+## 8. Institutional Command Center & Telemetry
+
+The platform features an institutional Next.js 16 command center (**HYDRA V2**) equipped with TradingView Lightweight Charts, real-time risk telemetry, multi-agent consensus transparency, and automated portfolio accounting:
+
+### 8.1 Command Center Interface (Dark & Light Modes)
+
+| Institutional Dark Mode | Daylight High-Contrast Mode |
+| :---: | :---: |
+| <img src="docs/screenshots/Screenshot%202026-09-18%20183035.png" alt="HYDRA V2 Dark Mode" width="100%" /> | <img src="docs/screenshots/Screenshot%202026-09-18%20182855.png" alt="HYDRA V2 Light Mode" width="100%" /> |
+| *Institutional Dark Mode — Interactive candlestick charts, real-time buy/sell signal overlays, and live RiskAgent feed.* | *Daylight High-Contrast Mode — Order routing status, real-time portfolio VaR gauge, and sector crowding monitors.* |
+
+### 8.2 Real-Time Consensus & Risk Analytics Panels
+
+| Multi-Agent Model Consensus | Institutional Risk Engine |
+| :---: | :---: |
+| <img src="docs/screenshots/Screenshot%202026-09-18%20182918.png" alt="Model Consensus" width="100%" /> | <img src="docs/screenshots/Screenshot%202026-09-18%20182932.png" alt="Risk Engine" width="100%" /> |
+| **Model Consensus**: Real-time vote matrix displaying individual model predictions, conviction confidence, ensemble weighting, and the Risk Agent's absolute veto authority. | **Risk Engine**: Multi-dimensional risk monitoring covering Half-Kelly position sizing, 95% VaR / CVaR limits, market regime status, and historical peak/trough drawdown. |
+
+| Portfolio Management & Capital Allocation | Technical Indicators & Regime Detection |
+| :---: | :---: |
+| <img src="docs/screenshots/Screenshot%202026-09-18%20182939.png" alt="Portfolio Management" width="100%" /> | <img src="docs/screenshots/Screenshot%202026-09-18%20182954.png" alt="Technicals & Analytics" width="100%" /> |
+| **Portfolio Accounting**: Real-time equity tracking, available liquidity reserves, daily/YTD PnL, realized vs. unrealized gains, and cash allocation bounds. | **Technical Analytics**: Quant indicators including 14-period RSI/Stochastic RSI, ADX trend strength, moving average alignment, ATR volatility regimes, and volume accumulation. |
+
+---
+
+## 9. Repository Structure
 
 ```text
 quantitative-trading-platform/
@@ -363,16 +392,16 @@ quantitative-trading-platform/
 
 ---
 
-## 9. Installation, Testing & Usage Guide
+## 10. Installation, Testing & Usage Guide
 
-### 9.1 Prerequisites
+### 10.1 Prerequisites
 * **Python**: `3.11+`
 * **Node.js**: `18.0+` (for optional frontend command center)
 * **Git**: `2.30+`
 
 ---
 
-### 9.2 Backend Setup
+### 10.2 Backend Setup
 ```bash
 # 1. Clone repository
 git clone https://github.com/dhruvin0041/quantitative-trading-platform.git
@@ -392,7 +421,8 @@ pip install -r requirements.txt
 
 ---
 
-### 9.3 Verification Suite
+<a id="verification-suite"></a>
+### 10.3 Verification Suite
 Ensure all institutional unit and integration tests pass cleanly:
 
 ```bash
@@ -405,7 +435,7 @@ ruff check .
 
 ---
 
-### 9.4 Running the Daily Paper Execution Runner
+### 10.4 Running the Daily Paper Execution Runner
 
 ```bash
 # 1. Dry-Run Mode (Recommended first run: zero broker or database mutations)
@@ -423,7 +453,7 @@ python execution/paper_runner.py --universe AAPL,MSFT,NVDA,GOOGL --target-risk 0
 
 ---
 
-### 9.5 Automated Daily EOD Scheduling
+### 10.5 Automated Daily EOD Scheduling
 
 The daily cycle is designed to run 15 minutes after US market close (**16:15 EST / 21:15 UTC**, Monday through Friday):
 
@@ -440,7 +470,7 @@ schtasks /create /tn "StockIndicator_DailyEOD" /tr "D:\DataScience\Projects\Data
 
 ---
 
-### 9.6 Running the Ground-Truth Walk-Forward Audit
+### 10.6 Running the Ground-Truth Walk-Forward Audit
 To reproduce the audited out-of-sample performance matrix across all 8 configurations:
 
 ```bash
@@ -453,6 +483,6 @@ python scripts/evaluation/final_audit.py --ablation pure_xgb
 
 ---
 
-## 10. Legal & Operational Disclaimer
+## 11. Legal & Operational Disclaimer
 
 This platform is a quantitative software engineering and machine learning research project. All strategies, signals, and simulated paper execution records are intended solely for research, testing, and educational purposes. Nothing contained in this codebase constitutes financial, investment, legal, or tax advice. Past empirical performance does not guarantee future results.
