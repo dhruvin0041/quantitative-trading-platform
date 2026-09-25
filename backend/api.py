@@ -5,6 +5,7 @@ import os
 import re
 import time
 from datetime import datetime
+from typing import Optional
 
 import pandas as pd
 import yfinance as yf
@@ -20,6 +21,11 @@ from prometheus_client import (
     Histogram,
     generate_latest,
 )
+
+try:
+    from execution.paper_runner import DailyPaperRunner
+except ImportError:
+    from backend.execution.paper_runner import DailyPaperRunner
 
 from src.agents.orchestrator import InstitutionalOrchestrator
 from src.data_ingestion.alternative_data import PhysicalEdgeAnalyzer
@@ -423,7 +429,24 @@ async def set_base_currency(request: Request):
     paper_engine.set_base_currency(new_currency)
     return {"status": "SUCCESS", "base_currency": new_currency}
 
-import json
+
+@app.get("/api/v1/portfolio/status", dependencies=[Depends(verify_api_key)])
+@app.get("/portfolio/status", dependencies=[Depends(verify_api_key)])
+async def get_portfolio_status(db_path: Optional[str] = None):
+    """
+    Institutional Read-Only Portfolio Status Inspection.
+    Streams real-time account balances, active positions, trailing stop ratchets,
+    and distance gauges directly from SQLite storage without triggering model inference.
+    """
+    try:
+        runner = DailyPaperRunner(state_db_path=db_path, status_only=True)
+        return await asyncio.to_thread(runner.display_portfolio_status, as_dict=True)
+    except Exception as e:
+        logger.error(f"Error fetching portfolio status: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500, detail=f"Failed to fetch portfolio status: {str(e)}"
+        )
+
 
 from fastapi.responses import StreamingResponse
 

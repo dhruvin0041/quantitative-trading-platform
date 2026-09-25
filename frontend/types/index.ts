@@ -266,3 +266,51 @@ export interface ChartData {
     snippet: string;
   }[];
 }
+
+export interface ReadOnlyAccountStatus {
+  cash: number;
+  equity: number;
+  buying_power: number;
+  currency: string;
+  initial_capital: number;
+  invested_capital: number;
+  allocation_pct: number;
+  cash_pct: number;
+  unrealized_pnl: number;
+  unrealized_pnl_pct: number;
+  total_pnl: number;
+  total_pnl_pct: number;
+}
+
+export interface ReadOnlyPosition {
+  symbol: string;
+  qty: number;
+  side: 'LONG' | 'SHORT';
+  avg_entry_price: number;
+  current_price: number;
+  market_value: number;
+  unrealized_pnl: number;
+  unrealized_pnl_pct: number;
+  stop_loss?: number | null;
+  take_profit?: number | null;
+}
+
+export interface ReadOnlyTrailingStop {
+  symbol: string;
+  side: 'LONG' | 'SHORT';
+  entry_price: number;
+  peak_trough_price: number;
+  stop_price: number;
+  multiplier: number;
+  atr: number;
+  distance_to_stop_pct: number;
+  updated_at: string;
+}
+
+export interface PortfolioStatusResponse {
+  account: ReadOnlyAccountStatus;
+  positions: ReadOnlyPosition[];
+  trailing_stops: ReadOnlyTrailingStop[];
+  timestamp: string;
+}
+

@@ -1114,7 +1114,9 @@ class DailyPaperRunner:
             print("Portfolio 100% in cash (no active open positions).")
         print("=" * 95 + "\n")
 
-    def display_portfolio_status(self) -> Dict[str, Any]:
+    def display_portfolio_status(
+        self, as_dict: bool = False, print_dashboard: Optional[bool] = None
+    ) -> Dict[str, Any]:
         """
         Institutional Read-Only Portfolio Status Inspection.
         Retrieves current account equity, cash balance, active positions,
@@ -1123,9 +1125,10 @@ class DailyPaperRunner:
         Guarantees:
         1. Pure read-only queries (zero DB mutations or table locks).
         2. Fast execution (bypasses data ingestion, feature pipeline, and model weights).
-        3. Formatted ASCII institutional terminal dashboard.
-        4. Returns structured dictionary for programmatic inspection and unit testing.
+        3. Formatted ASCII institutional terminal dashboard when print_dashboard is True.
+        4. Returns structured dictionary for web API endpoints and programmatic testing.
         """
+        should_print = not as_dict if print_dashboard is None else print_dashboard
         conn = None
         db_path = self.state_db_path
         if db_path and Path(db_path).exists():
@@ -1243,7 +1246,18 @@ class DailyPaperRunner:
                         )
                         stop_rows = cur.fetchall()
                     except Exception:
-                        stop_rows = []
+                        try:
+                            cur.execute(
+                                """
+                                SELECT symbol, side, entry_price, peak_trough_price, stop_price,
+                                       trail_mult, atr, updated_at
+                                FROM trailing_stops
+                                ORDER BY symbol
+                                """
+                            )
+                            stop_rows = cur.fetchall()
+                        except Exception:
+                            stop_rows = []
 
                 for r in stop_rows:
                     sym = str(r[0])
@@ -1303,72 +1317,73 @@ class DailyPaperRunner:
         )
 
         # Display ASCII Institutional Dashboard
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print("\n" + "=" * 95)
-        print("       INSTITUTIONAL QUANTITATIVE SYSTEM - PORTFOLIO STATUS (READ-ONLY)")
-        print("=" * 95)
-        print(f"Timestamp: {now_str} | Database: {self.state_db_path}")
+        if should_print:
+            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print("\n" + "=" * 95)
+            print("       INSTITUTIONAL QUANTITATIVE SYSTEM - PORTFOLIO STATUS (READ-ONLY)")
+            print("=" * 95)
+            print(f"Timestamp: {now_str} | Database: {self.state_db_path}")
 
-        print("\nACCOUNT OVERVIEW:")
-        tot_unreal_fmt = (
-            f"+${total_unrealized_pnl:,.2f}"
-            if total_unrealized_pnl >= 0
-            else f"-${abs(total_unrealized_pnl):,.2f}"
-        )
-        print(f"  Total Equity:        ${total_equity:,.2f} {currency}")
-        print(f"  Cash Balance:        ${cash:,.2f} ({cash_pct:.1f}% of portfolio)")
-        print(f"  Buying Power:        ${buying_power:,.2f}")
-        print(f"  Invested Capital:    ${invested_capital:,.2f} ({allocation_pct:.1f}% allocation)")
-        print(f"  Unrealized PnL:      {tot_unreal_fmt} ({total_unrealized_pct:+.2f}%)")
-        tot_pnl_fmt = (
-            f"+${total_pnl:,.2f}"
-            if total_pnl >= 0
-            else f"-${abs(total_pnl):,.2f}"
-        )
-        print(
-            f"  Initial Capital:     ${initial_capital:,.2f} (Total PnL: {tot_pnl_fmt} / {total_pnl_pct:+.2f}%)"
-        )
-
-        print(f"\nACTIVE POSITIONS ({len(positions_list)}):")
-        if positions_list:
-            print(
-                f"{'Symbol':<8} | {'Side':<6} | {'Qty':<6} | {'Entry Price':<12} | "
-                f"{'Current Price':<14} | {'Market Value':<14} | {'Unrealized PnL'}"
+            print("\nACCOUNT OVERVIEW:")
+            tot_unreal_fmt = (
+                f"+${total_unrealized_pnl:,.2f}"
+                if total_unrealized_pnl >= 0
+                else f"-${abs(total_unrealized_pnl):,.2f}"
             )
-            print("-" * 95)
-            for p in positions_list:
-                qty_str = (
-                    f"{int(p['qty'])}" if float(p['qty']).is_integer() else f"{p['qty']:.2f}"
-                )
-                pnl_val = p["unrealized_pnl"]
-                pnl_prefix = f"+${pnl_val:,.2f}" if pnl_val >= 0 else f"-${abs(pnl_val):,.2f}"
-                pnl_str = f"{pnl_prefix} ({p['unrealized_pnl_pct']:+.2f}%)"
-                print(
-                    f"{p['symbol']:<8} | {p['side']:<6} | {qty_str:<6} | "
-                    f"${p['avg_entry_price']:<11.2f} | ${p['current_price']:<13.2f} | "
-                    f"${abs(p['market_value']):<13,.2f} | {pnl_str}"
-                )
-        else:
-            print("Portfolio 100% in cash (no active open positions).")
-
-        print(f"\nACTIVE TRAILING STOPS ({len(trailing_stops_list)}):")
-        if trailing_stops_list:
-            print(
-                f"{'Symbol':<8} | {'Side':<6} | {'Entry Price':<12} | {'Peak / Trough':<14} | "
-                f"{'Stop Price':<12} | {'Multiplier':<10} | {'Distance to Stop'}"
+            print(f"  Total Equity:        ${total_equity:,.2f} {currency}")
+            print(f"  Cash Balance:        ${cash:,.2f} ({cash_pct:.1f}% of portfolio)")
+            print(f"  Buying Power:        ${buying_power:,.2f}")
+            print(f"  Invested Capital:    ${invested_capital:,.2f} ({allocation_pct:.1f}% allocation)")
+            print(f"  Unrealized PnL:      {tot_unreal_fmt} ({total_unrealized_pct:+.2f}%)")
+            tot_pnl_fmt = (
+                f"+${total_pnl:,.2f}"
+                if total_pnl >= 0
+                else f"-${abs(total_pnl):,.2f}"
             )
-            print("-" * 95)
-            for ts in trailing_stops_list:
-                side_note = "below" if ts["side"] == "LONG" else "above"
-                dist_str = f"{ts['distance_to_stop_pct']:+.2f}% ({side_note})"
+            print(
+                f"  Initial Capital:     ${initial_capital:,.2f} (Total PnL: {tot_pnl_fmt} / {total_pnl_pct:+.2f}%)"
+            )
+
+            print(f"\nACTIVE POSITIONS ({len(positions_list)}):")
+            if positions_list:
                 print(
-                    f"{ts['symbol']:<8} | {ts['side']:<6} | ${ts['entry_price']:<11.2f} | "
-                    f"${ts['peak_trough_price']:<13.2f} | ${ts['stop_price']:<11.2f} | "
-                    f"{ts['multiplier']:<4.2f}x     | {dist_str}"
+                    f"{'Symbol':<8} | {'Side':<6} | {'Qty':<6} | {'Entry Price':<12} | "
+                    f"{'Current Price':<14} | {'Market Value':<14} | {'Unrealized PnL'}"
                 )
-        else:
-            print("No active trailing stops registered.")
-        print("=" * 95 + "\n")
+                print("-" * 95)
+                for p in positions_list:
+                    qty_str = (
+                        f"{int(p['qty'])}" if float(p['qty']).is_integer() else f"{p['qty']:.2f}"
+                    )
+                    pnl_val = p["unrealized_pnl"]
+                    pnl_prefix = f"+${pnl_val:,.2f}" if pnl_val >= 0 else f"-${abs(pnl_val):,.2f}"
+                    pnl_str = f"{pnl_prefix} ({p['unrealized_pnl_pct']:+.2f}%)"
+                    print(
+                        f"{p['symbol']:<8} | {p['side']:<6} | {qty_str:<6} | "
+                        f"${p['avg_entry_price']:<11.2f} | ${p['current_price']:<13.2f} | "
+                        f"${abs(p['market_value']):<13,.2f} | {pnl_str}"
+                    )
+            else:
+                print("Portfolio 100% in cash (no active open positions).")
+
+            print(f"\nACTIVE TRAILING STOPS ({len(trailing_stops_list)}):")
+            if trailing_stops_list:
+                print(
+                    f"{'Symbol':<8} | {'Side':<6} | {'Entry Price':<12} | {'Peak / Trough':<14} | "
+                    f"{'Stop Price':<12} | {'Multiplier':<10} | {'Distance to Stop'}"
+                )
+                print("-" * 95)
+                for ts in trailing_stops_list:
+                    side_note = "below" if ts["side"] == "LONG" else "above"
+                    dist_str = f"{ts['distance_to_stop_pct']:+.2f}% ({side_note})"
+                    print(
+                        f"{ts['symbol']:<8} | {ts['side']:<6} | ${ts['entry_price']:<11.2f} | "
+                        f"${ts['peak_trough_price']:<13.2f} | ${ts['stop_price']:<11.2f} | "
+                        f"{ts['multiplier']:<4.2f}x     | {dist_str}"
+                    )
+            else:
+                print("No active trailing stops registered.")
+            print("=" * 95 + "\n")
 
         return {
             "account": {

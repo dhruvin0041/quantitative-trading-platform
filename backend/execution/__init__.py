@@ -7,7 +7,9 @@ if str(BACKEND_DIR) not in sys.path:
 
 try:
     from execution.broker_interface import BaseBrokerAdapter, MockPaperBroker
+    from execution.paper_runner import DailyPaperRunner
 except ImportError:
     from .broker_interface import BaseBrokerAdapter, MockPaperBroker
+    from .paper_runner import DailyPaperRunner
 
-__all__ = ["BaseBrokerAdapter", "MockPaperBroker"]
+__all__ = ["BaseBrokerAdapter", "MockPaperBroker", "DailyPaperRunner"]
