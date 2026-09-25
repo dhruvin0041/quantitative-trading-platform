@@ -66,9 +66,9 @@ class DailyPaperRunner:
         self.max_portfolio_allocation = max_portfolio_allocation
 
         if state_db_path is None:
-            artifacts_dir = BACKEND_DIR / "artifacts"
-            artifacts_dir.mkdir(parents=True, exist_ok=True)
-            self.state_db_path = str(artifacts_dir / "paper_execution_state.db")
+            data_dir = BACKEND_DIR / "data"
+            data_dir.mkdir(parents=True, exist_ok=True)
+            self.state_db_path = str(data_dir / "paper_trading.db")
         else:
             self.state_db_path = state_db_path
 
@@ -174,9 +174,44 @@ class DailyPaperRunner:
                     peak_trough_price REAL NOT NULL,
                     stop_price REAL NOT NULL,
                     ts_mult REAL NOT NULL,
+                    trail_mult REAL,
                     atr REAL NOT NULL,
                     updated_at TEXT NOT NULL
                 )
+                """
+            )
+            # Create compatibility views for institutional queries
+            cur.execute(
+                """
+                CREATE VIEW IF NOT EXISTS orders AS
+                SELECT
+                    order_id,
+                    symbol,
+                    qty,
+                    side,
+                    order_type,
+                    status,
+                    fill_price,
+                    slippage_bps,
+                    stop_loss,
+                    take_profit,
+                    timestamp,
+                    raw_payload
+                FROM broker_orders
+                """
+            )
+            cur.execute(
+                """
+                CREATE VIEW IF NOT EXISTS positions AS
+                SELECT
+                    symbol,
+                    qty,
+                    side,
+                    avg_entry_price,
+                    current_price,
+                    stop_loss,
+                    take_profit
+                FROM broker_positions
                 """
             )
             conn.commit()
@@ -910,6 +945,26 @@ class DailyPaperRunner:
             if conn:
                 conn.close()
 
+        # Mirror DB state to both backend/data/paper_trading.db and backend/artifacts/paper_execution_state.db
+        try:
+            data_dir = BACKEND_DIR / "data"
+            data_dir.mkdir(parents=True, exist_ok=True)
+            artifacts_dir = BACKEND_DIR / "artifacts"
+            artifacts_dir.mkdir(parents=True, exist_ok=True)
+
+            target_data_db = data_dir / "paper_trading.db"
+            target_artifacts_db = artifacts_dir / "paper_execution_state.db"
+
+            current_db = Path(self.state_db_path).resolve()
+            if current_db == target_data_db.resolve():
+                import shutil
+                shutil.copy2(self.state_db_path, str(target_artifacts_db))
+            elif current_db == target_artifacts_db.resolve():
+                import shutil
+                shutil.copy2(self.state_db_path, str(target_data_db))
+        except Exception as e:
+            logger.debug("Failed to mirror DB to secondary location: %s", e)
+
     def _get_trailing_stop_state(self, symbol: str) -> Optional[Dict[str, Any]]:
         conn = None
         try:
@@ -954,8 +1009,8 @@ class DailyPaperRunner:
             cur.execute(
                 """
                 INSERT OR REPLACE INTO trailing_stops (
-                    symbol, side, entry_price, peak_trough_price, stop_price, ts_mult, atr, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    symbol, side, entry_price, peak_trough_price, stop_price, ts_mult, trail_mult, atr, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     symbol,
@@ -963,6 +1018,7 @@ class DailyPaperRunner:
                     entry_p,
                     peak_trough_p,
                     stop_p,
+                    ts_mult,
                     ts_mult,
                     atr,
                     datetime.now().isoformat(),
