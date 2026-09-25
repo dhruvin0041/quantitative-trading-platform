@@ -2,37 +2,23 @@
 REM ==============================================================================
 REM Institutional Automated Daily Execution Runner (Windows Task Scheduler / Batch)
 REM 
-REM Cron Schedule Equivalent:
-REM   Mon-Fri at 16:15 EST (15 minutes after US market close: 21:15 UTC standard)
-REM   Cron Expression: 15 16 * * 1-5
-REM 
 REM Windows Task Scheduler Setup:
-REM   schtasks /create /tn "StockIndicator_DailyEOD" /tr "%~dp0run_daily_eod.bat" /sc weekly /d MON,TUE,WED,THU,FRI /st 16:15
-REM 
-REM Usage:
-REM   run_daily_eod.bat              (Live paper execution with Pure XGBoost flagship)
-REM   run_daily_eod.bat --dry-run    (Simulated run with zero broker/db mutations)
-REM   run_daily_eod.bat --use-veto   (Enables secondary asymmetric veto consensus)
+REM   schtasks /create /tn "StockIndicator_DailyEOD" /tr "D:\DataScience\Projects\Data_Science_Projects\Stock_Indicator\backend\scripts\ops\run_daily_eod.bat" /sc weekly /d MON,TUE,WED,THU,FRI /st 16:15 /f
 REM ==============================================================================
 
-setlocal enabledelayedexpansion
+:: Navigate to project root explicitly
+cd /d "D:\DataScience\Projects\Data_Science_Projects\Stock_Indicator"
 
-REM Set root working directory to backend
-cd /d "%~dp0..\.."
+:: Ensure artifacts directory exists for logging
+if not exist "backend\artifacts" mkdir "backend\artifacts"
 
-REM Activate virtual environment if present
-if exist "venv\Scripts\activate.bat" (
-    call "venv\Scripts\activate.bat"
-)
+:: Resolve virtual environment Python executable
+set PYTHON_BIN=backend\venv\Scripts\python.exe
+if not exist "%PYTHON_BIN%" set PYTHON_BIN=venv\Scripts\python.exe
+if not exist "%PYTHON_BIN%" set PYTHON_BIN=python.exe
 
-echo [%DATE% %TIME%] Starting Automated Daily EOD Execution Run...
-python execution\paper_runner.py %*
-set EXIT_CODE=%ERRORLEVEL%
+echo [%DATE% %TIME%] Starting Automated Daily EOD Execution Run... >> backend\artifacts\paper_execution.log 2>&1
 
-if %EXIT_CODE% equ 0 (
-    echo [%DATE% %TIME%] Automated Daily EOD Execution Run completed successfully.
-) else (
-    echo [%DATE% %TIME%] ERROR: Daily EOD Execution Run failed with exit code %EXIT_CODE%.
-)
+"%PYTHON_BIN%" -m backend.execution.paper_runner %* >> backend\artifacts\paper_execution.log 2>&1
 
-exit /b %EXIT_CODE%
+echo [%DATE% %TIME%] Automated Daily EOD Execution Run finished. >> backend\artifacts\paper_execution.log 2>&1
