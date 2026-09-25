@@ -10,7 +10,7 @@ slow_len       = input.int(24, "Slow MA Length (Blue)", minval=1, group="1. Tren
 k_lookback     = input.int(3, "Slope Lookback k (bars)", minval=1, maxval=10, group="1. Trend & Macro Alignment", tooltip="Lookback window k for slope calculation: MA_t - MA_{t-k}")
 
 // Layer 2: State-Machine Cooldown (Refractory Period)
-cooldown_bars  = input.int(7, "Cooldown Period (Bars)", minval=3, maxval=15, group="2. State-Machine Cooldown", tooltip="Minimum bars required between consecutive executions in the same direction")
+cooldown_bars  = input.int(7, "Cooldown Period (Bars)", minval=3, maxval=15, group="2. State-Machine Cooldown", tooltip="Minimum bars required between consecutive executions in the same direction or post-exit")
 
 // Layer 3: Dynamic ATR-Ratcheting Trailing Exits
 atr_period     = input.int(14, "ATR Period", minval=1, group="3. Dynamic Trailing Exit")
@@ -47,60 +47,56 @@ bullish_trigger = ta.crossover(fast_ma, slow_ma) or (low[1] <= fast_ma[1] and cl
 bearish_trigger = ta.crossunder(fast_ma, slow_ma) or (high[1] >= fast_ma[1] and close < fast_ma and close < close[1]) or (high[1] >= high[2] and close < low[1])
 
 // =============================================================================
-// STATE-MACHINE PERSISTENCE ACROSS BARS
+// STATE-MACHINE PERSISTENCE & POST-EXIT REFRACTORY COOLDOWN
 // =============================================================================
 var int   last_long_bar   = -9999
 var int   last_short_bar  = -9999
-var float current_stop    = na
-var bool  in_long_position = false
+var int   last_exit_bar   = -9999
+var float long_stop       = na
+var float short_stop      = na
+
+// Track closed trades to enforce identical post-stop refractory cooldown in Pine Script
+if ta.change(strategy.closedtrades) > 0
+    last_exit_bar := bar_index
+
+// Post-exit refractory condition
+post_exit_ok = (bar_index - last_exit_bar) >= cooldown_bars
 
 // =============================================================================
-// LAYER 3: DYNAMIC ATR-RATCHETING TRAILING EXITS (Active Monitoring)
+// LAYER 3: DYNAMIC ATR-RATCHETING TRAILING EXITS (Native Bracket Orders)
 // =============================================================================
-bool exit_triggered = false
+// Eliminate bar-close exit distortion and execution lag using native bracket stop orders
+if strategy.position_size > 0
+    float candidate_long_stop = high - (trail_mult * atr_val)
+    long_stop := math.max(nz(long_stop, low), candidate_long_stop)
+    strategy.exit("Exit Long", "Long", stop=long_stop)
+else
+    long_stop := na
 
-if in_long_position
-    // Exit Execution: Triggered if bar Low breaches the active Stop level
-    if low <= current_stop
-        strategy.close("Long", comment="Stop Exit")
-        in_long_position := false
-        current_stop     := na
-        exit_triggered   := true
-        // Reset cooldown counters when position is completely closed by stop
-        last_long_bar    := -9999
-        last_short_bar   := -9999
-    else
-        // Ratcheting Mechanism: Stop_t = max(Stop_{t-1}, High_t - trail_mult * ATR)
-        // Upward-only constraint: stop must never ratchet downward while holding long
-        float candidate_stop = high - (trail_mult * atr_val)
-        current_stop := math.max(current_stop, candidate_stop)
+if strategy.position_size < 0
+    float candidate_short_stop = low + (trail_mult * atr_val)
+    short_stop := math.min(nz(short_stop, high), candidate_short_stop)
+    strategy.exit("Exit Short", "Short", stop=short_stop)
+else
+    short_stop := na
 
 // =============================================================================
 // LAYER 2: STATE-MACHINE COOLDOWN & ENTRY LOGIC
 // =============================================================================
 // Long Entry Execution
-if bullish_trigger and long_trend_aligned and not in_long_position and not exit_triggered
-    // State Gating: Suppress new BUY if within refractory cooldown period
+if bullish_trigger and long_trend_aligned and (strategy.position_size <= 0) and post_exit_ok
     if (bar_index - last_long_bar) >= cooldown_bars
-        in_long_position := true
-        last_long_bar    := bar_index
-        last_short_bar   := -9999 // Reset opposite counter
-
-        // Initial Stop on Entry: Stop_0 = Entry Price - (trail_mult * ATR_14)
-        current_stop     := close - (trail_mult * atr_val)
+        last_long_bar := bar_index
+        last_short_bar := -9999
+        long_stop := close - (trail_mult * atr_val)
         strategy.entry("Long", strategy.long, comment="BUY")
 
-// Short Entry / Reversal Execution
-if bearish_trigger and short_trend_aligned and not short_prohibited
-    // State Gating: Suppress new SELL if within refractory cooldown period
+// Short Entry Execution
+if bearish_trigger and short_trend_aligned and not short_prohibited and (strategy.position_size >= 0) and post_exit_ok
     if (bar_index - last_short_bar) >= cooldown_bars
-        if in_long_position
-            strategy.close("Long", comment="Reverse Exit")
-            in_long_position := false
-            current_stop     := na
-
         last_short_bar := bar_index
-        last_long_bar  := -9999 // Reset opposite counter
+        last_long_bar := -9999
+        short_stop := close + (trail_mult * atr_val)
         strategy.entry("Short", strategy.short, comment="SELL")
 
 // =============================================================================
@@ -110,11 +106,14 @@ plot(fast_ma, "Fast MA (Orange)", color=color.new(#FF8C38, 0), linewidth=2)
 plot(slow_ma, "Slow MA (Blue)",   color=color.new(#4FC3F7, 0), linewidth=2)
 
 // Plot the active trailing stop line visually (discrete orange/red circles) ONLY while position is live
-plot(in_long_position ? current_stop : na, "ATR Ratcheting Trailing Stop", 
-     color=color.new(#FF5722, 0), style=plot.style_circles, linewidth=2)
+plot(strategy.position_size > 0 ? long_stop : strategy.position_size < 0 ? short_stop : na,
+     "ATR Ratcheting Trailing Stop", color=color.new(#FF5722, 0), style=plot.style_circles, linewidth=2)
 
 // Visual shape markers
-plotshape(bullish_trigger and long_trend_aligned and (bar_index - last_long_bar[1] >= cooldown_bars) and not in_long_position[1], 
+plotshape(bullish_trigger and long_trend_aligned and post_exit_ok and (bar_index - last_long_bar[1] >= cooldown_bars) and strategy.position_size[1] <= 0,
           title="Buy Signal Marker", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small, text="BUY")
 
-plotshape(exit_triggered, title="Trailing Stop Exit Marker", style=shape.circle, location=location.abovebar, color=color.red, size=size.small, text="STOP")
+plotshape(bearish_trigger and short_trend_aligned and not short_prohibited and post_exit_ok and (bar_index - last_short_bar[1] >= cooldown_bars) and strategy.position_size[1] >= 0,
+          title="Sell Signal Marker", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small, text="SELL")
+
+plotshape(ta.change(strategy.closedtrades) > 0, title="Trailing Stop Exit Marker", style=shape.circle, location=location.abovebar, color=color.red, size=size.small, text="STOP")

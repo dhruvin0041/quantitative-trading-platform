@@ -68,10 +68,11 @@ class ReportGenerator:
         # =========================================================================
         # 1. INDICATOR DEFINITIONS
         # =========================================================================
-        # fast_ma = Orange Moving Average (Ribbon_Fast, 12 EMA)
-        # slow_ma = Blue Moving Average (Ribbon_Slow, 24 EMA)
+        # Align features to df_full index to prevent shape mismatch if macro indicators drop edge rows
         if "Ribbon_Fast" in df_features.columns:
-            fast_ma = df_features["Ribbon_Fast"].values
+            fast_ma = (
+                df_features["Ribbon_Fast"].reindex(df_full.index).ffill().bfill().values
+            )
         else:
             fast_ma = (
                 ta.trend.EMAIndicator(close=df_full["Close"], window=12)
@@ -80,7 +81,9 @@ class ReportGenerator:
             )
 
         if "Ribbon_Slow" in df_features.columns:
-            slow_ma = df_features["Ribbon_Slow"].values
+            slow_ma = (
+                df_features["Ribbon_Slow"].reindex(df_full.index).ffill().bfill().values
+            )
         else:
             slow_ma = (
                 ta.trend.EMAIndicator(close=df_full["Close"], window=24)
@@ -90,7 +93,7 @@ class ReportGenerator:
 
         # Volatility: ATR(14)
         if atr_period == 14 and "ATR" in df_features.columns:
-            atr = df_features["ATR"].values
+            atr = df_features["ATR"].reindex(df_full.index).ffill().bfill().values
         else:
             atr_ins = ta.volatility.AverageTrueRange(
                 high=df_full["High"],
@@ -112,9 +115,13 @@ class ReportGenerator:
         # 2. STATE-MACHINE VARIABLES (Persistent across bars, strictly causal)
         # =========================================================================
         in_long_position = False
-        current_stop = np.nan
+        current_long_stop = np.nan
+        in_short_position = False
+        current_short_stop = np.nan
+
         last_long_bar = -9999
         last_short_bar = -9999
+        last_exit_bar = -9999
 
         start_idx = min_required_bars
 
@@ -129,31 +136,55 @@ class ReportGenerator:
             ):
                 continue
 
+            # Loop-scoped flag: Prevents same-bar exit and re-entry
+            exit_triggered_this_bar = False
+
             # =====================================================================
             # LAYER 3: DYNAMIC ATR-RATCHETING TRAILING EXITS (Position Monitoring)
             # =====================================================================
             if in_long_position:
                 # Exit Execution: Triggered if current bar Low breaches the active Stop
-                if lows[t] <= current_stop:
+                if lows[t] <= current_long_stop:
                     markers.append(
                         {
                             "time": dates[t],
                             "action": "EXIT",
-                            "label": f"Stop Exit @ {current_stop:.2f}",
+                            "label": f"Stop Exit @ {current_long_stop:.2f}",
                             "probability": 100,
                         }
                     )
                     in_long_position = False
-                    current_stop = np.nan
-                    # Reset cooldown counters when position is completely closed by stop
-                    last_long_bar = -9999
-                    last_short_bar = -9999
+                    current_long_stop = np.nan
+                    last_exit_bar = t
+                    exit_triggered_this_bar = True
                 else:
                     # Ratcheting Mechanism: Stop_t = max(Stop_{t-1}, High_t - trail_mult * ATR)
                     # Constraint: Stop line can only move upward; never downward while long
                     candidate_stop = highs[t] - (trail_mult * atr[t])
-                    current_stop = max(current_stop, candidate_stop)
-                    trailing_stop_series[t] = current_stop
+                    current_long_stop = max(current_long_stop, candidate_stop)
+                    trailing_stop_series[t] = current_long_stop
+
+            elif in_short_position:
+                # Exit Execution: Triggered if current bar High breaches the active Short Stop
+                if highs[t] >= current_short_stop:
+                    markers.append(
+                        {
+                            "time": dates[t],
+                            "action": "EXIT",
+                            "label": f"Short Stop Exit @ {current_short_stop:.2f}",
+                            "probability": 100,
+                        }
+                    )
+                    in_short_position = False
+                    current_short_stop = np.nan
+                    last_exit_bar = t
+                    exit_triggered_this_bar = True
+                else:
+                    # Ratcheting Mechanism: Short Stop_t = min(Stop_{t-1}, Low_t + trail_mult * ATR)
+                    # Constraint: Stop line can only move downward; never upward while short
+                    candidate_short_stop = lows[t] + (trail_mult * atr[t])
+                    current_short_stop = min(current_short_stop, candidate_short_stop)
+                    trailing_stop_series[t] = current_short_stop
 
             # =====================================================================
             # LAYER 1: TREND ALIGNMENT & MACRO DIRECTIONAL FILTER
@@ -202,19 +233,41 @@ class ReportGenerator:
             # =====================================================================
             # LAYER 2: STATE-MACHINE COOLDOWN & ORDER EXECUTION
             # =====================================================================
+            # Refractory Period Check: Must be at least cooldown_bars since the last stop exit
+            post_exit_ok = (t - last_exit_bar) >= cooldown_bars
+
             # Process Long Entry
-            if raw_buy_trigger and long_trend_aligned and not in_long_position:
+            if (
+                raw_buy_trigger
+                and long_trend_aligned
+                and not in_long_position
+                and not exit_triggered_this_bar
+                and post_exit_ok
+            ):
                 # State Gating: Suppress any new BUY if (current_bar - last_long_bar) < cooldown_bars
                 if (t - last_long_bar) >= cooldown_bars:
+                    # If in short position, reverse exit first
+                    if in_short_position:
+                        markers.append(
+                            {
+                                "time": dates[t],
+                                "action": "EXIT",
+                                "label": "Reverse Exit",
+                                "probability": 100,
+                            }
+                        )
+                        in_short_position = False
+                        current_short_stop = np.nan
+                        last_exit_bar = t
+
                     in_long_position = True
                     entry_price = closes[t]
                     last_long_bar = t
-                    # Reset cooldown counter on opposite-direction trigger
                     last_short_bar = -9999
 
                     # Initial Stop on Entry: Stop_0 = Entry Price - (trail_mult * ATR_14)
-                    current_stop = entry_price - (trail_mult * atr[t])
-                    trailing_stop_series[t] = current_stop
+                    current_long_stop = entry_price - (trail_mult * atr[t])
+                    trailing_stop_series[t] = current_long_stop
 
                     markers.append(
                         {
@@ -226,7 +279,14 @@ class ReportGenerator:
                     )
 
             # Process Short Entry / Reverse Exit
-            elif raw_sell_trigger and short_trend_aligned and not short_prohibited:
+            elif (
+                raw_sell_trigger
+                and short_trend_aligned
+                and not short_prohibited
+                and not in_short_position
+                and not exit_triggered_this_bar
+                and post_exit_ok
+            ):
                 # State Gating: Suppress any new SELL if (current_bar - last_short_bar) < cooldown_bars
                 if (t - last_short_bar) >= cooldown_bars:
                     # If long position is active, reverse exit long first
@@ -240,11 +300,17 @@ class ReportGenerator:
                             }
                         )
                         in_long_position = False
-                        current_stop = np.nan
+                        current_long_stop = np.nan
+                        last_exit_bar = t
 
+                    in_short_position = True
+                    entry_price = closes[t]
                     last_short_bar = t
-                    # Reset cooldown counter on opposite-direction trigger
                     last_long_bar = -9999
+
+                    # Initial Stop on Short Entry: Stop_0 = Entry Price + (trail_mult * ATR_14)
+                    current_short_stop = entry_price + (trail_mult * atr[t])
+                    trailing_stop_series[t] = current_short_stop
 
                     markers.append(
                         {
