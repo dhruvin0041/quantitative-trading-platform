@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import ta
 
 from src.data_ingestion.technical_indicators import (
     add_advanced_features,
@@ -11,42 +12,251 @@ class ReportGenerator:
     """
     Handles generation of historical markers, chart data, and AI reports
     to decouple logic from the primary API routing.
+
+    Implements a 3-layer quantitative strategy architecture:
+    1. Trend Alignment & Macro Directional Filter (Moving average hierarchy & momentum slope)
+    2. State-Machine Cooldown / Refractory Period (Eliminates signal clustering & over-allocation)
+    3. Dynamic ATR-Ratcheting Trailing Exits (Eliminates premature peak-fading exits)
     """
 
-    def __init__(self, kept_features_list):
+    def __init__(
+        self,
+        kept_features_list,
+        k: int = 3,
+        cooldown_bars: int = 7,
+        atr_period: int = 14,
+        trail_mult: float = 2.5,
+    ):
         self.kept_features_list = kept_features_list
+        self.k = k
+        self.cooldown_bars = cooldown_bars
+        self.atr_period = atr_period
+        self.trail_mult = trail_mult
 
-    def generate_historical_markers(self, ticker, df_raw):
+    def generate_historical_markers(
+        self,
+        ticker,
+        df_raw,
+        k: int | None = None,
+        cooldown_bars: int | None = None,
+        atr_period: int | None = None,
+        trail_mult: float | None = None,
+    ):
         """
-        Detects swing highs and lows to provide context.
+        Detects causal, non-repainting historical trade execution markers
+        and dynamic ATR trailing stop overlays governed by three algorithmic layers:
+        1. Trend Alignment & Macro Directional Filter
+        2. State-Machine Cooldown (Refractory Period)
+        3. Dynamic ATR-Ratcheting Trailing Exits
         """
+        k = k if k is not None else self.k
+        cooldown_bars = cooldown_bars if cooldown_bars is not None else self.cooldown_bars
+        atr_period = atr_period if atr_period is not None else self.atr_period
+        trail_mult = trail_mult if trail_mult is not None else self.trail_mult
+
         df_full = clean_multiindex_columns(df_raw.copy())
+        n = len(df_full)
+        min_required_bars = max(k + 1, atr_period + 1, 24)
 
-        # Detect Pivots
-        prices = df_full["Close"].values
+        if df_full.empty or n < min_required_bars:
+            df_full["trailing_stop"] = np.nan
+            return [], df_full
+
+        df_features = add_advanced_features(df_full.copy())
+        df_features = clean_multiindex_columns(df_features)
+
+        # =========================================================================
+        # 1. INDICATOR DEFINITIONS
+        # =========================================================================
+        # fast_ma = Orange Moving Average (Ribbon_Fast, 12 EMA)
+        # slow_ma = Blue Moving Average (Ribbon_Slow, 24 EMA)
+        if "Ribbon_Fast" in df_features.columns:
+            fast_ma = df_features["Ribbon_Fast"].values
+        else:
+            fast_ma = (
+                ta.trend.EMAIndicator(close=df_full["Close"], window=12)
+                .ema_indicator()
+                .values
+            )
+
+        if "Ribbon_Slow" in df_features.columns:
+            slow_ma = df_features["Ribbon_Slow"].values
+        else:
+            slow_ma = (
+                ta.trend.EMAIndicator(close=df_full["Close"], window=24)
+                .ema_indicator()
+                .values
+            )
+
+        # Volatility: ATR(14)
+        if atr_period == 14 and "ATR" in df_features.columns:
+            atr = df_features["ATR"].values
+        else:
+            atr_ins = ta.volatility.AverageTrueRange(
+                high=df_full["High"],
+                low=df_full["Low"],
+                close=df_full["Close"],
+                window=atr_period,
+            )
+            atr = atr_ins.average_true_range().ffill().bfill().values
+
+        closes = df_full["Close"].values
         highs = df_full["High"].values
         lows = df_full["Low"].values
         dates = df_full.index.strftime("%Y-%m-%d").tolist()
 
-        window = 3
+        trailing_stop_series = np.full(n, np.nan)
         markers = []
 
-        for i in range(window, len(prices) - window):
-            action = "SKIP"
-            if lows[i] == np.min(lows[i - window : i + window + 1]):
-                action = "BUY"
-            elif highs[i] == np.max(highs[i - window : i + window + 1]):
-                action = "SELL"
+        # =========================================================================
+        # 2. STATE-MACHINE VARIABLES (Persistent across bars, strictly causal)
+        # =========================================================================
+        in_long_position = False
+        current_stop = np.nan
+        last_long_bar = -9999
+        last_short_bar = -9999
 
-            if action != "SKIP":
-                markers.append(
-                    {
-                        "time": dates[i],
-                        "action": action,
-                        "label": action,
-                        "probability": 100,
-                    }
-                )
+        start_idx = min_required_bars
+
+        for t in range(start_idx, n):
+            # Guard against any NaN values in calculation window
+            if (
+                np.isnan(fast_ma[t])
+                or np.isnan(slow_ma[t])
+                or np.isnan(fast_ma[t - k])
+                or np.isnan(slow_ma[t - k])
+                or np.isnan(atr[t])
+            ):
+                continue
+
+            # =====================================================================
+            # LAYER 3: DYNAMIC ATR-RATCHETING TRAILING EXITS (Position Monitoring)
+            # =====================================================================
+            if in_long_position:
+                # Exit Execution: Triggered if current bar Low breaches the active Stop
+                if lows[t] <= current_stop:
+                    markers.append(
+                        {
+                            "time": dates[t],
+                            "action": "EXIT",
+                            "label": f"Stop Exit @ {current_stop:.2f}",
+                            "probability": 100,
+                        }
+                    )
+                    in_long_position = False
+                    current_stop = np.nan
+                    # Reset cooldown counters when position is completely closed by stop
+                    last_long_bar = -9999
+                    last_short_bar = -9999
+                else:
+                    # Ratcheting Mechanism: Stop_t = max(Stop_{t-1}, High_t - trail_mult * ATR)
+                    # Constraint: Stop line can only move upward; never downward while long
+                    candidate_stop = highs[t] - (trail_mult * atr[t])
+                    current_stop = max(current_stop, candidate_stop)
+                    trailing_stop_series[t] = current_stop
+
+            # =====================================================================
+            # LAYER 1: TREND ALIGNMENT & MACRO DIRECTIONAL FILTER
+            # =====================================================================
+            # Slope Calculation over lookback window k: slope(MA) = MA_t - MA_{t-k}
+            slope_fast = fast_ma[t] - fast_ma[t - k]
+            slope_slow = slow_ma[t] - slow_ma[t - k]
+
+            # Long Entry Filter:
+            # 1. fast_ma > slow_ma
+            # 2. slope(fast_ma) > 0 and slope(slow_ma) > 0
+            # 3. Close > slow_ma
+            long_trend_aligned = (
+                (fast_ma[t] > slow_ma[t])
+                and (slope_fast > 0)
+                and (slope_slow > 0)
+                and (closes[t] > slow_ma[t])
+            )
+
+            # Short Entry Filter:
+            # - Hard Prohibition: Completely suppress all SELL/Short signals while Close > slow_ma
+            # - Valid only if Close < slow_ma AND fast_ma < slow_ma AND slope(slow_ma) < 0
+            short_prohibited = closes[t] > slow_ma[t]
+            short_trend_aligned = (
+                (not short_prohibited)
+                and (closes[t] < slow_ma[t])
+                and (fast_ma[t] < slow_ma[t])
+                and (slope_slow < 0)
+            )
+
+            # Technical Entry Triggers (Confirmed on bar close):
+            # Bullish: Golden cross OR pullback bounce off the moving average ribbon OR confirmed pivot low
+            raw_buy_trigger = (
+                (fast_ma[t] > slow_ma[t] and fast_ma[t - 1] <= slow_ma[t - 1])
+                or (lows[t - 1] <= fast_ma[t - 1] and closes[t] > fast_ma[t] and closes[t] > closes[t - 1])
+                or (lows[t - 1] <= lows[t - 2] and closes[t] > highs[t - 1])
+            )
+
+            # Bearish: Death cross OR pullback rejection at ribbon OR confirmed pivot high
+            raw_sell_trigger = (
+                (fast_ma[t] < slow_ma[t] and fast_ma[t - 1] >= slow_ma[t - 1])
+                or (highs[t - 1] >= fast_ma[t - 1] and closes[t] < fast_ma[t] and closes[t] < closes[t - 1])
+                or (highs[t - 1] >= highs[t - 2] and closes[t] < lows[t - 1])
+            )
+
+            # =====================================================================
+            # LAYER 2: STATE-MACHINE COOLDOWN & ORDER EXECUTION
+            # =====================================================================
+            # Process Long Entry
+            if raw_buy_trigger and long_trend_aligned and not in_long_position:
+                # State Gating: Suppress any new BUY if (current_bar - last_long_bar) < cooldown_bars
+                if (t - last_long_bar) >= cooldown_bars:
+                    in_long_position = True
+                    entry_price = closes[t]
+                    last_long_bar = t
+                    # Reset cooldown counter on opposite-direction trigger
+                    last_short_bar = -9999
+
+                    # Initial Stop on Entry: Stop_0 = Entry Price - (trail_mult * ATR_14)
+                    current_stop = entry_price - (trail_mult * atr[t])
+                    trailing_stop_series[t] = current_stop
+
+                    markers.append(
+                        {
+                            "time": dates[t],
+                            "action": "BUY",
+                            "label": f"BUY (Entry: {entry_price:.2f})",
+                            "probability": 100,
+                        }
+                    )
+
+            # Process Short Entry / Reverse Exit
+            elif raw_sell_trigger and short_trend_aligned and not short_prohibited:
+                # State Gating: Suppress any new SELL if (current_bar - last_short_bar) < cooldown_bars
+                if (t - last_short_bar) >= cooldown_bars:
+                    # If long position is active, reverse exit long first
+                    if in_long_position:
+                        markers.append(
+                            {
+                                "time": dates[t],
+                                "action": "EXIT",
+                                "label": "Reverse Exit",
+                                "probability": 100,
+                            }
+                        )
+                        in_long_position = False
+                        current_stop = np.nan
+
+                    last_short_bar = t
+                    # Reset cooldown counter on opposite-direction trigger
+                    last_long_bar = -9999
+
+                    markers.append(
+                        {
+                            "time": dates[t],
+                            "action": "SELL",
+                            "label": f"SELL (Close: {closes[t]:.2f})",
+                            "probability": 100,
+                        }
+                    )
+
+        # Attach trailing stop to df_full for chart visualization
+        df_full["trailing_stop"] = trailing_stop_series
         return markers, df_full
 
     def package_chart_data(
@@ -64,6 +274,8 @@ class ReportGenerator:
         df_full["ribbon_lower"] = df_features["Ribbon_Slow"]
         df_full["bb_upper"] = df_features["BB_120_Upper"]
         df_full["bb_lower"] = df_features["BB_120_Lower"]
+        if "trailing_stop" not in df_full.columns:
+            df_full["trailing_stop"] = np.nan
 
         df_chart = df_full.reset_index()
         date_col = "Date" if "Date" in df_chart.columns else "index"
@@ -86,17 +298,20 @@ class ReportGenerator:
         df_cloud_json = df_chart.copy()
 
         # Replace 0.0 with np.nan for chart indicators (caused by ML fillna)
-        for col in ["ribbon_upper", "ribbon_lower", "bb_upper", "bb_lower"]:
-            df_cloud_json[col] = df_cloud_json[col].replace(0.0, np.nan)
+        for col in ["ribbon_upper", "ribbon_lower", "bb_upper", "bb_lower", "trailing_stop"]:
+            if col in df_cloud_json.columns:
+                df_cloud_json[col] = df_cloud_json[col].replace(0.0, np.nan)
 
         # Only drop if ALL essential indicators are missing
         df_cloud_json = df_cloud_json.dropna(
             subset=["ribbon_upper", "ribbon_lower", "bb_upper", "bb_lower"], how="all"
         )
 
-        clouds = df_cloud_json[
-            ["time", "ribbon_upper", "ribbon_lower", "bb_upper", "bb_lower"]
-        ].replace({np.nan: None}).to_dict(orient="records")
+        cloud_cols = ["time", "ribbon_upper", "ribbon_lower", "bb_upper", "bb_lower"]
+        if "trailing_stop" in df_cloud_json.columns:
+            cloud_cols.append("trailing_stop")
+
+        clouds = df_cloud_json[cloud_cols].replace({np.nan: None}).to_dict(orient="records")
 
         # Merge System Signals (from Journal) with Historical Pivots
         final_markers = historical_markers.copy()
@@ -125,3 +340,4 @@ class ReportGenerator:
             "ai_report": ai_report_dict,
             "historical_markers": final_markers,
         }
+

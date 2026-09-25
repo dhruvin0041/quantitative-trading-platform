@@ -238,7 +238,7 @@ export interface ChartData {
   
   // Chart related
   candles: { time: string; open: number; high: number; low: number; close: number; volume?: number }[];
-  clouds: { time: string; ribbon_upper: number; ribbon_lower: number; bb_upper: number; bb_lower: number }[];
+  clouds: { time: string; ribbon_upper: number; ribbon_lower: number; bb_upper: number; bb_lower: number; trailing_stop?: number | null }[];
   forecast_fan?: { time: string; p10: number; p50: number; p90: number }[];
   ai_report: AIReport; // Keep for legacy component compatibility
   historical_markers: { time: string; action: string; probability: number; label?: string }[];
