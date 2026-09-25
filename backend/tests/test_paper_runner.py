@@ -1,8 +1,11 @@
 import os
 import sqlite3
+import subprocess
+import sys
 import tempfile
 import unittest
 from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -461,6 +464,142 @@ class TestDailyPaperRunner(unittest.TestCase):
         self.assertNotEqual(score_aapl, 70.0)
         self.assertNotEqual(score_nvda, 70.0)
         self.assertNotEqual(score_aapl, score_nvda)
+
+    def test_portfolio_status_read_only(self):
+        """Verify display_portfolio_status inspects db accurately and performs zero mutations."""
+        # 1. Populate mock database tables
+        conn = sqlite3.connect(self.db_path)
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT OR REPLACE INTO broker_account (key, value) VALUES ('cash', '25000.0')"
+            )
+            cur.execute(
+                "INSERT OR REPLACE INTO broker_account (key, value) VALUES ('initial_capital', '100000.0')"
+            )
+            cur.execute(
+                "INSERT OR REPLACE INTO broker_account (key, value) VALUES ('currency', 'USD')"
+            )
+
+            cur.execute(
+                """
+                INSERT OR REPLACE INTO broker_positions
+                (symbol, qty, side, avg_entry_price, current_price, stop_loss, take_profit)
+                VALUES ('NVDA', 100.0, 'LONG', 200.0, 220.0, 190.0, 250.0)
+                """
+            )
+            cur.execute(
+                """
+                INSERT OR REPLACE INTO broker_positions
+                (symbol, qty, side, avg_entry_price, current_price, stop_loss, take_profit)
+                VALUES ('MSFT', 50.0, 'LONG', 400.0, 410.0, 380.0, 450.0)
+                """
+            )
+            cur.execute(
+                """
+                INSERT OR REPLACE INTO trailing_stops
+                (symbol, side, entry_price, peak_trough_price, stop_price, ts_mult, trail_mult, atr, updated_at)
+                VALUES ('NVDA', 'LONG', 200.0, 225.0, 195.0, 3.5, 3.5, 5.0, '2026-09-25T12:00:00')
+                """
+            )
+            cur.execute(
+                """
+                INSERT OR REPLACE INTO trailing_stops
+                (symbol, side, entry_price, peak_trough_price, stop_price, ts_mult, trail_mult, atr, updated_at)
+                VALUES ('MSFT', 'LONG', 400.0, 415.0, 385.0, 2.8, 2.8, 10.0, '2026-09-25T12:00:00')
+                """
+            )
+            conn.commit()
+
+            # Check baseline row count in daily_execution_runs
+            cur.execute("SELECT count(*) FROM daily_execution_runs")
+            baseline_runs_count = cur.fetchone()[0]
+            self.assertEqual(baseline_runs_count, 0)
+        finally:
+            conn.close()
+
+        # 2. Instantiate read-only runner with status_only=True
+        status_runner = DailyPaperRunner(
+            state_db_path=self.db_path,
+            status_only=True,
+        )
+
+        # 3. Call display_portfolio_status
+        status = status_runner.display_portfolio_status()
+
+        # 4. Assert returned dictionary structure and values
+        self.assertIn("account", status)
+        self.assertIn("positions", status)
+        self.assertIn("trailing_stops", status)
+
+        acc = status["account"]
+        self.assertEqual(acc["cash"], 25000.0)
+        # NVDA market value: 100 * 220 = 22,000; MSFT: 50 * 410 = 20,500; Total equity: 25000 + 42500 = 67500.0
+        self.assertEqual(acc["equity"], 67500.0)
+        self.assertEqual(acc["buying_power"], 25000.0)
+        self.assertEqual(acc["invested_capital"], 42500.0)
+        self.assertEqual(acc["currency"], "USD")
+        # NVDA unrealized: (220 - 200) * 100 = 2000; MSFT: (410 - 400) * 50 = 500; Total: 2500.0
+        self.assertEqual(acc["unrealized_pnl"], 2500.0)
+
+        # Check positions
+        positions = {p["symbol"]: p for p in status["positions"]}
+        self.assertEqual(len(positions), 2)
+        self.assertIn("NVDA", positions)
+        self.assertIn("MSFT", positions)
+        self.assertEqual(positions["NVDA"]["qty"], 100.0)
+        self.assertEqual(positions["NVDA"]["unrealized_pnl"], 2000.0)
+        self.assertAlmostEqual(positions["NVDA"]["unrealized_pnl_pct"], 10.0, places=2)
+
+        # Check trailing stops
+        stops = {ts["symbol"]: ts for ts in status["trailing_stops"]}
+        self.assertEqual(len(stops), 2)
+        self.assertIn("NVDA", stops)
+        self.assertIn("MSFT", stops)
+        self.assertEqual(stops["NVDA"]["stop_price"], 195.0)
+        self.assertEqual(stops["NVDA"]["multiplier"], 3.5)
+        # Distance to stop for NVDA: (195 - 220) / 220 * 100 = -11.3636%
+        expected_dist_nvda = ((195.0 - 220.0) / 220.0) * 100.0
+        self.assertAlmostEqual(stops["NVDA"]["distance_to_stop_pct"], expected_dist_nvda, places=2)
+
+        # 5. Verify Zero Database Mutations
+        conn = sqlite3.connect(self.db_path)
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT count(*) FROM daily_execution_runs")
+            post_runs_count = cur.fetchone()[0]
+            self.assertEqual(
+                post_runs_count, 0, "display_portfolio_status mutated daily_execution_runs!"
+            )
+
+            cur.execute("SELECT count(*) FROM broker_positions")
+            post_pos_count = cur.fetchone()[0]
+            self.assertEqual(post_pos_count, 2)
+        finally:
+            conn.close()
+
+    def test_cli_status_flag_exits_cleanly(self):
+        """Verify executing paper_runner.py with --status argument exits with code 0."""
+        project_root = Path(__file__).resolve().parent.parent.parent
+        env = os.environ.copy()
+        env["PYTHONPATH"] = f"{project_root}{os.pathsep}{env.get('PYTHONPATH', '')}"
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "backend.execution.paper_runner",
+                "--status",
+                "--db-path",
+                self.db_path,
+            ],
+            cwd=str(project_root),
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, f"CLI exited with error: {result.stderr}")
+        self.assertIn("INSTITUTIONAL QUANTITATIVE SYSTEM - PORTFOLIO STATUS", result.stdout)
+        self.assertIn("ACCOUNT OVERVIEW:", result.stdout)
 
 
 if __name__ == "__main__":

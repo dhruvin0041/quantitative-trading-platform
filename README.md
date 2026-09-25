@@ -453,6 +453,10 @@ python -m backend.execution.paper_runner --use-veto
 
 # 4. Customizing Execution Parameters
 python -m backend.execution.paper_runner --universe AAPL,MSFT,NVDA,GOOGL --target-risk 0.015 --max-concurrent-positions 3
+
+# 5. Read-Only Portfolio Status Inspection
+# Inspect portfolio balance, positions, and trailing stops
+python -m backend.execution.paper_runner --status
 ```
 
 Alternatively, invoke the dedicated on-demand shell runner scripts directly:

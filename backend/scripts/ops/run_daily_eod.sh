@@ -9,6 +9,7 @@
 #   ./run_daily_eod.sh              (Live paper execution with Pure XGBoost flagship)
 #   ./run_daily_eod.sh --dry-run    (Simulated run with zero broker/db mutations)
 #   ./run_daily_eod.sh --use-veto   (Enables secondary asymmetric veto consensus)
+#   ./run_daily_eod.sh --status     (Read-only status dashboard: balance, positions, stops)
 # ==============================================================================
 
 set -euo pipefail

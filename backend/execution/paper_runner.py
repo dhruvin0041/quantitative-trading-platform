@@ -57,6 +57,7 @@ class DailyPaperRunner:
         use_veto: bool = False,
         max_concurrent_positions: int = 2,
         max_portfolio_allocation: float = 0.80,
+        status_only: bool = False,
     ):
         self.universe = universe or ["AAPL", "MSFT", "NVDA"]
         self.benchmark_tickers = benchmark_tickers or ["SPY", "^VIX", "^TNX"]
@@ -64,6 +65,7 @@ class DailyPaperRunner:
         self.use_veto = use_veto
         self.max_concurrent_positions = max_concurrent_positions
         self.max_portfolio_allocation = max_portfolio_allocation
+        self.status_only = status_only
 
         if state_db_path is None:
             data_dir = BACKEND_DIR / "data"
@@ -85,8 +87,14 @@ class DailyPaperRunner:
             min_trades=3,
         )
 
-        self._init_runner_db()
-        self._init_live_models()
+        if not status_only:
+            self._init_runner_db()
+            self._init_live_models()
+        else:
+            self.xgb_model = None
+            self.lgbm_model = None
+            self.scaler = None
+            self.kept_features = None
 
     def _init_live_models(self) -> None:
         """
@@ -1106,6 +1114,282 @@ class DailyPaperRunner:
             print("Portfolio 100% in cash (no active open positions).")
         print("=" * 95 + "\n")
 
+    def display_portfolio_status(self) -> Dict[str, Any]:
+        """
+        Institutional Read-Only Portfolio Status Inspection.
+        Retrieves current account equity, cash balance, active positions,
+        trailing stop ratchets, and unrealized PnL directly from persistent SQLite storage.
+
+        Guarantees:
+        1. Pure read-only queries (zero DB mutations or table locks).
+        2. Fast execution (bypasses data ingestion, feature pipeline, and model weights).
+        3. Formatted ASCII institutional terminal dashboard.
+        4. Returns structured dictionary for programmatic inspection and unit testing.
+        """
+        conn = None
+        db_path = self.state_db_path
+        if db_path and Path(db_path).exists():
+            try:
+                db_abs = Path(db_path).resolve().as_posix()
+                conn = sqlite3.connect(f"file:{db_abs}?mode=ro", uri=True)
+            except Exception:
+                conn = sqlite3.connect(db_path)
+
+        cash = float(getattr(self.broker, "cash", 100000.0))
+        initial_capital = float(getattr(self.broker, "initial_capital", 100000.0))
+        currency = getattr(self.broker, "currency", "USD")
+
+        positions_list: List[Dict[str, Any]] = []
+        trailing_stops_list: List[Dict[str, Any]] = []
+
+        if conn is not None:
+            try:
+                cur = conn.cursor()
+                # 1. Account Balance
+                try:
+                    cur.execute("SELECT key, value FROM broker_account")
+                    acc_rows = dict(cur.fetchall())
+                    if "cash" in acc_rows:
+                        cash = float(acc_rows["cash"])
+                    if "initial_capital" in acc_rows:
+                        initial_capital = float(acc_rows["initial_capital"])
+                    if "currency" in acc_rows:
+                        currency = str(acc_rows["currency"])
+                except Exception as e:
+                    logger.debug("Could not query broker_account: %s", e)
+
+                # 2. Active Positions
+                pos_rows = []
+                try:
+                    cur.execute(
+                        """
+                        SELECT symbol, qty, side, avg_entry_price, current_price, stop_loss, take_profit
+                        FROM positions
+                        """
+                    )
+                    pos_rows = cur.fetchall()
+                except Exception:
+                    try:
+                        cur.execute(
+                            """
+                            SELECT symbol, qty, side, avg_entry_price, current_price, stop_loss, take_profit
+                            FROM broker_positions
+                            """
+                        )
+                        pos_rows = cur.fetchall()
+                    except Exception:
+                        pos_rows = []
+
+                for r in pos_rows:
+                    sym = str(r[0])
+                    qty = float(r[1])
+                    if qty <= 0:
+                        continue
+                    side = str(r[2]).upper()
+                    avg_entry = float(r[3])
+                    curr_p = float(r[4]) if r[4] is not None and r[4] > 0 else avg_entry
+                    sl = float(r[5]) if r[5] is not None else 0.0
+                    tp = float(r[6]) if r[6] is not None else 0.0
+
+                    if side == "SHORT":
+                        market_val = -(curr_p * qty)
+                        unrealized = (avg_entry - curr_p) * qty
+                    else:
+                        market_val = curr_p * qty
+                        unrealized = (curr_p - avg_entry) * qty
+
+                    cost_basis = avg_entry * qty
+                    unrealized_pct = (
+                        (unrealized / cost_basis * 100.0) if cost_basis > 0 else 0.0
+                    )
+
+                    positions_list.append(
+                        {
+                            "symbol": sym,
+                            "qty": qty,
+                            "side": side,
+                            "avg_entry_price": avg_entry,
+                            "current_price": curr_p,
+                            "market_value": market_val,
+                            "unrealized_pnl": unrealized,
+                            "unrealized_pnl_pct": unrealized_pct,
+                            "stop_loss": sl,
+                            "take_profit": tp,
+                        }
+                    )
+
+                # 3. Active Trailing Stops
+                curr_price_map = {p["symbol"]: p["current_price"] for p in positions_list}
+                stop_rows = []
+                try:
+                    cur.execute(
+                        """
+                        SELECT symbol, side, entry_price, peak_trough_price, stop_price,
+                               COALESCE(trail_mult, ts_mult), atr, updated_at
+                        FROM trailing_stops
+                        ORDER BY symbol
+                        """
+                    )
+                    stop_rows = cur.fetchall()
+                except Exception:
+                    try:
+                        cur.execute(
+                            """
+                            SELECT symbol, side, entry_price, peak_trough_price, stop_price,
+                                   ts_mult, atr, updated_at
+                            FROM trailing_stops
+                            ORDER BY symbol
+                            """
+                        )
+                        stop_rows = cur.fetchall()
+                    except Exception:
+                        stop_rows = []
+
+                for r in stop_rows:
+                    sym = str(r[0])
+                    side = str(r[1]).upper()
+                    entry_p = float(r[2])
+                    peak_p = float(r[3])
+                    stop_p = float(r[4])
+                    mult = float(r[5]) if r[5] is not None else 2.5
+                    atr = float(r[6]) if r[6] is not None else 0.0
+                    updated_at = str(r[7])
+
+                    ref_p = curr_price_map.get(sym, peak_p)
+                    if ref_p > 0:
+                        if side == "LONG":
+                            dist_pct = ((stop_p - ref_p) / ref_p) * 100.0
+                        else:
+                            dist_pct = ((ref_p - stop_p) / ref_p) * 100.0
+                    else:
+                        dist_pct = 0.0
+
+                    trailing_stops_list.append(
+                        {
+                            "symbol": sym,
+                            "side": side,
+                            "entry_price": entry_p,
+                            "peak_trough_price": peak_p,
+                            "stop_price": stop_p,
+                            "multiplier": mult,
+                            "atr": atr,
+                            "distance_to_stop_pct": dist_pct,
+                            "updated_at": updated_at,
+                        }
+                    )
+            finally:
+                conn.close()
+
+        # Compute summary metrics
+        total_market_value = sum(
+            p["unrealized_pnl"] if p["side"] == "SHORT" else (p["current_price"] * p["qty"])
+            for p in positions_list
+        )
+        total_equity = cash + total_market_value
+        buying_power = max(0.0, cash)
+        total_unrealized_pnl = sum(p["unrealized_pnl"] for p in positions_list)
+        total_cost_basis = sum(p["avg_entry_price"] * p["qty"] for p in positions_list)
+        total_unrealized_pct = (
+            (total_unrealized_pnl / total_cost_basis * 100.0) if total_cost_basis > 0 else 0.0
+        )
+        invested_capital = sum(abs(p["market_value"]) for p in positions_list)
+        allocation_pct = (
+            (invested_capital / total_equity * 100.0) if total_equity > 0 else 0.0
+        )
+        cash_pct = (cash / total_equity * 100.0) if total_equity > 0 else 0.0
+        total_pnl = total_equity - initial_capital
+        total_pnl_pct = (
+            (total_pnl / initial_capital * 100.0) if initial_capital > 0 else 0.0
+        )
+
+        # Display ASCII Institutional Dashboard
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print("\n" + "=" * 95)
+        print("       INSTITUTIONAL QUANTITATIVE SYSTEM - PORTFOLIO STATUS (READ-ONLY)")
+        print("=" * 95)
+        print(f"Timestamp: {now_str} | Database: {self.state_db_path}")
+
+        print("\nACCOUNT OVERVIEW:")
+        tot_unreal_fmt = (
+            f"+${total_unrealized_pnl:,.2f}"
+            if total_unrealized_pnl >= 0
+            else f"-${abs(total_unrealized_pnl):,.2f}"
+        )
+        print(f"  Total Equity:        ${total_equity:,.2f} {currency}")
+        print(f"  Cash Balance:        ${cash:,.2f} ({cash_pct:.1f}% of portfolio)")
+        print(f"  Buying Power:        ${buying_power:,.2f}")
+        print(f"  Invested Capital:    ${invested_capital:,.2f} ({allocation_pct:.1f}% allocation)")
+        print(f"  Unrealized PnL:      {tot_unreal_fmt} ({total_unrealized_pct:+.2f}%)")
+        tot_pnl_fmt = (
+            f"+${total_pnl:,.2f}"
+            if total_pnl >= 0
+            else f"-${abs(total_pnl):,.2f}"
+        )
+        print(
+            f"  Initial Capital:     ${initial_capital:,.2f} (Total PnL: {tot_pnl_fmt} / {total_pnl_pct:+.2f}%)"
+        )
+
+        print(f"\nACTIVE POSITIONS ({len(positions_list)}):")
+        if positions_list:
+            print(
+                f"{'Symbol':<8} | {'Side':<6} | {'Qty':<6} | {'Entry Price':<12} | "
+                f"{'Current Price':<14} | {'Market Value':<14} | {'Unrealized PnL'}"
+            )
+            print("-" * 95)
+            for p in positions_list:
+                qty_str = (
+                    f"{int(p['qty'])}" if float(p['qty']).is_integer() else f"{p['qty']:.2f}"
+                )
+                pnl_val = p["unrealized_pnl"]
+                pnl_prefix = f"+${pnl_val:,.2f}" if pnl_val >= 0 else f"-${abs(pnl_val):,.2f}"
+                pnl_str = f"{pnl_prefix} ({p['unrealized_pnl_pct']:+.2f}%)"
+                print(
+                    f"{p['symbol']:<8} | {p['side']:<6} | {qty_str:<6} | "
+                    f"${p['avg_entry_price']:<11.2f} | ${p['current_price']:<13.2f} | "
+                    f"${abs(p['market_value']):<13,.2f} | {pnl_str}"
+                )
+        else:
+            print("Portfolio 100% in cash (no active open positions).")
+
+        print(f"\nACTIVE TRAILING STOPS ({len(trailing_stops_list)}):")
+        if trailing_stops_list:
+            print(
+                f"{'Symbol':<8} | {'Side':<6} | {'Entry Price':<12} | {'Peak / Trough':<14} | "
+                f"{'Stop Price':<12} | {'Multiplier':<10} | {'Distance to Stop'}"
+            )
+            print("-" * 95)
+            for ts in trailing_stops_list:
+                side_note = "below" if ts["side"] == "LONG" else "above"
+                dist_str = f"{ts['distance_to_stop_pct']:+.2f}% ({side_note})"
+                print(
+                    f"{ts['symbol']:<8} | {ts['side']:<6} | ${ts['entry_price']:<11.2f} | "
+                    f"${ts['peak_trough_price']:<13.2f} | ${ts['stop_price']:<11.2f} | "
+                    f"{ts['multiplier']:<4.2f}x     | {dist_str}"
+                )
+        else:
+            print("No active trailing stops registered.")
+        print("=" * 95 + "\n")
+
+        return {
+            "account": {
+                "cash": round(cash, 2),
+                "equity": round(total_equity, 2),
+                "buying_power": round(buying_power, 2),
+                "currency": currency,
+                "initial_capital": round(initial_capital, 2),
+                "invested_capital": round(invested_capital, 2),
+                "allocation_pct": round(allocation_pct, 2),
+                "cash_pct": round(cash_pct, 2),
+                "unrealized_pnl": round(total_unrealized_pnl, 2),
+                "unrealized_pnl_pct": round(total_unrealized_pct, 2),
+                "total_pnl": round(total_pnl, 2),
+                "total_pnl_pct": round(total_pnl_pct, 2),
+            },
+            "positions": positions_list,
+            "trailing_stops": trailing_stops_list,
+            "timestamp": datetime.now().isoformat(),
+        }
+
 
 def main():
     parser = argparse.ArgumentParser(description="Automated Daily Execution Runner")
@@ -1145,9 +1429,24 @@ def main():
         default=0.80,
         help="Maximum total portfolio allocation ratio (default: 0.80)",
     )
+    parser.add_argument(
+        "--status",
+        action="store_true",
+        default=False,
+        help="Display current portfolio balance, active positions, trailing stops, and unrealized PnL, then exit immediately.",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+    if args.status:
+        runner = DailyPaperRunner(
+            state_db_path=args.db_path,
+            initial_capital=args.capital,
+            status_only=True,
+        )
+        runner.display_portfolio_status()
+        sys.exit(0)
 
     runner = DailyPaperRunner(
         state_db_path=args.db_path,

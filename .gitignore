@@ -70,7 +70,7 @@ backend/artifacts/*.h5
 backend/artifacts/*.json
 backend/artifacts/*.pkl
 backend/artifacts/*.db
-backend/data/*.db
+backend/data/
 backend/mlflow.db
 backend/mlruns/
 backend/backtest_results/

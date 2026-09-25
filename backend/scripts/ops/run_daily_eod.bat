@@ -9,6 +9,7 @@ REM Usage:
 REM   run_daily_eod.bat              (Live paper execution with Pure XGBoost flagship)
 REM   run_daily_eod.bat --dry-run    (Simulated run with zero broker/db mutations)
 REM   run_daily_eod.bat --use-veto   (Enables secondary asymmetric veto consensus)
+REM   run_daily_eod.bat --status     (Read-only status dashboard: balance, positions, stops)
 REM ==============================================================================
 
 :: Navigate to project root explicitly
