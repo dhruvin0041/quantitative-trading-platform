@@ -11,6 +11,16 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
+try:
+    import joblib
+except ImportError:
+    joblib = None
+
+try:
+    import xgboost as xgb
+except ImportError:
+    xgb = None
+
 # Add backend directory to sys.path
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 if str(BACKEND_DIR) not in sys.path:
@@ -76,6 +86,64 @@ class DailyPaperRunner:
         )
 
         self._init_runner_db()
+        self._init_live_models()
+
+    def _init_live_models(self) -> None:
+        """
+        Loads the production XGBoost (and LightGBM) models, scaler, and feature definitions
+        for live in-process inference when mock_predictions are not provided.
+        """
+        self.xgb_model = None
+        self.lgbm_model = None
+        self.scaler = None
+        self.kept_features: Optional[List[str]] = None
+
+        artifacts_dir = BACKEND_DIR / "artifacts"
+        configs_dir = BACKEND_DIR / "configs"
+
+        # 1. Kept Features Definition
+        kf_path = configs_dir / "kept_features.json"
+        if kf_path.exists():
+            try:
+                with open(kf_path, "r") as f:
+                    self.kept_features = json.load(f)
+            except Exception as e:
+                logger.warning("Could not load kept_features.json from %s: %s", kf_path, e)
+
+        if not self.kept_features:
+            try:
+                from src.execution.live_inference import FEATURE_COLUMNS
+                self.kept_features = list(FEATURE_COLUMNS)
+            except Exception as e:
+                logger.warning("Could not import FEATURE_COLUMNS fallback: %s", e)
+
+        # 2. Production Feature Scaler
+        scaler_path = artifacts_dir / "latest_scaler.joblib"
+        if scaler_path.exists() and joblib is not None:
+            try:
+                self.scaler = joblib.load(str(scaler_path))
+                logger.info("Loaded live feature scaler from %s", scaler_path)
+            except Exception as e:
+                logger.warning("Could not load scaler from %s: %s", scaler_path, e)
+
+        # 3. Primary Alpha Driver: XGBoost Ensemble
+        xgb_path = artifacts_dir / "xgb_ensemble.json"
+        if xgb_path.exists() and xgb is not None:
+            try:
+                self.xgb_model = xgb.XGBClassifier()
+                self.xgb_model.load_model(str(xgb_path))
+                logger.info("Loaded live XGBoost model from %s", xgb_path)
+            except Exception as e:
+                logger.warning("Could not load XGBoost model from %s: %s", xgb_path, e)
+
+        # 4. Secondary Risk Gate: LightGBM Agent
+        lgbm_path = artifacts_dir / "lgbm_agent.joblib"
+        if lgbm_path.exists() and joblib is not None:
+            try:
+                self.lgbm_model = joblib.load(str(lgbm_path))
+                logger.info("Loaded live LightGBM model from %s", lgbm_path)
+            except Exception as e:
+                logger.warning("Could not load LightGBM model from %s: %s", lgbm_path, e)
 
     def _init_runner_db(self) -> None:
         """Initializes SQLite schema for execution runs and audit logs."""
@@ -163,20 +231,30 @@ class DailyPaperRunner:
             except Exception as e:
                 logger.error("Error fetching market data for %s: %s", sym, e)
 
-        # Re-compute relative volatility and adaptive trailing stop multiplier against SPY
+        # Re-compute Beta-calibrated adaptive trailing stop multiplier against SPY
         if "SPY" in data and not data["SPY"].empty:
             spy_df = data["SPY"]
             spy_df["SPY_SMA_50"] = spy_df["Close"].rolling(50, min_periods=10).mean()
-            vol_spy = spy_df["vol_20d"]
+            spy_ret = spy_df["Close"].pct_change()
+            spy_var_20d = spy_ret.rolling(20, min_periods=5).var()
 
             for sym in self.universe:
                 if sym in data and not data[sym].empty:
                     sym_df = data[sym]
-                    # Align SPY volatility
-                    aligned_spy_vol = vol_spy.reindex(sym_df.index).ffill()
-                    vol_ratio = sym_df["vol_20d"] / (aligned_spy_vol + 1e-9)
-                    # Adaptive Multiplier: min(4.0, max(2.5, 2.5 * vol_ratio))
-                    sym_df["ts_mult"] = np.clip(2.5 * vol_ratio.fillna(1.0), 2.5, 4.0)
+                    asset_ret = sym_df["Close"].pct_change()
+                    aligned_spy_ret = spy_ret.reindex(sym_df.index)
+                    aligned_spy_var = spy_var_20d.reindex(sym_df.index)
+                    cov_20d = asset_ret.rolling(20, min_periods=5).cov(aligned_spy_ret)
+                    beta = cov_20d / (aligned_spy_var + 1e-9)
+                    sym_df["beta_20d"] = beta
+                    sym_df["ts_mult"] = np.clip(
+                        2.5 * np.maximum(1.0, beta.fillna(1.0)), 2.5, 4.0
+                    ).fillna(2.5)
+
+        for sym in self.universe:
+            if sym in data and not data[sym].empty:
+                if "ts_mult" not in data[sym].columns:
+                    data[sym]["ts_mult"] = 2.5
 
         return data
 
@@ -401,8 +479,72 @@ class DailyPaperRunner:
             # Model Probabilities: [P(SELL), P(HOLD), P(BUY)]
             if mock_predictions and sym in mock_predictions:
                 base_probs = mock_predictions[sym]
+            elif self.xgb_model is not None:
+                try:
+                    from src.execution.live_inference import add_upgraded_features
+
+                    spy_df = data.get("SPY")
+                    if spy_df is None or spy_df.empty:
+                        spy_df = pd.DataFrame({"Close": df["Close"]}, index=df.index)
+
+                    vix_df = data.get("^VIX")
+                    if vix_df is None or vix_df.empty:
+                        vix_df = pd.DataFrame({"Close": 18.0}, index=spy_df.index)
+
+                    feat_df = add_upgraded_features(df.copy(), spy_df, vix_df)
+                    feat_df = feat_df.loc[:, ~feat_df.columns.duplicated()].copy()
+
+                    cols = self.kept_features or list(feat_df.columns)
+                    X_unscaled = feat_df.reindex(columns=cols).dropna()
+
+                    if not X_unscaled.empty:
+                        latest_row = X_unscaled.iloc[[-1]]
+                        if self.scaler is not None:
+                            scaled_vals = self.scaler.transform(latest_row)
+                            X_input = pd.DataFrame(
+                                scaled_vals, columns=cols, index=latest_row.index
+                            )
+                        else:
+                            X_input = latest_row
+
+                        p_xgb = self.xgb_model.predict_proba(X_input)[0]
+
+                        p_lgbm = np.array([0.20, 0.60, 0.20])
+                        if self.lgbm_model is not None:
+                            try:
+                                p_lgbm = self.lgbm_model.predict_proba(X_input)[0]
+                            except Exception as e:
+                                logger.debug("LGBM live prediction error for %s: %s", sym, e)
+
+                        p_dqn = np.array([0.25, 0.50, 0.25])
+                        base_probs = {
+                            "XGB_AGENT": p_xgb,
+                            "LGBM_AGENT": p_lgbm,
+                            "DQN_AGENT": p_dqn,
+                        }
+                    else:
+                        logger.warning(
+                            "Feature matrix empty after feature pipeline for %s; using neutral baseline.",
+                            sym,
+                        )
+                        base_probs = {
+                            "XGB_AGENT": np.array([0.15, 0.70, 0.15]),
+                            "LGBM_AGENT": np.array([0.20, 0.60, 0.20]),
+                            "DQN_AGENT": np.array([0.25, 0.50, 0.25]),
+                        }
+                except Exception as e:
+                    logger.warning(
+                        "Live model inference failed for %s: %s; falling back to neutral baseline.",
+                        sym,
+                        e,
+                    )
+                    base_probs = {
+                        "XGB_AGENT": np.array([0.15, 0.70, 0.15]),
+                        "LGBM_AGENT": np.array([0.20, 0.60, 0.20]),
+                        "DQN_AGENT": np.array([0.25, 0.50, 0.25]),
+                    }
             else:
-                # Default baseline neutral if live model server is not connected
+                # Default baseline neutral if live model is not loaded
                 base_probs = {
                     "XGB_AGENT": np.array([0.15, 0.70, 0.15]),
                     "LGBM_AGENT": np.array([0.20, 0.60, 0.20]),
@@ -474,7 +616,11 @@ class DailyPaperRunner:
                 "signal_note": signal_note,
                 "current_price": curr_close,
                 "atr": float(df["ATR"].iloc[-1]) if "ATR" in df.columns else curr_close * 0.02,
-                "ts_mult": float(df["ts_mult"].iloc[-1]) if "ts_mult" in df.columns else 2.5,
+                "ts_mult": (
+                    float(df["ts_mult"].iloc[-1])
+                    if ("ts_mult" in df.columns and not pd.isna(df["ts_mult"].iloc[-1]))
+                    else 2.5
+                ),
             }
 
         return signals

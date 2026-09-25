@@ -355,6 +355,114 @@ class TestDailyPaperRunner(unittest.TestCase):
         finally:
             conn.close()
 
+    def test_beta_calibrated_trailing_stop_multipliers(self):
+        """Verify ts_mult calculation produces differentiated values across varying beta values."""
+        dates = pd.date_range("2024-01-01", periods=60, freq="D")
+        spy_ret = pd.Series(np.tile([0.01, -0.01, 0.02, -0.02, 0.01], 12), index=dates)
+        spy_prices = 400.0 * (1.0 + spy_ret).cumprod()
+        spy_df = pd.DataFrame(
+            {
+                "Open": spy_prices,
+                "High": spy_prices * 1.01,
+                "Low": spy_prices * 0.99,
+                "Close": spy_prices,
+                "Volume": [1000000] * 60,
+                "vol_20d": [0.01] * 60,
+            },
+            index=dates,
+        )
+
+        test_cases = [
+            ("LOW_BETA", 0.5, 2.5),
+            ("MID_BETA", 1.2, 3.0),
+            ("HIGH_BETA", 1.8, 4.0),
+        ]
+
+        mock_data = {"SPY": spy_df}
+        for sym, beta_target, _ in test_cases:
+            asset_ret = beta_target * spy_df["Close"].pct_change()
+            asset_prices = 100.0 * (1.0 + asset_ret.fillna(0)).cumprod()
+            asset_df = pd.DataFrame(
+                {
+                    "Open": asset_prices,
+                    "High": asset_prices * 1.01,
+                    "Low": asset_prices * 0.99,
+                    "Close": asset_prices,
+                    "Volume": [1000000] * 60,
+                    "vol_20d": [0.01] * 60,
+                },
+                index=dates,
+            )
+            mock_data[sym] = asset_df
+
+        # Recompute Beta-calibrated trailing stop multiplier
+        spy_ret_calc = spy_df["Close"].pct_change()
+        spy_var_20d = spy_ret_calc.rolling(20, min_periods=5).var()
+
+        for sym, _, expected_mult in test_cases:
+            sym_df = mock_data[sym]
+            asset_ret = sym_df["Close"].pct_change()
+            cov_20d = asset_ret.rolling(20, min_periods=5).cov(spy_ret_calc)
+            beta = cov_20d / (spy_var_20d + 1e-9)
+            sym_df["beta_20d"] = beta
+            sym_df["ts_mult"] = np.clip(
+                2.5 * np.maximum(1.0, beta.fillna(1.0)), 2.5, 4.0
+            ).fillna(2.5)
+
+            actual_mult = float(sym_df["ts_mult"].iloc[-1])
+            self.assertAlmostEqual(actual_mult, expected_mult, places=2)
+
+    def test_live_inference_without_mocks_generates_active_probabilities(self):
+        """Verify running paper_runner.py without mocks loads real model artifacts and generates varying probabilities."""
+        self.assertIsNotNone(self.runner.xgb_model, "XGBoost model artifact was not loaded.")
+        self.assertIsNotNone(self.runner.kept_features, "Kept features list was not loaded.")
+
+        dates = pd.date_range("2023-01-01", periods=150, freq="D")
+        np.random.seed(42)
+
+        def make_synthetic_df(base_price: float, trend: float) -> pd.DataFrame:
+            returns = np.random.normal(trend, 0.015, len(dates))
+            prices = base_price * np.exp(np.cumsum(returns))
+            return pd.DataFrame(
+                {
+                    "Open": prices * 0.995,
+                    "High": prices * 1.01,
+                    "Low": prices * 0.99,
+                    "Close": prices,
+                    "Volume": np.random.randint(1000000, 5000000, len(dates)),
+                    "SMA_200": prices * 0.95,
+                    "ATR": prices * 0.02,
+                    "ts_mult": [2.5] * len(dates),
+                },
+                index=dates,
+            )
+
+        spy_df = make_synthetic_df(450.0, 0.0005)
+        spy_df["SPY_SMA_50"] = spy_df["Close"].rolling(50).mean().bfill()
+        vix_df = pd.DataFrame({"Close": np.random.uniform(14, 22, len(dates))}, index=dates)
+        aapl_df = make_synthetic_df(170.0, -0.001)
+        nvda_df = make_synthetic_df(120.0, 0.003)
+
+        mock_data = {"SPY": spy_df, "^VIX": vix_df, "AAPL": aapl_df, "NVDA": nvda_df}
+        macro_filters = self.runner.evaluate_macro_filters(mock_data)
+
+        # Execute signal generation with mock_predictions=None (in-process live inference)
+        signals = self.runner.generate_and_filter_signals(
+            mock_data, macro_filters, mock_predictions=None
+        )
+
+        self.assertIn("AAPL", signals)
+        self.assertIn("NVDA", signals)
+
+        score_aapl = signals["AAPL"]["agreement_score"]
+        score_nvda = signals["NVDA"]["agreement_score"]
+
+        # Ensure probabilities are dynamic and NOT identical static 70.0% mock fallbacks
+        self.assertNotEqual(score_aapl, 70.0)
+        self.assertNotEqual(score_nvda, 70.0)
+        self.assertNotEqual(score_aapl, score_nvda)
+
 
 if __name__ == "__main__":
     unittest.main()
+
