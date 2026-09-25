@@ -1,9 +1,14 @@
 @echo off
 REM ==============================================================================
-REM Institutional Automated Daily Execution Runner (Windows Task Scheduler / Batch)
-REM 
-REM Windows Task Scheduler Setup:
-REM   schtasks /create /tn "StockIndicator_DailyEOD" /tr "D:\DataScience\Projects\Data_Science_Projects\Stock_Indicator\backend\scripts\ops\run_daily_eod.bat" /sc weekly /d MON,TUE,WED,THU,FRI /st 16:15 /f
+REM Manual On-Demand Daily Execution Runner (Windows)
+REM
+REM Strictly manual and on-demand execution. No background daemons or loops.
+REM Executes a single daily execution cycle and terminates immediately.
+REM
+REM Usage:
+REM   run_daily_eod.bat              (Live paper execution with Pure XGBoost flagship)
+REM   run_daily_eod.bat --dry-run    (Simulated run with zero broker/db mutations)
+REM   run_daily_eod.bat --use-veto   (Enables secondary asymmetric veto consensus)
 REM ==============================================================================
 
 :: Navigate to project root explicitly
@@ -17,8 +22,11 @@ set PYTHON_BIN=backend\venv\Scripts\python.exe
 if not exist "%PYTHON_BIN%" set PYTHON_BIN=venv\Scripts\python.exe
 if not exist "%PYTHON_BIN%" set PYTHON_BIN=python.exe
 
-echo [%DATE% %TIME%] Starting Automated Daily EOD Execution Run... >> backend\artifacts\paper_execution.log 2>&1
+echo [%DATE% %TIME%] Starting Manual On-Demand Daily Execution Run... >> backend\artifacts\paper_execution.log 2>&1
 
 "%PYTHON_BIN%" -m backend.execution.paper_runner %* >> backend\artifacts\paper_execution.log 2>&1
+set EXIT_CODE=%ERRORLEVEL%
 
-echo [%DATE% %TIME%] Automated Daily EOD Execution Run finished. >> backend\artifacts\paper_execution.log 2>&1
+echo [%DATE% %TIME%] Manual On-Demand Daily Execution Run finished with exit code %EXIT_CODE%. >> backend\artifacts\paper_execution.log 2>&1
+
+exit /b %EXIT_CODE%

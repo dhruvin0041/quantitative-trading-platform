@@ -7,7 +7,7 @@
 [![Code Style: Ruff](https://img.shields.io/badge/Code%20Style-Ruff-black.svg)](https://github.com/astral-sh/ruff)
 [![Tests](https://img.shields.io/badge/Tests-48%20Passing-brightgreen.svg)](#verification-suite)
 
-An institutional-grade systematic algorithmic trading and risk management platform designed for US equity markets. The system couples multi-modal data ingestion, stationarized feature engineering, machine learning signal generation, symmetric macro regime filtering, dynamic asset expectancy gating, and volatility-adaptive trailing stop ratchets with an automated end-of-day (EOD) paper execution engine.
+An institutional-grade systematic algorithmic trading and risk management platform designed for US equity markets. The system couples multi-modal data ingestion, stationarized feature engineering, machine learning signal generation, symmetric macro regime filtering, dynamic asset expectancy gating, and volatility-adaptive trailing stop ratchets with a manual on-demand end-of-day (EOD) paper execution engine.
 
 <p align="center">
   <img src="docs/screenshots/Screenshot%202026-09-18%20182855.png" alt="HYDRA V2 Institutional Command Center (Light Mode)" width="100%" />
@@ -367,9 +367,9 @@ quantitative-trading-platform/
 │   │   └── best_xgb_params.json        # Optuna-tuned tree hyperparameters
 │   │
 │   ├── scripts/                        # Automation, research, and evaluation scripts
-│   │   ├── ops/                        # Operational and scheduling scripts
-│   │   │   ├── run_daily_eod.bat       # Windows Task Scheduler automation script
-│   │   │   ├── run_daily_eod.sh        # POSIX cron automation script (16:15 EST)
+│   │   ├── ops/                        # Operational execution scripts
+│   │   │   ├── run_daily_eod.bat       # Windows manual on-demand execution runner
+│   │   │   ├── run_daily_eod.sh        # POSIX manual on-demand execution runner
 │   │   │   └── clean_artifacts.py      # Zero-state reset utility
 │   │   │
 │   │   └── evaluation/                 # Institutional audit & validation harnesses
@@ -435,42 +435,41 @@ ruff check .
 
 ---
 
-### 10.4 Running the Daily Paper Execution Runner
+### 10.4 Running the Daily Paper Execution Runner (Manual On-Demand)
+
+The paper trading execution engine is strictly designed for **manual, on-demand CLI execution**. Automated recurring background schedulers (such as Windows Task Scheduler or cron daemons) are intentionally decommissioned to eliminate unattended execution risk.
+
+Execute single-cycle on-demand runs from the project root:
 
 ```bash
-# 1. Dry-Run Mode (Recommended first run: zero broker or database mutations)
-python execution/paper_runner.py --dry-run
+# 1. Dry-Run Mode (Simulated evaluation: zero broker or database mutations)
+python -m backend.execution.paper_runner --dry-run
 
-# 2. Production Flagship Execution (Pure XGBoost + Macro Filter + Adaptive Stops)
-python execution/paper_runner.py
+# 2. Live Paper Execution (Pure XGBoost Flagship: evaluates signals, sizes, and updates state)
+python -m backend.execution.paper_runner
 
 # 3. Optional Asymmetric Veto Execution (Enables LightGBM & DQN veto filters)
-python execution/paper_runner.py --use-veto
+python -m backend.execution.paper_runner --use-veto
 
-# 4. Customizing Parameters
-python execution/paper_runner.py --universe AAPL,MSFT,NVDA,GOOGL --target-risk 0.015 --max-concurrent-positions 3
+# 4. Customizing Execution Parameters
+python -m backend.execution.paper_runner --universe AAPL,MSFT,NVDA,GOOGL --target-risk 0.015 --max-concurrent-positions 3
+```
+
+Alternatively, invoke the dedicated on-demand shell runner scripts directly:
+
+```bash
+# Windows (Command Prompt or PowerShell):
+backend\scripts\ops\run_daily_eod.bat
+backend\scripts\ops\run_daily_eod.bat --dry-run
+
+# Linux / macOS (POSIX Bash):
+./backend/scripts/ops/run_daily_eod.sh
+./backend/scripts/ops/run_daily_eod.sh --dry-run
 ```
 
 ---
 
-### 10.5 Automated Daily EOD Scheduling
-
-The daily cycle is designed to run 15 minutes after US market close (**16:15 EST / 21:15 UTC**, Monday through Friday):
-
-#### Windows Task Scheduler
-```cmd
-schtasks /create /tn "StockIndicator_DailyEOD" /tr "D:\DataScience\Projects\Data_Science_Projects\Stock_Indicator\backend\scripts\ops\run_daily_eod.bat" /sc weekly /d MON,TUE,WED,THU,FRI /st 16:15
-```
-
-#### Linux / macOS Cron
-```cron
-# Edit crontab via `crontab -e`
-15 16 * * 1-5 /path/to/quantitative-trading-platform/backend/scripts/ops/run_daily_eod.sh >> /path/to/backend/artifacts/cron_eod.log 2>&1
-```
-
----
-
-### 10.6 Running the Ground-Truth Walk-Forward Audit
+### 10.5 Running the Ground-Truth Walk-Forward Audit
 To reproduce the audited out-of-sample performance matrix across all 8 configurations:
 
 ```bash

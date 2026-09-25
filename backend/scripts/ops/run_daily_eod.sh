@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Institutional Automated Daily Execution Runner (POSIX / Cron)
+# Manual On-Demand Daily Execution Runner (POSIX)
 #
-# Cron Schedule:
-#   Mon-Fri at 16:15 EST (15 minutes after US market close: 21:15 UTC standard)
-#   Cron Entry:
-#   15 16 * * 1-5 /path/to/backend/scripts/ops/run_daily_eod.sh >> /path/to/backend/artifacts/cron_eod.log 2>&1
+# Strictly manual and on-demand execution. No background daemons or loops.
+# Executes a single daily execution cycle and terminates immediately.
 #
 # Usage:
 #   ./run_daily_eod.sh              (Live paper execution with Pure XGBoost flagship)
@@ -25,14 +23,14 @@ if [ -f "venv/bin/activate" ]; then
     source "venv/bin/activate"
 fi
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting Automated Daily EOD Execution Run..."
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting Manual On-Demand Daily Execution Run..."
 python execution/paper_runner.py "$@"
 EXIT_CODE=$?
 
 if [ ${EXIT_CODE} -eq 0 ]; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Automated Daily EOD Execution Run completed successfully."
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Manual On-Demand Daily Execution Run completed successfully."
 else
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: Daily EOD Execution Run failed with exit code ${EXIT_CODE}."
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: Daily Execution Run failed with exit code ${EXIT_CODE}."
 fi
 
 exit ${EXIT_CODE}
