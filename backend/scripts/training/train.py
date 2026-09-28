@@ -240,7 +240,7 @@ def main():
     print(f"\n[1/5] Cleaning artifacts for {ticker}...")
     step_start = time.time()
     try:
-        run_cleanup([])
+        run_cleanup(["--ticker", ticker])
         print(f"  >>> Step 1 Complete ({time.time() - step_start:.2f}s)")
     except Exception as e:
         print(f"  [FATAL ERROR] Step 1 Failed: {e}")

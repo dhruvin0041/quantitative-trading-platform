@@ -1,13 +1,25 @@
 # clean_artifacts.py
 import os
 import shutil
+from pathlib import Path
+
+BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
+
+
+def _resolve_path(f: str) -> Path:
+    p = Path(f)
+    if p.is_absolute():
+        return p
+    return BACKEND_DIR / f
 
 
 def clean_cache():
     """Clears python cache folders recursively."""
     print("--- Clearing Caches ---")
-    for root, dirs, files in os.walk("."):
-        dirs[:] = [d for d in dirs if d not in ("venv", ".venv", ".git", "node_modules")]
+    for root, dirs, files in os.walk(BACKEND_DIR):
+        dirs[:] = [
+            d for d in dirs if d not in ("venv", ".venv", ".git", "node_modules")
+        ]
         for d in dirs:
             if d == "__pycache__":
                 path = os.path.join(root, d)
@@ -39,14 +51,17 @@ def clean_training_artifacts():
         "artifacts/y_train_sig.joblib",
         "artifacts/X_val_tabular.joblib",
         "artifacts/y_val_sig.joblib",
+        "artifacts/best_lgbm_params.json",
+        "artifacts/best_xgb_params.json",
         "configs/active_ticker.json",
         "configs/kept_features.json",
     ]
     print("--- Cleaning Training Artifacts ---")
     for f in files:
-        if os.path.exists(f):
+        target = _resolve_path(f)
+        if target.exists():
             try:
-                os.remove(f)
+                target.unlink()
                 print(f"  [DELETED] {f}")
             except Exception as e:
                 print(f"  [ERROR] Could not delete {f}: {e}")
@@ -70,6 +85,8 @@ def clean_optimization_artifacts(ticker=None, universal=False):
         "artifacts/tft_quantile_weights.weights.h5",
         "artifacts/dqn_model.pth",
         "artifacts/lgbm_agent.joblib",
+        "artifacts/best_xgb_params.json",
+        "artifacts/best_lgbm_params.json",
         "configs/best_xgb_params.json",
         "configs/best_lgbm_params.json",
         "configs/best_catboost_params.json",
@@ -85,9 +102,10 @@ def clean_optimization_artifacts(ticker=None, universal=False):
         files.append(f"optuna_studies/{ticker}.db")
 
     for f in files:
-        if os.path.exists(f):
+        target = _resolve_path(f)
+        if target.exists():
             try:
-                os.remove(f)
+                target.unlink()
                 print(f"  [DELETED] {f}")
             except Exception as e:
                 print(f"  [ERROR] Could not delete {f}: {e}")
@@ -100,12 +118,16 @@ def clean_data_state():
     files = [
         "data/empirical_validation.db",
         "data/paper_trading.json",
+        "data/paper_trading.db",
+        "data/backtest_log.db",
+        "artifacts/paper_execution_state.db",
     ]
     print("--- Cleaning Data State (Zero-State Protocol) ---")
     for f in files:
-        if os.path.exists(f):
+        target = _resolve_path(f)
+        if target.exists():
             try:
-                os.remove(f)
+                target.unlink()
                 print(f"  [DELETED] {f}")
             except Exception as e:
                 print(f"  [ERROR] Could not delete {f}: {e}")
@@ -145,3 +167,4 @@ def main(argv=None):
 
 if __name__ == "__main__":
     main()
+
