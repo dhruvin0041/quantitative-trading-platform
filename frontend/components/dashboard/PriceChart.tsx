@@ -183,26 +183,10 @@ export function PriceChart({ data, loading }: PriceChartProps) {
     if (data.historical_markers && data.historical_markers.length > 0) {
       const filteredMarkers = data.historical_markers.filter(m => {
         // Strictly allow BUY and SELL markers
-        if (m.action !== 'BUY' && m.action !== 'SELL') return false;
-        if (m.probability && m.probability < 60) return false;
-        return true;
+        return m.action === 'BUY' || m.action === 'SELL';
       }).sort((a, b) => new Date(a.time as string).getTime() - new Date(b.time as string).getTime());
-      
-      const cleanedMarkers: typeof filteredMarkers = [];
-      let lastAction = null;
-      let lastTime = 0;
-      
-      for (const m of filteredMarkers) {
-        const timeVal = new Date(m.time as string).getTime();
-        if (lastAction === m.action && (timeVal - lastTime) < (5 * 24 * 60 * 60 * 1000)) {
-           continue;
-        }
-        cleanedMarkers.push(m);
-        lastAction = m.action;
-        lastTime = timeVal;
-      }
 
-      const markers = cleanedMarkers.map((marker) => {
+      const markers = filteredMarkers.map((marker) => {
         const isBuy = marker.action === 'BUY';
         return {
           time: marker.time,

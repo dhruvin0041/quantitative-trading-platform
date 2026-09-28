@@ -54,6 +54,22 @@ class TestReportingPipeline(unittest.TestCase):
         )
         return df
 
+    def _create_oscillating_series(self, n=120):
+        dates = pd.date_range("2024-01-01", periods=n, freq="D")
+        t = np.arange(n)
+        prices = 100.0 + 15.0 * np.sin(t / 6.0) + (t * 0.4)
+        df = pd.DataFrame(
+            {
+                "Open": prices - 0.5,
+                "High": prices + 1.5,
+                "Low": prices - 1.5,
+                "Close": prices,
+                "Volume": 1000000,
+            },
+            index=dates,
+        )
+        return df
+
     def test_only_buy_and_sell_markers_emitted(self):
         """
         Chart Marker Cleanliness Mandate:
@@ -209,7 +225,7 @@ class TestReportingPipeline(unittest.TestCase):
         same_day_markers = [m for m in markers if m["time"] == exit_date]
         actions = [m["action"] for m in same_day_markers]
 
-        # Stop loss breach must NOT emit an EXIT marker (cleanliness mandate)
+        # Stop loss breach emits a SELL marker placed above bar (take profit/stop)
         self.assertNotIn("EXIT", actions)
         self.assertNotIn("STOP", actions)
         # And NO same-bar re-entry allowed
@@ -218,7 +234,8 @@ class TestReportingPipeline(unittest.TestCase):
             actions,
             f"Bug detected: Same-bar re-entry occurred! Actions on {exit_date}: {actions}",
         )
-        self.assertEqual(len(same_day_markers), 0)
+        self.assertIn("SELL", actions)
+        self.assertEqual(len(same_day_markers), 1)
 
     def test_post_exit_cooldown_enforced(self):
         """
@@ -250,53 +267,103 @@ class TestReportingPipeline(unittest.TestCase):
             f"Cooldown violation: Found BUY signals during post-exit refractory period: {forbidden_buys}",
         )
 
-    def test_short_trailing_stop_ratchets_down(self):
+    def test_strictly_alternating_signals(self):
         """
-        Verify that:
-        1. Short entry generates an initial trailing stop above entry price.
-        2. As price prints lower lows, the short trailing stop ratchets DOWN monotonically.
-        3. When High >= current_short_stop, position is closed (trailing stop drops to nan)
-           and zero EXIT markers are emitted.
+        Verify that across various market regimes (uptrend, downtrend, oscillating),
+        historical_markers strictly alternates BUY -> SELL -> BUY -> SELL.
+        Zero consecutive identical actions allowed and no orphan SELL before the first BUY.
         """
-        df = self._create_downtrend_series(60)
-        dates = df.index.strftime("%Y-%m-%d").tolist()
+        for df_series in [
+            self._create_uptrend_series(80),
+            self._create_downtrend_series(80),
+            self._create_oscillating_series(120),
+        ]:
+            markers, _ = self.report_gen.generate_historical_markers("TEST", df_series.copy())
+            actions = [m["action"] for m in markers]
+            if not actions:
+                continue
 
-        markers, df_res = self.report_gen.generate_historical_markers("TEST", df.copy())
-        sell_markers = [m for m in markers if m["action"] == "SELL"]
-        self.assertTrue(len(sell_markers) > 0, "Downtrend should have triggered a SELL (short) entry")
+            # First marker must always be BUY (no orphan SELL)
+            self.assertEqual(
+                actions[0],
+                "BUY",
+                f"First marker must be BUY, got {actions[0]}",
+            )
+            # All markers must strictly alternate
+            for i in range(1, len(actions)):
+                self.assertNotEqual(
+                    actions[i],
+                    actions[i - 1],
+                    f"Duplicate consecutive signal detected at index {i}: {actions[i-1]} followed by {actions[i]}",
+                )
+                if actions[i - 1] == "BUY":
+                    self.assertEqual(actions[i], "SELL")
+                else:
+                    self.assertEqual(actions[i], "BUY")
 
-        sell_time = sell_markers[0]["time"]
-        sell_idx = dates.index(sell_time)
+    def test_trend_runner_not_cut_on_breakout(self):
+        """
+        Verify that during a strong trend expansion where price breaks out above
+        the upper volatility envelope, the position is NOT cut prematurely on bar 1 or 2.
+        The dynamic ATR trailing stop must ratchet upward under the runner.
+        """
+        n = 60
+        dates = pd.date_range("2024-01-01", periods=n, freq="D")
+        prices = [100.0] * 30
+        for i in range(1, 31):
+            prices.append(100.0 + i * 3.0)
 
-        # Check stops after sell_idx
-        short_stops = df_res["trailing_stop"].iloc[sell_idx : sell_idx + 5].values
-        valid_stops = [s for s in short_stops if not np.isnan(s)]
+        prices = np.array(prices)
+        df = pd.DataFrame(
+            {
+                "Open": prices - 0.5,
+                "High": prices + 1.5,
+                "Low": prices - 1.0,
+                "Close": prices,
+                "Volume": 1000000,
+            },
+            index=dates,
+        )
+        # Bar 28 dips to touch fast MA value
+        df.iloc[28, df.columns.get_loc("Low")] = 92.0
+        df.iloc[29, df.columns.get_loc("Open")] = 98.0
+        df.iloc[29, df.columns.get_loc("Close")] = 100.0
+        df.iloc[29, df.columns.get_loc("High")] = 101.0
 
-        self.assertTrue(len(valid_stops) >= 2, "Expected multiple valid short trailing stops")
+        markers, df_res = self.report_gen.generate_historical_markers("TEST", df)
+        date_strs = [d.strftime("%Y-%m-%d") for d in dates]
+
+        buy_markers = [m for m in markers if m["action"] == "BUY"]
+        self.assertTrue(len(buy_markers) >= 1, "Expected a BUY entry before the breakout run")
+
+        buy_date = buy_markers[0]["time"]
+        buy_bar = date_strs.index(buy_date)
+
+        # Immediate breakout bars following the entry
+        sell_dates = [m["time"] for m in markers if m["action"] == "SELL"]
+        sell_bars = [date_strs.index(s) for s in sell_dates]
+
+        self.assertNotIn(
+            buy_bar + 1,
+            sell_bars,
+            f"Premature exit detected! Position was cut on bar 1 of breakout (bar {buy_bar + 1})",
+        )
+        self.assertNotIn(
+            buy_bar + 2,
+            sell_bars,
+            f"Premature exit detected! Position was cut on bar 2 of breakout (bar {buy_bar + 2})",
+        )
+
+        # Verify that trailing stop ratchets upward under the runner
+        stops = df_res["trailing_stop"].iloc[buy_bar : buy_bar + 8].values
+        valid_stops = [s for s in stops if not np.isnan(s)]
+        self.assertGreaterEqual(len(valid_stops), 4, "Expected active trailing stops during runner")
         for i in range(1, len(valid_stops)):
-            self.assertLessEqual(
+            self.assertGreaterEqual(
                 valid_stops[i],
                 valid_stops[i - 1],
-                f"Short trailing stop increased! Bar {i}: {valid_stops[i]} > {valid_stops[i-1]}",
+                f"Trailing stop failed to ratchet upward at step {i}: {valid_stops[i]} < {valid_stops[i - 1]}",
             )
-
-        # Test silent exit on High spike
-        test_exit_idx = sell_idx + 4
-        active_stop = df_res["trailing_stop"].iloc[test_exit_idx - 1]
-
-        df_exit = df.copy()
-        df_exit.iloc[test_exit_idx, df_exit.columns.get_loc("High")] = active_stop + 10.0
-        df_exit.iloc[test_exit_idx, df_exit.columns.get_loc("Close")] = active_stop + 5.0
-
-        markers_exit, _ = self.report_gen.generate_historical_markers("TEST", df_exit)
-        exit_date = dates[test_exit_idx]
-        exit_markers = [m for m in markers_exit if m["time"] == exit_date and m["action"] in ["EXIT", "STOP"]]
-
-        self.assertEqual(
-            len(exit_markers),
-            0,
-            f"Silent exit mandate violated: Emitted {exit_markers} on stopout",
-        )
 
 
 if __name__ == "__main__":

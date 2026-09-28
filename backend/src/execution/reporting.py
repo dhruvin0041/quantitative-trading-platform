@@ -240,20 +240,6 @@ class ReportGenerator:
             )
             atr = atr_ins.average_true_range().ffill().bfill().values
 
-        # Volatility Envelope (Bollinger Bands: 20-period, 2 std dev)
-        if "BB_Upper" in df_advanced.columns and "BB_Lower" in df_advanced.columns:
-            upper_band = df_advanced["BB_Upper"].reindex(df_full.index).ffill().bfill().values
-            lower_band = df_advanced["BB_Lower"].reindex(df_full.index).ffill().bfill().values
-        else:
-            bb = ta.volatility.BollingerBands(close=df_full["Close"], window=20, window_dev=2)
-            upper_band = bb.bollinger_hband().ffill().bfill().values
-            lower_band = bb.bollinger_lband().ffill().bfill().values
-
-        # 14-period RSI
-        if "RSI_14" in df_advanced.columns:
-            rsi_14 = df_advanced["RSI_14"].reindex(df_full.index).ffill().bfill().values
-        else:
-            rsi_14 = ta.momentum.RSIIndicator(close=df_full["Close"], window=14).rsi().ffill().bfill().values
 
         # =========================================================================
         # 3. PRODUCTION XGBOOST IN-PROCESS INFERENCE (27 Stationarized Features)
@@ -301,7 +287,7 @@ class ReportGenerator:
         markers = []
 
         # =========================================================================
-        # 4. STATE-MACHINE & ASSET EXPECTANCY FILTER
+        # 4. STRICT ALTERNATING STATE-MACHINE & ASSET EXPECTANCY FILTER
         # =========================================================================
         expectancy_filter = AssetExpectancyFilter(
             lookback_days=90,
@@ -310,18 +296,11 @@ class ReportGenerator:
             recovery_hurdle=1.20,
         )
 
-        in_long_position = False
-        current_long_stop = np.nan
-        long_entry_price = np.nan
-        long_entry_date = None
-
-        in_short_position = False
-        current_short_stop = np.nan
-        short_entry_price = np.nan
-        short_entry_date = None
-
-        last_long_bar = -9999
-        last_short_bar = -9999
+        in_position = False
+        current_trailing_stop = np.nan
+        entry_price = np.nan
+        entry_date = None
+        last_buy_bar = -9999
         last_exit_bar = -9999
 
         start_idx = min_required_bars
@@ -337,207 +316,103 @@ class ReportGenerator:
                 continue
 
             trail_mult_t = ts_mult_series[t]
-            exit_triggered_this_bar = False
-
-            # =====================================================================
-            # LAYER 3: DYNAMIC ATR-RATCHETING TRAILING EXITS & SWING TOP EXITS
-            # =====================================================================
-            if in_long_position:
-                if lows[t] <= current_long_stop:
-                    exit_price = min(closes[t], current_long_stop)
-                    pnl_ret = (exit_price - long_entry_price) / (long_entry_price + 1e-9)
-                    expectancy_filter.record_trade(
-                        ticker, date=dates[t], pnl_ret=pnl_ret, entry_date=long_entry_date
-                    )
-                    in_long_position = False
-                    current_long_stop = np.nan
-                    long_entry_price = np.nan
-                    long_entry_date = None
-                    last_exit_bar = t
-                    exit_triggered_this_bar = True
-                    # Silent exit: do NOT append EXIT/STOP marker
-                else:
-                    # Check Sell at Swing Tops (Exhaustion / Distribution)
-                    top_exhaustion = (
-                        (highs[t] >= upper_band[t] or highs[t - 1] >= upper_band[t - 1])
-                        and (closes[t] < opens[t])
-                        and (closes[t] < lows[t - 1])
-                    )
-                    rsi_rolling_over = (rsi_14[t] < rsi_14[t - 1]) and (
-                        rsi_14[t - 1] >= 70 or rsi_14[t] >= 70
-                    )
-                    p_sell_t = float(probs_matrix[t, 0])
-                    bearish_tilt = (p_sell_t > 0.50) or rsi_rolling_over
-
-                    if top_exhaustion and bearish_tilt:
-                        exit_price = closes[t]
-                        pnl_ret = (exit_price - long_entry_price) / (long_entry_price + 1e-9)
-                        expectancy_filter.record_trade(
-                            ticker, date=dates[t], pnl_ret=pnl_ret, entry_date=long_entry_date
-                        )
-                        in_long_position = False
-                        current_long_stop = np.nan
-                        long_entry_price = np.nan
-                        long_entry_date = None
-                        last_exit_bar = t
-                        exit_triggered_this_bar = True
-
-                        markers.append(
-                            {
-                                "time": dates[t],
-                                "action": "SELL",
-                                "label": f"SELL (Top Exit: {closes[t]:.2f})",
-                                "probability": int(round(max(p_sell_t, 0.60) * 100)),
-                                "price": round(closes[t], 2),
-                            }
-                        )
-                    else:
-                        candidate_stop = highs[t] - (trail_mult_t * atr[t])
-                        current_long_stop = max(current_long_stop, candidate_stop)
-                        trailing_stop_series[t] = current_long_stop
-
-            elif in_short_position:
-                if highs[t] >= current_short_stop:
-                    exit_price = max(closes[t], current_short_stop)
-                    pnl_ret = (short_entry_price - exit_price) / (short_entry_price + 1e-9)
-                    expectancy_filter.record_trade(
-                        ticker, date=dates[t], pnl_ret=pnl_ret, entry_date=short_entry_date
-                    )
-                    in_short_position = False
-                    current_short_stop = np.nan
-                    short_entry_price = np.nan
-                    short_entry_date = None
-                    last_exit_bar = t
-                    exit_triggered_this_bar = True
-                    # Silent exit: do NOT append EXIT/STOP marker
-                else:
-                    candidate_short_stop = lows[t] + (trail_mult_t * atr[t])
-                    current_short_stop = min(current_short_stop, candidate_short_stop)
-                    trailing_stop_series[t] = current_short_stop
-
-            # =====================================================================
-            # LAYER 1: TREND ALIGNMENT & MACRO DIRECTIONAL FILTER
-            # =====================================================================
-            slope_slow = slow_ma[t] - slow_ma[t - k]
-
-            # Long Entry Filter:
-            # 1. Macro & Trend Alignment:
-            long_trend_aligned = (
-                (fast_ma[t] > slow_ma[t])
-                and (slope_slow > 0)
-                and (closes[t] > slow_ma[t])
-                and bool(macro_bull[t])
-            )
-
-            # 2. Bottom / Pullback Confirmation:
-            pullback_touched_value = (lows[t] <= fast_ma[t]) or (lows[t - 1] <= lower_band[t - 1])
-            bullish_reversal = (closes[t] > opens[t]) and (closes[t] > highs[t - 1])
-            is_swing_bottom = pullback_touched_value and bullish_reversal
-
-            # Short Entry Filter:
-            # Layer 1 hard short prohibition when close > slow_ma (or counter-trend short in confirmed bull)
-            short_prohibited = (closes[t] >= slow_ma[t])
-            short_trend_aligned = (
-                (not short_prohibited)
-                and (closes[t] < slow_ma[t])
-                and (fast_ma[t] < slow_ma[t])
-                and (slope_slow < 0)
-            )
-
-            # Pure XGBoost Conviction: P(BUY) >= 0.60
             p_sell = float(probs_matrix[t, 0])
             p_buy = float(probs_matrix[t, 2])
+            slope_fast = fast_ma[t] - fast_ma[t - k]
+            slope_slow = slow_ma[t] - slow_ma[t - k]
 
-            # Layer 2: Refractory cooldown checks (pure integer bar count)
-            bars_since_exit = t - last_exit_bar
-            post_exit_ok = bars_since_exit >= cooldown_bars
+            if in_position:
+                # =================================================================
+                # EXIT LOGIC (SELL): Trailing Stop Breached OR Structural Breakdown
+                # =================================================================
+                stop_breached = lows[t] <= current_trailing_stop
+                trend_exhausted = (closes[t] < fast_ma[t]) and (slope_fast < 0)
 
-            # Asset-Level Expectancy Gating
-            exp_allowed, _ = expectancy_filter.is_entry_allowed(ticker, dates[t])
-
-            # Process Long Entry (P(BUY) >= 0.60 at Swing Bottoms)
-            if (
-                p_buy >= 0.60
-                and long_trend_aligned
-                and is_swing_bottom
-                and exp_allowed
-                and not in_long_position
-                and not exit_triggered_this_bar
-                and post_exit_ok
-                and (t - last_long_bar) >= cooldown_bars
-            ):
-                if in_short_position:
-                    exit_price = max(closes[t], current_short_stop)
-                    pnl_ret = (short_entry_price - exit_price) / (short_entry_price + 1e-9)
+                if stop_breached or trend_exhausted:
+                    exit_price = closes[t]
+                    pnl_ret = (exit_price - entry_price) / (entry_price + 1e-9)
                     expectancy_filter.record_trade(
-                        ticker, date=dates[t], pnl_ret=pnl_ret, entry_date=short_entry_date
+                        ticker, date=dates[t], pnl_ret=pnl_ret, entry_date=entry_date
                     )
-                    in_short_position = False
-                    current_short_stop = np.nan
-                    short_entry_price = np.nan
-                    short_entry_date = None
+                    in_position = False
                     last_exit_bar = t
+                    current_trailing_stop = np.nan
+                    entry_price = np.nan
+                    entry_date = None
 
-                in_long_position = True
-                long_entry_price = closes[t]
-                long_entry_date = dates[t]
-                last_long_bar = t
-                last_short_bar = -9999
+                    markers.append(
+                        {
+                            "time": dates[t],
+                            "action": "SELL",
+                            "label": "SELL (Take Profit / Stop)",
+                            "probability": int(round(max(p_sell, 0.60) * 100)),
+                            "price": round(exit_price, 2),
+                        }
+                    )
+                else:
+                    # Ratchet trailing stop strictly upward under higher highs
+                    candidate_stop = highs[t] - (trail_mult_t * atr[t])
+                    current_trailing_stop = max(current_trailing_stop, candidate_stop)
+                    trailing_stop_series[t] = current_trailing_stop
 
-                current_long_stop = long_entry_price - (trail_mult_t * atr[t])
-                trailing_stop_series[t] = current_long_stop
+            else:
+                # =================================================================
+                # ENTRY LOGIC (BUY): Pullback to Value in Confirmed Bull Trend
+                # =================================================================
+                bars_since_exit = t - last_exit_bar
+                post_exit_ok = bars_since_exit >= cooldown_bars
+                bars_since_buy = t - last_buy_bar
+                post_buy_ok = bars_since_buy >= cooldown_bars
 
-                markers.append(
-                    {
-                        "time": dates[t],
-                        "action": "BUY",
-                        "label": f"BUY (Entry: {long_entry_price:.2f})",
-                        "probability": int(round(p_buy * 100)),
-                        "price": round(long_entry_price, 2),
-                    }
+                # 1. Macro & Trend Alignment
+                long_trend_aligned = (
+                    (closes[t] > slow_ma[t])
+                    and (fast_ma[t] > slow_ma[t])
+                    and (slope_slow > 0)
+                    and bool(macro_bull[t])
                 )
 
-            # Process Short Entry (P(SELL) >= 0.60)
-            elif (
-                p_sell >= 0.60
-                and short_trend_aligned
-                and not short_prohibited
-                and exp_allowed
-                and not in_short_position
-                and not exit_triggered_this_bar
-                and post_exit_ok
-                and (t - last_short_bar) >= cooldown_bars
-            ):
-                if in_long_position:
-                    exit_price = min(closes[t], current_long_stop)
-                    pnl_ret = (exit_price - long_entry_price) / (long_entry_price + 1e-9)
-                    expectancy_filter.record_trade(
-                        ticker, date=dates[t], pnl_ret=pnl_ret, entry_date=long_entry_date
-                    )
-                    in_long_position = False
-                    current_long_stop = np.nan
-                    long_entry_price = np.nan
-                    long_entry_date = None
-                    last_exit_bar = t
-
-                in_short_position = True
-                short_entry_price = closes[t]
-                short_entry_date = dates[t]
-                last_short_bar = t
-                last_long_bar = -9999
-
-                current_short_stop = short_entry_price + (trail_mult_t * atr[t])
-                trailing_stop_series[t] = current_short_stop
-
-                markers.append(
-                    {
-                        "time": dates[t],
-                        "action": "SELL",
-                        "label": f"SELL (Close: {short_entry_price:.2f})",
-                        "probability": int(round(p_sell * 100)),
-                        "price": round(short_entry_price, 2),
-                    }
+                # 2. Pullback to Value (Fast MA test within 0.5% on bar t or bar t-1)
+                pullback_to_value = (
+                    (lows[t] <= fast_ma[t] * 1.005)
+                    or (lows[t - 1] <= fast_ma[t - 1] * 1.005)
                 )
+
+                # 3. Candle Reversal Confirmation (Green candle closing above previous close)
+                candle_reversal = (closes[t] > opens[t]) and (closes[t] > closes[t - 1])
+
+                # 4. Alpha Conviction: P(BUY) >= 0.55
+                alpha_conviction = p_buy >= 0.55
+
+                # 5. Expectancy Filter
+                exp_allowed, _ = expectancy_filter.is_entry_allowed(ticker, dates[t])
+
+                if (
+                    long_trend_aligned
+                    and pullback_to_value
+                    and candle_reversal
+                    and alpha_conviction
+                    and exp_allowed
+                    and post_exit_ok
+                    and post_buy_ok
+                ):
+                    in_position = True
+                    entry_price = closes[t]
+                    entry_date = dates[t]
+                    last_buy_bar = t
+
+                    current_trailing_stop = entry_price - (trail_mult_t * atr[t])
+                    trailing_stop_series[t] = current_trailing_stop
+
+                    markers.append(
+                        {
+                            "time": dates[t],
+                            "action": "BUY",
+                            "label": f"BUY (Entry: {entry_price:.2f})",
+                            "probability": int(round(p_buy * 100)),
+                            "price": round(entry_price, 2),
+                        }
+                    )
 
         # Update instance expectancy filter with accumulated historical state
         self.expectancy_filter = expectancy_filter
