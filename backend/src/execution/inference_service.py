@@ -500,7 +500,7 @@ class InferenceService:
 
         # Packaging Chart & Historical Markers
         historical_markers, df_full = self.report_gen.generate_historical_markers(
-            ticker, ticker_df_risk
+            ticker, ticker_df_risk, spy_df=spy_df_risk
         )
         ai_report_stub = {
             "Models": {"Meta_Model_Status": "Institutional Mesh V2.1"},

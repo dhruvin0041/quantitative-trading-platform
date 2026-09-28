@@ -182,7 +182,13 @@ class AssetExpectancyFilter:
         recovery_threshold: float = 1.20,
         lookback_days: int = 90,
         min_trades: int = 4,
+        trip_hurdle: float | None = None,
+        recovery_hurdle: float | None = None,
     ):
+        if trip_hurdle is not None:
+            suspension_threshold = trip_hurdle
+        if recovery_hurdle is not None:
+            recovery_threshold = recovery_hurdle
         self.suspension_threshold = suspension_threshold
         self.recovery_threshold = recovery_threshold
         self.lookback_days = lookback_days

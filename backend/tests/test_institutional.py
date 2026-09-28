@@ -38,6 +38,7 @@ class TestInstitutionalExcellence(unittest.TestCase):
         self.assertTrue(np.all(weights >= 0))
 
     def test_drift_monitor(self):
+        np.random.seed(42)
         monitor = DriftMonitor()
         train = np.random.normal(0, 1, (100, 5))
         live_no_drift = np.random.normal(0, 1, (100, 5))
