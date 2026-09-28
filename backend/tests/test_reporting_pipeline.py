@@ -247,14 +247,14 @@ class TestReportingPipeline(unittest.TestCase):
         first_buy_time = buy_markers[0]["time"]
         buy_idx = dates.index(first_buy_time)
 
-        # Force stop out on exit_bar_idx
+        # Force stop out on exit_bar_idx (Close strictly below trailing stop)
         exit_bar_idx = buy_idx + 4
         prev_stop = df_res_pre["trailing_stop"].iloc[exit_bar_idx - 1]
         self.assertFalse(np.isnan(prev_stop), "Trailing stop should be active prior to exit bar")
 
         df.iloc[exit_bar_idx, df.columns.get_loc("Low")] = prev_stop - 10.0
         df.iloc[exit_bar_idx, df.columns.get_loc("High")] = 160.0
-        df.iloc[exit_bar_idx, df.columns.get_loc("Close")] = 158.0
+        df.iloc[exit_bar_idx, df.columns.get_loc("Close")] = prev_stop - 2.0
 
         markers, df_res = self.report_gen.generate_historical_markers("TEST", df)
         exit_date = dates[exit_bar_idx]
@@ -289,8 +289,9 @@ class TestReportingPipeline(unittest.TestCase):
         exit_bar_idx = buy_idx + 4
         prev_stop = df_res_pre["trailing_stop"].iloc[exit_bar_idx - 1]
 
-        # Force stop out on exit_bar_idx
+        # Force stop out on exit_bar_idx (Close strictly below trailing stop)
         df.iloc[exit_bar_idx, df.columns.get_loc("Low")] = prev_stop - 5.0
+        df.iloc[exit_bar_idx, df.columns.get_loc("Close")] = prev_stop - 2.0
 
         markers, _ = self.report_gen.generate_historical_markers("TEST", df)
 
@@ -468,6 +469,82 @@ class TestReportingPipeline(unittest.TestCase):
                 ["SELL", "SELL"],
                 f"Found illegal consecutive SELL signals at index {i}: {pair}",
             )
+
+    def test_intraday_wick_does_not_shakeout_position(self):
+        """
+        Verify requirement #2 (Close-based trailing stops):
+        An intraday low dipping below the trailing stop MUST NOT shake out the position
+        if the candle's daily Close remains above the trailing stop.
+        """
+        df = self._create_uptrend_series(60)
+        dates = df.index.strftime("%Y-%m-%d").tolist()
+
+        markers_pre, df_res_pre = self.report_gen.generate_historical_markers("TEST", df.copy())
+        buy_markers = [m for m in markers_pre if m["action"] == "BUY"]
+        self.assertTrue(len(buy_markers) > 0, "Uptrend should have triggered at least one BUY")
+
+        first_buy_time = buy_markers[0]["time"]
+        buy_idx = dates.index(first_buy_time)
+        wick_bar_idx = buy_idx + 4
+        prev_stop = df_res_pre["trailing_stop"].iloc[wick_bar_idx - 1]
+        self.assertFalse(np.isnan(prev_stop), "Trailing stop should be active prior to wick bar")
+
+        # Create an intraday wick: Low penetrates below stop, but Close rallies comfortably above stop
+        df_wick = df.copy()
+        df_wick.iloc[wick_bar_idx, df_wick.columns.get_loc("Low")] = prev_stop - 10.0
+        df_wick.iloc[wick_bar_idx, df_wick.columns.get_loc("Close")] = prev_stop + 5.0
+
+        markers, df_res = self.report_gen.generate_historical_markers("TEST", df_wick)
+        wick_date = dates[wick_bar_idx]
+
+        # Assert no SELL was emitted on wick_date and trailing stop remains active
+        same_day_sells = [m for m in markers if m["time"] == wick_date and m["action"] == "SELL"]
+        self.assertEqual(
+            len(same_day_sells),
+            0,
+            f"Wick shakeout detected! Position was prematurely exited on intraday wick at {wick_date}",
+        )
+        self.assertFalse(
+            np.isnan(df_res["trailing_stop"].iloc[wick_bar_idx]),
+            "Trailing stop should remain active after surviving intraday wick",
+        )
+
+    def test_parabolic_exhaustion_exit(self):
+        """
+        Verify requirement #3 (Parabolic exhaustion exit):
+        When price extends into extreme volatility territory (High > upper_band * 1.02 or RSI > 75)
+        and prints a bearish reversal rejection wick (Close < Open and Close < High - range * 0.6),
+        a SELL marker is emitted to take profits at the peak.
+        """
+        df = self._create_uptrend_series(60)
+        dates = df.index.strftime("%Y-%m-%d").tolist()
+
+        markers_pre, df_res_pre = self.report_gen.generate_historical_markers("TEST", df.copy())
+        buy_markers = [m for m in markers_pre if m["action"] == "BUY"]
+        self.assertTrue(len(buy_markers) > 0, "Uptrend should have triggered at least one BUY")
+
+        first_buy_time = buy_markers[0]["time"]
+        buy_idx = dates.index(first_buy_time)
+        exhaust_bar_idx = buy_idx + 8
+
+        # Synthesize a massive parabolic blow-off candle with top rejection wick
+        df_exhaust = df.copy()
+        df_exhaust.iloc[exhaust_bar_idx, df_exhaust.columns.get_loc("Open")] = 250.0
+        df_exhaust.iloc[exhaust_bar_idx, df_exhaust.columns.get_loc("High")] = 300.0
+        df_exhaust.iloc[exhaust_bar_idx, df_exhaust.columns.get_loc("Low")] = 200.0
+        # Close < Open and in bottom 40% of range (300 - 100 * 0.6 = 240)
+        df_exhaust.iloc[exhaust_bar_idx, df_exhaust.columns.get_loc("Close")] = 220.0
+
+        markers, _ = self.report_gen.generate_historical_markers("TEST", df_exhaust)
+        exhaust_date = dates[exhaust_bar_idx]
+
+        sell_markers = [m for m in markers if m["time"] == exhaust_date and m["action"] == "SELL"]
+        self.assertEqual(
+            len(sell_markers),
+            1,
+            f"Expected a parabolic exhaustion SELL on {exhaust_date}, found: {sell_markers}",
+        )
+        self.assertEqual(sell_markers[0]["label"], "SELL (Parabolic Exhaustion)")
 
 
 if __name__ == "__main__":

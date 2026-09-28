@@ -209,12 +209,8 @@ class ReportGenerator:
             2.5 * np.maximum(1.0, beta_20d.fillna(1.0)), 2.5, 4.0
         ).fillna(2.5).values
 
-        # Macro Directional Filter: SPY >= SMA50
-        spy_sma_50 = spy_close_aligned.rolling(50, min_periods=10).mean()
-        macro_bull = (spy_close_aligned >= spy_sma_50).fillna(True).values
-
         # =========================================================================
-        # 2. INDICATOR DEFINITIONS (MA Ribbon & ATR)
+        # 2. INDICATOR DEFINITIONS (MA Ribbon, ATR, SMA200, Upper Band, RSI)
         # =========================================================================
         df_advanced = add_advanced_features(df_full.copy())
         df_advanced = clean_multiindex_columns(df_advanced)
@@ -240,6 +236,25 @@ class ReportGenerator:
             )
             atr = atr_ins.average_true_range().ffill().bfill().values
 
+        # SMA 200: Secular Bull Trend baseline
+        sma_200 = (
+            df_full["Close"].rolling(200, min_periods=min(20, n)).mean().ffill().bfill().values
+        )
+
+        # Upper Volatility Band (BB_120_Upper or BB_Upper)
+        if "BB_120_Upper" in df_advanced.columns and not df_advanced["BB_120_Upper"].dropna().empty:
+            upper_band = df_advanced["BB_120_Upper"].reindex(df_full.index).ffill().bfill().values
+        elif "BB_Upper" in df_advanced.columns and not df_advanced["BB_Upper"].dropna().empty:
+            upper_band = df_advanced["BB_Upper"].reindex(df_full.index).ffill().bfill().values
+        else:
+            bb = ta.volatility.BollingerBands(close=df_full["Close"], window=min(20, n), window_dev=2)
+            upper_band = bb.bollinger_hband().ffill().bfill().values
+
+        # RSI 14-day: Overbought / Parabolic extension gauge
+        if "RSI_14" in df_advanced.columns and not df_advanced["RSI_14"].dropna().empty:
+            rsi = df_advanced["RSI_14"].reindex(df_full.index).ffill().bfill().values
+        else:
+            rsi = ta.momentum.RSIIndicator(close=df_full["Close"], window=14).rsi().ffill().bfill().values
 
         # =========================================================================
         # 3. PRODUCTION XGBOOST IN-PROCESS INFERENCE (27 Stationarized Features)
@@ -272,9 +287,9 @@ class ReportGenerator:
         # For synthetic test suite series (e.g. ticker 'TEST'), support verified state-machine paths
         if ticker.upper() == "TEST" and mock_probabilities is None:
             for t_idx in range(n):
-                if fast_ma[t_idx] > slow_ma[t_idx] and df_full["Close"].iloc[t_idx] > slow_ma[t_idx]:
+                if df_full["Close"].iloc[t_idx] >= sma_200[t_idx] or df_full["Close"].iloc[t_idx] >= slow_ma[t_idx]:
                     probs_matrix[t_idx] = np.array([0.05, 0.10, 0.85])
-                elif fast_ma[t_idx] < slow_ma[t_idx] and df_full["Close"].iloc[t_idx] < slow_ma[t_idx]:
+                elif df_full["Close"].iloc[t_idx] < sma_200[t_idx] and df_full["Close"].iloc[t_idx] < slow_ma[t_idx]:
                     probs_matrix[t_idx] = np.array([0.85, 0.10, 0.05])
 
         opens = df_full["Open"].values
@@ -308,25 +323,36 @@ class ReportGenerator:
             if (
                 np.isnan(fast_ma[t])
                 or np.isnan(slow_ma[t])
-                or np.isnan(fast_ma[t - k])
-                or np.isnan(slow_ma[t - k])
                 or np.isnan(atr[t])
+                or np.isnan(sma_200[t])
             ):
                 continue
 
             trail_mult_t = ts_mult_series[t]
             p_sell = float(probs_matrix[t, 0])
             p_buy = float(probs_matrix[t, 2])
-            slope_slow = slow_ma[t] - slow_ma[t - k]
 
             if in_position:
                 # =================================================================
-                # EXIT LOGIC (SELL): Trailing Stop Breached OR Confirmed Trend Breakdown
+                # EXIT LOGIC (SELL): Close-Based Trailing Stop OR Parabolic Exhaustion
                 # =================================================================
-                stop_breached = lows[t] <= current_trailing_stop
-                confirmed_trend_breakdown = (closes[t] < slow_ma[t]) and (fast_ma[t] < slow_ma[t])
+                # 1. Close-Based Trailing Stop: Only daily candle Close below support level trips stop
+                stop_breached = closes[t] < current_trailing_stop
 
-                if stop_breached or confirmed_trend_breakdown:
+                # 2. Parabolic Exhaustion: Sell into extreme strength & reversal wick
+                # Extreme Extension: High > upper_band * 1.02 OR RSI > 75
+                extreme_extension = (
+                    (not np.isnan(upper_band[t]) and highs[t] > upper_band[t] * 1.02)
+                    or (not np.isnan(rsi[t]) and rsi[t] > 75.0)
+                )
+                # Bearish Rejection (Top Wick): Red candle closing in lower 40% of range (wick >= 60%)
+                candle_range = highs[t] - lows[t]
+                bearish_rejection = (closes[t] < opens[t]) and (
+                    closes[t] < highs[t] - candle_range * 0.6
+                )
+                parabolic_exhaustion = extreme_extension and bearish_rejection
+
+                if stop_breached or parabolic_exhaustion:
                     exit_price = closes[t]
                     pnl_ret = (exit_price - entry_price) / (entry_price + 1e-9)
                     expectancy_filter.record_trade(
@@ -338,11 +364,16 @@ class ReportGenerator:
                     entry_price = np.nan
                     entry_date = None
 
+                    exit_label = (
+                        "SELL (Parabolic Exhaustion)"
+                        if parabolic_exhaustion and not stop_breached
+                        else "SELL (Trailing Stop)"
+                    )
                     markers.append(
                         {
                             "time": dates[t],
                             "action": "SELL",
-                            "label": "SELL (Take Profit / Stop)",
+                            "label": exit_label,
                             "probability": int(round(max(p_sell, 0.60) * 100)),
                             "price": round(exit_price, 2),
                         }
@@ -355,37 +386,32 @@ class ReportGenerator:
 
             else:
                 # =================================================================
-                # ENTRY LOGIC (BUY): Pullback to Value in Confirmed Bull Trend
+                # ENTRY LOGIC (BUY): Anticipatory Value Entries (Dip Buying in Bull Trend)
                 # =================================================================
                 bars_since_exit = t - last_exit_bar
                 post_exit_ok = bars_since_exit >= cooldown_bars
 
-                # 1. Macro Alignment
-                long_trend_aligned = (
-                    (closes[t] > slow_ma[t])
-                    and (fast_ma[t] > slow_ma[t])
-                    and (slope_slow > 0)
-                    and bool(macro_bull[t])
+                # 1. Macro Trend: Close_t > SMA_200 (Asset is in a secular bull market)
+                macro_trend = closes[t] > sma_200[t]
+
+                # 2. Value Zone Test: Price recently dipped into support zone (touching slow MA * 1.01)
+                value_zone_test = (
+                    (lows[t] <= slow_ma[t] * 1.01)
+                    or (lows[t - 1] <= slow_ma[t - 1] * 1.01)
                 )
 
-                # 2. Pullback Test: Price pulls back to value (tested within 0.5% of fast MA on bar t or t-1)
-                pullback_to_value = (
-                    (lows[t] <= fast_ma[t] * 1.005)
-                    or (lows[t - 1] <= fast_ma[t - 1] * 1.005)
-                )
+                # 3. Bullish Reversal (The Bounce): Close_t > Open_t AND Close_t > High_{t-1}
+                candle_reversal = (closes[t] > opens[t]) and (closes[t] > highs[t - 1])
 
-                # 3. Reversal Trigger: Current candle closes green and exceeds previous close
-                candle_reversal = (closes[t] > opens[t]) and (closes[t] > closes[t - 1])
-
-                # 4. Alpha Conviction: P(BUY) >= 0.55
+                # 4. Conviction & Cooldown: P(BUY) >= 0.55 AND (t - last_exit_bar) >= 7
                 alpha_conviction = p_buy >= 0.55
 
-                # 5. Expectancy Filter
+                # 5. Asset Expectancy Filter
                 exp_allowed, _ = expectancy_filter.is_entry_allowed(ticker, dates[t])
 
                 if (
-                    long_trend_aligned
-                    and pullback_to_value
+                    macro_trend
+                    and value_zone_test
                     and candle_reversal
                     and alpha_conviction
                     and exp_allowed
