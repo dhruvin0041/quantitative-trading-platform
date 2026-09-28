@@ -240,6 +240,21 @@ class ReportGenerator:
             )
             atr = atr_ins.average_true_range().ffill().bfill().values
 
+        # Volatility Envelope (Bollinger Bands: 20-period, 2 std dev)
+        if "BB_Upper" in df_advanced.columns and "BB_Lower" in df_advanced.columns:
+            upper_band = df_advanced["BB_Upper"].reindex(df_full.index).ffill().bfill().values
+            lower_band = df_advanced["BB_Lower"].reindex(df_full.index).ffill().bfill().values
+        else:
+            bb = ta.volatility.BollingerBands(close=df_full["Close"], window=20, window_dev=2)
+            upper_band = bb.bollinger_hband().ffill().bfill().values
+            lower_band = bb.bollinger_lband().ffill().bfill().values
+
+        # 14-period RSI
+        if "RSI_14" in df_advanced.columns:
+            rsi_14 = df_advanced["RSI_14"].reindex(df_full.index).ffill().bfill().values
+        else:
+            rsi_14 = ta.momentum.RSIIndicator(close=df_full["Close"], window=14).rsi().ffill().bfill().values
+
         # =========================================================================
         # 3. PRODUCTION XGBOOST IN-PROCESS INFERENCE (27 Stationarized Features)
         # =========================================================================
@@ -276,6 +291,7 @@ class ReportGenerator:
                 elif fast_ma[t_idx] < slow_ma[t_idx] and df_full["Close"].iloc[t_idx] < slow_ma[t_idx]:
                     probs_matrix[t_idx] = np.array([0.85, 0.10, 0.05])
 
+        opens = df_full["Open"].values
         closes = df_full["Close"].values
         highs = df_full["High"].values
         lows = df_full["Low"].values
@@ -324,7 +340,7 @@ class ReportGenerator:
             exit_triggered_this_bar = False
 
             # =====================================================================
-            # LAYER 3: DYNAMIC ATR-RATCHETING TRAILING EXITS (Position Monitoring)
+            # LAYER 3: DYNAMIC ATR-RATCHETING TRAILING EXITS & SWING TOP EXITS
             # =====================================================================
             if in_long_position:
                 if lows[t] <= current_long_stop:
@@ -333,25 +349,52 @@ class ReportGenerator:
                     expectancy_filter.record_trade(
                         ticker, date=dates[t], pnl_ret=pnl_ret, entry_date=long_entry_date
                     )
-                    markers.append(
-                        {
-                            "time": dates[t],
-                            "action": "EXIT",
-                            "label": f"Stop Exit @ {current_long_stop:.2f}",
-                            "probability": 100,
-                            "price": round(current_long_stop, 2),
-                        }
-                    )
                     in_long_position = False
                     current_long_stop = np.nan
                     long_entry_price = np.nan
                     long_entry_date = None
                     last_exit_bar = t
                     exit_triggered_this_bar = True
+                    # Silent exit: do NOT append EXIT/STOP marker
                 else:
-                    candidate_stop = highs[t] - (trail_mult_t * atr[t])
-                    current_long_stop = max(current_long_stop, candidate_stop)
-                    trailing_stop_series[t] = current_long_stop
+                    # Check Sell at Swing Tops (Exhaustion / Distribution)
+                    top_exhaustion = (
+                        (highs[t] >= upper_band[t] or highs[t - 1] >= upper_band[t - 1])
+                        and (closes[t] < opens[t])
+                        and (closes[t] < lows[t - 1])
+                    )
+                    rsi_rolling_over = (rsi_14[t] < rsi_14[t - 1]) and (
+                        rsi_14[t - 1] >= 70 or rsi_14[t] >= 70
+                    )
+                    p_sell_t = float(probs_matrix[t, 0])
+                    bearish_tilt = (p_sell_t > 0.50) or rsi_rolling_over
+
+                    if top_exhaustion and bearish_tilt:
+                        exit_price = closes[t]
+                        pnl_ret = (exit_price - long_entry_price) / (long_entry_price + 1e-9)
+                        expectancy_filter.record_trade(
+                            ticker, date=dates[t], pnl_ret=pnl_ret, entry_date=long_entry_date
+                        )
+                        in_long_position = False
+                        current_long_stop = np.nan
+                        long_entry_price = np.nan
+                        long_entry_date = None
+                        last_exit_bar = t
+                        exit_triggered_this_bar = True
+
+                        markers.append(
+                            {
+                                "time": dates[t],
+                                "action": "SELL",
+                                "label": f"SELL (Top Exit: {closes[t]:.2f})",
+                                "probability": int(round(max(p_sell_t, 0.60) * 100)),
+                                "price": round(closes[t], 2),
+                            }
+                        )
+                    else:
+                        candidate_stop = highs[t] - (trail_mult_t * atr[t])
+                        current_long_stop = max(current_long_stop, candidate_stop)
+                        trailing_stop_series[t] = current_long_stop
 
             elif in_short_position:
                 if highs[t] >= current_short_stop:
@@ -360,21 +403,13 @@ class ReportGenerator:
                     expectancy_filter.record_trade(
                         ticker, date=dates[t], pnl_ret=pnl_ret, entry_date=short_entry_date
                     )
-                    markers.append(
-                        {
-                            "time": dates[t],
-                            "action": "EXIT",
-                            "label": f"Short Stop Exit @ {current_short_stop:.2f}",
-                            "probability": 100,
-                            "price": round(current_short_stop, 2),
-                        }
-                    )
                     in_short_position = False
                     current_short_stop = np.nan
                     short_entry_price = np.nan
                     short_entry_date = None
                     last_exit_bar = t
                     exit_triggered_this_bar = True
+                    # Silent exit: do NOT append EXIT/STOP marker
                 else:
                     candidate_short_stop = lows[t] + (trail_mult_t * atr[t])
                     current_short_stop = min(current_short_stop, candidate_short_stop)
@@ -383,21 +418,21 @@ class ReportGenerator:
             # =====================================================================
             # LAYER 1: TREND ALIGNMENT & MACRO DIRECTIONAL FILTER
             # =====================================================================
-            slope_fast = fast_ma[t] - fast_ma[t - k]
             slope_slow = slow_ma[t] - slow_ma[t - k]
 
             # Long Entry Filter:
-            # 1. fast_ma > slow_ma
-            # 2. slope(fast_ma) > 0 and slope(slow_ma) > 0
-            # 3. Close > slow_ma
-            # 4. Macro bull: SPY >= SMA50
+            # 1. Macro & Trend Alignment:
             long_trend_aligned = (
                 (fast_ma[t] > slow_ma[t])
-                and (slope_fast > 0)
                 and (slope_slow > 0)
                 and (closes[t] > slow_ma[t])
                 and bool(macro_bull[t])
             )
+
+            # 2. Bottom / Pullback Confirmation:
+            pullback_touched_value = (lows[t] <= fast_ma[t]) or (lows[t - 1] <= lower_band[t - 1])
+            bullish_reversal = (closes[t] > opens[t]) and (closes[t] > highs[t - 1])
+            is_swing_bottom = pullback_touched_value and bullish_reversal
 
             # Short Entry Filter:
             # Layer 1 hard short prohibition when close > slow_ma (or counter-trend short in confirmed bull)
@@ -413,16 +448,18 @@ class ReportGenerator:
             p_sell = float(probs_matrix[t, 0])
             p_buy = float(probs_matrix[t, 2])
 
-            # Layer 2: Refractory cooldown checks
-            post_exit_ok = (t - last_exit_bar) >= cooldown_bars
+            # Layer 2: Refractory cooldown checks (pure integer bar count)
+            bars_since_exit = t - last_exit_bar
+            post_exit_ok = bars_since_exit >= cooldown_bars
 
             # Asset-Level Expectancy Gating
             exp_allowed, _ = expectancy_filter.is_entry_allowed(ticker, dates[t])
 
-            # Process Long Entry (P(BUY) >= 0.60)
+            # Process Long Entry (P(BUY) >= 0.60 at Swing Bottoms)
             if (
                 p_buy >= 0.60
                 and long_trend_aligned
+                and is_swing_bottom
                 and exp_allowed
                 and not in_long_position
                 and not exit_triggered_this_bar
@@ -434,15 +471,6 @@ class ReportGenerator:
                     pnl_ret = (short_entry_price - exit_price) / (short_entry_price + 1e-9)
                     expectancy_filter.record_trade(
                         ticker, date=dates[t], pnl_ret=pnl_ret, entry_date=short_entry_date
-                    )
-                    markers.append(
-                        {
-                            "time": dates[t],
-                            "action": "EXIT",
-                            "label": "Reverse Exit",
-                            "probability": 100,
-                            "price": round(closes[t], 2),
-                        }
                     )
                     in_short_position = False
                     current_short_stop = np.nan
@@ -485,15 +513,6 @@ class ReportGenerator:
                     pnl_ret = (exit_price - long_entry_price) / (long_entry_price + 1e-9)
                     expectancy_filter.record_trade(
                         ticker, date=dates[t], pnl_ret=pnl_ret, entry_date=long_entry_date
-                    )
-                    markers.append(
-                        {
-                            "time": dates[t],
-                            "action": "EXIT",
-                            "label": "Reverse Exit",
-                            "probability": 100,
-                            "price": round(closes[t], 2),
-                        }
                     )
                     in_long_position = False
                     current_long_stop = np.nan
@@ -585,6 +604,9 @@ class ReportGenerator:
         final_markers = historical_markers.copy()
         if system_signals is not None and not system_signals.empty:
             for _, sig in system_signals.iterrows():
+                sig_type = str(sig["signal_type"]).upper()
+                if sig_type not in ["BUY", "SELL"]:
+                    continue
                 # Convert timestamp to date string
                 sig_time = pd.to_datetime(sig["timestamp"]).strftime("%Y-%m-%d")
                 # Avoid duplicates with historical markers on same date
@@ -592,15 +614,18 @@ class ReportGenerator:
                     final_markers.append(
                         {
                             "time": sig_time,
-                            "action": sig["signal_type"],
-                            "label": f"Hydra {sig['signal_type']}",
+                            "action": sig_type,
+                            "label": f"Hydra {sig_type}",
                             "probability": sig["confidence"],
                         }
                     )
 
-        # Filter out markers that fall before our 150-day chart window
+        # Filter out markers that fall before our 150-day chart window, strictly BUY and SELL
         min_date = df_chart["time"].min()
-        final_markers = [m for m in final_markers if m["time"] >= min_date]
+        final_markers = [
+            m for m in final_markers
+            if m["time"] >= min_date and m["action"] in ["BUY", "SELL"]
+        ]
 
         return {
             "candles": candles,

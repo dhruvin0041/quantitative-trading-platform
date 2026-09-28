@@ -133,7 +133,6 @@ export function PriceChart({ data, loading }: PriceChartProps) {
     if (!data || !data.candles || !chartRef.current || !candlestickSeriesRef.current) return;
 
     const isDark = resolvedTheme === 'dark';
-    const vetoColor = isDark ? '#FFA726' : '#E65100'; // Orange for vetoed/purged trades
     const varBreachColor = isDark ? 'rgba(255, 82, 82, 0.6)' : 'rgba(192, 56, 10, 0.6)';
     const safeColor = isDark ? 'rgba(0, 230, 118, 0.2)' : 'rgba(29, 122, 58, 0.2)';
 
@@ -183,11 +182,11 @@ export function PriceChart({ data, loading }: PriceChartProps) {
 
     if (data.historical_markers && data.historical_markers.length > 0) {
       const filteredMarkers = data.historical_markers.filter(m => {
-        // HIDE hold markers, but SHOW VETOED and CROWDING_VETO markers to visualize RiskAgent intervention
-        if (m.action === 'HOLD') return false;
-        if (m.probability && m.probability < 60 && !m.action.includes('VETO')) return false;
+        // Strictly allow BUY and SELL markers
+        if (m.action !== 'BUY' && m.action !== 'SELL') return false;
+        if (m.probability && m.probability < 60) return false;
         return true;
-      }).sort((a,b) => new Date(a.time as string).getTime() - new Date(b.time as string).getTime());
+      }).sort((a, b) => new Date(a.time as string).getTime() - new Date(b.time as string).getTime());
       
       const cleanedMarkers: typeof filteredMarkers = [];
       let lastAction = null;
@@ -204,51 +203,13 @@ export function PriceChart({ data, loading }: PriceChartProps) {
       }
 
       const markers = cleanedMarkers.map((marker) => {
-        let position: "belowBar" | "aboveBar" | "inBar" = "belowBar";
-        let color = "#10B981";
-        let shape: "arrowUp" | "arrowDown" | "circle" | "square" = "arrowUp";
-        let text = '';
-
-        const isShortExit =
-          marker.action === 'SHORT_EXIT' ||
-          (marker.action === 'EXIT' && marker.label?.toLowerCase().includes('short'));
-
-        if (marker.action === 'BUY') {
-          position = "belowBar";
-          color = "#10B981";
-          shape = "arrowUp";
-          text = 'BUY';
-        } else if (marker.action === 'EXIT' || marker.action === 'STOP') {
-          if (isShortExit) {
-            position = "aboveBar";
-            color = "#EF4444";
-            shape = "circle";
-            text = 'STOP';
-          } else {
-            // Long Stop Exit: positioned belowBar
-            position = "belowBar";
-            color = "#EF4444";
-            shape = "circle";
-            text = 'STOP';
-          }
-        } else if (marker.action.includes('VETO') || marker.action === 'VAR_LIMIT_BREACH') {
-          position = "aboveBar";
-          color = vetoColor;
-          shape = "square";
-          text = 'X'; // Mark vetoes distinctly
-        } else if (marker.action === 'SELL') {
-          position = "aboveBar";
-          color = "#F59E0B";
-          shape = "arrowDown";
-          text = 'SELL';
-        }
-
+        const isBuy = marker.action === 'BUY';
         return {
           time: marker.time,
-          position,
-          color,
-          shape,
-          text,
+          position: (isBuy ? "belowBar" : "aboveBar") as "belowBar" | "aboveBar",
+          color: isBuy ? "#10B981" : "#EF4444",
+          shape: (isBuy ? "arrowUp" : "arrowDown") as "arrowUp" | "arrowDown",
+          text: marker.action,
           size: 1,
         };
       });
