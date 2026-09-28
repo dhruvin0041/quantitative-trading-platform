@@ -3,7 +3,6 @@ import logging
 from datetime import datetime
 
 import numpy as np
-import pandas as pd
 
 from src.data_ingestion.nlp_processor import NewsTokenizer
 from src.execution.asset_intelligence import (
@@ -507,18 +506,11 @@ class InferenceService:
             "Risk": {"Quality": quality_metrics["score"]},
         }
 
-        system_signals = None
-        if self.journal:
-            raw_sigs = self.journal.get_all_signals()
-            if raw_sigs is not None and isinstance(raw_sigs, pd.DataFrame) and not raw_sigs.empty and "asset" in raw_sigs.columns:
-                system_signals = raw_sigs[raw_sigs["asset"] == ticker].head(30)
-
         reporting_data = self.report_gen.package_chart_data(
             ticker,
             df_full,
             ai_report_stub,
             historical_markers,
-            system_signals=system_signals,
         )
         response_data.update(reporting_data)
         response_data["signal_id"] = signal_id

@@ -193,6 +193,7 @@ class PredictResponse(BaseModel):
     # Chart & Portfolio
     portfolio: Optional[PortfolioSummary] = None
     historical_markers: Optional[List[Dict[str, Any]]] = None
+    markers: Optional[List[Dict[str, Any]]] = None
     candles: Optional[List[Dict[str, Any]]] = None
     clouds: Optional[List[Dict[str, Any]]] = None
 

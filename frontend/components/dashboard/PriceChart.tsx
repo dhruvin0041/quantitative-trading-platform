@@ -180,11 +180,20 @@ export function PriceChart({ data, loading }: PriceChartProps) {
       forecastP10Ref.current.setData(data.forecast_fan.map((f: { time: string; p10: number }) => ({ time: f.time, value: f.p10 })));
     }
 
-    if (data.historical_markers && data.historical_markers.length > 0) {
-      const filteredMarkers = data.historical_markers.filter(m => {
-        // Strictly allow BUY and SELL markers
-        return m.action === 'BUY' || m.action === 'SELL';
-      }).sort((a, b) => new Date(a.time as string).getTime() - new Date(b.time as string).getTime());
+    const rawMarkers = data.historical_markers || data.markers || [];
+    if (rawMarkers && rawMarkers.length > 0) {
+      const validMarkers = rawMarkers
+        .filter(m => m.action === 'BUY' || m.action === 'SELL')
+        .sort((a, b) => new Date(a.time as string).getTime() - new Date(b.time as string).getTime());
+
+      const filteredMarkers: typeof validMarkers = [];
+      let lastAction: string | null = null;
+      for (const m of validMarkers) {
+        if (m.action !== lastAction) {
+          filteredMarkers.push(m);
+          lastAction = m.action;
+        }
+      }
 
       const markers = filteredMarkers.map((marker) => {
         const isBuy = marker.action === 'BUY';

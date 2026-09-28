@@ -300,7 +300,6 @@ class ReportGenerator:
         current_trailing_stop = np.nan
         entry_price = np.nan
         entry_date = None
-        last_buy_bar = -9999
         last_exit_bar = -9999
 
         start_idx = min_required_bars
@@ -318,17 +317,16 @@ class ReportGenerator:
             trail_mult_t = ts_mult_series[t]
             p_sell = float(probs_matrix[t, 0])
             p_buy = float(probs_matrix[t, 2])
-            slope_fast = fast_ma[t] - fast_ma[t - k]
             slope_slow = slow_ma[t] - slow_ma[t - k]
 
             if in_position:
                 # =================================================================
-                # EXIT LOGIC (SELL): Trailing Stop Breached OR Structural Breakdown
+                # EXIT LOGIC (SELL): Trailing Stop Breached OR Confirmed Trend Breakdown
                 # =================================================================
                 stop_breached = lows[t] <= current_trailing_stop
-                trend_exhausted = (closes[t] < fast_ma[t]) and (slope_fast < 0)
+                confirmed_trend_breakdown = (closes[t] < slow_ma[t]) and (fast_ma[t] < slow_ma[t])
 
-                if stop_breached or trend_exhausted:
+                if stop_breached or confirmed_trend_breakdown:
                     exit_price = closes[t]
                     pnl_ret = (exit_price - entry_price) / (entry_price + 1e-9)
                     expectancy_filter.record_trade(
@@ -350,7 +348,7 @@ class ReportGenerator:
                         }
                     )
                 else:
-                    # Ratchet trailing stop strictly upward under higher highs
+                    # Give beta-calibrated trailing stop room to work: ratchet strictly upward
                     candidate_stop = highs[t] - (trail_mult_t * atr[t])
                     current_trailing_stop = max(current_trailing_stop, candidate_stop)
                     trailing_stop_series[t] = current_trailing_stop
@@ -361,10 +359,8 @@ class ReportGenerator:
                 # =================================================================
                 bars_since_exit = t - last_exit_bar
                 post_exit_ok = bars_since_exit >= cooldown_bars
-                bars_since_buy = t - last_buy_bar
-                post_buy_ok = bars_since_buy >= cooldown_bars
 
-                # 1. Macro & Trend Alignment
+                # 1. Macro Alignment
                 long_trend_aligned = (
                     (closes[t] > slow_ma[t])
                     and (fast_ma[t] > slow_ma[t])
@@ -372,13 +368,13 @@ class ReportGenerator:
                     and bool(macro_bull[t])
                 )
 
-                # 2. Pullback to Value (Fast MA test within 0.5% on bar t or bar t-1)
+                # 2. Pullback Test: Price pulls back to value (tested within 0.5% of fast MA on bar t or t-1)
                 pullback_to_value = (
                     (lows[t] <= fast_ma[t] * 1.005)
                     or (lows[t - 1] <= fast_ma[t - 1] * 1.005)
                 )
 
-                # 3. Candle Reversal Confirmation (Green candle closing above previous close)
+                # 3. Reversal Trigger: Current candle closes green and exceeds previous close
                 candle_reversal = (closes[t] > opens[t]) and (closes[t] > closes[t - 1])
 
                 # 4. Alpha Conviction: P(BUY) >= 0.55
@@ -394,12 +390,10 @@ class ReportGenerator:
                     and alpha_conviction
                     and exp_allowed
                     and post_exit_ok
-                    and post_buy_ok
                 ):
                     in_position = True
                     entry_price = closes[t]
                     entry_date = dates[t]
-                    last_buy_bar = t
 
                     current_trailing_stop = entry_price - (trail_mult_t * atr[t])
                     trailing_stop_series[t] = current_trailing_stop
@@ -414,18 +408,29 @@ class ReportGenerator:
                         }
                     )
 
+        # Strict Post-Processing Invariant: deduplication guard
+        clean_markers = []
+        last_action = None
+        for m in markers:
+            if m["action"] in ["BUY", "SELL"]:
+                if m["action"] != last_action:
+                    clean_markers.append(m)
+                    last_action = m["action"]
+
         # Update instance expectancy filter with accumulated historical state
         self.expectancy_filter = expectancy_filter
 
         # Attach trailing stop to df_full for chart visualization
         df_full["trailing_stop"] = trailing_stop_series
-        return markers, df_full
+        return clean_markers, df_full
 
     def package_chart_data(
         self, ticker, df_full, ai_report_dict, historical_markers, system_signals=None
     ):
         """
         Formats data for the Next.js institutional dashboard.
+        The historical_markers array is the direct, single source of truth from
+        the simulation loop and is strictly deduplicated against duplicate signals.
         """
         df_full = clean_multiindex_columns(df_full)
         df_features = add_advanced_features(df_full.copy())
@@ -475,36 +480,31 @@ class ReportGenerator:
 
         clouds = df_cloud_json[cloud_cols].replace({np.nan: None}).to_dict(orient="records")
 
-        # Merge System Signals (from Journal) with Historical Pivots
-        final_markers = historical_markers.copy()
-        if system_signals is not None and not system_signals.empty:
-            for _, sig in system_signals.iterrows():
-                sig_type = str(sig["signal_type"]).upper()
-                if sig_type not in ["BUY", "SELL"]:
-                    continue
-                # Convert timestamp to date string
-                sig_time = pd.to_datetime(sig["timestamp"]).strftime("%Y-%m-%d")
-                # Avoid duplicates with historical markers on same date
-                if not any(m["time"] == sig_time for m in final_markers):
-                    final_markers.append(
-                        {
-                            "time": sig_time,
-                            "action": sig_type,
-                            "label": f"Hydra {sig_type}",
-                            "probability": sig["confidence"],
-                        }
-                    )
+        # Single Source of Truth: historical_markers from the simulation loop ONLY.
+        # Do NOT merge raw candle triggers, database order journals, or system_signals.
+        raw_markers = list(historical_markers) if historical_markers else []
 
-        # Filter out markers that fall before our 150-day chart window, strictly BUY and SELL
+        # Filter out markers that fall before our chart window, strictly BUY and SELL
         min_date = df_chart["time"].min()
-        final_markers = [
-            m for m in final_markers
-            if m["time"] >= min_date and m["action"] in ["BUY", "SELL"]
+        window_markers = [
+            m for m in raw_markers
+            if m.get("time") and m["time"] >= min_date and m.get("action") in ["BUY", "SELL"]
         ]
+        window_markers.sort(key=lambda m: m["time"])
+
+        # Strict Post-Processing Invariant: deduplication guard
+        clean_markers = []
+        last_action = None
+        for m in window_markers:
+            if m["action"] in ["BUY", "SELL"]:
+                if m["action"] != last_action:
+                    clean_markers.append(m)
+                    last_action = m["action"]
 
         return {
             "candles": candles,
             "clouds": clouds,
             "ai_report": ai_report_dict,
-            "historical_markers": final_markers,
+            "historical_markers": clean_markers,
+            "markers": clean_markers,
         }

@@ -242,6 +242,7 @@ export interface ChartData {
   forecast_fan?: { time: string; p10: number; p50: number; p90: number }[];
   ai_report: AIReport; // Keep for legacy component compatibility
   historical_markers: { time: string; action: string; probability: number; label?: string }[];
+  markers?: { time: string; action: string; probability: number; label?: string }[];
   portfolio: Portfolio;
   timestamp: string;
   metadata: AssetMetadata;

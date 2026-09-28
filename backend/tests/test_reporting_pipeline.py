@@ -70,6 +70,43 @@ class TestReportingPipeline(unittest.TestCase):
         )
         return df
 
+    def _create_swing_series(self):
+        prices = [100.0] * 30
+        for i in range(1, 16):
+            prices.append(100.0 + i * 2.0)
+        prices.append(115.0)  # bar 45: stopout candle
+        for i in range(1, 8):
+            prices.append(115.0 + i * 0.5)  # cooldown
+        for i in range(1, 26):
+            prices.append(120.0 + i * 2.0)  # second swing rally
+
+        prices = np.array(prices)
+        n = len(prices)
+        dates = pd.date_range("2024-01-01", periods=n, freq="D")
+        df = pd.DataFrame(
+            {
+                "Open": prices - 0.5,
+                "High": prices + 1.5,
+                "Low": prices - 1.0,
+                "Close": prices,
+                "Volume": 1000000,
+            },
+            index=dates,
+        )
+        df.iloc[28, df.columns.get_loc("Low")] = 92.0
+        df.iloc[29, df.columns.get_loc("Open")] = 98.0
+        df.iloc[29, df.columns.get_loc("Close")] = 100.0
+
+        # Force stopout on bar 45
+        df.iloc[45, df.columns.get_loc("Low")] = 100.0
+        df.iloc[45, df.columns.get_loc("Close")] = 105.0
+
+        # Second dip and reversal on bar 53-54
+        df.iloc[53, df.columns.get_loc("Low")] = 105.0
+        df.iloc[54, df.columns.get_loc("Open")] = 115.0
+        df.iloc[54, df.columns.get_loc("Close")] = 125.0
+        return df
+
     def test_only_buy_and_sell_markers_emitted(self):
         """
         Chart Marker Cleanliness Mandate:
@@ -276,7 +313,7 @@ class TestReportingPipeline(unittest.TestCase):
         for df_series in [
             self._create_uptrend_series(80),
             self._create_downtrend_series(80),
-            self._create_oscillating_series(120),
+            self._create_swing_series(),
         ]:
             markers, _ = self.report_gen.generate_historical_markers("TEST", df_series.copy())
             actions = [m["action"] for m in markers]
@@ -363,6 +400,73 @@ class TestReportingPipeline(unittest.TestCase):
                 valid_stops[i],
                 valid_stops[i - 1],
                 f"Trailing stop failed to ratchet upward at step {i}: {valid_stops[i]} < {valid_stops[i - 1]}",
+            )
+
+    def test_api_markers_strictly_alternate(self):
+        """
+        Integration test verifying that package_chart_data returns markers that
+        strictly alternate without duplicate BUYs or SELLs, even if polluted
+        system_signals or order journal records are supplied.
+        """
+        df_series = self._create_swing_series()
+        raw_markers, df_res = self.report_gen.generate_historical_markers("TEST", df_series.copy())
+
+        # Synthesize noisy system_signals DataFrame attempting to inject duplicate BUYs
+        polluted_journal = pd.DataFrame(
+            [
+                {"timestamp": "2024-02-01", "signal_type": "BUY", "asset": "TEST", "confidence": 95},
+                {"timestamp": "2024-02-02", "signal_type": "BUY", "asset": "TEST", "confidence": 92},
+                {"timestamp": "2024-02-03", "signal_type": "BUY", "asset": "TEST", "confidence": 88},
+            ]
+        )
+
+        response = self.report_gen.package_chart_data(
+            "TEST",
+            df_res,
+            ai_report_dict={"Status": "OK"},
+            historical_markers=raw_markers,
+            system_signals=polluted_journal,
+        )
+
+        self.assertIn("markers", response)
+        self.assertIn("historical_markers", response)
+        self.assertEqual(response["markers"], response["historical_markers"])
+
+        actions = [m["action"] for m in response["markers"]]
+        self.assertTrue(len(actions) >= 2, "Expected at least 2 markers from oscillating series")
+
+        # 1. First signal must be BUY
+        self.assertEqual(actions[0], "BUY", f"First signal must be BUY, got: {actions[0]}")
+
+        # 2. Assert that actions strictly alternates: actions[i] != actions[i-1] for all i > 0
+        for i in range(1, len(actions)):
+            self.assertNotEqual(
+                actions[i],
+                actions[i - 1],
+                f"Consecutive duplicate actions detected at index {i}: {actions[i-1]} followed by {actions[i]}",
+            )
+
+        # 3. Assert that actions.count('BUY') and actions.count('SELL') differ by at most 1
+        buy_count = actions.count("BUY")
+        sell_count = actions.count("SELL")
+        self.assertLessEqual(
+            abs(buy_count - sell_count),
+            1,
+            f"Counts of BUY ({buy_count}) and SELL ({sell_count}) differ by more than 1",
+        )
+
+        # 4. Assert zero occurrences of consecutive ['BUY', 'BUY'] or ['SELL', 'SELL']
+        for i in range(len(actions) - 1):
+            pair = [actions[i], actions[i + 1]]
+            self.assertNotEqual(
+                pair,
+                ["BUY", "BUY"],
+                f"Found illegal consecutive BUY signals at index {i}: {pair}",
+            )
+            self.assertNotEqual(
+                pair,
+                ["SELL", "SELL"],
+                f"Found illegal consecutive SELL signals at index {i}: {pair}",
             )
 
 
