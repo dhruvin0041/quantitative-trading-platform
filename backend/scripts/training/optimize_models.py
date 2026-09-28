@@ -1,3 +1,4 @@
+import argparse
 import json
 import os
 import sys
@@ -204,8 +205,9 @@ def objective_rf(trial, X_train, y_train):
     return np.mean(scores) if scores else 0.5
 
 
-def run_optimization():
+def run_optimization(n_trials: int = 50) -> bool:
     from src.utils.gpu_utils import get_compute_backend
+
     get_compute_backend()
     # Load training data saved by train.py
     if not os.path.exists("artifacts/X_train_tabular.joblib") or not os.path.exists(
@@ -218,16 +220,20 @@ def run_optimization():
     X_train = joblib.load("artifacts/X_train_tabular.joblib")
     y_train = joblib.load("artifacts/y_train_sig.joblib")
 
-    print("Running Bayesian Optimization for 4 models with 4 choices per parameter...")
+    print(
+        f"Running Bayesian Optimization for 4 models with {n_trials} trials each..."
+    )
     for model_name, obj_func in [
         ("xgb", objective_xgb),
         ("lgbm", objective_lgbm),
         ("catboost", objective_catboost),
         ("rf", objective_rf),
     ]:
-        print(f"\nOptimizing {model_name}...")
+        print(f"\nOptimizing {model_name} ({n_trials} trials)...")
         study = optuna.create_study(direction="maximize")
-        study.optimize(lambda t: obj_func(t, X_train, y_train), n_trials=50, n_jobs=1)
+        study.optimize(
+            lambda t: obj_func(t, X_train, y_train), n_trials=n_trials, n_jobs=1
+        )
         print(f"Best {model_name} AUC: {study.best_value}")
         with open(f"configs/best_{model_name}_params.json", "w") as f:
             json.dump(study.best_params, f, indent=2)
@@ -235,4 +241,14 @@ def run_optimization():
 
 
 if __name__ == "__main__":
-    run_optimization()
+    parser = argparse.ArgumentParser(
+        description="Bayesian Hyperparameter Optimization for Branch Models"
+    )
+    parser.add_argument(
+        "--trials",
+        type=int,
+        default=50,
+        help="Number of Optuna trials per model (default: 50)",
+    )
+    args = parser.parse_args()
+    run_optimization(n_trials=args.trials)

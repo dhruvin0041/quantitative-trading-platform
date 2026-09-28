@@ -215,10 +215,17 @@ def main():
     parser.add_argument(
         "--trials", type=int, default=50, help="Number of Optuna trials"
     )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=100,
+        help="Number of epochs for deep learning models (default: 100)",
+    )
     args = parser.parse_args()
 
     ticker = args.ticker.upper()
     n_trials = args.trials
+    epochs = args.epochs
 
     pipeline_start = time.time()
 
@@ -249,7 +256,9 @@ def main():
     # ==========================================
     # STEP 2: OPTIMIZE MODELS (Bayesian)
     # ==========================================
-    print("\n[2/5] Optimizing branch models (XGB, LGBM, CatBoost, RF)...")
+    print(
+        f"\n[2/5] Optimizing branch models (XGB, LGBM, CatBoost, RF) with {n_trials} trials..."
+    )
     step_start = time.time()
     config = load_config()
 
@@ -290,7 +299,7 @@ def main():
     joblib.dump(ts_val[:, -1, :], "artifacts/X_val_tabular.joblib")
     joblib.dump(y_sig_val, "artifacts/y_val_sig.joblib")
 
-    if not run_bayesian_optimization():
+    if not run_bayesian_optimization(n_trials=n_trials):
         print("  [FATAL ERROR] Step 2 Failed.")
         return
     print(f"  >>> Step 2 Complete ({time.time() - step_start:.2f}s)")
@@ -298,7 +307,7 @@ def main():
     # ==========================================
     # STEP 3: OPTUNA OPTIMIZATION
     # ==========================================
-    print(f"\n[3/5] Running Optuna optimization for {ticker}...")
+    print(f"\n[3/5] Running Optuna optimization for {ticker} ({n_trials} trials)...")
     step_start = time.time()
     if not run_optuna_optimization(ticker=ticker, n_trials=n_trials):
         print("  [FATAL ERROR] Step 3 Failed.")
@@ -308,7 +317,7 @@ def main():
     # ==========================================
     # STEP 4: FINAL TRAINING
     # ==========================================
-    print(f"\n[4/5] Training final models for {ticker}...")
+    print(f"\n[4/5] Training final models for {ticker} ({epochs} epochs)...")
     step_start = time.time()
 
     print(f"Train: {ts_train.shape}, Val: {ts_val.shape}")
@@ -346,6 +355,7 @@ def main():
     with mlflow.start_run(run_name=f"DL_FUSION_{ticker}"):
         mlflow.log_params(updated_config["model"])
         mlflow.log_param("time_steps", updated_config["data"]["time_steps"])
+        mlflow.log_param("epochs", epochs)
         model = build_fusion_model(updated_config)
 
         # ==========================================
@@ -384,7 +394,7 @@ def main():
             history = model.fit(
                 x=X_train,
                 y=Y_train,
-                epochs=30,
+                epochs=epochs,
                 validation_split=0.1,
                 verbose=1,
                 sample_weight=[
@@ -426,7 +436,7 @@ def main():
         # Train on actual price returns (Regression)
         with benchmark_context("TFT Quantile Training"):
             tft_model.fit(
-                X_train[0], Y_train[1][:, 1], epochs=30, validation_split=0.1, verbose=1
+                X_train[0], Y_train[1][:, 1], epochs=epochs, validation_split=0.1, verbose=1
             )
         tft_model.save_weights("artifacts/tft_quantile_weights.weights.h5")
         mlflow.tensorflow.log_model(tft_model, "tft_model")
