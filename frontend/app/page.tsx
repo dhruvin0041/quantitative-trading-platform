@@ -111,7 +111,7 @@ export default function HydraTerminal() {
 
   const currencySymbol = useMemo(() => {
     const stock = universe.find(s => s.ticker === ticker);
-    return stock?.market === \'india\' ? \'₹\' : \'$\';
+    return stock?.market === 'india' ? '₹' : '$';
   }, [universe, ticker]);
 
   // Extract Mock Risk Metrics from chartData or default
