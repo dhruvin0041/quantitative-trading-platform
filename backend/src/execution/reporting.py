@@ -208,18 +208,24 @@ class ReportGenerator:
             is_red = closes[t] < opens[t]
 
             # 1. Edge-Triggered BUY (Dip & Bounce Pivot)
+            zone_test_buy = (lows[t-1] <= fast_ma[t-1]) or (lows[t] <= fast_ma[t])
             buy_triggered = (
-                (lows[t] <= fast_ma[t]) and
+                zone_test_buy and
                 is_green and
                 (closes[t] > highs[t-1])
             )
 
             # 2. Edge-Triggered SELL (Peak & Exhaustion Pivot)
-            upper_band_val = upper_band[t] if not np.isnan(upper_band[t]) else np.inf
-            overextended = (highs[t] >= upper_band_val) or (highs[t] > fast_ma[t] * 1.02)
+            upper_band_val_t1 = upper_band[t-1] if not np.isnan(upper_band[t-1]) else np.inf
+            upper_band_val_t = upper_band[t] if not np.isnan(upper_band[t]) else np.inf
+            
+            overextended_t1 = (highs[t-1] >= upper_band_val_t1) or (highs[t-1] > fast_ma[t-1] * 1.02)
+            overextended_t = (highs[t] >= upper_band_val_t) or (highs[t] > fast_ma[t] * 1.02)
+            
+            zone_test_sell = overextended_t1 or overextended_t
 
             sell_triggered = (
-                overextended and
+                zone_test_sell and
                 is_red and
                 (closes[t] < lows[t-1])
             )
@@ -274,6 +280,10 @@ class ReportGenerator:
 
         df_chart = df_full.reset_index()
         date_col = "Date" if "Date" in df_chart.columns else "index"
+        
+        # Filter for 2026 onwards for UI clarity
+        df_chart = df_chart[df_chart[date_col] >= pd.Timestamp("2026-01-01")]
+        
         df_chart["time"] = df_chart[date_col].dt.strftime("%Y-%m-%d")
         df_chart = df_chart.rename(
             columns={
