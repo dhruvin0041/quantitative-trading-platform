@@ -57,12 +57,18 @@ def apply_dynamic_triple_barrier(
     df: pd.DataFrame, tp_atr_multiplier=2.0, sl_atr_multiplier=1.0, horizon=10
 ) -> pd.DataFrame:
     """
-    PATH 1: Dynamic Barriers based on current volatility (ATR).
-    - Upper Barrier: Take Profit based on ATR
-    - Lower Barrier: Stop Loss based on ATR
-    - Vertical Barrier: Time Limit (e.g., 10 days)
+    OFFLINE TRAINING LABEL GENERATION ONLY (SUPERVISED TARGET CREATION).
 
-    Refactored to use vectorized Pandas/NumPy operations for massive panel datasets.
+    WARNING - NON-CAUSAL TRAINING TARGET GENERATOR:
+    This function shifts price series forward (`shift(-h)`) to discover whether future
+    prices hit the take-profit (+tp_atr_multiplier * ATR) or stop-loss (-sl_atr_multiplier * ATR)
+    barrier within the specified horizon.
+
+    CRITICAL ARCHITECTURAL ISOLATION MANDATE:
+    - This function MUST REMAIN STRICTLY ISOLATED to offline dataset labeling and model training.
+    - It MUST NEVER be imported, called, or referenced in `live_inference.py`, `inference_service.py`,
+      or any real-time trading execution path.
+    - In live trading and point-in-time inference, all features and signals must be strictly causal (t <= now).
     """
     print(
         f"Applying Dynamic Triple Barrier Labeling (TP: {tp_atr_multiplier}x ATR, SL: {sl_atr_multiplier}x ATR, Horizon: {horizon} days)..."

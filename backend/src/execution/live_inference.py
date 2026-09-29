@@ -6,6 +6,8 @@ os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
 import json
 import logging
+from datetime import datetime
+from typing import Tuple
 
 import joblib
 import numpy as np
@@ -19,6 +21,31 @@ from src.models.ensemble.meta_ensemble import MetaEnsemble
 from src.models.neural.fusion_network import build_fusion_model
 
 logger = logging.getLogger(__name__)
+
+
+def check_bar_forming_status(df: pd.DataFrame) -> Tuple[bool, str]:
+    """
+    Determines whether the latest row in the daily DataFrame is an intraday forming bar
+    or an officially closed bar. Market close for US equities is 16:00:00 US Eastern.
+    """
+    try:
+        import zoneinfo
+        ny_tz = zoneinfo.ZoneInfo("America/New_York")
+        now_ny = datetime.now(ny_tz)
+
+        if df is None or df.empty:
+            return False, "CONFIRMED"
+
+        last_ts = df.index[-1]
+        last_date = last_ts.date() if hasattr(last_ts, "date") else pd.to_datetime(last_ts).date()
+        today_ny = now_ny.date()
+
+        if last_date == today_ny and now_ny.hour < 16:
+            return True, "FORMING"
+        return False, "CONFIRMED"
+    except Exception:
+        return False, "CONFIRMED"
+
 
 FEATURE_COLUMNS = [
     "MA20_vs_MA50",
@@ -269,21 +296,31 @@ def add_upgraded_features(df, spy_df, vix_df):
     df["MA20_vs_MA50"] = (df["MA20"] - df["MA50"]) / (close_s + 1e-9)
 
     # Defensive check for Series extraction from DataFrames (yfinance consistency)
-    def get_series(df, col):
-        s = df[col]
+    def get_series(d, col):
+        if d is None:
+            return None
+        if col in d.columns:
+            s = d[col]
+        elif len(d.columns) > 0:
+            s = d.iloc[:, 0]
+        else:
+            return None
         if isinstance(s, pd.DataFrame):
             return s.iloc[:, 0]
         return s
 
     spy_close = get_series(spy_df, "Close")
+    if spy_close is None:
+        spy_close = close_s.copy()
     vix_close = get_series(vix_df, "Close")
+    if vix_close is None:
+        vix_close = pd.Series(20.0, index=df.index)
 
     # Market Context Features - CROSS MARKET ALIGNMENT
     # Forward fill valid historical market prints and trim start date to valid overlap window
-    df["SPY_Return"] = spy_close.pct_change().reindex(df.index).ffill()
-    df["VIX_Level"] = vix_close.reindex(df.index).ffill()
-    df["VIX_Change"] = vix_close.pct_change().reindex(df.index).ffill()
-    df = df.dropna(subset=["VIX_Level", "SPY_Return"])
+    df["SPY_Return"] = spy_close.pct_change().reindex(df.index).ffill().fillna(0.0)
+    df["VIX_Level"] = vix_close.reindex(df.index).ffill().fillna(20.0)
+    df["VIX_Change"] = vix_close.pct_change().reindex(df.index).ffill().fillna(0.0)
     df["Relative_Strength"] = df["Return"] - df["SPY_Return"]
 
     # ==========================================
@@ -428,6 +465,8 @@ def fetch_live_data(ticker, config):
     avg_volume_20d = df["Volume"].rolling(20).mean().iloc[-1]
     vol_ratio = current_volume / (avg_volume_20d + 1e-9)
 
+    is_forming, bar_state = check_bar_forming_status(df)
+
     tech_snapshot = {
         "RSI": round(float(df["RSI"].iloc[-1]), 2),
         "MACD": round(float(df["MACD"].iloc[-1]), 2),
@@ -436,6 +475,8 @@ def fetch_live_data(ticker, config):
         "ADX": round(float(df["ADX"].iloc[-1]), 2),
         "Volume_Ratio": round(float(vol_ratio), 2),
         "ATR_Regime_Ratio": round(float(df["ATR_Regime_Ratio"].iloc[-1]), 2) if "ATR_Regime_Ratio" in df.columns else 1.0,
+        "is_bar_forming": is_forming,
+        "bar_state": bar_state,
     }
 
     return (

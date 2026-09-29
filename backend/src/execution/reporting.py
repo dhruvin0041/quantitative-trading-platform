@@ -129,7 +129,7 @@ class ReportGenerator:
                     except Exception as e:
                         logger.warning("Could not load XGBoost model from %s: %s", x_path, e)
 
-    def generate_historical_markers(
+    def generate_post_hoc_zigzag_overlay(
         self,
         ticker: str,
         df_raw: pd.DataFrame,
@@ -142,10 +142,18 @@ class ReportGenerator:
         mock_probabilities: Optional[np.ndarray] = None,
     ) -> Tuple[List[Dict[str, Any]], pd.DataFrame]:
         """
-        Institutional Swing Pivot Detector:
-        Isolates BUY signals strictly to local swing dips (troughs) and SELL signals
-        strictly to local swing peaks (crests). Enforces 100% alternation (BUY -> SELL -> BUY -> SELL)
-        with zero clutter, no counter-trend whipsaws, and dynamic volatility adaptation.
+        Post-Hoc Retrospective ZigZag Overlay (EX-POST ANALYSIS ONLY).
+
+        WARNING - NON-CAUSAL LOGIC (INTENTIONAL LOOK-AHEAD BIAS):
+        This function identifies swing highs and swing lows by scanning future bars
+        (`highs[i + r_offset]`, `lows[i + r_offset]`). It creates retrospective peak/trough
+        markers that were impossible to know at time t, and repaints dynamically at the right
+        edge as new highs or lows develop.
+
+        CRITICAL ARCHITECTURAL POLICY:
+        - MUST NEVER be used for live signal generation or automated order execution.
+        - MUST NEVER drive primary real-time candlestick chart markers.
+        - Strictly reserved for retrospective post-trade visual analysis overlays.
         """
         k = k if k is not None else self.k
         atr_period = atr_period if atr_period is not None else self.atr_period
@@ -274,7 +282,7 @@ class ReportGenerator:
                 {
                     "time": dates[idx],
                     "action": action,
-                    "label": "",
+                    "label": "Post-Hoc Pivot (Non-Causal)",
                     "text": "",
                     "probability": 100,
                     "price": round(float(price), 2),
@@ -283,6 +291,27 @@ class ReportGenerator:
 
         df_full["trailing_stop"] = np.nan
         return markers, df_full
+
+    def generate_historical_markers(
+        self,
+        ticker: str,
+        df_raw: pd.DataFrame,
+        *args,
+        **kwargs,
+    ) -> Tuple[List[Dict[str, Any]], pd.DataFrame]:
+        """
+        DEPRECATED: Retrospective swing pivot marker generator.
+        Redirects to `generate_post_hoc_zigzag_overlay`.
+        Notice: Contains look-ahead bias (highs[i + r_offset]). For live/causal trading,
+        use `SignalLedger` or causal point-in-time ML signals.
+        """
+        logger.warning(
+            "[DEPRECATION WARNING] `generate_historical_markers` was called. "
+            "This logic contains retrospective look-ahead bias and is deprecated for live execution. "
+            "Redirecting to `generate_post_hoc_zigzag_overlay`."
+        )
+        return self.generate_post_hoc_zigzag_overlay(ticker, df_raw, *args, **kwargs)
+
 
     def package_chart_data(
         self, ticker, df_full, ai_report_dict, historical_markers, system_signals=None

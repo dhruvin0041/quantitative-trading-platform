@@ -1,10 +1,15 @@
 import asyncio
 import logging
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
+import joblib
 import numpy as np
+import pandas as pd
 
 from src.data_ingestion.nlp_processor import NewsTokenizer
+from src.data_ingestion.technical_indicators import clean_multiindex_columns
 from src.execution.asset_intelligence import (
     AdaptiveWeightingEngine,
     AssetProfileEngine,
@@ -16,6 +21,8 @@ from src.execution.execution_authority import ExecutionAuthorityEngine
 from src.execution.forecast_engine import ForecastCalibrationEngine
 from src.execution.governance_engine import SignalGovernanceAnalytics
 from src.execution.live_inference import (
+    FEATURE_COLUMNS,
+    add_upgraded_features,
     compute_shap_explanation,
     fetch_live_data,
     fetch_live_news,
@@ -33,6 +40,7 @@ from src.execution.signal_intelligence import (
     RegimeEngineV2,
     SignalQualityEngine,
 )
+from src.execution.signal_ledger import SignalLedger
 from src.execution.timing_engine import PredictiveTimingEngine
 from src.execution.trade_engine import TradeConstructionEngine
 from src.models.regime.calibration import ModelCalibrator
@@ -57,6 +65,7 @@ class InferenceService:
         paper_engine,
         perf_analyzer,
         signal_journal=None,
+        signal_ledger=None,
         use_veto: bool = False,
     ):
         self.use_veto = use_veto
@@ -67,6 +76,7 @@ class InferenceService:
         self.orchestrator = orchestrator
         self.router = smart_router
         self.report_gen = report_gen
+        self.signal_ledger = signal_ledger if signal_ledger is not None else SignalLedger()
         self.consensus_engine = WeightedConsensusEngine()
         self.forecast_engine = ForecastCalibrationEngine()
         self.trade_engine = TradeConstructionEngine()
@@ -95,6 +105,253 @@ class InferenceService:
         self.asset_engine = AssetProfileEngine()
         self.weight_engine = AdaptiveWeightingEngine()
         self.mtf_engine = MultiTimeframeEngine()
+
+    def _replay_causal_ml_signals(
+        self,
+        ticker: str,
+        ticker_df: pd.DataFrame,
+        spy_df: Optional[pd.DataFrame] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Point-in-Time Sequential Causal Replay.
+        Evaluates the XGBoost consensus model sequentially over historical bars.
+        At each bar t, features use strictly trailing data <= t.
+        Fills are modeled at Open[t+1] +/- 5bps slippage (never High/Low).
+        Confirmed signals are committed to the append-only SignalLedger.
+        """
+        try:
+            df = clean_multiindex_columns(ticker_df.copy())
+            if df.empty or len(df) < 30:
+                return []
+
+            spy = clean_multiindex_columns(spy_df.copy()) if spy_df is not None else None
+            df_feat = add_upgraded_features(df.copy(), spy, None)
+            df_feat = df_feat.loc[:, ~df_feat.columns.duplicated()].copy()
+            df_filtered = df_feat.reindex(columns=FEATURE_COLUMNS).dropna()
+
+            if df_filtered.empty or len(df_filtered) < 15:
+                return []
+
+            # Pre-fitted production scaler
+            scaler = None
+            for s_path in [
+                "artifacts/latest_scaler.joblib",
+                "backend/artifacts/latest_scaler.joblib",
+            ]:
+                p = Path(s_path)
+                if p.exists():
+                    try:
+                        scaler = joblib.load(p)
+                        break
+                    except Exception:
+                        pass
+            if scaler is None:
+                scaler = getattr(self.mm, "scaler", None)
+
+            if scaler is None:
+                logger.warning("No scaler available for causal ML replay.")
+                return []
+
+            scaled_rows = scaler.transform(df_filtered.values)
+
+            # Pre-trained XGBoost Alpha Model
+            model = getattr(self.mm, "xgb_model", None)
+            if model is None:
+                for m_path in [
+                    "artifacts/xgb_ensemble.json",
+                    "backend/artifacts/xgb_ensemble.json",
+                ]:
+                    mp = Path(m_path)
+                    if mp.exists():
+                        try:
+                            import xgboost as xgb
+
+                            model = xgb.XGBClassifier()
+                            model.load_model(str(mp))
+                            break
+                        except Exception:
+                            pass
+
+            if model is None:
+                logger.warning("No XGBoost model available for causal ML replay.")
+                return []
+
+            all_probs = model.predict_proba(scaled_rows)
+            valid_indices = df_filtered.index
+            if len(all_probs) == 1 and len(valid_indices) > 1:
+                all_probs = np.tile(all_probs, (len(valid_indices), 1))
+
+            # SMA200 and SPY SMA50 for causal macro trend filter
+            close_s = df["Close"].reindex(valid_indices).ffill()
+            sma200_s = close_s.rolling(window=200, min_periods=20).mean()
+            if spy is not None and "Close" in spy.columns:
+                spy_close_s = spy["Close"].reindex(valid_indices).ffill()
+                spy_sma50_s = spy_close_s.rolling(window=50, min_periods=10).mean()
+            else:
+                spy_close_s = close_s
+                spy_sma50_s = close_s
+
+            current_pos = "FLAT"
+            last_trade_idx = -10
+            min_cooldown_bars = 5
+
+            for i in range(len(valid_indices)):
+                v_idx = valid_indices[i]
+                bar_time = (
+                    v_idx.strftime("%Y-%m-%d")
+                    if hasattr(v_idx, "strftime")
+                    else str(v_idx)
+                )
+                prob_vec = all_probs[i]
+                if self.model_calibrator is not None:
+                    prob_vec = self.model_calibrator.calibrate("XGB", prob_vec)
+
+                p_sell, p_hold, p_buy = (
+                    float(prob_vec[0]),
+                    float(prob_vec[1]),
+                    float(prob_vec[2]),
+                )
+
+                # Conviction threshold >= 0.60
+                if p_buy >= 0.60:
+                    raw_signal = "BUY"
+                    conf = p_buy
+                elif p_sell >= 0.60:
+                    raw_signal = "SELL"
+                    conf = p_sell
+                else:
+                    raw_signal = "HOLD"
+                    conf = p_hold
+
+                # Macro filter at bar t
+                cur_c = float(close_s.iloc[i])
+                cur_sma200 = (
+                    float(sma200_s.iloc[i]) if pd.notna(sma200_s.iloc[i]) else cur_c
+                )
+                cur_spy = float(spy_close_s.iloc[i])
+                cur_spy_sma50 = (
+                    float(spy_sma50_s.iloc[i])
+                    if pd.notna(spy_sma50_s.iloc[i])
+                    else cur_spy
+                )
+
+                long_ok = (cur_c >= cur_sma200) and (cur_spy >= cur_spy_sma50)
+                short_ok = (cur_c < cur_sma200) or (cur_spy < cur_spy_sma50)
+
+                if raw_signal == "BUY" and not long_ok:
+                    filtered_signal = "HOLD"
+                elif raw_signal == "SELL" and not short_ok:
+                    filtered_signal = "HOLD"
+                else:
+                    filtered_signal = raw_signal
+
+                # State machine alternation: BUY -> SELL -> BUY
+                # Target execution is Open[t+1]
+                locs = df.index.get_indexer([valid_indices[i]])
+                orig_idx = int(locs[0]) if len(locs) > 0 and locs[0] >= 0 else i
+                if (
+                    filtered_signal == "BUY"
+                    and current_pos != "LONG"
+                    and (i - last_trade_idx >= min_cooldown_bars)
+                ):
+                    current_pos = "LONG"
+                    last_trade_idx = i
+                    if orig_idx + 1 < len(df):
+                        next_idx = df.index[orig_idx + 1]
+                        exec_target = (
+                            next_idx.strftime("%Y-%m-%d")
+                            if hasattr(next_idx, "strftime")
+                            else str(next_idx)
+                        )
+                        exec_price = (
+                            float(df["Open"].iloc[orig_idx + 1]) * 1.0005
+                        )  # 5 bps slippage
+                    else:
+                        exec_target = "NEXT_SESSION_OPEN"
+                        exec_price = float(df["Close"].iloc[orig_idx]) * 1.0005
+
+                    self.signal_ledger.record_signal(
+                        symbol=ticker,
+                        bar_timestamp=bar_time,
+                        signal="BUY",
+                        confidence=conf,
+                        execution_target_bar=exec_target,
+                        execution_price=round(exec_price, 2),
+                        model_version="Institutional_Mesh_V2.1",
+                        raw_features_hash=SignalLedger.compute_features_hash(
+                            scaled_rows[i]
+                        ),
+                        metadata={
+                            "source": "causal_replay",
+                            "rule": "Open[t+1] + 5bps",
+                        },
+                    )
+
+                elif (
+                    filtered_signal == "SELL"
+                    and current_pos == "LONG"
+                    and (i - last_trade_idx >= min_cooldown_bars)
+                ):
+                    current_pos = "FLAT"
+                    last_trade_idx = i
+                    if orig_idx + 1 < len(df):
+                        next_idx = df.index[orig_idx + 1]
+                        exec_target = (
+                            next_idx.strftime("%Y-%m-%d")
+                            if hasattr(next_idx, "strftime")
+                            else str(next_idx)
+                        )
+                        exec_price = (
+                            float(df["Open"].iloc[orig_idx + 1]) * 0.9995
+                        )  # 5 bps slippage
+                    else:
+                        exec_target = "NEXT_SESSION_OPEN"
+                        exec_price = float(df["Close"].iloc[orig_idx]) * 0.9995
+
+                    self.signal_ledger.record_signal(
+                        symbol=ticker,
+                        bar_timestamp=bar_time,
+                        signal="SELL",
+                        confidence=conf,
+                        execution_target_bar=exec_target,
+                        execution_price=round(exec_price, 2),
+                        model_version="Institutional_Mesh_V2.1",
+                        raw_features_hash=SignalLedger.compute_features_hash(
+                            scaled_rows[i]
+                        ),
+                        metadata={
+                            "source": "causal_replay",
+                            "rule": "Open[t+1] - 5bps",
+                        },
+                    )
+
+            return self.signal_ledger.get_signals(
+                symbol=ticker, actions_filter=["BUY", "SELL"]
+            )
+
+        except Exception as e:
+            logger.error("Error during causal ML replay for %s: %s", ticker, e)
+            return []
+
+    def get_causal_chart_markers(
+        self,
+        ticker: str,
+        ticker_df: pd.DataFrame,
+        spy_df: Optional[pd.DataFrame] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieves verified causal markers from the immutable SignalLedger.
+        If the ledger does not have existing signals for this ticker,
+        it executes a point-in-time sequential replay using strictly trailing data (t <= bar),
+        commits the signals to the ledger, and returns them.
+        """
+        existing = self.signal_ledger.get_signals(
+            symbol=ticker, actions_filter=["BUY", "SELL"]
+        )
+        if len(existing) >= 2:
+            return existing
+
+        return self._replay_causal_ml_signals(ticker, ticker_df, spy_df)
 
     async def get_prediction(self, ticker, config, metadata):
         import uuid
@@ -497,10 +754,60 @@ class InferenceService:
             }
         }
 
-        # Packaging Chart & Historical Markers
-        historical_markers, df_full = self.report_gen.generate_historical_markers(
+        # Check forming vs confirmed status
+        is_bar_forming = bool(tech_snapshot.get("is_bar_forming", False))
+        bar_state = str(tech_snapshot.get("bar_state", "CONFIRMED"))
+        if not ticker_df_risk.empty:
+            last_idx = ticker_df_risk.index[-1]
+            bar_date = (
+                last_idx.strftime("%Y-%m-%d")
+                if hasattr(last_idx, "strftime")
+                else str(last_idx)
+            )
+        else:
+            bar_date = datetime.now().strftime("%Y-%m-%d")
+
+        # Causal execution pricing & latency modeling (t -> t+1 Open)
+        execution_target = "NEXT_SESSION_OPEN"
+        if final_signal == "BUY":
+            exec_price = round(current_price * 1.0005, 2)  # 5 bps slippage
+        elif final_signal == "SELL":
+            exec_price = round(current_price * 0.9995, 2)  # 5 bps slippage
+        else:
+            exec_price = round(current_price, 2)
+
+        response_data["is_bar_forming"] = is_bar_forming
+        response_data["bar_state"] = bar_state
+        response_data["provisional"] = is_bar_forming
+        response_data["execution_target_bar"] = execution_target
+        response_data["execution_price"] = exec_price
+
+        # Zero-Repainting Mandate: Commit confirmed signals to immutable SQLite ledger
+        if not is_bar_forming and final_signal in ["BUY", "SELL", "HOLD"]:
+            features_hash = SignalLedger.compute_features_hash(tabular_row)
+            self.signal_ledger.record_signal(
+                symbol=ticker,
+                bar_timestamp=bar_date,
+                signal=final_signal,
+                confidence=float(calibrated_prob / 100.0),
+                execution_target_bar=execution_target,
+                execution_price=exec_price,
+                model_version="Institutional_Mesh_V2.1",
+                raw_features_hash=features_hash,
+                metadata={
+                    "quality_score": quality_metrics["score"],
+                    "ev_pct": ev_metrics["ev_pct"],
+                    "regime": regime_detailed,
+                    "signal_note": signal_note,
+                    "agreement_score": agreement_data["agreement_score"],
+                },
+            )
+
+        # Retrieve verified causal markers (sourced from SignalLedger / Causal ML Consensus)
+        causal_markers = self.get_causal_chart_markers(
             ticker, ticker_df_risk, spy_df=spy_df_risk
         )
+
         ai_report_stub = {
             "Models": {"Meta_Model_Status": "Institutional Mesh V2.1"},
             "Risk": {"Quality": quality_metrics["score"]},
@@ -508,9 +815,9 @@ class InferenceService:
 
         reporting_data = self.report_gen.package_chart_data(
             ticker,
-            df_full,
+            ticker_df_risk,
             ai_report_stub,
-            historical_markers,
+            causal_markers,
         )
         response_data.update(reporting_data)
         response_data["signal_id"] = signal_id
