@@ -15,7 +15,6 @@ export function PriceChart({ data, loading }: PriceChartProps) {
   const chartRef = useRef<IChartApi | null>(null);
   const candlestickSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
-  const riskVarSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
   const bbUpperSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const bbLowerSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const ribbonUpperSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
@@ -87,17 +86,6 @@ export function PriceChart({ data, loading }: PriceChartProps) {
       visible: false,
     });
 
-    // RiskAgent VaR Sub-chart overlay
-    riskVarSeriesRef.current = chart.addSeries(HistogramSeries, {
-      color: 'rgba(255, 82, 82, 0.4)',
-      priceFormat: { type: 'volume' },
-      priceScaleId: 'risk_scale',
-    });
-    chart.priceScale('risk_scale').applyOptions({
-      scaleMargins: { top: 0.8, bottom: 0 }, // Sits slightly above volume
-      visible: false,
-    });
-
     bbUpperSeriesRef.current = chart.addSeries(LineSeries, { color: supportLineColor, lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, autoscaleInfoProvider: () => null });
     bbLowerSeriesRef.current = chart.addSeries(LineSeries, { color: supportLineColor, lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, autoscaleInfoProvider: () => null });
     ribbonUpperSeriesRef.current = chart.addSeries(LineSeries, { color: maOrange, lineWidth: 1, crosshairMarkerVisible: false, autoscaleInfoProvider: () => null });
@@ -145,20 +133,6 @@ export function PriceChart({ data, loading }: PriceChartProps) {
         color: (c.close >= c.open) ? 'rgba(0, 230, 118, 0.3)' : 'rgba(255, 82, 82, 0.3)',
       }));
       volumeSeriesRef.current.setData(volumeData);
-    }
-
-    // Generate Risk VaR Overlay data based on markers (mocking portfolio VaR spikes)
-    if (riskVarSeriesRef.current) {
-      const riskData = data.candles.map((c: { time: string }) => {
-        const marker = data.historical_markers?.find(m => m.time === c.time);
-        const isBreach = marker && (marker.action === 'VAR_LIMIT_BREACH' || marker.action === 'CROWDING_VETO');
-        return {
-          time: c.time,
-          value: isBreach ? 100 : 20, // 100 for breach, 20 for baseline
-          color: isBreach ? varBreachColor : safeColor,
-        };
-      });
-      riskVarSeriesRef.current.setData(riskData);
     }
 
     if (data.clouds && data.clouds.length > 0 && bbUpperSeriesRef.current && bbLowerSeriesRef.current && ribbonUpperSeriesRef.current && ribbonLowerSeriesRef.current) {
