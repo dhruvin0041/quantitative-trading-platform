@@ -209,7 +209,10 @@ class ReportGenerator:
 
             # 1. Edge-Triggered BUY (Dip & Bounce Pivot)
             zone_test_buy = (lows[t-1] <= fast_ma[t-1]) or (lows[t] <= fast_ma[t])
+            bullish_regime = (closes[t] > slow_ma[t])
+            
             buy_triggered = (
+                bullish_regime and
                 zone_test_buy and
                 is_green and
                 (closes[t] > highs[t-1])
