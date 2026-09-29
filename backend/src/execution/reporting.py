@@ -173,9 +173,10 @@ class ReportGenerator:
         tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
         atr_vals = tr.rolling(atr_period).mean().bfill().values
 
-        left_bars = 3
-        right_bars = 3
-        min_swing_bars = 3
+        left_bars = 5
+        right_bars = 5
+        min_swing_bars = 5
+        min_pct_base = 0.045
 
         # 1. Detect candidate Swing Highs (Peaks) and Swing Lows (Dips)
         pivots: List[Tuple[int, str, float]] = []
@@ -216,7 +217,7 @@ class ReportGenerator:
 
         for idx, action, price in pivots:
             cur_price = closes[idx]
-            min_return_pct = max(0.035, float((2.0 * atr_vals[idx]) / max(cur_price, 1e-4)))
+            min_return_pct = max(min_pct_base, float((2.2 * atr_vals[idx]) / max(cur_price, 1e-4)))
 
             if current_action is None:
                 if action == "BUY":
@@ -239,19 +240,19 @@ class ReportGenerator:
 
                 if action == "SELL":
                     # Must have risen from previous BUY
-                    if price > prev_price * (1.0 + min_return_pct) or (idx - prev_idx) >= 6:
+                    if price > prev_price * (1.0 + min_return_pct) or (idx - prev_idx) >= 7:
                         signals.append((idx, action, price))
                         current_action = "SELL"
                 elif action == "BUY":
                     # Must have fallen from previous SELL
-                    if price < prev_price * (1.0 - min_return_pct) or (idx - prev_idx) >= 6:
+                    if price < prev_price * (1.0 - min_return_pct) or (idx - prev_idx) >= 7:
                         signals.append((idx, action, price))
                         current_action = "BUY"
 
         # 3. Right-Edge Handling (Unconfirmed recent bars at the right edge)
         if current_action == "BUY" and signals:
             prev_idx, prev_action, prev_price = signals[-1]
-            min_return_pct = max(0.035, float((2.0 * atr_vals[-1]) / max(closes[-1], 1e-4)))
+            min_return_pct = max(min_pct_base, float((2.2 * atr_vals[-1]) / max(closes[-1], 1e-4)))
             recent_window = list(range(max(prev_idx + min_swing_bars, n - right_bars), n))
             if recent_window:
                 best_high_idx = max(recent_window, key=lambda k: highs[k])
@@ -259,7 +260,7 @@ class ReportGenerator:
                     signals.append((best_high_idx, "SELL", float(highs[best_high_idx])))
         elif current_action == "SELL" and signals:
             prev_idx, prev_action, prev_price = signals[-1]
-            min_return_pct = max(0.035, float((2.0 * atr_vals[-1]) / max(closes[-1], 1e-4)))
+            min_return_pct = max(min_pct_base, float((2.2 * atr_vals[-1]) / max(closes[-1], 1e-4)))
             recent_window = list(range(max(prev_idx + min_swing_bars, n - right_bars), n))
             if recent_window:
                 best_low_idx = min(recent_window, key=lambda k: lows[k])
