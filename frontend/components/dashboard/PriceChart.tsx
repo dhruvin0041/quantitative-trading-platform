@@ -162,32 +162,18 @@ export function PriceChart({ data, loading }: PriceChartProps) {
         .sort((a, b) => new Date(a.time as string).getTime() - new Date(b.time as string).getTime());
 
       const markers = validMarkers.map((marker) => {
-        const isBuy = marker.action === 'BUY';
-        return {
-          time: marker.time,
-          position: (isBuy ? "belowBar" : "aboveBar") as "belowBar" | "aboveBar",
-          color: isBuy ? "#10B981" : "#EF4444",
-          shape: (isBuy ? "arrowUp" : "arrowDown") as "arrowUp" | "arrowDown",
-          text: "",
-          size: 2,
-        };|        return {
-          time: marker.time,
-          position: (isBuy ? "belowBar" : "aboveBar") as "belowBar" | "aboveBar",
-          color: isBuy ? "#10B981" : "#EF4444",
-          shape: (isBuy ? "arrowUp" : "arrowDown") as "arrowUp" | "arrowDown",
-          text: "",
-          size: 2,
-        };|        return {
-          time: marker.time,
-          position: (isBuy ? "belowBar" : "aboveBar") as "belowBar" | "aboveBar",
-          color: isBuy ? "#10B981" : "#EF4444",
-          shape: (isBuy ? "arrowUp" : "arrowDown") as "arrowUp" | "arrowDown",
-          text: "",
-          size: 2,
-        };
-      });
-      
-      createSeriesMarkers(candlestickSeriesRef.current, markers);
+          const isBuy = marker.action === 'BUY';
+          return {
+            time: marker.time,
+            position: (isBuy ? "belowBar" : "aboveBar") as "belowBar" | "aboveBar",
+            color: isBuy ? "#10B981" : "#EF4444",
+            shape: (isBuy ? "arrowUp" : "arrowDown") as "arrowUp" | "arrowDown",
+            text: "",
+            size: 2,
+          };
+        });
+        
+        createSeriesMarkers(candlestickSeriesRef.current, markers);
     } else {
       createSeriesMarkers(candlestickSeriesRef.current, []);
     }
