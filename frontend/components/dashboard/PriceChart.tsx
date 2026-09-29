@@ -169,7 +169,21 @@ export function PriceChart({ data, loading }: PriceChartProps) {
           color: isBuy ? "#10B981" : "#EF4444",
           shape: (isBuy ? "arrowUp" : "arrowDown") as "arrowUp" | "arrowDown",
           text: "",
-          size: 1,
+          size: 2,
+        };|        return {
+          time: marker.time,
+          position: (isBuy ? "belowBar" : "aboveBar") as "belowBar" | "aboveBar",
+          color: isBuy ? "#10B981" : "#EF4444",
+          shape: (isBuy ? "arrowUp" : "arrowDown") as "arrowUp" | "arrowDown",
+          text: "",
+          size: 2,
+        };|        return {
+          time: marker.time,
+          position: (isBuy ? "belowBar" : "aboveBar") as "belowBar" | "aboveBar",
+          color: isBuy ? "#10B981" : "#EF4444",
+          shape: (isBuy ? "arrowUp" : "arrowDown") as "arrowUp" | "arrowDown",
+          text: "",
+          size: 2,
         };
       });
       
