@@ -71,6 +71,7 @@ class TestInferencePipelineIntegration(unittest.IsolatedAsyncioTestCase):
         self.mock_paper.history = []
         self.mock_paper.portfolio_snapshots = []
         self.mock_paper.initial_capital = 100000.0
+        self.mock_paper.positions = {}
         self.mock_paper.get_portfolio_summary.return_value = {
             "peak_equity": 100000.0,
             "trough_equity": 100000.0,
@@ -80,6 +81,10 @@ class TestInferencePipelineIntegration(unittest.IsolatedAsyncioTestCase):
         self.mock_perf = MagicMock()
         self.mock_journal = MagicMock()
         self.mock_journal.get_all_signals.return_value = None
+        self.mock_ledger = MagicMock()
+        self.mock_ledger.get_signals.return_value = []
+        self.mock_ledger.get_latest_bar_timestamp.return_value = None
+        self.mock_ledger.record_signal.return_value = True
 
         # Instantiate InferenceService with mocked dependencies
         self.service = InferenceService(
@@ -93,6 +98,7 @@ class TestInferencePipelineIntegration(unittest.IsolatedAsyncioTestCase):
             self.mock_paper,
             self.mock_perf,
             self.mock_journal,
+            signal_ledger=self.mock_ledger,
         )
         # Disable external isotonic calibrator for deterministic test assertions
         self.service.model_calibrator = None

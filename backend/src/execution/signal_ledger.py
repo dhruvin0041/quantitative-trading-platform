@@ -203,3 +203,15 @@ class SignalLedger:
                 "SELECT COUNT(*) as cnt FROM signal_ledger WHERE symbol = ?;", (symbol,)
             ).fetchone()
             return int(row["cnt"]) if row else 0
+
+    def get_latest_bar_timestamp(self, symbol: str) -> Optional[str]:
+        """Returns the most recent bar_timestamp recorded for the symbol, or None if none exist."""
+        symbol = symbol.upper().strip()
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT MAX(bar_timestamp) as latest FROM signal_ledger WHERE symbol = ?;",
+                (symbol,),
+            ).fetchone()
+            if row and row["latest"]:
+                return str(row["latest"])
+            return None

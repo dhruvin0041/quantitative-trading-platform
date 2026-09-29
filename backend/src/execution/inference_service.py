@@ -238,9 +238,16 @@ class InferenceService:
                 long_ok = (cur_c >= cur_sma200) and (cur_spy >= cur_spy_sma50)
                 short_ok = (cur_c < cur_sma200) or (cur_spy < cur_spy_sma50)
 
+                # An existing LONG position can ALWAYS exit/take profit on a SELL signal.
+                # Only opening a new naked SHORT when FLAT requires macro short_ok confirmation.
+                if current_pos == "LONG":
+                    sell_allowed = True
+                else:
+                    sell_allowed = short_ok
+
                 if raw_signal == "BUY" and not long_ok:
                     filtered_signal = "HOLD"
-                elif raw_signal == "SELL" and not short_ok:
+                elif raw_signal == "SELL" and not sell_allowed:
                     filtered_signal = "HOLD"
                 else:
                     filtered_signal = raw_signal
@@ -325,6 +332,26 @@ class InferenceService:
                         },
                     )
 
+            # Record checkpoint for the latest evaluated bar if no BUY/SELL occurred on it
+            if len(valid_indices) > 0:
+                last_v_idx = valid_indices[-1]
+                last_bar_time = (
+                    last_v_idx.strftime("%Y-%m-%d")
+                    if hasattr(last_v_idx, "strftime")
+                    else str(last_v_idx)
+                )
+                self.signal_ledger.record_signal(
+                    symbol=ticker,
+                    bar_timestamp=last_bar_time,
+                    signal="HOLD" if current_pos == "FLAT" else "HOLD_LONG",
+                    confidence=0.5,
+                    execution_target_bar="NEXT_SESSION_OPEN",
+                    execution_price=round(float(df["Close"].iloc[-1]), 2),
+                    model_version="Institutional_Mesh_V2.1",
+                    raw_features_hash="latest_bar_marker",
+                    metadata={"source": "causal_replay_checkpoint"},
+                )
+
             return self.signal_ledger.get_signals(
                 symbol=ticker, actions_filter=["BUY", "SELL"]
             )
@@ -341,15 +368,29 @@ class InferenceService:
     ) -> List[Dict[str, Any]]:
         """
         Retrieves verified causal markers from the immutable SignalLedger.
-        If the ledger does not have existing signals for this ticker,
+        If the ledger does not have existing signals for this ticker up to the latest bar,
         it executes a point-in-time sequential replay using strictly trailing data (t <= bar),
         commits the signals to the ledger, and returns them.
         """
-        existing = self.signal_ledger.get_signals(
-            symbol=ticker, actions_filter=["BUY", "SELL"]
-        )
-        if len(existing) >= 2:
-            return existing
+        latest_bar_date = None
+        if ticker_df is not None and not ticker_df.empty:
+            last_idx = ticker_df.index[-1]
+            latest_bar_date = (
+                last_idx.strftime("%Y-%m-%d")
+                if hasattr(last_idx, "strftime")
+                else str(last_idx)[:10]
+            )
+
+        latest_ledger_bar = self.signal_ledger.get_latest_bar_timestamp(ticker)
+
+        if (
+            latest_bar_date is not None
+            and latest_ledger_bar is not None
+            and latest_ledger_bar >= latest_bar_date
+        ):
+            return self.signal_ledger.get_signals(
+                symbol=ticker, actions_filter=["BUY", "SELL"]
+            )
 
         return self._replay_causal_ml_signals(ticker, ticker_df, spy_df)
 
@@ -575,6 +616,16 @@ class InferenceService:
             risk_veto=consensus_result["consensus_status"] == "VETOED",
         )
 
+        # Position awareness: Exiting an existing LONG position in paper trading is a risk-reducing action,
+        # never a counter-trend naked short.
+        is_long_exit = bool(
+            self.paper_engine
+            and isinstance(getattr(self.paper_engine, "positions", None), dict)
+            and ticker in self.paper_engine.positions
+            and isinstance(self.paper_engine.positions[ticker], dict)
+            and self.paper_engine.positions[ticker].get("shares", 0) > 0
+        )
+
         # Signal Suppression logic
         final_signal = pre_signal
         signal_note = None
@@ -590,7 +641,7 @@ class InferenceService:
                 f"Suppressed by Macro Regime Filter: Close ({curr_close:.2f} < SMA200 {sma_200:.2f}) "
                 f"or SPY ({curr_spy_close:.2f} < SMA50 {spy_sma_50:.2f})"
             )
-        elif pre_signal == "SELL" and not short_allowed:
+        elif pre_signal == "SELL" and not short_allowed and not is_long_exit:
             final_signal = "HOLD"
             signal_note = (
                 f"Suppressed by Macro Regime Filter: Counter-trend SHORT forbidden in confirmed bull regime "
