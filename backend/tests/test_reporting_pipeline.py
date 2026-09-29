@@ -100,40 +100,45 @@ class TestReportingPipeline(unittest.TestCase):
                 f"Prohibited EXIT/STOP markers found on chart: {exit_markers}",
             )
 
-    def test_consecutive_buy_signals_allowed_without_state_gating(self):
+    def test_debounce_anti_spam_filter(self):
         """
-        Verify that multiple consecutive BUY signals are emitted when localized price
-        action meets the momentum setup across successive bars (un-gated continuous signals).
+        Verify that multiple consecutive BUY/SELL signals are debounced to a minimum 3-bar gap
+        and require edge-triggered reversal conditions.
         """
         df = self._create_uptrend_series(60)
-        # Induce consecutive pullback bounce candles (Low <= fast_ma, Close > slow_ma, Close > Open)
-        # On bars 35, 36, 37
-        for b in [35, 36, 37]:
+        # Induce consecutive pullback bounce candles (Low <= fast_ma, Close > Open, Close > High[t-1])
+        # On bars 35, 36, 37, 38
+        for b in [35, 36, 37, 38]:
+            df.iloc[b-1, df.columns.get_loc("High")] = 100.0 # ensure High[t-1] is low enough
             df.iloc[b, df.columns.get_loc("Low")] = 85.0  # touches/crosses below fast_ma
             df.iloc[b, df.columns.get_loc("Open")] = 110.0
             df.iloc[b, df.columns.get_loc("High")] = 125.0
-            df.iloc[b, df.columns.get_loc("Close")] = 120.0  # green candle closing above slow_ma
+            df.iloc[b, df.columns.get_loc("Close")] = 120.0  # green candle and Close > High[t-1]
 
         markers, _ = self.report_gen.generate_historical_markers("TEST", df)
         date_strs = [d.strftime("%Y-%m-%d") for d in df.index]
         marker_dates = {m["time"]: m["action"] for m in markers}
 
-        # Verify that all 3 consecutive bars fired a BUY marker
-        for b in [35, 36, 37]:
-            d = date_strs[b]
-            self.assertIn(d, marker_dates, f"Expected marker on bar {b} ({d})")
-            self.assertEqual(marker_dates[d], "BUY", f"Expected BUY on bar {b} ({d})")
+        # Verify that ONLY bar 35 and 38 fired a BUY marker due to the 3-bar debounce rule
+        self.assertIn(date_strs[35], marker_dates, f"Expected marker on bar 35 ({date_strs[35]})")
+        self.assertNotIn(date_strs[36], marker_dates, f"Expected NO marker on bar 36 ({date_strs[36]})")
+        self.assertNotIn(date_strs[37], marker_dates, f"Expected NO marker on bar 37 ({date_strs[37]})")
+        self.assertIn(date_strs[38], marker_dates, f"Expected marker on bar 38 ({date_strs[38]})")
 
-    def test_raw_momentum_sell_conditions(self):
+        self.assertEqual(marker_dates[date_strs[35]], "BUY")
+        self.assertEqual(marker_dates[date_strs[38]], "BUY")
+
+    def test_edge_triggered_sell_conditions(self):
         """
-        Verify SELL trigger: (Close < fast_ma OR High >= upper_band) AND Close < Open.
+        Verify SELL trigger: (High >= upper_band OR High > fast_ma * 1.02) AND Close < Open AND Close < Low[t-1].
         """
         df = self._create_uptrend_series(60)
-        # Bar 40: red candle with breakdown below fast_ma
+        # Bar 40: red candle with breakdown, overextended high, taking out previous low
+        df.iloc[39, df.columns.get_loc("Low")] = 110.0
         df.iloc[40, df.columns.get_loc("Open")] = 120.0
-        df.iloc[40, df.columns.get_loc("High")] = 121.0
+        df.iloc[40, df.columns.get_loc("High")] = 200.0 # overextended
         df.iloc[40, df.columns.get_loc("Low")] = 80.0
-        df.iloc[40, df.columns.get_loc("Close")] = 85.0  # sharp drop below fast_ma
+        df.iloc[40, df.columns.get_loc("Close")] = 85.0  # Close < Open AND Close < Low[t-1]
 
         markers, _ = self.report_gen.generate_historical_markers("TEST", df)
         date_strs = [d.strftime("%Y-%m-%d") for d in df.index]

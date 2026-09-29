@@ -191,47 +191,63 @@ class ReportGenerator:
         dates = df_full.index.strftime("%Y-%m-%d").tolist()
 
         # =========================================================================
-        # RAW VECTORIZED MOMENTUM SIGNALS (UN-GATED CONTINUOUS)
+        # EDGE-TRIGGERED MOMENTUM SIGNALS WITH DEBOUNCE (ANTI-SPAM)
         # =========================================================================
         valid_ma = ~np.isnan(fast_ma) & ~np.isnan(slow_ma)
-        is_green = closes > opens
-        is_red = closes < opens
 
-        # 1. Emit BUY if:
-        #    - Close > slow_ma (Bullish regime)
-        #    - Low <= fast_ma (testing the ribbon / pullback or bounce)
-        #    - Close > Open (green candle)
-        buy_cond = valid_ma & (closes > slow_ma) & (lows <= fast_ma) & is_green
-
-        # 2. Emit SELL if:
-        #    - (Close < fast_ma OR High >= upper_band)
-        #    - Close < Open (red candle)
-        upper_band_valid = ~np.isnan(upper_band)
-        overextended = upper_band_valid & (highs >= upper_band)
-        sell_cond = valid_ma & ((closes < fast_ma) | overextended) & is_red
+        last_buy_bar = -999
+        last_sell_bar = -999
 
         markers: List[Dict[str, Any]] = []
-        for t in range(n):
-            if buy_cond[t]:
+
+        for t in range(1, n):
+            if not valid_ma[t]:
+                continue
+
+            is_green = closes[t] > opens[t]
+            is_red = closes[t] < opens[t]
+
+            # 1. Edge-Triggered BUY (Dip & Bounce Pivot)
+            buy_triggered = (
+                (lows[t] <= fast_ma[t]) and
+                is_green and
+                (closes[t] > highs[t-1])
+            )
+
+            # 2. Edge-Triggered SELL (Peak & Exhaustion Pivot)
+            upper_band_val = upper_band[t] if not np.isnan(upper_band[t]) else np.inf
+            overextended = (highs[t] >= upper_band_val) or (highs[t] > fast_ma[t] * 1.02)
+
+            sell_triggered = (
+                overextended and
+                is_red and
+                (closes[t] < lows[t-1])
+            )
+
+            if buy_triggered and (t - last_buy_bar) >= 3:
                 markers.append(
                     {
                         "time": dates[t],
                         "action": "BUY",
-                        "label": "BUY",
+                        "label": "",
+                        "text": "",
                         "probability": 100,
                         "price": round(float(closes[t]), 2),
                     }
                 )
-            elif sell_cond[t]:
+                last_buy_bar = t
+            elif sell_triggered and (t - last_sell_bar) >= 3:
                 markers.append(
                     {
                         "time": dates[t],
                         "action": "SELL",
-                        "label": "SELL",
+                        "label": "",
+                        "text": "",
                         "probability": 100,
                         "price": round(float(closes[t]), 2),
                     }
                 )
+                last_sell_bar = t
 
         df_full["trailing_stop"] = np.nan
         return markers, df_full
