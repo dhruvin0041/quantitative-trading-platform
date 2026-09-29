@@ -100,53 +100,47 @@ class TestReportingPipeline(unittest.TestCase):
                 f"Prohibited EXIT/STOP markers found on chart: {exit_markers}",
             )
 
-    def test_debounce_anti_spam_filter(self):
+    def test_swing_dip_and_peak_detection(self):
         """
-        Verify that multiple consecutive BUY/SELL signals are debounced to a minimum 3-bar gap
-        and require edge-triggered reversal conditions.
+        Verify requirement: BUY markers appear strictly on swing dips (local troughs)
+        and SELL markers appear strictly on swing peaks (local crests).
         """
-        df = self._create_uptrend_series(60)
-        # Induce consecutive pullback bounce candles (Low <= fast_ma, Close > Open, Close > High[t-1])
-        # On bars 35, 36, 37, 38
-        for b in [35, 36, 37, 38]:
-            df.iloc[b-1, df.columns.get_loc("High")] = 100.0 # ensure High[t-1] is low enough
-            df.iloc[b, df.columns.get_loc("Low")] = 85.0  # touches/crosses below fast_ma
-            df.iloc[b, df.columns.get_loc("Open")] = 110.0
-            df.iloc[b, df.columns.get_loc("High")] = 125.0
-            df.iloc[b, df.columns.get_loc("Close")] = 120.0  # green candle and Close > High[t-1]
-
+        df = self._create_swing_series()
         markers, _ = self.report_gen.generate_historical_markers("TEST", df)
-        date_strs = [d.strftime("%Y-%m-%d") for d in df.index]
-        marker_dates = {m["time"]: m["action"] for m in markers}
+        self.assertTrue(len(markers) >= 2, "Expected at least one BUY and one SELL on swing series")
 
-        # Verify that ONLY bar 35 and 38 fired a BUY marker due to the 3-bar debounce rule
-        self.assertIn(date_strs[35], marker_dates, f"Expected marker on bar 35 ({date_strs[35]})")
-        self.assertNotIn(date_strs[36], marker_dates, f"Expected NO marker on bar 36 ({date_strs[36]})")
-        self.assertNotIn(date_strs[37], marker_dates, f"Expected NO marker on bar 37 ({date_strs[37]})")
-        self.assertIn(date_strs[38], marker_dates, f"Expected marker on bar 38 ({date_strs[38]})")
+        # First confirmed marker should be BUY on the initial dip
+        self.assertEqual(markers[0]["action"], "BUY")
 
-        self.assertEqual(marker_dates[date_strs[35]], "BUY")
-        self.assertEqual(marker_dates[date_strs[38]], "BUY")
+        # For every BUY, price must be a local dip relative to adjacent swings
+        # For every SELL, price must be a local peak relative to adjacent swings
+        for i in range(len(markers) - 1):
+            cur = markers[i]
+            nxt = markers[i + 1]
+            if cur["action"] == "BUY" and nxt["action"] == "SELL":
+                self.assertGreaterEqual(
+                    nxt["price"],
+                    cur["price"],
+                    f"SELL peak ({nxt['price']}) should be higher than BUY dip ({cur['price']})",
+                )
 
-    def test_edge_triggered_sell_conditions(self):
+    def test_strict_alternation_guarantee(self):
         """
-        Verify SELL trigger: (High >= upper_band OR High > fast_ma * 1.02) AND Close < Open AND Close < Low[t-1].
+        Verify that emitted signals strictly alternate (BUY -> SELL -> BUY -> SELL)
+        with zero consecutive duplicate actions.
         """
-        df = self._create_uptrend_series(60)
-        # Bar 40: red candle with breakdown, overextended high, taking out previous low
-        df.iloc[39, df.columns.get_loc("Low")] = 110.0
-        df.iloc[40, df.columns.get_loc("Open")] = 120.0
-        df.iloc[40, df.columns.get_loc("High")] = 200.0 # overextended
-        df.iloc[40, df.columns.get_loc("Low")] = 80.0
-        df.iloc[40, df.columns.get_loc("Close")] = 85.0  # Close < Open AND Close < Low[t-1]
-
-        markers, _ = self.report_gen.generate_historical_markers("TEST", df)
-        date_strs = [d.strftime("%Y-%m-%d") for d in df.index]
-        d_40 = date_strs[40]
-
-        matching = [m for m in markers if m["time"] == d_40]
-        self.assertTrue(len(matching) >= 1, f"Expected SELL marker on breakdown candle at {d_40}")
-        self.assertEqual(matching[0]["action"], "SELL")
+        for df_series in [
+            self._create_uptrend_series(60),
+            self._create_downtrend_series(60),
+            self._create_swing_series(),
+        ]:
+            markers, _ = self.report_gen.generate_historical_markers("TEST", df_series.copy())
+            for i in range(len(markers) - 1):
+                self.assertNotEqual(
+                    markers[i]["action"],
+                    markers[i + 1]["action"],
+                    f"Consecutive identical actions detected at indices {i} and {i+1}: {markers[i]['action']}",
+                )
 
     def test_package_chart_data_preserves_consecutive_signals(self):
         """

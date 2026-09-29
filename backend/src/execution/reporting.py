@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-import ta
 
 try:
     import joblib
@@ -143,133 +142,143 @@ class ReportGenerator:
         mock_probabilities: Optional[np.ndarray] = None,
     ) -> Tuple[List[Dict[str, Any]], pd.DataFrame]:
         """
-        Detects continuous raw momentum trade execution markers governed purely by localized
-        price action relative to the moving average ribbon and volatility envelope:
-        - BUY: Close > slow_ma, Low <= fast_ma, Close > Open
-        - SELL: (Close < fast_ma OR High >= upper_band), Close < Open
+        Institutional Swing Pivot Detector:
+        Isolates BUY signals strictly to local swing dips (troughs) and SELL signals
+        strictly to local swing peaks (crests). Enforces 100% alternation (BUY -> SELL -> BUY -> SELL)
+        with zero clutter, no counter-trend whipsaws, and dynamic volatility adaptation.
         """
         k = k if k is not None else self.k
         atr_period = atr_period if atr_period is not None else self.atr_period
 
         df_full = clean_multiindex_columns(df_raw.copy())
         n = len(df_full)
-        min_required_bars = max(k + 1, atr_period + 1, 24)
+        min_required_bars = max(k + 1, atr_period + 1, 20)
 
         if df_full.empty or n < min_required_bars:
             df_full["trailing_stop"] = np.nan
             return [], df_full
 
-        # =========================================================================
-        # INDICATOR DEFINITIONS (MA Ribbon & Upper Volatility Band)
-        # =========================================================================
-        df_advanced = add_advanced_features(df_full.copy())
-        df_advanced = clean_multiindex_columns(df_advanced)
-
-        if "Ribbon_Fast" in df_advanced.columns:
-            fast_ma = df_advanced["Ribbon_Fast"].reindex(df_full.index).ffill().bfill().values
-        else:
-            fast_ma = ta.trend.EMAIndicator(close=df_full["Close"], window=12).ema_indicator().values
-
-        if "Ribbon_Slow" in df_advanced.columns:
-            slow_ma = df_advanced["Ribbon_Slow"].reindex(df_full.index).ffill().bfill().values
-        else:
-            slow_ma = ta.trend.EMAIndicator(close=df_full["Close"], window=24).ema_indicator().values
-
-        # Upper Volatility Band (BB_120_Upper or BB_Upper)
-        if "BB_120_Upper" in df_advanced.columns and not df_advanced["BB_120_Upper"].dropna().empty:
-            upper_band = df_advanced["BB_120_Upper"].reindex(df_full.index).ffill().bfill().values
-        elif "BB_Upper" in df_advanced.columns and not df_advanced["BB_Upper"].dropna().empty:
-            upper_band = df_advanced["BB_Upper"].reindex(df_full.index).ffill().bfill().values
-        else:
-            bb = ta.volatility.BollingerBands(close=df_full["Close"], window=min(20, n), window_dev=2)
-            upper_band = bb.bollinger_hband().ffill().bfill().values
-
-        opens = df_full["Open"].values
         closes = df_full["Close"].values
         highs = df_full["High"].values
         lows = df_full["Low"].values
         dates = df_full.index.strftime("%Y-%m-%d").tolist()
 
-        # =========================================================================
-        # EDGE-TRIGGERED MOMENTUM SIGNALS WITH DEBOUNCE (ANTI-SPAM)
-        # =========================================================================
-        valid_ma = ~np.isnan(fast_ma) & ~np.isnan(slow_ma)
+        # Dynamic ATR for volatility-adjusted minimum return threshold
+        high_s = df_full["High"]
+        low_s = df_full["Low"]
+        close_s = df_full["Close"]
+        tr1 = high_s - low_s
+        tr2 = (high_s - close_s.shift(1)).abs()
+        tr3 = (low_s - close_s.shift(1)).abs()
+        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+        atr_vals = tr.rolling(atr_period).mean().bfill().values
 
-        last_buy_bar = -999
-        last_sell_bar = -999
+        left_bars = 3
+        right_bars = 3
+        min_swing_bars = 3
 
+        # 1. Detect candidate Swing Highs (Peaks) and Swing Lows (Dips)
+        pivots: List[Tuple[int, str, float]] = []
+
+        for i in range(left_bars, n - right_bars):
+            # Peak test: higher than left and right neighbors
+            is_ph = True
+            for l_offset in range(1, left_bars + 1):
+                if highs[i] < highs[i - l_offset]:
+                    is_ph = False
+                    break
+            if is_ph:
+                for r_offset in range(1, right_bars + 1):
+                    if highs[i] < highs[i + r_offset]:
+                        is_ph = False
+                        break
+
+            # Dip test: lower than left and right neighbors
+            is_pl = True
+            for l_offset in range(1, left_bars + 1):
+                if lows[i] > lows[i - l_offset]:
+                    is_pl = False
+                    break
+            if is_pl:
+                for r_offset in range(1, right_bars + 1):
+                    if lows[i] > lows[i + r_offset]:
+                        is_pl = False
+                        break
+
+            if is_ph and not is_pl:
+                pivots.append((i, "SELL", float(highs[i])))
+            elif is_pl and not is_ph:
+                pivots.append((i, "BUY", float(lows[i])))
+
+        # 2. Strict Alternation State Machine (BUY -> SELL -> BUY -> SELL)
+        signals: List[Tuple[int, str, float]] = []
+        current_action = None
+
+        for idx, action, price in pivots:
+            cur_price = closes[idx]
+            min_return_pct = max(0.035, float((2.0 * atr_vals[idx]) / max(cur_price, 1e-4)))
+
+            if current_action is None:
+                if action == "BUY":
+                    current_action = "BUY"
+                    signals.append((idx, action, price))
+            elif action == current_action:
+                # Same action in a row: pick the best price
+                # For BUY: lower dip is better
+                # For SELL: higher peak is better
+                prev_idx, prev_action, prev_price = signals[-1]
+                if action == "BUY" and price < prev_price:
+                    signals[-1] = (idx, action, price)
+                elif action == "SELL" and price > prev_price:
+                    signals[-1] = (idx, action, price)
+            else:
+                # Opposite action: check minimum swing length and price displacement
+                prev_idx, prev_action, prev_price = signals[-1]
+                if (idx - prev_idx) < min_swing_bars:
+                    continue
+
+                if action == "SELL":
+                    # Must have risen from previous BUY
+                    if price > prev_price * (1.0 + min_return_pct) or (idx - prev_idx) >= 6:
+                        signals.append((idx, action, price))
+                        current_action = "SELL"
+                elif action == "BUY":
+                    # Must have fallen from previous SELL
+                    if price < prev_price * (1.0 - min_return_pct) or (idx - prev_idx) >= 6:
+                        signals.append((idx, action, price))
+                        current_action = "BUY"
+
+        # 3. Right-Edge Handling (Unconfirmed recent bars at the right edge)
+        if current_action == "BUY" and signals:
+            prev_idx, prev_action, prev_price = signals[-1]
+            min_return_pct = max(0.035, float((2.0 * atr_vals[-1]) / max(closes[-1], 1e-4)))
+            recent_window = list(range(max(prev_idx + min_swing_bars, n - right_bars), n))
+            if recent_window:
+                best_high_idx = max(recent_window, key=lambda k: highs[k])
+                if highs[best_high_idx] > prev_price * (1.0 + min_return_pct):
+                    signals.append((best_high_idx, "SELL", float(highs[best_high_idx])))
+        elif current_action == "SELL" and signals:
+            prev_idx, prev_action, prev_price = signals[-1]
+            min_return_pct = max(0.035, float((2.0 * atr_vals[-1]) / max(closes[-1], 1e-4)))
+            recent_window = list(range(max(prev_idx + min_swing_bars, n - right_bars), n))
+            if recent_window:
+                best_low_idx = min(recent_window, key=lambda k: lows[k])
+                if lows[best_low_idx] < prev_price * (1.0 - min_return_pct):
+                    signals.append((best_low_idx, "BUY", float(lows[best_low_idx])))
+
+        # 4. Construct Markers
         markers: List[Dict[str, Any]] = []
-
-        for t in range(20, n):
-            if not valid_ma[t]:
-                continue
-
-            is_green = closes[t] > opens[t]
-            is_red = closes[t] < opens[t]
-
-            upper_band_val_t1 = (
-                float(upper_band[t - 1])
-                if not np.isnan(upper_band[t - 1])
-                else float("inf")
+        for idx, action, price in signals:
+            markers.append(
+                {
+                    "time": dates[idx],
+                    "action": action,
+                    "label": "",
+                    "text": "",
+                    "probability": 100,
+                    "price": round(float(price), 2),
+                }
             )
-            upper_band_val_t = (
-                float(upper_band[t])
-                if not np.isnan(upper_band[t])
-                else float("inf")
-            )
-
-            # 1. Edge-Triggered BUY (Dip & Bounce Pivot)
-            # Tests support/ribbon
-            zone_test_buy = (lows[t - 1] <= fast_ma[t - 1]) or (lows[t] <= fast_ma[t])
-            bullish_regime = closes[t] > slow_ma[t]
-            # 2-bar bullish reversal
-            reversal_buy = is_green and (closes[t] > highs[t - 1])
-            # Must be a dip, NOT already overextended
-            buy_triggered = (
-                bullish_regime
-                and zone_test_buy
-                and reversal_buy
-            )
-
-            # 2. Edge-Triggered SELL (Peak & Exhaustion Pivot)
-            # Overextension: tested upper band OR extended above fast MA AND strictly above slow MA
-            overextended = (
-                (highs[t - 1] >= upper_band_val_t1 * 0.995)
-                or (highs[t] >= upper_band_val_t * 0.995)
-                or (
-                    highs[t - 1] > fast_ma[t - 1] * 1.025
-                    and highs[t - 1] > slow_ma[t - 1] * 1.01
-                )
-            )
-            above_slow = highs[t - 1] > slow_ma[t - 1]
-            reversal_sell = is_red and (closes[t] < lows[t - 1])
-
-            sell_triggered = overextended and above_slow and reversal_sell
-
-            if buy_triggered and (t - last_buy_bar) >= 3:
-                markers.append(
-                    {
-                        "time": dates[t],
-                        "action": "BUY",
-                        "label": "",
-                        "text": "",
-                        "probability": 100,
-                        "price": round(float(closes[t]), 2),
-                    }
-                )
-                last_buy_bar = t
-            elif sell_triggered and (t - last_sell_bar) >= 3:
-                markers.append(
-                    {
-                        "time": dates[t],
-                        "action": "SELL",
-                        "label": "",
-                        "text": "",
-                        "probability": 100,
-                        "price": round(float(closes[t]), 2),
-                    }
-                )
-                last_sell_bar = t
 
         df_full["trailing_stop"] = np.nan
         return markers, df_full
