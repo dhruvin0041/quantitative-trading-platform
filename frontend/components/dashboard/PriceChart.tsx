@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { createChart, ColorType, CrosshairMode, CandlestickSeries, LineSeries, HistogramSeries, createSeriesMarkers, IChartApi, ISeriesApi, LineStyle } from 'lightweight-charts';
+import { createChart, ColorType, CrosshairMode, CandlestickSeries, LineSeries, HistogramSeries, createSeriesMarkers, IChartApi, ISeriesApi } from 'lightweight-charts';
 import { ChartData } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTheme } from 'next-themes';
@@ -20,7 +20,7 @@ export function PriceChart({ data, loading }: PriceChartProps) {
   const bbLowerSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const ribbonUpperSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const ribbonLowerSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
-  const trailingStopSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  // const trailingStopSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const forecastP90Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const forecastP50Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const forecastP10Ref = useRef<ISeriesApi<"Line"> | null>(null);
@@ -102,7 +102,7 @@ export function PriceChart({ data, loading }: PriceChartProps) {
     bbLowerSeriesRef.current = chart.addSeries(LineSeries, { color: supportLineColor, lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, autoscaleInfoProvider: () => null });
     ribbonUpperSeriesRef.current = chart.addSeries(LineSeries, { color: maOrange, lineWidth: 1, crosshairMarkerVisible: false, autoscaleInfoProvider: () => null });
     ribbonLowerSeriesRef.current = chart.addSeries(LineSeries, { color: maBlue, lineWidth: 1, crosshairMarkerVisible: false, autoscaleInfoProvider: () => null });
-    trailingStopSeriesRef.current = chart.addSeries(LineSeries, { color: '#FF5722', lineWidth: 2, lineStyle: LineStyle.Dotted, crosshairMarkerVisible: true, autoscaleInfoProvider: () => null });
+    // trailingStopSeriesRef.current = chart.addSeries(LineSeries, { color: '#FF5722', lineWidth: 2, lineStyle: 3, crosshairMarkerVisible: true, autoscaleInfoProvider: () => null });
 
     forecastP90Ref.current = chart.addSeries(LineSeries, { color: isDark ? 'rgba(0, 230, 118, 0.6)' : 'rgba(29, 122, 58, 0.6)', lineWidth: 2, lineStyle: 2, crosshairMarkerVisible: true });
     forecastP50Ref.current = chart.addSeries(LineSeries, { color: isDark ? 'rgba(79, 195, 247, 0.8)' : 'rgba(79, 195, 247, 0.8)', lineWidth: 2, lineStyle: 0, crosshairMarkerVisible: true });
@@ -166,12 +166,13 @@ export function PriceChart({ data, loading }: PriceChartProps) {
       bbLowerSeriesRef.current.setData(data.clouds.filter(c => c.bb_lower !== null).map(c => ({ time: c.time, value: c.bb_lower as number })));
       ribbonUpperSeriesRef.current.setData(data.clouds.filter(c => c.ribbon_upper !== null).map(c => ({ time: c.time, value: c.ribbon_upper as number })));
       ribbonLowerSeriesRef.current.setData(data.clouds.filter(c => c.ribbon_lower !== null).map(c => ({ time: c.time, value: c.ribbon_lower as number })));
-      if (trailingStopSeriesRef.current) {
-        const stopPoints = data.clouds
-          .filter(c => c.trailing_stop !== undefined && c.trailing_stop !== null && !isNaN(c.trailing_stop))
-          .map(c => ({ time: c.time, value: c.trailing_stop as number }));
-        trailingStopSeriesRef.current.setData(stopPoints);
-      }
+      // Trailing stop line rendering commented out for minimalist UI
+      // if (trailingStopSeriesRef.current) {
+      //   const stopPoints = data.clouds
+      //     .filter(c => c.trailing_stop !== undefined && c.trailing_stop !== null && !isNaN(c.trailing_stop))
+      //     .map(c => ({ time: c.time, value: c.trailing_stop as number }));
+      //   trailingStopSeriesRef.current.setData(stopPoints);
+      // }
     }
 
     if (data.forecast_fan && forecastP90Ref.current && forecastP50Ref.current && forecastP10Ref.current) {
@@ -186,23 +187,14 @@ export function PriceChart({ data, loading }: PriceChartProps) {
         .filter(m => m.action === 'BUY' || m.action === 'SELL')
         .sort((a, b) => new Date(a.time as string).getTime() - new Date(b.time as string).getTime());
 
-      const filteredMarkers: typeof validMarkers = [];
-      let lastAction: string | null = null;
-      for (const m of validMarkers) {
-        if (m.action !== lastAction) {
-          filteredMarkers.push(m);
-          lastAction = m.action;
-        }
-      }
-
-      const markers = filteredMarkers.map((marker) => {
+      const markers = validMarkers.map((marker) => {
         const isBuy = marker.action === 'BUY';
         return {
           time: marker.time,
           position: (isBuy ? "belowBar" : "aboveBar") as "belowBar" | "aboveBar",
           color: isBuy ? "#10B981" : "#EF4444",
           shape: (isBuy ? "arrowUp" : "arrowDown") as "arrowUp" | "arrowDown",
-          text: marker.action,
+          text: "",
           size: 1,
         };
       });

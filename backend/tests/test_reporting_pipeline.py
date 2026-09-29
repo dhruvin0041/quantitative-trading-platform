@@ -54,31 +54,15 @@ class TestReportingPipeline(unittest.TestCase):
         )
         return df
 
-    def _create_oscillating_series(self, n=120):
-        dates = pd.date_range("2024-01-01", periods=n, freq="D")
-        t = np.arange(n)
-        prices = 100.0 + 15.0 * np.sin(t / 6.0) + (t * 0.4)
-        df = pd.DataFrame(
-            {
-                "Open": prices - 0.5,
-                "High": prices + 1.5,
-                "Low": prices - 1.5,
-                "Close": prices,
-                "Volume": 1000000,
-            },
-            index=dates,
-        )
-        return df
-
     def _create_swing_series(self):
         prices = [100.0] * 30
         for i in range(1, 16):
             prices.append(100.0 + i * 2.0)
-        prices.append(115.0)  # bar 45: stopout candle
+        prices.append(115.0)  # pullback / breakdown candle
         for i in range(1, 8):
-            prices.append(115.0 + i * 0.5)  # cooldown
+            prices.append(115.0 + i * 0.5)
         for i in range(1, 26):
-            prices.append(120.0 + i * 2.0)  # second swing rally
+            prices.append(120.0 + i * 2.0)
 
         prices = np.array(prices)
         n = len(prices)
@@ -93,18 +77,6 @@ class TestReportingPipeline(unittest.TestCase):
             },
             index=dates,
         )
-        df.iloc[28, df.columns.get_loc("Low")] = 92.0
-        df.iloc[29, df.columns.get_loc("Open")] = 98.0
-        df.iloc[29, df.columns.get_loc("Close")] = 100.0
-
-        # Force stopout on bar 45
-        df.iloc[45, df.columns.get_loc("Low")] = 100.0
-        df.iloc[45, df.columns.get_loc("Close")] = 105.0
-
-        # Second dip and reversal on bar 53-54
-        df.iloc[53, df.columns.get_loc("Low")] = 105.0
-        df.iloc[54, df.columns.get_loc("Open")] = 115.0
-        df.iloc[54, df.columns.get_loc("Close")] = 125.0
         return df
 
     def test_only_buy_and_sell_markers_emitted(self):
@@ -128,305 +100,70 @@ class TestReportingPipeline(unittest.TestCase):
                 f"Prohibited EXIT/STOP markers found on chart: {exit_markers}",
             )
 
-    def test_cooldown_strictly_enforces_bar_count(self):
+    def test_consecutive_buy_signals_allowed_without_state_gating(self):
         """
-        Synthesize an exit at bar t=50; assert no BUY can fire for t in [51, 56].
-        The first allowable entry must be t >= 57 (pure integer bar index).
-        """
-        n = 70
-        dates = pd.date_range("2024-01-01", periods=n, freq="D")
-        p1 = np.ones(30) * 100.0
-        p2 = 100.0 + np.arange(1, 41) * 2.0
-        prices = np.concatenate([p1, p2])
-        df = pd.DataFrame(
-            {
-                "Open": prices - 0.5,
-                "High": prices + 1.0,
-                "Low": prices - 1.0,
-                "Close": prices,
-                "Volume": 1000000,
-            },
-            index=dates,
-        )
-
-        # Baseline to obtain active trailing stop prior to bar 50
-        _, df_res_pre = self.report_gen.generate_historical_markers("TEST", df.copy())
-        active_stop_49 = df_res_pre["trailing_stop"].iloc[49]
-        self.assertFalse(np.isnan(active_stop_49), "Trailing stop should be active at bar 49")
-
-        # Synthesize stop breach at bar 50
-        df_mod = df.copy()
-        df_mod.iloc[50, df_mod.columns.get_loc("Low")] = active_stop_49 - 10.0
-        df_mod.iloc[50, df_mod.columns.get_loc("Close")] = active_stop_49 - 5.0
-
-        # For bars 51..69, provide valid pullback and bullish reversal candles
-        for b in range(51, n):
-            df_mod.iloc[b, df_mod.columns.get_loc("Low")] = 90.0  # touches value
-            prev_h = df_mod.iloc[b - 1]["High"]
-            df_mod.iloc[b, df_mod.columns.get_loc("Open")] = prev_h + 0.5
-            df_mod.iloc[b, df_mod.columns.get_loc("High")] = prev_h + 3.0
-            df_mod.iloc[b, df_mod.columns.get_loc("Close")] = prev_h + 2.0
-
-        markers, _ = self.report_gen.generate_historical_markers("TEST", df_mod)
-        date_strs = [d.strftime("%Y-%m-%d") for d in dates]
-        buy_indices = [date_strs.index(m["time"]) for m in markers if m["action"] == "BUY"]
-
-        # Assert no BUY fired during lockout window [51, 56]
-        forbidden_window = list(range(51, 57))
-        for b in forbidden_window:
-            self.assertNotIn(
-                b,
-                buy_indices,
-                f"Cooldown leak detected! BUY marker fired at bar {b} within lockout [51, 56]",
-            )
-
-        # First allowable entry after exit at 50 must be t >= 57
-        post_exit_buys = [b for b in buy_indices if b >= 50]
-        self.assertTrue(len(post_exit_buys) > 0, "Expected a BUY entry after cooldown expired")
-        self.assertGreaterEqual(
-            post_exit_buys[0],
-            57,
-            f"First entry after exit at bar 50 was at bar {post_exit_buys[0]}, expected >= 57",
-        )
-
-    def test_buy_only_at_pullbacks(self):
-        """
-        Verify that candles expanding at the upper envelope with no pullback
-        cannot trigger a BUY until a structural swing bottom pullback occurs.
-        """
-        n = 60
-        dates = pd.date_range("2024-01-01", periods=n, freq="D")
-        prices = 100.0 + np.arange(n) * 2.0
-        # Low is close to Close, well above fast_ma and lower_band (pure upper envelope expansion)
-        df_no_pb = pd.DataFrame(
-            {
-                "Open": prices - 0.5,
-                "High": prices + 1.0,
-                "Low": prices - 0.1,
-                "Close": prices,
-                "Volume": 1000000,
-            },
-            index=dates,
-        )
-
-        markers_no_pb, _ = self.report_gen.generate_historical_markers("TEST", df_no_pb.copy())
-        buy_markers_no_pb = [m for m in markers_no_pb if m["action"] == "BUY"]
-        self.assertEqual(
-            len(buy_markers_no_pb),
-            0,
-            f"Expected zero BUY markers during upper envelope expansion without pullback, got: {buy_markers_no_pb}",
-        )
-
-        # Now introduce a pullback on bar 38 dipping into value, followed by bullish reversal on bar 39
-        df_pb = df_no_pb.copy()
-        df_pb.iloc[38, df_pb.columns.get_loc("Low")] = 85.0  # dip into value
-        df_pb.iloc[39, df_pb.columns.get_loc("Open")] = 175.0
-        df_pb.iloc[39, df_pb.columns.get_loc("High")] = 185.0
-        df_pb.iloc[39, df_pb.columns.get_loc("Close")] = 182.0  # reversal
-
-        markers_pb, _ = self.report_gen.generate_historical_markers("TEST", df_pb)
-        buy_markers_pb = [m for m in markers_pb if m["action"] == "BUY"]
-        self.assertTrue(
-            len(buy_markers_pb) >= 1,
-            "Expected a BUY marker once a swing bottom pullback occurred",
-        )
-
-    def test_no_same_bar_reentry(self):
-        """
-        Verify that when a stop loss is breached on bar t,
-        NO immediate BUY marker can be emitted on that exact same timestamp,
-        even if bar t closes strongly and meets entry triggers.
+        Verify that multiple consecutive BUY signals are emitted when localized price
+        action meets the momentum setup across successive bars (un-gated continuous signals).
         """
         df = self._create_uptrend_series(60)
-        dates = df.index.strftime("%Y-%m-%d").tolist()
-
-        markers_pre, df_res_pre = self.report_gen.generate_historical_markers("TEST", df.copy())
-        buy_markers = [m for m in markers_pre if m["action"] == "BUY"]
-        self.assertTrue(len(buy_markers) > 0, "Uptrend should have triggered at least one BUY")
-
-        first_buy_time = buy_markers[0]["time"]
-        buy_idx = dates.index(first_buy_time)
-
-        # Force stop out on exit_bar_idx (Close strictly below trailing stop)
-        exit_bar_idx = buy_idx + 4
-        prev_stop = df_res_pre["trailing_stop"].iloc[exit_bar_idx - 1]
-        self.assertFalse(np.isnan(prev_stop), "Trailing stop should be active prior to exit bar")
-
-        df.iloc[exit_bar_idx, df.columns.get_loc("Low")] = prev_stop - 10.0
-        df.iloc[exit_bar_idx, df.columns.get_loc("High")] = 160.0
-        df.iloc[exit_bar_idx, df.columns.get_loc("Close")] = prev_stop - 2.0
-
-        markers, df_res = self.report_gen.generate_historical_markers("TEST", df)
-        exit_date = dates[exit_bar_idx]
-
-        same_day_markers = [m for m in markers if m["time"] == exit_date]
-        actions = [m["action"] for m in same_day_markers]
-
-        # Stop loss breach emits a SELL marker placed above bar (take profit/stop)
-        self.assertNotIn("EXIT", actions)
-        self.assertNotIn("STOP", actions)
-        # And NO same-bar re-entry allowed
-        self.assertNotIn(
-            "BUY",
-            actions,
-            f"Bug detected: Same-bar re-entry occurred! Actions on {exit_date}: {actions}",
-        )
-        self.assertIn("SELL", actions)
-        self.assertEqual(len(same_day_markers), 1)
-
-    def test_post_exit_cooldown_enforced(self):
-        """
-        Verify that for bars < cooldown_bars after an exit, subsequent entry triggers
-        are suppressed by the post-exit refractory cooldown.
-        """
-        df = self._create_uptrend_series(60)
-        dates = df.index.strftime("%Y-%m-%d").tolist()
-
-        markers_pre, df_res_pre = self.report_gen.generate_historical_markers("TEST", df.copy())
-        buy_markers = [m for m in markers_pre if m["action"] == "BUY"]
-        buy_idx = dates.index(buy_markers[0]["time"])
-
-        exit_bar_idx = buy_idx + 4
-        prev_stop = df_res_pre["trailing_stop"].iloc[exit_bar_idx - 1]
-
-        # Force stop out on exit_bar_idx (Close strictly below trailing stop)
-        df.iloc[exit_bar_idx, df.columns.get_loc("Low")] = prev_stop - 5.0
-        df.iloc[exit_bar_idx, df.columns.get_loc("Close")] = prev_stop - 2.0
+        # Induce consecutive pullback bounce candles (Low <= fast_ma, Close > slow_ma, Close > Open)
+        # On bars 35, 36, 37
+        for b in [35, 36, 37]:
+            df.iloc[b, df.columns.get_loc("Low")] = 85.0  # touches/crosses below fast_ma
+            df.iloc[b, df.columns.get_loc("Open")] = 110.0
+            df.iloc[b, df.columns.get_loc("High")] = 125.0
+            df.iloc[b, df.columns.get_loc("Close")] = 120.0  # green candle closing above slow_ma
 
         markers, _ = self.report_gen.generate_historical_markers("TEST", df)
+        date_strs = [d.strftime("%Y-%m-%d") for d in df.index]
+        marker_dates = {m["time"]: m["action"] for m in markers}
 
-        # Check all bars within [exit_bar_idx, exit_bar_idx + cooldown - 1]
-        cooldown_dates = [dates[i] for i in range(exit_bar_idx, exit_bar_idx + self.cooldown)]
-        forbidden_buys = [m for m in markers if m["time"] in cooldown_dates and m["action"] == "BUY"]
+        # Verify that all 3 consecutive bars fired a BUY marker
+        for b in [35, 36, 37]:
+            d = date_strs[b]
+            self.assertIn(d, marker_dates, f"Expected marker on bar {b} ({d})")
+            self.assertEqual(marker_dates[d], "BUY", f"Expected BUY on bar {b} ({d})")
 
-        self.assertEqual(
-            len(forbidden_buys),
-            0,
-            f"Cooldown violation: Found BUY signals during post-exit refractory period: {forbidden_buys}",
-        )
-
-    def test_strictly_alternating_signals(self):
+    def test_raw_momentum_sell_conditions(self):
         """
-        Verify that across various market regimes (uptrend, downtrend, oscillating),
-        historical_markers strictly alternates BUY -> SELL -> BUY -> SELL.
-        Zero consecutive identical actions allowed and no orphan SELL before the first BUY.
+        Verify SELL trigger: (Close < fast_ma OR High >= upper_band) AND Close < Open.
         """
-        for df_series in [
-            self._create_uptrend_series(80),
-            self._create_downtrend_series(80),
-            self._create_swing_series(),
-        ]:
-            markers, _ = self.report_gen.generate_historical_markers("TEST", df_series.copy())
-            actions = [m["action"] for m in markers]
-            if not actions:
-                continue
+        df = self._create_uptrend_series(60)
+        # Bar 40: red candle with breakdown below fast_ma
+        df.iloc[40, df.columns.get_loc("Open")] = 120.0
+        df.iloc[40, df.columns.get_loc("High")] = 121.0
+        df.iloc[40, df.columns.get_loc("Low")] = 80.0
+        df.iloc[40, df.columns.get_loc("Close")] = 85.0  # sharp drop below fast_ma
 
-            # First marker must always be BUY (no orphan SELL)
-            self.assertEqual(
-                actions[0],
-                "BUY",
-                f"First marker must be BUY, got {actions[0]}",
-            )
-            # All markers must strictly alternate
-            for i in range(1, len(actions)):
-                self.assertNotEqual(
-                    actions[i],
-                    actions[i - 1],
-                    f"Duplicate consecutive signal detected at index {i}: {actions[i-1]} followed by {actions[i]}",
-                )
-                if actions[i - 1] == "BUY":
-                    self.assertEqual(actions[i], "SELL")
-                else:
-                    self.assertEqual(actions[i], "BUY")
+        markers, _ = self.report_gen.generate_historical_markers("TEST", df)
+        date_strs = [d.strftime("%Y-%m-%d") for d in df.index]
+        d_40 = date_strs[40]
 
-    def test_trend_runner_not_cut_on_breakout(self):
+        matching = [m for m in markers if m["time"] == d_40]
+        self.assertTrue(len(matching) >= 1, f"Expected SELL marker on breakdown candle at {d_40}")
+        self.assertEqual(matching[0]["action"], "SELL")
+
+    def test_package_chart_data_preserves_consecutive_signals(self):
         """
-        Verify that during a strong trend expansion where price breaks out above
-        the upper volatility envelope, the position is NOT cut prematurely on bar 1 or 2.
-        The dynamic ATR trailing stop must ratchet upward under the runner.
-        """
-        n = 60
-        dates = pd.date_range("2024-01-01", periods=n, freq="D")
-        prices = [100.0] * 30
-        for i in range(1, 31):
-            prices.append(100.0 + i * 3.0)
-
-        prices = np.array(prices)
-        df = pd.DataFrame(
-            {
-                "Open": prices - 0.5,
-                "High": prices + 1.5,
-                "Low": prices - 1.0,
-                "Close": prices,
-                "Volume": 1000000,
-            },
-            index=dates,
-        )
-        # Bar 28 dips to touch fast MA value
-        df.iloc[28, df.columns.get_loc("Low")] = 92.0
-        df.iloc[29, df.columns.get_loc("Open")] = 98.0
-        df.iloc[29, df.columns.get_loc("Close")] = 100.0
-        df.iloc[29, df.columns.get_loc("High")] = 101.0
-
-        markers, df_res = self.report_gen.generate_historical_markers("TEST", df)
-        date_strs = [d.strftime("%Y-%m-%d") for d in dates]
-
-        buy_markers = [m for m in markers if m["action"] == "BUY"]
-        self.assertTrue(len(buy_markers) >= 1, "Expected a BUY entry before the breakout run")
-
-        buy_date = buy_markers[0]["time"]
-        buy_bar = date_strs.index(buy_date)
-
-        # Immediate breakout bars following the entry
-        sell_dates = [m["time"] for m in markers if m["action"] == "SELL"]
-        sell_bars = [date_strs.index(s) for s in sell_dates]
-
-        self.assertNotIn(
-            buy_bar + 1,
-            sell_bars,
-            f"Premature exit detected! Position was cut on bar 1 of breakout (bar {buy_bar + 1})",
-        )
-        self.assertNotIn(
-            buy_bar + 2,
-            sell_bars,
-            f"Premature exit detected! Position was cut on bar 2 of breakout (bar {buy_bar + 2})",
-        )
-
-        # Verify that trailing stop ratchets upward under the runner
-        stops = df_res["trailing_stop"].iloc[buy_bar : buy_bar + 8].values
-        valid_stops = [s for s in stops if not np.isnan(s)]
-        self.assertGreaterEqual(len(valid_stops), 4, "Expected active trailing stops during runner")
-        for i in range(1, len(valid_stops)):
-            self.assertGreaterEqual(
-                valid_stops[i],
-                valid_stops[i - 1],
-                f"Trailing stop failed to ratchet upward at step {i}: {valid_stops[i]} < {valid_stops[i - 1]}",
-            )
-
-    def test_api_markers_strictly_alternate(self):
-        """
-        Integration test verifying that package_chart_data returns markers that
-        strictly alternate without duplicate BUYs or SELLs, even if polluted
-        system_signals or order journal records are supplied.
+        Integration test verifying that package_chart_data does NOT deduplicate
+        consecutive identical signals (multiple consecutive BUYs or SELLs are preserved).
         """
         df_series = self._create_swing_series()
-        raw_markers, df_res = self.report_gen.generate_historical_markers("TEST", df_series.copy())
 
-        # Synthesize noisy system_signals DataFrame attempting to inject duplicate BUYs
-        polluted_journal = pd.DataFrame(
-            [
-                {"timestamp": "2024-02-01", "signal_type": "BUY", "asset": "TEST", "confidence": 95},
-                {"timestamp": "2024-02-02", "signal_type": "BUY", "asset": "TEST", "confidence": 92},
-                {"timestamp": "2024-02-03", "signal_type": "BUY", "asset": "TEST", "confidence": 88},
-            ]
-        )
+        # Create consecutive BUY markers intentionally
+        mock_markers = [
+            {"time": "2024-02-01", "action": "BUY", "label": "BUY", "probability": 100, "price": 100.0},
+            {"time": "2024-02-02", "action": "BUY", "label": "BUY", "probability": 100, "price": 102.0},
+            {"time": "2024-02-03", "action": "BUY", "label": "BUY", "probability": 100, "price": 104.0},
+            {"time": "2024-02-04", "action": "SELL", "label": "SELL", "probability": 100, "price": 101.0},
+            {"time": "2024-02-05", "action": "SELL", "label": "SELL", "probability": 100, "price": 99.0},
+        ]
 
         response = self.report_gen.package_chart_data(
             "TEST",
-            df_res,
+            df_series,
             ai_report_dict={"Status": "OK"},
-            historical_markers=raw_markers,
-            system_signals=polluted_journal,
+            historical_markers=mock_markers,
         )
 
         self.assertIn("markers", response)
@@ -434,117 +171,8 @@ class TestReportingPipeline(unittest.TestCase):
         self.assertEqual(response["markers"], response["historical_markers"])
 
         actions = [m["action"] for m in response["markers"]]
-        self.assertTrue(len(actions) >= 2, "Expected at least 2 markers from oscillating series")
-
-        # 1. First signal must be BUY
-        self.assertEqual(actions[0], "BUY", f"First signal must be BUY, got: {actions[0]}")
-
-        # 2. Assert that actions strictly alternates: actions[i] != actions[i-1] for all i > 0
-        for i in range(1, len(actions)):
-            self.assertNotEqual(
-                actions[i],
-                actions[i - 1],
-                f"Consecutive duplicate actions detected at index {i}: {actions[i-1]} followed by {actions[i]}",
-            )
-
-        # 3. Assert that actions.count('BUY') and actions.count('SELL') differ by at most 1
-        buy_count = actions.count("BUY")
-        sell_count = actions.count("SELL")
-        self.assertLessEqual(
-            abs(buy_count - sell_count),
-            1,
-            f"Counts of BUY ({buy_count}) and SELL ({sell_count}) differ by more than 1",
-        )
-
-        # 4. Assert zero occurrences of consecutive ['BUY', 'BUY'] or ['SELL', 'SELL']
-        for i in range(len(actions) - 1):
-            pair = [actions[i], actions[i + 1]]
-            self.assertNotEqual(
-                pair,
-                ["BUY", "BUY"],
-                f"Found illegal consecutive BUY signals at index {i}: {pair}",
-            )
-            self.assertNotEqual(
-                pair,
-                ["SELL", "SELL"],
-                f"Found illegal consecutive SELL signals at index {i}: {pair}",
-            )
-
-    def test_intraday_wick_does_not_shakeout_position(self):
-        """
-        Verify requirement #2 (Close-based trailing stops):
-        An intraday low dipping below the trailing stop MUST NOT shake out the position
-        if the candle's daily Close remains above the trailing stop.
-        """
-        df = self._create_uptrend_series(60)
-        dates = df.index.strftime("%Y-%m-%d").tolist()
-
-        markers_pre, df_res_pre = self.report_gen.generate_historical_markers("TEST", df.copy())
-        buy_markers = [m for m in markers_pre if m["action"] == "BUY"]
-        self.assertTrue(len(buy_markers) > 0, "Uptrend should have triggered at least one BUY")
-
-        first_buy_time = buy_markers[0]["time"]
-        buy_idx = dates.index(first_buy_time)
-        wick_bar_idx = buy_idx + 4
-        prev_stop = df_res_pre["trailing_stop"].iloc[wick_bar_idx - 1]
-        self.assertFalse(np.isnan(prev_stop), "Trailing stop should be active prior to wick bar")
-
-        # Create an intraday wick: Low penetrates below stop, but Close rallies comfortably above stop
-        df_wick = df.copy()
-        df_wick.iloc[wick_bar_idx, df_wick.columns.get_loc("Low")] = prev_stop - 10.0
-        df_wick.iloc[wick_bar_idx, df_wick.columns.get_loc("Close")] = prev_stop + 5.0
-
-        markers, df_res = self.report_gen.generate_historical_markers("TEST", df_wick)
-        wick_date = dates[wick_bar_idx]
-
-        # Assert no SELL was emitted on wick_date and trailing stop remains active
-        same_day_sells = [m for m in markers if m["time"] == wick_date and m["action"] == "SELL"]
-        self.assertEqual(
-            len(same_day_sells),
-            0,
-            f"Wick shakeout detected! Position was prematurely exited on intraday wick at {wick_date}",
-        )
-        self.assertFalse(
-            np.isnan(df_res["trailing_stop"].iloc[wick_bar_idx]),
-            "Trailing stop should remain active after surviving intraday wick",
-        )
-
-    def test_parabolic_exhaustion_exit(self):
-        """
-        Verify requirement #3 (Parabolic exhaustion exit):
-        When price extends into extreme volatility territory (High > upper_band * 1.02 or RSI > 75)
-        and prints a bearish reversal rejection wick (Close < Open and Close < High - range * 0.6),
-        a SELL marker is emitted to take profits at the peak.
-        """
-        df = self._create_uptrend_series(60)
-        dates = df.index.strftime("%Y-%m-%d").tolist()
-
-        markers_pre, df_res_pre = self.report_gen.generate_historical_markers("TEST", df.copy())
-        buy_markers = [m for m in markers_pre if m["action"] == "BUY"]
-        self.assertTrue(len(buy_markers) > 0, "Uptrend should have triggered at least one BUY")
-
-        first_buy_time = buy_markers[0]["time"]
-        buy_idx = dates.index(first_buy_time)
-        exhaust_bar_idx = buy_idx + 8
-
-        # Synthesize a massive parabolic blow-off candle with top rejection wick
-        df_exhaust = df.copy()
-        df_exhaust.iloc[exhaust_bar_idx, df_exhaust.columns.get_loc("Open")] = 250.0
-        df_exhaust.iloc[exhaust_bar_idx, df_exhaust.columns.get_loc("High")] = 300.0
-        df_exhaust.iloc[exhaust_bar_idx, df_exhaust.columns.get_loc("Low")] = 200.0
-        # Close < Open and in bottom 40% of range (300 - 100 * 0.6 = 240)
-        df_exhaust.iloc[exhaust_bar_idx, df_exhaust.columns.get_loc("Close")] = 220.0
-
-        markers, _ = self.report_gen.generate_historical_markers("TEST", df_exhaust)
-        exhaust_date = dates[exhaust_bar_idx]
-
-        sell_markers = [m for m in markers if m["time"] == exhaust_date and m["action"] == "SELL"]
-        self.assertEqual(
-            len(sell_markers),
-            1,
-            f"Expected a parabolic exhaustion SELL on {exhaust_date}, found: {sell_markers}",
-        )
-        self.assertEqual(sell_markers[0]["label"], "SELL (Parabolic Exhaustion)")
+        # Verify 3 consecutive BUYs followed by 2 consecutive SELLs are preserved
+        self.assertEqual(actions, ["BUY", "BUY", "BUY", "SELL", "SELL"])
 
 
 if __name__ == "__main__":
