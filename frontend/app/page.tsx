@@ -111,7 +111,7 @@ export default function HydraTerminal() {
 
   const currencySymbol = useMemo(() => {
     const stock = universe.find(s => s.ticker === ticker);
-    return stock?.market === 'india' ? '₹' : '$';
+    return stock?.market === \'india\' ? \'₹\' : \'$\';
   }, [universe, ticker]);
 
   // Extract Mock Risk Metrics from chartData or default
@@ -186,23 +186,9 @@ export default function HydraTerminal() {
           <div className="p-4 w-[320px] h-full flex flex-col">
             <div className="flex p-1 bg-background rounded-lg border border-border mb-4 flex-wrap gap-1">
               <button
-                onClick={() => setMarket('us')}
-                className={cn(
-                  "flex-1 min-w-[45px] py-1.5 rounded-md text-[11px] font-bold uppercase transition-all",
-                  market === 'us' ? "bg-muted text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                🇺🇸 US
-              </button>
+                onClick={() =>🇺🇸 US</button>
               <button
-                onClick={() => setMarket('india')}
-                className={cn(
-                  "flex-1 min-w-[45px] py-1.5 rounded-md text-[11px] font-bold uppercase transition-all",
-                  market === 'india' ? "bg-muted text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                🇮🇳 IND
-              </button>
+                onClick={() =>🇮🇳 IND</button>
             </div>
 
             <div className="flex-1 overflow-y-auto hide-scrollbar">

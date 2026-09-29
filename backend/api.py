@@ -276,28 +276,39 @@ async def get_stock_universe():
             data = yf.download(all_tickers, period="5d", interval="1d", progress=False)
             results = []
 
-            # Vectorized price extraction: ffill() drops intermediate NaNs safely, then we take the last 2 rows
-            if isinstance(data["Close"], pd.DataFrame):
-                closes = data["Close"].ffill().iloc[-2:]
-            else:
-                closes = pd.DataFrame({all_tickers[0]: data["Close"]}).ffill().iloc[-2:]
-
-            curr_prices = closes.iloc[-1].to_dict() if len(closes) >= 1 else {}
-            prev_prices = closes.iloc[-2].to_dict() if len(closes) >= 2 else curr_prices
+            results = []
 
             for market_id, tickers_dict in UNIVERSES_METADATA.items():
                 for t, meta in tickers_dict.items():
-                    curr = float(curr_prices.get(t, 0.0))
-                    prev = float(prev_prices.get(t, curr))
+                    try:
+                        # Extract non-NaN prices for this specific ticker
+                        if isinstance(data["Close"], pd.DataFrame):
+                            ticker_series = data["Close"][t].dropna()
+                        else:
+                            ticker_series = data["Close"].dropna()
+                            
+                        if len(ticker_series) >= 2:
+                            curr = float(ticker_series.iloc[-1])
+                            prev = float(ticker_series.iloc[-2])
+                        elif len(ticker_series) == 1:
+                            curr = float(ticker_series.iloc[-1])
+                            prev = curr
+                        else:
+                            curr = 0.0
+                            prev = 0.0
+                    except KeyError:
+                        curr = 0.0
+                        prev = 0.0
+
                     # Prevent division by zero and handle NA seamlessly
-                    pct = ((curr / prev) - 1) * 100 if prev != 0 and pd.notna(curr) and pd.notna(prev) else 0.0
+                    pct = ((curr / prev) - 1) * 100 if prev != 0 else 0.0
 
                     results.append(
                         UniverseStockItem(
                             ticker=t,
                             name=meta["name"],
-                            price=curr if pd.notna(curr) else 0.0,
-                            pct_change=pct if pd.notna(pct) else 0.0,
+                            price=curr,
+                            pct_change=pct,
                             market=market_id,
                             metadata={**meta, "ticker": t, "market": market_id.upper()},
                         )
