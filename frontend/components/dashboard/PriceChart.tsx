@@ -120,10 +120,6 @@ export function PriceChart({ data, loading }: PriceChartProps) {
   useEffect(() => {
     if (!data || !data.candles || !chartRef.current || !candlestickSeriesRef.current) return;
 
-    const isDark = resolvedTheme === 'dark';
-    const varBreachColor = isDark ? 'rgba(255, 82, 82, 0.6)' : 'rgba(192, 56, 10, 0.6)';
-    const safeColor = isDark ? 'rgba(0, 230, 118, 0.2)' : 'rgba(29, 122, 58, 0.2)';
-
     candlestickSeriesRef.current.setData(data.candles);
 
     if (volumeSeriesRef.current) {
