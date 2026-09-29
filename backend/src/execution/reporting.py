@@ -200,38 +200,51 @@ class ReportGenerator:
 
         markers: List[Dict[str, Any]] = []
 
-        for t in range(1, n):
+        for t in range(20, n):
             if not valid_ma[t]:
                 continue
 
             is_green = closes[t] > opens[t]
             is_red = closes[t] < opens[t]
 
+            upper_band_val_t1 = (
+                float(upper_band[t - 1])
+                if not np.isnan(upper_band[t - 1])
+                else float("inf")
+            )
+            upper_band_val_t = (
+                float(upper_band[t])
+                if not np.isnan(upper_band[t])
+                else float("inf")
+            )
+
             # 1. Edge-Triggered BUY (Dip & Bounce Pivot)
-            zone_test_buy = (lows[t-1] <= fast_ma[t-1]) or (lows[t] <= fast_ma[t])
-            bullish_regime = (closes[t] > slow_ma[t])
-            
+            # Tests support/ribbon
+            zone_test_buy = (lows[t - 1] <= fast_ma[t - 1]) or (lows[t] <= fast_ma[t])
+            bullish_regime = closes[t] > slow_ma[t]
+            # 2-bar bullish reversal
+            reversal_buy = is_green and (closes[t] > highs[t - 1])
+            # Must be a dip, NOT already overextended
             buy_triggered = (
-                bullish_regime and
-                zone_test_buy and
-                is_green and
-                (closes[t] > highs[t-1])
+                bullish_regime
+                and zone_test_buy
+                and reversal_buy
             )
 
             # 2. Edge-Triggered SELL (Peak & Exhaustion Pivot)
-            upper_band_val_t1 = upper_band[t-1] if not np.isnan(upper_band[t-1]) else np.inf
-            upper_band_val_t = upper_band[t] if not np.isnan(upper_band[t]) else np.inf
-            
-            overextended_t1 = (highs[t-1] >= upper_band_val_t1) or (highs[t-1] > fast_ma[t-1] * 1.02)
-            overextended_t = (highs[t] >= upper_band_val_t) or (highs[t] > fast_ma[t] * 1.02)
-            
-            zone_test_sell = overextended_t1 or overextended_t
-
-            sell_triggered = (
-                zone_test_sell and
-                is_red and
-                (closes[t] < lows[t-1])
+            # Overextension: tested upper band OR extended above fast MA AND strictly above slow MA
+            overextended = (
+                (highs[t - 1] >= upper_band_val_t1 * 0.995)
+                or (highs[t] >= upper_band_val_t * 0.995)
+                or (
+                    highs[t - 1] > fast_ma[t - 1] * 1.025
+                    and highs[t - 1] > slow_ma[t - 1] * 1.01
+                )
             )
+            above_slow = highs[t - 1] > slow_ma[t - 1]
+            reversal_sell = is_red and (closes[t] < lows[t - 1])
+
+            sell_triggered = overextended and above_slow and reversal_sell
 
             if buy_triggered and (t - last_buy_bar) >= 3:
                 markers.append(
@@ -283,10 +296,12 @@ class ReportGenerator:
 
         df_chart = df_full.reset_index()
         date_col = "Date" if "Date" in df_chart.columns else "index"
-        
-        # Filter for 2026 onwards for UI clarity
-        df_chart = df_chart[df_chart[date_col] >= pd.Timestamp("2026-01-01")]
-        
+
+        # Filter for 2026 onwards for UI clarity if 2026 data exists
+        df_2026 = df_chart[df_chart[date_col] >= pd.Timestamp("2026-01-01")]
+        if not df_2026.empty:
+            df_chart = df_2026
+
         df_chart["time"] = df_chart[date_col].dt.strftime("%Y-%m-%d")
         df_chart = df_chart.rename(
             columns={
@@ -325,10 +340,17 @@ class ReportGenerator:
         raw_markers = list(historical_markers) if historical_markers else []
 
         # Filter out markers that fall before our chart window, strictly BUY and SELL
-        min_date = df_chart["time"].min()
+        min_date = (
+            str(df_chart["time"].min())
+            if not df_chart.empty and pd.notna(df_chart["time"].min())
+            else ""
+        )
         window_markers = [
-            m for m in raw_markers
-            if m.get("time") and m["time"] >= min_date and m.get("action") in ["BUY", "SELL"]
+            m
+            for m in raw_markers
+            if m.get("time")
+            and (not min_date or str(m["time"]) >= min_date)
+            and m.get("action") in ["BUY", "SELL"]
         ]
         window_markers.sort(key=lambda m: m["time"])
 
