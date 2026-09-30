@@ -116,12 +116,16 @@ class StrategyGovernanceEngine:
         return {
             "strategy_version": manifest.get("strategy_version"),
             "freeze_timestamp_utc": manifest.get("freeze_timestamp_utc"),
+            "freeze_timestamp_new_york": manifest.get("freeze_timestamp_new_york"),
+            "freeze_display_new_york": manifest.get("freeze_display_new_york"),
             "freeze_session_edt": manifest.get("freeze_session_edt"),
             "git_commit": manifest.get("git_commit"),
             "lock_active": manifest.get("anti_overfitting_lock", True),
             "integrity_verified": is_valid,
             "violations_count": len(violations),
             "violations": violations,
+            "model_provenance": manifest.get("model_provenance", {}),
+            "prospective_sequence": manifest.get("prospective_sequence", {}),
             "frozen_hyperparameters": manifest.get("frozen_hyperparameters", {}),
             "validation_policy": manifest.get("validation_policy", {}),
         }

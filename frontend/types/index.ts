@@ -364,12 +364,16 @@ export interface PortfolioStatusResponse {
 export interface GovernanceStatus {
   strategy_version: string;
   freeze_timestamp_utc: string;
-  freeze_session_edt: string;
+  freeze_timestamp_new_york: string;
+  freeze_display_new_york?: string;
+  freeze_session_edt?: string;
   git_commit: string;
   lock_active: boolean;
   integrity_verified: boolean;
   violations_count: number;
   violations: string[];
+  model_provenance?: Record<string, unknown>;
+  prospective_sequence?: Record<string, unknown>;
   frozen_hyperparameters: Record<string, unknown>;
   validation_policy: {
     checkpoints: number[];
@@ -384,15 +388,21 @@ export interface ProspectiveSignal {
   symbol: string;
   source_candle_timestamp: string;
   signal_generation_timestamp: string;
+  source_candle_display?: string;
+  signal_generation_display?: string;
+  execution_target_display?: string;
   signal: 'BUY' | 'SELL' | 'HOLD' | 'NO_SIGNAL';
   probability: number;
   confidence: number;
   feature_hash: string;
   model_hash: string;
   execution_target_timestamp: string;
+  expected_execution_price?: number;
   execution_price: number;
   actual_market_open?: number | null;
-  slippage?: number | null;
+  actual_fill_price?: number | null;
+  slippage_bps?: number | null;
+  actual_slippage?: number | null;
   commission?: number | null;
   status: 'PENDING_EXECUTION' | 'EXECUTED' | 'COMPLETED';
   outcome_evaluation_timestamp?: string | null;

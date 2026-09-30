@@ -49,6 +49,7 @@ from src.schemas import (
     ExpectedValueMetrics,
     SignalQuality,
 )
+from src.utils.timezone_utils import format_new_york_display
 
 logger = logging.getLogger(__name__)
 
@@ -281,11 +282,11 @@ class InferenceService:
                         exec_price = (
                             float(df["Open"].iloc[orig_idx + 1]) * 1.0005
                         )  # 5 bps slippage
-                        exec_time_str = f"{exec_target} 09:30:00 EST"
+                        exec_time_str = format_new_york_display(f"{exec_target} 09:30:00")
                     else:
                         exec_target = "NEXT_SESSION_OPEN"
                         exec_price = float(df["Close"].iloc[orig_idx]) * 1.0005
-                        exec_time_str = "NEXT_SESSION_OPEN 09:30:00 EST"
+                        exec_time_str = "NEXT_SESSION_OPEN 09:30:00 ET"
 
                     self.signal_ledger.record_signal(
                         symbol=ticker,
@@ -301,8 +302,8 @@ class InferenceService:
                         metadata={
                             "source": "causal_replay",
                             "rule": "Open[t+1] + 5bps",
-                            "source_candle_timestamp": f"{bar_time} 16:00:00 EST",
-                            "signal_generation_timestamp": f"{bar_time} 16:00:00 EST",
+                            "source_candle_timestamp": format_new_york_display(f"{bar_time} 16:00:00"),
+                            "signal_generation_timestamp": format_new_york_display(f"{bar_time} 16:00:00"),
                             "execution_timestamp": exec_time_str,
                             "execution_price": round(exec_price, 2),
                             "signal_state": "CONFIRMED",
@@ -326,11 +327,11 @@ class InferenceService:
                         exec_price = (
                             float(df["Open"].iloc[orig_idx + 1]) * 0.9995
                         )  # 5 bps slippage
-                        exec_time_str = f"{exec_target} 09:30:00 EST"
+                        exec_time_str = format_new_york_display(f"{exec_target} 09:30:00")
                     else:
                         exec_target = "NEXT_SESSION_OPEN"
                         exec_price = float(df["Close"].iloc[orig_idx]) * 0.9995
-                        exec_time_str = "NEXT_SESSION_OPEN 09:30:00 EST"
+                        exec_time_str = "NEXT_SESSION_OPEN 09:30:00 ET"
 
                     self.signal_ledger.record_signal(
                         symbol=ticker,
@@ -346,8 +347,8 @@ class InferenceService:
                         metadata={
                             "source": "causal_replay",
                             "rule": "Open[t+1] - 5bps",
-                            "source_candle_timestamp": f"{bar_time} 16:00:00 EST",
-                            "signal_generation_timestamp": f"{bar_time} 16:00:00 EST",
+                            "source_candle_timestamp": format_new_york_display(f"{bar_time} 16:00:00"),
+                            "signal_generation_timestamp": format_new_york_display(f"{bar_time} 16:00:00"),
                             "execution_timestamp": exec_time_str,
                             "execution_price": round(exec_price, 2),
                             "signal_state": "CONFIRMED",
@@ -373,9 +374,9 @@ class InferenceService:
                     raw_features_hash="latest_bar_marker",
                     metadata={
                         "source": "causal_replay_checkpoint",
-                        "source_candle_timestamp": f"{last_bar_time} 16:00:00 EST",
-                        "signal_generation_timestamp": f"{last_bar_time} 16:00:00 EST",
-                        "execution_timestamp": "NEXT_SESSION_OPEN 09:30:00 EST",
+                        "source_candle_timestamp": format_new_york_display(f"{last_bar_time} 16:00:00"),
+                        "signal_generation_timestamp": format_new_york_display(f"{last_bar_time} 16:00:00"),
+                        "execution_timestamp": "NEXT_SESSION_OPEN 09:30:00 ET",
                         "signal_state": "CONFIRMED",
                     },
                 )
@@ -886,9 +887,9 @@ class InferenceService:
             provisional_signal = None
             provisional_marker = None
             confirmed_signal = final_signal
-            sig_gen_time = f"{bar_date} 16:00:00 EST"
-            source_candle_time = f"{bar_date} 16:00:00 EST"
-            exec_time = "NEXT_SESSION_OPEN 09:30:00 EST"
+            sig_gen_time = format_new_york_display(f"{bar_date} 16:00:00")
+            source_candle_time = format_new_york_display(f"{bar_date} 16:00:00")
+            exec_time = "NEXT_SESSION_OPEN 09:30:00 ET"
 
         response_data["signal"] = confirmed_signal
         response_data["signal_state"] = signal_state

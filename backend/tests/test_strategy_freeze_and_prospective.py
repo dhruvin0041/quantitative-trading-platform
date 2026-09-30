@@ -7,8 +7,10 @@ Comprehensive Validation Test Suite for:
 4. Immutability of original prospective signal fields during outcome evaluation
 5. Anti-overfitting lock enforcement and detection of mutated parameters/models
 6. VIX[t-1] timestamp purity (no 16:00-16:15 ET lookahead)
-7. Next-session causal execution timing at Open[t+1]
+7. Next-session causal execution timing at Open[t+1] with frozen 5-bps formula
 8. Strict segregation between Preliminary Historical Evidence and Untouched Forward Validation datasets
+9. Freeze timestamp and prospective sequence mathematical integrity (UTC vs America/New_York)
+10. Strict execution price semantics (NULL fills at generation time, 5-bps formula at next session open)
 """
 import copy
 import json
@@ -16,6 +18,7 @@ import os
 import shutil
 import tempfile
 import unittest
+import zoneinfo
 
 import numpy as np
 import pandas as pd
@@ -30,6 +33,10 @@ from src.execution.strategy_governance import (
     StrategyGovernanceEngine,
     StrategyLockError,
 )
+from src.utils.timezone_utils import (
+    format_new_york_display,
+    parse_to_utc,
+)
 
 
 class TestStrategyFreezeAndProspective(unittest.TestCase):
@@ -39,7 +46,6 @@ class TestStrategyFreezeAndProspective(unittest.TestCase):
         self.ledger = SignalLedger(self.db_path)
 
     def tearDown(self):
-        # Allow sqlite connection cleanup
         try:
             shutil.rmtree(self.temp_dir, ignore_errors=True)
         except Exception:
@@ -64,15 +70,15 @@ class TestStrategyFreezeAndProspective(unittest.TestCase):
         # 1b. Test prospective ledger table
         res_prop = self.ledger.record_prospective_signal(
             symbol="AAPL",
-            source_candle_timestamp="2026-09-30 16:00:00 EST",
-            signal_generation_timestamp="2026-09-30 16:00:00 EST",
+            source_candle_timestamp="2026-09-30 16:00:00 EDT",
+            signal_generation_timestamp="2026-09-30 16:00:00 EDT",
             signal="BUY",
             probability=0.85,
             confidence=0.85,
             feature_hash="hash123",
             model_hash="model123",
-            execution_target_timestamp="2026-10-01 09:30:00 EST",
-            execution_price=225.0,
+            execution_target_timestamp="2026-10-01 09:30:00 EDT",
+            expected_execution_price=225.0,
             is_provisional=True,
         )
         self.assertIsNone(res_prop, "Provisional signal must be rejected from prospective ledger")
@@ -80,11 +86,9 @@ class TestStrategyFreezeAndProspective(unittest.TestCase):
 
     def test_2_forming_candle_isolation(self):
         """Proof 2: A forming intraday candle is recognized and excluded from confirmed signals."""
-        import zoneinfo
         ny_tz = zoneinfo.ZoneInfo("America/New_York")
         now_ny = pd.Timestamp.now(tz=ny_tz)
 
-        # Simulate a dataframe whose last row is today
         dates = pd.date_range(end=now_ny.floor("D"), periods=10, freq="D")
         df = pd.DataFrame(
             {
@@ -127,18 +131,14 @@ class TestStrategyFreezeAndProspective(unittest.TestCase):
             index=dates,
         )
 
-        # Slice at T=80
         t80 = dates[80]
         df_t80 = df_full.loc[:t80].copy()
         spy_t80 = spy_full.loc[:t80].copy()
         vix_t80 = vix_full.loc[:t80].copy()
 
-        # Compute features at T=80 point-in-time
         feat_pit = add_upgraded_features(df_t80, spy_t80, vix_t80, lag_vix=True)
-        # Compute features on full history up to T=100
         feat_full = add_upgraded_features(df_full.copy(), spy_full.copy(), vix_full.copy(), lag_vix=True)
 
-        # Verify that feature vector at bar T=80 is 100% IDENTICAL
         pit_row = feat_pit.loc[t80, FEATURE_COLUMNS].values
         full_row = feat_full.loc[t80, FEATURE_COLUMNS].values
 
@@ -154,20 +154,27 @@ class TestStrategyFreezeAndProspective(unittest.TestCase):
         """Proof 4: Future outcome calculation appends returns but NEVER modifies original signal fields."""
         sig_id = self.ledger.record_prospective_signal(
             symbol="AAPL",
-            source_candle_timestamp="2026-09-30 16:00:00 EST",
-            signal_generation_timestamp="2026-09-30 16:00:00 EST",
+            source_candle_timestamp="2026-09-30 16:00:00 EDT",
+            signal_generation_timestamp="2026-09-30 16:00:00 EDT",
             signal="BUY",
             probability=0.78,
             confidence=0.78,
             feature_hash="orig_feat_hash",
             model_hash="orig_model_hash",
-            execution_target_timestamp="2026-10-01 09:30:00 EST",
-            execution_price=225.50,
+            execution_target_timestamp="2026-10-01 09:30:00 EDT",
+            expected_execution_price=225.50,
         )
         self.assertIsNotNone(sig_id)
 
         # Record snapshot of original fields
         before = self.ledger.get_prospective_signals("AAPL")[0]
+        # At generation time, fill price and market open MUST BE NULL
+        self.assertIsNone(before["actual_market_open"])
+        self.assertIsNone(before["actual_fill_price"])
+        self.assertIsNone(before["slippage_bps"])
+        self.assertIsNone(before["commission"])
+        self.assertEqual(before["expected_execution_price"], 225.50)
+        self.assertEqual(before["status"], "PENDING_EXECUTION")
 
         # Simulate subsequent price bars
         dates = ["2026-09-30", "2026-10-01", "2026-10-02", "2026-10-05", "2026-10-06", "2026-10-07"]
@@ -198,10 +205,14 @@ class TestStrategyFreezeAndProspective(unittest.TestCase):
         self.assertEqual(after["feature_hash"], before["feature_hash"])
         self.assertEqual(after["model_hash"], before["model_hash"])
         self.assertEqual(after["execution_target_timestamp"], before["execution_target_timestamp"])
-        self.assertEqual(after["execution_price"], before["execution_price"])
+        self.assertEqual(after["expected_execution_price"], before["expected_execution_price"])
 
-        # Outcome fields successfully populated
+        # Outcome fields successfully populated with 5-bps formula:
+        # BUY: Open[t+1] * (1 + 0.0005) = 226.0 * 1.0005 = 226.113
         self.assertEqual(after["actual_market_open"], 226.0)
+        self.assertEqual(after["actual_fill_price"], 226.113)
+        self.assertEqual(after["slippage_bps"], 5.0)
+        self.assertEqual(after["commission"], 0.005)
         self.assertIsNotNone(after["return_1d"])
         self.assertEqual(after["status"], "COMPLETED")
         self.assertEqual(after["outcome"], "WIN")
@@ -212,7 +223,6 @@ class TestStrategyFreezeAndProspective(unittest.TestCase):
         valid, violations = gov.verify_integrity()
         self.assertTrue(valid, f"Initial manifest must be valid. Violations: {violations}")
 
-        # Simulate tampering with a manifest or config
         temp_manifest = copy.deepcopy(gov.load_manifest())
         temp_manifest["model_hashes"]["xgb_ensemble.json"] = "TAMPERED_HASH_9999"
         tampered_path = os.path.join(self.temp_dir, "tampered_manifest.json")
@@ -241,32 +251,28 @@ class TestStrategyFreezeAndProspective(unittest.TestCase):
             index=dates,
         )
         spy_df = pd.DataFrame({"Close": [500.0, 501.0, 502.0, 503.0, 504.0]}, index=dates)
-        # VIX on day 2 spikes to 35.0 post-close (16:15 ET)
         vix_df = pd.DataFrame({"Close": [15.0, 16.0, 35.0, 17.0, 18.0]}, index=dates)
 
         res = add_upgraded_features(df.copy(), spy_df, vix_df, lag_vix=True)
-        # At day index 2 (2026-09-03), VIX_Level must be day index 1 value (16.0), NOT 35.0!
         self.assertEqual(res["VIX_Level"].iloc[2], 16.0)
-        # The 35.0 spike is only visible on day index 3 (2026-09-04)
         self.assertEqual(res["VIX_Level"].iloc[3], 35.0)
 
     def test_7_next_session_causal_execution(self):
-        """Proof 8: Confirmed signals execute at next session Open[t+1] with slippage."""
+        """Proof 8: Confirmed signals execute at next session Open[t+1] with 5-bps execution formula."""
         sig_id = self.ledger.record_prospective_signal(
             symbol="AAPL",
-            source_candle_timestamp="2026-09-30 16:00:00 EST",
-            signal_generation_timestamp="2026-09-30 16:00:00 EST",
+            source_candle_timestamp="2026-09-30 16:00:00 EDT",
+            signal_generation_timestamp="2026-09-30 16:00:00 EDT",
             signal="BUY",
             probability=0.72,
             confidence=0.72,
             feature_hash="h1",
             model_hash="m1",
-            execution_target_timestamp="2026-10-01 09:30:00 EST",
-            execution_price=225.50,
+            execution_target_timestamp="2026-10-01 09:30:00 EDT",
+            expected_execution_price=225.50,
         )
         self.assertIsNotNone(sig_id)
 
-        # When evaluated with next day's open
         df_next = pd.DataFrame(
             {
                 "Open": [224.0, 226.10],
@@ -280,11 +286,14 @@ class TestStrategyFreezeAndProspective(unittest.TestCase):
 
         rec = self.ledger.get_prospective_signals("AAPL")[0]
         self.assertEqual(rec["actual_market_open"], 226.10)
-        self.assertEqual(rec["execution_target_timestamp"], "2026-10-01 09:30:00 EST")
+        # BUY: 226.10 * 1.0005 = 226.213
+        self.assertEqual(rec["actual_fill_price"], round(226.10 * 1.0005, 4))
+        self.assertEqual(rec["slippage_bps"], 5.0)
+        self.assertEqual(rec["commission"], 0.005)
+        self.assertEqual(rec["execution_target_display"], "2026-10-01 09:30:00 EDT")
 
     def test_8_historical_and_prospective_datasets_remain_strictly_separate(self):
         """Proof 9: Historical and prospective datasets remain completely separate in distinct tables and tags."""
-        # Insert historical signal
         self.ledger.record_signal(
             symbol="AAPL",
             bar_timestamp="2024-05-15",
@@ -295,18 +304,17 @@ class TestStrategyFreezeAndProspective(unittest.TestCase):
             dataset="PRELIMINARY_HISTORICAL_EVIDENCE",
         )
 
-        # Insert prospective signal
         self.ledger.record_prospective_signal(
             symbol="AAPL",
-            source_candle_timestamp="2026-09-30 16:00:00 EST",
-            signal_generation_timestamp="2026-09-30 16:00:00 EST",
+            source_candle_timestamp="2026-09-30 16:00:00 EDT",
+            signal_generation_timestamp="2026-09-30 16:00:00 EDT",
             signal="BUY",
             probability=0.70,
             confidence=0.70,
             feature_hash="h2",
             model_hash="m2",
-            execution_target_timestamp="2026-10-01 09:30:00 EST",
-            execution_price=225.50,
+            execution_target_timestamp="2026-10-01 09:30:00 EDT",
+            expected_execution_price=225.50,
         )
 
         hist = self.ledger.get_signals("AAPL")
@@ -318,11 +326,111 @@ class TestStrategyFreezeAndProspective(unittest.TestCase):
 
         self.assertEqual(len(prop), 1)
         self.assertEqual(prop[0]["dataset"], "UNTOUCHED_FORWARD_VALIDATION")
-        self.assertEqual(prop[0]["source_candle_timestamp"], "2026-09-30 16:00:00 EST")
+        self.assertEqual(prop[0]["source_candle_timestamp"], "2026-09-30T20:00:00Z")
+        self.assertEqual(prop[0]["source_candle_display"], "2026-09-30 16:00:00 EDT")
 
         summary = self.ledger.get_prospective_summary("AAPL")
         self.assertEqual(summary["total_signals_generated"], 1)
         self.assertEqual(summary["dataset_label"], "UNTOUCHED FORWARD VALIDATION")
+
+    def test_9_freeze_timestamp_and_prospective_sequence_integrity(self):
+        """Proof 10: Freeze timestamp and prospective sequence represent identical instants in UTC and Eastern."""
+        gov = StrategyGovernanceEngine()
+        status = gov.get_governance_status()
+
+        utc_freeze = status["freeze_timestamp_utc"]
+        ny_freeze = status["freeze_timestamp_new_york"]
+        self.assertEqual(utc_freeze, "2026-09-30T10:39:57Z")
+        self.assertEqual(ny_freeze, "2026-09-30T06:39:57-04:00")
+
+        # Mathematical verification of identical instant
+        dt_utc = parse_to_utc(utc_freeze)
+        dt_ny = parse_to_utc(ny_freeze)
+        self.assertEqual(dt_utc, dt_ny, "UTC freeze and New York freeze must represent the exact same epoch instant")
+        self.assertEqual(format_new_york_display(utc_freeze), "2026-09-30 06:39:57 EDT")
+
+        # Mathematical verification of prospective sequence
+        seq = status["prospective_sequence"]
+        candle_utc = seq["first_eligible_completed_candle_utc"]
+        candle_ny = seq["first_eligible_completed_candle_new_york"]
+        self.assertEqual(candle_utc, "2026-09-30T20:00:00Z")
+        self.assertEqual(candle_ny, "2026-09-30 16:00:00 EDT")
+        self.assertEqual(parse_to_utc(candle_utc), parse_to_utc(candle_ny))
+
+        exec_utc = seq["first_next_session_execution_utc"]
+        exec_ny = seq["first_next_session_execution_new_york"]
+        self.assertEqual(exec_utc, "2026-10-01T13:30:00Z")
+        self.assertEqual(exec_ny, "2026-10-01 09:30:00 EDT")
+        self.assertEqual(parse_to_utc(exec_utc), parse_to_utc(exec_ny))
+
+    def test_10_execution_formula_5bps_strict_precision(self):
+        """Proof 11: 5-bps execution formula applies Open[t+1] * (1 ± 0.0005) for BUY and SELL."""
+        # Test BUY
+        buy_id = self.ledger.record_prospective_signal(
+            symbol="AAPL",
+            source_candle_timestamp="2026-09-30 16:00:00 EDT",
+            signal_generation_timestamp="2026-09-30 16:00:00 EDT",
+            signal="BUY",
+            probability=0.75,
+            confidence=0.75,
+            feature_hash="fb",
+            model_hash="mb",
+            execution_target_timestamp="2026-10-01 09:30:00 EDT",
+            expected_execution_price=220.00,
+        )
+        self.assertIsNotNone(buy_id)
+
+        # Test SELL
+        sell_id = self.ledger.record_prospective_signal(
+            symbol="MSFT",
+            source_candle_timestamp="2026-09-30 16:00:00 EDT",
+            signal_generation_timestamp="2026-09-30 16:00:00 EDT",
+            signal="SELL",
+            probability=0.80,
+            confidence=0.80,
+            feature_hash="fs",
+            model_hash="ms",
+            execution_target_timestamp="2026-10-01 09:30:00 EDT",
+            expected_execution_price=450.00,
+        )
+        self.assertIsNotNone(sell_id)
+
+        df_exec = pd.DataFrame(
+            {
+                "Open": [220.0, 200.0],
+                "High": [221.0, 202.0],
+                "Low": [219.0, 198.0],
+                "Close": [220.5, 201.0],
+            },
+            index=["2026-09-30", "2026-10-01"],
+        )
+        self.ledger.evaluate_prospective_outcomes("AAPL", df_exec)
+
+        df_msft = pd.DataFrame(
+            {
+                "Open": [450.0, 400.0],
+                "High": [452.0, 402.0],
+                "Low": [448.0, 395.0],
+                "Close": [451.0, 398.0],
+            },
+            index=["2026-09-30", "2026-10-01"],
+        )
+        self.ledger.evaluate_prospective_outcomes("MSFT", df_msft)
+
+        aapl_sig = self.ledger.get_prospective_signals("AAPL")[0]
+        msft_sig = self.ledger.get_prospective_signals("MSFT")[0]
+
+        # BUY formula: Open[t+1] * (1 + 0.0005) = 200.0 * 1.0005 = 200.1000
+        self.assertEqual(aapl_sig["actual_fill_price"], 200.1)
+        self.assertEqual(aapl_sig["slippage_bps"], 5.0)
+        self.assertEqual(aapl_sig["actual_slippage"], 0.1)
+        self.assertEqual(aapl_sig["commission"], 0.005)
+
+        # SELL formula: Open[t+1] * (1 - 0.0005) = 400.0 * 0.9995 = 399.8000
+        self.assertEqual(msft_sig["actual_fill_price"], 399.8)
+        self.assertEqual(msft_sig["slippage_bps"], 5.0)
+        self.assertEqual(msft_sig["actual_slippage"], 0.2)
+        self.assertEqual(msft_sig["commission"], 0.005)
 
 
 if __name__ == "__main__":

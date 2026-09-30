@@ -10,12 +10,19 @@ import json
 import logging
 import sqlite3
 import uuid
+import zoneinfo
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
+
+from src.utils.timezone_utils import (
+    format_new_york_display,
+    parse_to_utc,
+    to_utc_iso,
+)
 
 logger = logging.getLogger("SignalLedger")
 
@@ -101,9 +108,12 @@ class SignalLedger:
                     feature_hash TEXT NOT NULL,
                     model_hash TEXT NOT NULL,
                     execution_target_timestamp TEXT NOT NULL,
-                    execution_price REAL NOT NULL,
+                    expected_execution_price REAL NOT NULL,
+                    execution_price REAL,
                     actual_market_open REAL,
-                    slippage REAL,
+                    actual_fill_price REAL,
+                    slippage_bps REAL,
+                    actual_slippage REAL,
                     commission REAL,
                     status TEXT NOT NULL DEFAULT 'PENDING_EXECUTION',
                     outcome_evaluation_timestamp TEXT,
@@ -126,6 +136,19 @@ class SignalLedger:
                 ON prospective_signals(symbol, source_candle_timestamp);
                 """
             )
+
+            # Schema migration for existing prospective_signals tables
+            cursor.execute("PRAGMA table_info(prospective_signals);")
+            p_cols = [row["name"] for row in cursor.fetchall()]
+            if p_cols:
+                if "expected_execution_price" not in p_cols:
+                    conn.execute("ALTER TABLE prospective_signals ADD COLUMN expected_execution_price REAL;")
+                if "actual_fill_price" not in p_cols:
+                    conn.execute("ALTER TABLE prospective_signals ADD COLUMN actual_fill_price REAL;")
+                if "slippage_bps" not in p_cols:
+                    conn.execute("ALTER TABLE prospective_signals ADD COLUMN slippage_bps REAL;")
+                if "actual_slippage" not in p_cols:
+                    conn.execute("ALTER TABLE prospective_signals ADD COLUMN actual_slippage REAL;")
             conn.commit()
 
     @staticmethod
@@ -218,15 +241,21 @@ class SignalLedger:
         feature_hash: str,
         model_hash: str,
         execution_target_timestamp: str,
-        execution_price: float,
+        expected_execution_price: Optional[float] = None,
+        execution_price: Optional[float] = None,
         strategy_version: str = "HYDRA_PROSPECTIVE_V1.0",
         is_provisional: bool = False,
     ) -> Optional[str]:
         """
         Phase 8 & 9: Records an untouched prospective forward trading signal.
-        Writes ONLY generation-time data. Original fields are permanently immutable.
+        Writes ONLY generation-time data known at bar close.
+        Original fields are permanently immutable.
         Rejects provisional signals or forming candles.
-        Returns signal_id on successful insert, or None if rejected/already exists.
+
+        Mandate:
+        An actual fill price, actual market open, slippage, and commission
+        MUST NOT be recorded before the future market open exists.
+        At signal generation time, only write information known at that time.
         """
         if is_provisional:
             logger.warning(
@@ -234,12 +263,26 @@ class SignalLedger:
             )
             return None
 
+        # Resolve expected execution price known at signal generation (from Close[t])
+        if expected_execution_price is not None:
+            expected_price = float(expected_execution_price)
+        elif execution_price is not None:
+            expected_price = float(execution_price)
+        else:
+            raise ValueError("expected_execution_price must be provided at signal generation")
+
         symbol = symbol.upper().strip()
         signal = signal.upper().strip()
-        date_str = source_candle_timestamp[:10].replace("-", "")
+
+        # Convert timestamps to standardized ISO UTC for internal storage
+        src_utc = to_utc_iso(source_candle_timestamp)
+        gen_utc = to_utc_iso(signal_generation_timestamp)
+        tgt_utc = to_utc_iso(execution_target_timestamp)
+
+        date_str = parse_to_utc(source_candle_timestamp).strftime("%Y%m%d")
         uid_short = str(uuid.uuid4())[:8].upper()
         signal_id = f"PROP-{symbol}-{date_str}-{uid_short}"
-        now_utc = datetime.now(timezone.utc).isoformat()
+        now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -249,40 +292,47 @@ class SignalLedger:
                     signal_id, strategy_version, symbol, source_candle_timestamp,
                     signal_generation_timestamp, signal, probability, confidence,
                     feature_hash, model_hash, execution_target_timestamp,
-                    execution_price, status, dataset, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING_EXECUTION', 'UNTOUCHED_FORWARD_VALIDATION', ?);
+                    expected_execution_price, execution_price,
+                    actual_market_open, actual_fill_price, slippage_bps, actual_slippage, commission,
+                    status, dataset, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, 'PENDING_EXECUTION', 'UNTOUCHED_FORWARD_VALIDATION', ?);
                 """,
                 (
                     signal_id,
                     strategy_version,
                     symbol,
-                    source_candle_timestamp,
-                    signal_generation_timestamp,
+                    src_utc,
+                    gen_utc,
                     signal,
                     float(probability),
                     float(confidence),
                     feature_hash,
                     model_hash,
-                    execution_target_timestamp,
-                    float(execution_price),
+                    tgt_utc,
+                    expected_price,
+                    expected_price,  # legacy alias
                     now_utc,
                 ),
             )
             conn.commit()
             if cursor.rowcount > 0:
                 logger.info(
-                    f"[PROSPECTIVE COMMITTED] {signal_id}: {symbol} {signal} @ {source_candle_timestamp}"
+                    f"[PROSPECTIVE COMMITTED] {signal_id}: {symbol} {signal} @ {src_utc} (Expected: ${expected_price:.2f})"
                 )
                 return signal_id
             else:
                 logger.debug(
-                    f"[PROSPECTIVE IMMUTABLE] Signal for {symbol} @ {source_candle_timestamp} under {strategy_version} already exists."
+                    f"[PROSPECTIVE IMMUTABLE] Signal for {symbol} @ {src_utc} under {strategy_version} already exists."
                 )
                 return None
 
     def evaluate_prospective_outcomes(self, symbol: str, price_df: pd.DataFrame) -> int:
         """
-        Phase 9: Evaluates realized future outcomes for prospective signals.
+        Phase 9: Evaluates realized future outcomes for prospective signals at next-session open.
+        Strictly applies the frozen 5-bps execution formula:
+            BUY:  Open[t+1] * (1 + 0.0005)
+            SELL: Open[t+1] * (1 - 0.0005)
+            Commission: $0.005/share
         Separates signal generation from outcome evaluation.
         Never alters or rewrites generation-time fields.
         """
@@ -296,6 +346,8 @@ class SignalLedger:
         else:
             date_indices = [str(x)[:10] for x in price_df.index]
 
+        ny_tz = zoneinfo.ZoneInfo("America/New_York")
+
         with self._get_connection() as conn:
             rows = conn.execute(
                 """
@@ -307,55 +359,71 @@ class SignalLedger:
             ).fetchall()
 
             updated_count = 0
-            now_utc = datetime.now(timezone.utc).isoformat()
+            now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
             for r in rows:
-                sig_date = r["source_candle_timestamp"][:10]
+                # Convert source candle timestamp to New York date string for dataframe indexing
+                src_dt_ny = parse_to_utc(r["source_candle_timestamp"]).astimezone(ny_tz)
+                sig_date = src_dt_ny.strftime("%Y-%m-%d")
+
                 if sig_date not in date_indices:
                     continue
                 loc = date_indices.index(sig_date)
 
-                # Need at least Open[loc+1] to execute
+                # Future market open MUST exist (Open[loc+1]) before execution can occur
                 if loc + 1 >= len(date_indices):
+                    # Next market open does not yet exist. Do NOT record actual fill price!
                     continue
 
-                exec_open = float(price_df["Open"].iloc[loc + 1])
+                actual_market_open = float(price_df["Open"].iloc[loc + 1])
                 sig_type = r["signal"]
-                exec_price = float(r["execution_price"])
-                slippage = round(abs(exec_price - exec_open), 4)
+
+                # Frozen 5-bps execution formula:
+                # BUY:  Open[t+1] * (1 + 0.0005)
+                # SELL: Open[t+1] * (1 - 0.0005)
+                # Commission: $0.005/share
+                if sig_type == "BUY":
+                    actual_fill_price = round(actual_market_open * 1.0005, 4)
+                elif sig_type == "SELL":
+                    actual_fill_price = round(actual_market_open * 0.9995, 4)
+                else:
+                    actual_fill_price = round(actual_market_open, 4)
+
+                slippage_bps = 5.0
+                actual_slippage = round(abs(actual_fill_price - actual_market_open), 4)
                 commission = 0.005  # $0.005/share institutional standard
 
-                # Compute returns for future horizons
+                # Compute returns for future horizons relative to actual_fill_price
                 ret_1d, ret_3d, ret_5d, ret_10d = None, None, None, None
                 mae, mfe = None, None
 
                 # Horizon 1D (Close of next session)
                 if loc + 1 < len(date_indices):
                     c1 = float(price_df["Close"].iloc[loc + 1])
-                    ret_1d = (c1 - exec_open) / exec_open if sig_type == "BUY" else (exec_open - c1) / exec_open
+                    ret_1d = (c1 - actual_fill_price) / actual_fill_price if sig_type == "BUY" else (actual_fill_price - c1) / actual_fill_price
 
                 # Horizon 3D
                 if loc + 3 < len(date_indices):
                     c3 = float(price_df["Close"].iloc[loc + 3])
-                    ret_3d = (c3 - exec_open) / exec_open if sig_type == "BUY" else (exec_open - c3) / exec_open
+                    ret_3d = (c3 - actual_fill_price) / actual_fill_price if sig_type == "BUY" else (actual_fill_price - c3) / actual_fill_price
 
                 # Horizon 5D
                 if loc + 5 < len(date_indices):
                     c5 = float(price_df["Close"].iloc[loc + 5])
-                    ret_5d = (c5 - exec_open) / exec_open if sig_type == "BUY" else (exec_open - c5) / exec_open
+                    ret_5d = (c5 - actual_fill_price) / actual_fill_price if sig_type == "BUY" else (actual_fill_price - c5) / actual_fill_price
                     highs = price_df["High"].iloc[loc + 1 : loc + 6].values
                     lows = price_df["Low"].iloc[loc + 1 : loc + 6].values
                     if sig_type == "BUY":
-                        mfe = round(float((np.max(highs) - exec_open) / exec_open), 4)
-                        mae = round(float((np.min(lows) - exec_open) / exec_open), 4)
+                        mfe = round(float((np.max(highs) - actual_fill_price) / actual_fill_price), 4)
+                        mae = round(float((np.min(lows) - actual_fill_price) / actual_fill_price), 4)
                     else:
-                        mfe = round(float((exec_open - np.min(lows)) / exec_open), 4)
-                        mae = round(float((exec_open - np.max(highs)) / exec_open), 4)
+                        mfe = round(float((actual_fill_price - np.min(lows)) / actual_fill_price), 4)
+                        mae = round(float((actual_fill_price - np.max(highs)) / actual_fill_price), 4)
 
                 # Horizon 10D
                 if loc + 10 < len(date_indices):
                     c10 = float(price_df["Close"].iloc[loc + 10])
-                    ret_10d = (c10 - exec_open) / exec_open if sig_type == "BUY" else (exec_open - c10) / exec_open
+                    ret_10d = (c10 - actual_fill_price) / actual_fill_price if sig_type == "BUY" else (actual_fill_price - c10) / actual_fill_price
 
                 outcome = None
                 status = "EXECUTED"
@@ -363,14 +431,17 @@ class SignalLedger:
                     outcome = "WIN" if ret_5d > 0 else ("LOSS" if ret_5d < 0 else "SCRATCH")
                     status = "COMPLETED"
                 elif ret_1d is not None:
-                    outcome = "WIN" if ret_1d > 0 else "LOSS"
+                    outcome = "WIN" if ret_1d > 0 else ("LOSS" if ret_1d < 0 else "SCRATCH")
 
                 conn.execute(
                     """
                     UPDATE prospective_signals
                     SET actual_market_open = ?,
-                        slippage = ?,
+                        actual_fill_price = ?,
+                        slippage_bps = ?,
+                        actual_slippage = ?,
                         commission = ?,
+                        execution_price = ?,
                         return_1d = ?,
                         return_3d = ?,
                         return_5d = ?,
@@ -383,9 +454,12 @@ class SignalLedger:
                     WHERE signal_id = ?;
                     """,
                     (
-                        round(exec_open, 2),
-                        slippage,
+                        round(actual_market_open, 2),
+                        actual_fill_price,
+                        slippage_bps,
+                        actual_slippage,
                         commission,
+                        actual_fill_price,
                         round(ret_1d, 4) if ret_1d is not None else None,
                         round(ret_3d, 4) if ret_3d is not None else None,
                         round(ret_5d, 4) if ret_5d is not None else None,
@@ -404,7 +478,7 @@ class SignalLedger:
             return updated_count
 
     def get_prospective_signals(self, symbol: str = "AAPL") -> List[Dict[str, Any]]:
-        """Retrieves all untouched prospective signals in chronological order."""
+        """Retrieves all untouched prospective signals in chronological order with dynamic New York display."""
         symbol = symbol.upper().strip()
         with self._get_connection() as conn:
             rows = conn.execute(
@@ -416,7 +490,17 @@ class SignalLedger:
                 (symbol,),
             ).fetchall()
 
-        return [dict(r) for r in rows]
+        signals = []
+        for r in rows:
+            d = dict(r)
+            if d.get("expected_execution_price") is None and d.get("execution_price") is not None:
+                d["expected_execution_price"] = d["execution_price"]
+            # Expose dynamic America/New_York display formatting
+            d["source_candle_display"] = format_new_york_display(d["source_candle_timestamp"])
+            d["signal_generation_display"] = format_new_york_display(d["signal_generation_timestamp"])
+            d["execution_target_display"] = format_new_york_display(d["execution_target_timestamp"])
+            signals.append(d)
+        return signals
 
     def get_prospective_summary(self, symbol: str = "AAPL") -> Dict[str, Any]:
         """
@@ -563,13 +647,17 @@ class SignalLedger:
                     "signal_state": "CONFIRMED",
                     "is_provisional": False,
                     "source_candle_timestamp": meta.get(
-                        "source_candle_timestamp", f"{r['bar_timestamp']} 16:00:00 EST"
+                        "source_candle_timestamp",
+                        format_new_york_display(f"{r['bar_timestamp']} 16:00:00"),
                     ),
                     "signal_generation_timestamp": meta.get(
                         "signal_generation_timestamp", r["timestamp"]
                     ),
                     "execution_timestamp": meta.get(
-                        "execution_timestamp", f"{r['execution_target_bar']} 09:30:00 EST"
+                        "execution_timestamp",
+                        format_new_york_display(f"{r['execution_target_bar']} 09:30:00")
+                        if r["execution_target_bar"] != "NEXT_SESSION_OPEN"
+                        else "NEXT_SESSION_OPEN 09:30:00 ET",
                     ),
                 }
             )

@@ -1,8 +1,10 @@
 {
   "strategy_version": "HYDRA_PROSPECTIVE_V1.0",
-  "freeze_timestamp_utc": "2026-09-30T10:30:00Z",
-  "freeze_session_edt": "2026-09-30 00:00:00 EDT",
-  "git_commit": "a956aacd983502fabc26f8f3843dc8ee5bac0d5f",
+  "freeze_timestamp_utc": "2026-09-30T10:39:57Z",
+  "freeze_timestamp_new_york": "2026-09-30T06:39:57-04:00",
+  "freeze_display_new_york": "2026-09-30 06:39:57 EDT",
+  "freeze_session_edt": "2026-09-30 06:39:57 EDT",
+  "git_commit": "355b77020913be7ae8aa6305dd25fa265ed0365a",
   "status": "FROZEN_FOR_PROSPECTIVE_VALIDATION",
   "anti_overfitting_lock": true,
   "model_hashes": {
@@ -22,9 +24,82 @@
   },
   "code_hashes": {
     "live_inference.py": "9d353993ef133c1bebd9098f34194dc76bcefccc2434bba8401c2840e8c8a17f",
-    "inference_service.py": "e44d5cdaffd21607b5239fa279ab101d3ac87e691e88fbb39104b2fd5b961045",
-    "signal_ledger.py": "eae66436f9e7fc28fb6195b6a4b57fe03b134c63da90683244adf9fc7f30034f",
+    "inference_service.py": "b88bdfb9ebc99a7876ceae94f6828941b08b684ca15f5e572eb150229f80ea2b",
+    "signal_ledger.py": "81b71baccd81d1ebed3757500e6f8b2d1eb4baa8b97cec1961971ba73361c99a",
     "backtest_service.py": "faa7afcefb8799e5b90763c3b01c329a55d1ba960b2cd8ded747cbf0ce47a04b"
+  },
+  "model_provenance": {
+    "core_model_training": {
+      "components": [
+        "xgb_ensemble.json",
+        "lgbm_agent.joblib",
+        "latest_fusion_weights.weights.h5",
+        "tft_quantile_weights.weights.h5"
+      ],
+      "start_date": "2019-01-02",
+      "end_date": "2023-12-29",
+      "description": "5-year core feature and multi-branch ML neural network training partition"
+    },
+    "scaler_fitting": {
+      "components": [
+        "latest_scaler.joblib"
+      ],
+      "start_date": "2019-01-02",
+      "end_date": "2023-12-29",
+      "description": "Robust feature normalization fitted strictly on core training set to prevent scaling snooping"
+    },
+    "downstream_calibration": {
+      "components": [
+        "model_calibrator.joblib"
+      ],
+      "start_date": "2024-01-02",
+      "end_date": "2024-06-06",
+      "description": "Isotonic probability calibrator fitted on out-of-fold validation set"
+    },
+    "meta_ensemble_training": {
+      "components": [
+        "meta_ensemble.joblib"
+      ],
+      "start_date": "2024-01-02",
+      "end_date": "2024-06-06",
+      "description": "Stacking meta-learner weighting raw branch probabilities on validation set"
+    },
+    "dqn_rl_training": {
+      "components": [
+        "dqn_model.pth"
+      ],
+      "start_date": "2024-01-02",
+      "end_date": "2024-06-06",
+      "description": "Deep Q-Network sequential policy replay trained on validation set state transitions"
+    },
+    "hyperparameter_optimization": {
+      "components": [
+        "optimized_params_AAPL.json",
+        "model_params.yaml"
+      ],
+      "start_date": "2020-01-01",
+      "end_date": "2026-09-28",
+      "description": "Optuna study for barrier ATR multipliers, cooldown, and probability threshold on preliminary historical evidence"
+    },
+    "prospective_validation": {
+      "dataset": "UNTOUCHED_FORWARD_VALIDATION",
+      "freeze_timestamp_utc": "2026-09-30T10:39:57Z",
+      "freeze_timestamp_new_york": "2026-09-30 06:39:57 EDT",
+      "start_date": "2026-09-30",
+      "first_signal_date": "2026-09-30",
+      "first_execution_date": "2026-10-01",
+      "description": "Untouched forward out-of-sample paper trading experiment"
+    }
+  },
+  "prospective_sequence": {
+    "strategy_freeze_utc": "2026-09-30T10:39:57Z",
+    "strategy_freeze_new_york": "2026-09-30 06:39:57 EDT",
+    "first_eligible_completed_candle_utc": "2026-09-30T20:00:00Z",
+    "first_eligible_completed_candle_new_york": "2026-09-30 16:00:00 EDT",
+    "first_prospective_signal_utc": "2026-09-30T20:00:02Z",
+    "first_prospective_signal_new_york": "2026-09-30 16:00:02 EDT",
+    "first_next_session_execution_utc": "2026-10-01T13:30:00Z",
+    "first_next_session_execution_new_york": "2026-10-01 09:30:00 EDT"
   },
   "frozen_hyperparameters": {
     "target_symbol": "AAPL",
@@ -49,6 +124,8 @@
     },
     "execution_assumptions": {
       "slippage_bps": 5.0,
+      "buy_execution_formula": "Open[t+1] * (1 + 0.0005)",
+      "sell_execution_formula": "Open[t+1] * (1 - 0.0005)",
       "commission_per_share_usd": 0.005
     }
   },
