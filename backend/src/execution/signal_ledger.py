@@ -106,6 +106,13 @@ class SignalLedger:
         """
         symbol = symbol.upper().strip()
         now_utc = datetime.now(timezone.utc).isoformat()
+
+        # Zero-Repainting Mandate: Provisional signals must never enter the immutable confirmed ledger
+        if metadata and (metadata.get("is_provisional") or metadata.get("signal_state") == "PROVISIONAL"):
+            logger.warning(
+                f"[LEDGER REJECTED] {symbol} @ {bar_timestamp}: Cannot commit PROVISIONAL signal to immutable confirmed ledger."
+            )
+            return False
         metadata_json = json.dumps(metadata or {}, sort_keys=True)
 
         with self._get_connection() as conn:
@@ -176,6 +183,7 @@ class SignalLedger:
 
         signals = []
         for r in rows:
+            meta = json.loads(r["metadata"]) if r["metadata"] else {}
             signals.append(
                 {
                     "timestamp": r["timestamp"],
@@ -191,7 +199,18 @@ class SignalLedger:
                     "price": r["execution_price"],  # For chart compatibility
                     "model_version": r["model_version"],
                     "raw_features_hash": r["raw_features_hash"],
-                    "metadata": json.loads(r["metadata"]),
+                    "metadata": meta,
+                    "signal_state": "CONFIRMED",
+                    "is_provisional": False,
+                    "source_candle_timestamp": meta.get(
+                        "source_candle_timestamp", f"{r['bar_timestamp']} 16:00:00 EST"
+                    ),
+                    "signal_generation_timestamp": meta.get(
+                        "signal_generation_timestamp", r["timestamp"]
+                    ),
+                    "execution_timestamp": meta.get(
+                        "execution_timestamp", f"{r['execution_target_bar']} 09:30:00 EST"
+                    ),
                 }
             )
         return signals

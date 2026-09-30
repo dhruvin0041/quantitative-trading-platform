@@ -151,25 +151,39 @@ export function PriceChart({ data, loading }: PriceChartProps) {
       forecastP10Ref.current.setData(data.forecast_fan.map((f: { time: string; p10: number }) => ({ time: f.time, value: f.p10 })));
     }
 
+    // Zero-Repainting Mandate: Confirmed markers ONLY from closed candles
     const rawMarkers = data.historical_markers || data.markers || [];
-    if (rawMarkers && rawMarkers.length > 0) {
-      const validMarkers = rawMarkers
-        .filter(m => m.action === 'BUY' || m.action === 'SELL')
-        .sort((a, b) => new Date(a.time as string).getTime() - new Date(b.time as string).getTime());
+    const validMarkers = rawMarkers
+      .filter(m => (m.action === 'BUY' || m.action === 'SELL') && !m.is_provisional)
+      .sort((a, b) => new Date(a.time as string).getTime() - new Date(b.time as string).getTime());
 
-      const markers = validMarkers.map((marker) => {
-          const isBuy = marker.action === 'BUY';
-          return {
-            time: marker.time,
-            position: (isBuy ? "belowBar" : "aboveBar") as "belowBar" | "aboveBar",
-            color: isBuy ? "#10B981" : "#EF4444",
-            shape: (isBuy ? "arrowUp" : "arrowDown") as "arrowUp" | "arrowDown",
-            text: "",
-            size: 2,
-          };
-        });
-        
-        createSeriesMarkers(candlestickSeriesRef.current, markers);
+    const markers = validMarkers.map((marker) => {
+      const isBuy = marker.action === 'BUY';
+      return {
+        time: marker.time,
+        position: (isBuy ? "belowBar" : "aboveBar") as "belowBar" | "aboveBar",
+        color: isBuy ? "#10B981" : "#EF4444",
+        shape: (isBuy ? "arrowUp" : "arrowDown") as "arrowUp" | "arrowDown",
+        text: "",
+        size: 2,
+      };
+    });
+
+    // If an intraday forming candle has an estimate, render it separately with explicit PROVISIONAL styling
+    if (data.provisional_marker && data.provisional_marker.action) {
+      const prov = data.provisional_marker;
+      markers.push({
+        time: prov.time,
+        position: prov.position as "belowBar" | "aboveBar",
+        color: "#F59E0B", // Amber warning color
+        shape: prov.shape as "arrowUp" | "arrowDown",
+        text: "PROV",
+        size: 1,
+      });
+    }
+
+    if (markers.length > 0) {
+      createSeriesMarkers(candlestickSeriesRef.current, markers);
     } else {
       createSeriesMarkers(candlestickSeriesRef.current, []);
     }
@@ -182,16 +196,53 @@ export function PriceChart({ data, loading }: PriceChartProps) {
         setLegendContent(null);
         return;
       }
+      // Check provisional marker first
+      if (data.provisional_marker && data.provisional_marker.time === param.time) {
+        const prov = data.provisional_marker;
+        setLegendContent(
+          <div className="flex flex-col gap-1 border-l-2 border-amber-500 pl-2">
+            <span className="text-[12px] font-bold uppercase text-amber-500 tracking-wider">
+              PROVISIONAL {prov.action} (UNCONFIRMED)
+            </span>
+            <span className="text-[10px] font-mono text-amber-400/90">
+              STATE: INTRADAY FORMING CANDLE
+            </span>
+            <span className="text-[10px] font-mono text-muted-foreground">
+              Source: Live temporary tick {prov.source_candle_timestamp || ""}
+            </span>
+            <span className="text-[10px] text-muted-foreground italic">
+              * Non-binding estimate. Confirmed only at 16:00 EST close.
+            </span>
+          </div>
+        );
+        return;
+      }
+
       if (data.historical_markers) {
         const marker = data.historical_markers.find(m => m.time === param.time);
         if (marker && marker.action !== 'HOLD') {
           const isVeto = marker.action.includes('VETO') || marker.action === 'VAR_LIMIT_BREACH';
+          const isBuy = marker.action === 'BUY';
           setLegendContent(
             <div className="flex flex-col gap-1">
-              <span className={cn("text-[12px] font-bold uppercase", isVeto ? "text-warning" : "text-foreground")}>
-                {isVeto ? 'RISK AGENT VETO' : `${marker.action} SIGNAL`}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className={cn("text-[12px] font-bold uppercase", isVeto ? "text-warning" : (isBuy ? "text-positive" : "text-negative"))}>
+                  {isVeto ? 'RISK AGENT VETO' : `CONFIRMED ${marker.action} SIGNAL`}
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-positive/10 text-positive font-mono uppercase">
+                  LOCKED
+                </span>
+              </div>
               <span className="text-[11px] font-mono text-muted-foreground">Confidence: {marker.probability || 0}%</span>
+              {marker.source_candle_timestamp && (
+                <span className="text-[10px] font-mono text-muted-foreground">Source Bar: {marker.source_candle_timestamp}</span>
+              )}
+              {marker.execution_timestamp && (
+                <span className="text-[10px] font-mono text-muted-foreground">Execution: {marker.execution_timestamp}</span>
+              )}
+              {marker.execution_price && (
+                <span className="text-[10px] font-mono text-muted-foreground">Exec Price: ${marker.execution_price}</span>
+              )}
               {marker.label && <span className="text-[11px] text-muted-foreground">{marker.label}</span>}
               {isVeto && <span className="text-[10px] text-negative font-mono mt-1 border-t border-border pt-1">Reason: Sector Crowding / VaR</span>}
             </div>

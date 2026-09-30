@@ -11,7 +11,10 @@ interface TradeCardProps {
 export const TradeCard: React.FC<TradeCardProps> = ({ data, currency }) => {
   if (!data) return null;
 
-  const action = data.signal || "HOLD";
+  const isProvisional = Boolean(data.is_bar_forming || data.signal_state === 'PROVISIONAL');
+  const action = isProvisional 
+    ? (data.provisional_signal || "HOLD")
+    : (data.signal || "HOLD");
   const confidence = data.confidence_score || 0;
   
   // Assume some mock data or derived data for sizing if not present
@@ -58,11 +61,45 @@ export const TradeCard: React.FC<TradeCardProps> = ({ data, currency }) => {
   return (
     <div className="flex flex-col bg-card border border-border rounded-xl overflow-y-auto shadow-lg h-full min-h-[360px] custom-scrollbar">
       
+      {/* PROVISIONAL / CAUSAL STATE BANNER */}
+      {isProvisional ? (
+        <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="inline-block w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+            <span className="text-[11px] font-black text-amber-500 uppercase tracking-widest">
+              PROVISIONAL / UNCONFIRMED
+            </span>
+          </div>
+          <span className="text-[10px] font-mono bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded">
+            BAR FORMING
+          </span>
+        </div>
+      ) : (
+        <div className="bg-emerald-500/10 border-b border-emerald-500/20 px-4 py-2 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+            <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-widest">
+              CONFIRMED CAUSAL SIGNAL
+            </span>
+          </div>
+          <span className="text-[10px] font-mono bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded">
+            LOCKED
+          </span>
+        </div>
+      )}
+
       {/* HEADER: Action & Confidence */}
-      <div className={cn("px-4 py-4 border-b flex items-center justify-between", actionBg)}>
+      <div className={cn("px-4 py-4 border-b flex items-center justify-between", isProvisional ? "bg-amber-500/10 border-amber-500/20" : actionBg)}>
         <div className="flex flex-col">
-          <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Signal Action</span>
-          <span className={cn("text-[24px] font-black uppercase leading-none tracking-tight", actionColor)}>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Signal Action</span>
+            {isProvisional && (
+              <span className="text-[9px] font-mono px-1.5 py-0.2 bg-amber-500/20 text-amber-400 rounded">
+                ESTIMATE
+              </span>
+            )}
+          </div>
+          <span className={cn("text-[24px] font-black uppercase leading-none tracking-tight", isProvisional ? "text-amber-500" : actionColor)}>
             {action}
           </span>
         </div>
@@ -71,6 +108,18 @@ export const TradeCard: React.FC<TradeCardProps> = ({ data, currency }) => {
           <span className="text-[24px] font-mono font-black text-foreground leading-none tabular-nums">
             {confidence.toFixed(1)}%
           </span>
+        </div>
+      </div>
+
+      {/* CAUSAL TIMING SUB-BANNER */}
+      <div className="px-4 py-2 bg-muted/20 border-b border-border text-[10px] font-mono text-muted-foreground flex flex-col gap-0.5">
+        <div className="flex justify-between">
+          <span>Source Candle:</span>
+          <span className="text-foreground">{data.source_candle_timestamp || "Previous Day Close (16:00 EST)"}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Execution Target:</span>
+          <span className="text-foreground">{data.execution_timestamp || data.execution_target_bar || "Next Session Open (09:30 EST)"}</span>
         </div>
       </div>
 
@@ -191,12 +240,20 @@ export const TradeCard: React.FC<TradeCardProps> = ({ data, currency }) => {
           }
         </p>
         <button 
-          disabled={action === 'VETOED'}
+          disabled={action === 'VETOED' || isProvisional}
           className={cn(
             "mt-4 w-full py-2.5 rounded text-white text-[13px] font-bold transition-colors flex items-center justify-center gap-2",
-            action === 'VETOED' ? "bg-muted text-muted-foreground cursor-not-allowed" : "bg-primary hover:bg-primary/90"
+            (action === 'VETOED' || isProvisional) 
+              ? "bg-muted text-muted-foreground cursor-not-allowed" 
+              : "bg-primary hover:bg-primary/90"
           )}>
-          Execute Trade <ArrowRight className="w-4 h-4" />
+          {isProvisional ? (
+            <>Pending Bar Close (16:00 EST)</>
+          ) : action === 'VETOED' ? (
+            <>Vetoed by Risk Agent</>
+          ) : (
+            <>Execute Trade at Next Open <ArrowRight className="w-4 h-4" /></>
+          )}
         </button>
       </div>
       

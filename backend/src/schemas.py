@@ -223,6 +223,16 @@ class PredictResponse(BaseModel):
 
     qualitative_citations: Optional[List[Dict[str, Any]]] = None
 
+    # Causal Execution and Transparency Mandate
+    signal_state: str = "CONFIRMED"  # CONFIRMED | PROVISIONAL | HOLD | NO_SIGNAL
+    is_bar_forming: bool = False
+    bar_state: str = "CONFIRMED"  # CONFIRMED | FORMING
+    provisional_signal: Optional[str] = None
+    provisional_marker: Optional[Dict[str, Any]] = None
+    signal_generation_timestamp: Optional[str] = None
+    source_candle_timestamp: Optional[str] = None
+    execution_timestamp: Optional[str] = None
+
 
 class UniverseStockItem(BaseModel):
     ticker: str

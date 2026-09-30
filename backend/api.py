@@ -286,7 +286,7 @@ async def get_stock_universe():
                             ticker_series = data["Close"][t].dropna()
                         else:
                             ticker_series = data["Close"].dropna()
-                            
+
                         if len(ticker_series) >= 2:
                             curr = float(ticker_series.iloc[-1])
                             prev = float(ticker_series.iloc[-2])

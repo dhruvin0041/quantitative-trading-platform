@@ -212,7 +212,19 @@ def run_backtest():
                 pass
 
             if signal in ["BUY", "SELL"]:
-                actual_ret = current_row["future_5d_ret"]
+                # Causal next-session execution: Signal known at close of Day i -> executes at Day i+1 Open
+                if i + 1 < len(df):
+                    next_row = df.iloc[i + 1]
+                    exec_date = df.index[i + 1].strftime("%Y-%m-%d")
+                    entry_price = float(next_row["Open"]) * (1.0005 if signal == "BUY" else 0.9995)
+                    exit_idx = min(i + 5, len(df) - 1)
+                    exit_price = float(df["Close"].iloc[exit_idx])
+                    actual_ret = (exit_price / entry_price) - 1.0
+                else:
+                    exec_date = "NEXT_SESSION_OPEN"
+                    entry_price = float(current_row["Close"])
+                    actual_ret = 0.0
+
                 was_correct = (signal == "BUY" and actual_ret > 0) or (
                     signal == "SELL" and actual_ret < 0
                 )
@@ -220,6 +232,7 @@ def run_backtest():
                 trades.append(
                     {
                         "date": date.strftime("%Y-%m-%d"),
+                        "execution_date": exec_date,
                         "ticker": ticker,
                         "signal": signal,
                         "confidence": round(confidence, 1),
@@ -229,7 +242,7 @@ def run_backtest():
                         "atr_value": current_row.get(
                             "ATR", current_row["Close"] * 0.02
                         ),
-                        "entry_price": current_row["Close"],
+                        "entry_price": round(entry_price, 2),
                     }
                 )
             elif signal == "VETOED":

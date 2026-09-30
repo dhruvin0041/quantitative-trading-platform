@@ -70,8 +70,9 @@ def run_backtest(ticker="AAPL", start_date="2023-01-01", end_date=None):
     common_idx = df_filtered.index.intersection(peer_filtered.index)
     df_filtered = df_filtered.loc[common_idx]
     peer_filtered = peer_filtered.loc[common_idx]
+    target_df = df.loc[common_idx]
 
-    # 3. Simulate
+    # 3. Simulate with Realistic Next-Session Causal Execution
     capital = 100000
     shares = 0
     equity_curve = []
@@ -85,8 +86,38 @@ def run_backtest(ticker="AAPL", start_date="2023-01-01", end_date=None):
     w_xgb = accs["xgb_accuracy"] / total_acc
     w_dqn = accs["dqn_accuracy"] / total_acc
 
+    # Causal Execution Mandate:
+    # Signals generated at Day t Close (16:00 EST) execute on Day t+1 Open (09:30 EST)
+    slippage = 0.001  # 0.1% (10 bps)
+    commission_per_share = 0.005
+    pending_order = None
+    pending_position_size = 0.0
+
     for i in range(time_steps - 1, len(df_filtered)):
-        # Prep inputs using data up to the current day (i)
+        # 1. MORNING EXECUTION (09:30 EST): Fill pending order from Day i-1 close at Day i Open
+        open_price = float(target_df["Open"].iloc[i])
+        if pending_order == "BUY":
+            buy_price = open_price * (1 + slippage)
+            max_spend = capital * pending_position_size
+            buy_shares = int(max_spend / buy_price)
+            if buy_shares > 0:
+                shares += buy_shares
+                capital -= (buy_shares * buy_price) + (
+                    buy_shares * commission_per_share
+                )
+            pending_order = None
+        elif pending_order == "SELL" and shares > 0:
+            sell_price = open_price * (1 - slippage)
+            capital += (shares * sell_price) - (shares * commission_per_share)
+            shares = 0
+            pending_order = None
+
+        # 2. MARKET CLOSE (16:00 EST): Evaluate Day i portfolio equity
+        close_price = float(target_df["Close"].iloc[i])
+        current_equity = capital + (shares * close_price)
+        equity_curve.append(current_equity)
+
+        # 3. POST-CLOSE INFERENCE (16:00+ EST): Compute signal using strictly trailing data up to i
         recent_data = df_filtered.iloc[i - time_steps + 1 : i + 1].values
         peer_recent = peer_filtered.iloc[i - time_steps + 1 : i + 1].values
 
@@ -120,44 +151,29 @@ def run_backtest(ticker="AAPL", start_date="2023-01-01", end_date=None):
         ensemble_p = (ensemble_p * (1 - w_dqn)) + (dqn_p * w_dqn)
 
         final_signal = np.argmax(ensemble_p)
-        confidence = ensemble_p[final_signal]
-        current_price = df_filtered.iloc[i]["Close"]
+        confidence = float(ensemble_p[final_signal])
 
         # Institutional Risk Management: Drawdown Circuit Breaker
-        current_equity = capital + (shares * current_price)
         peak_equity = max(max(equity_curve) if equity_curve else capital, capital)
         if current_equity < peak_equity * 0.80 and shares > 0:
             print(
-                f"[{df_filtered.index[i]}] Circuit Breaker Triggered! 20% Drawdown reached. Liquidating."
+                f"[{df_filtered.index[i]}] Circuit Breaker Triggered! 20% Drawdown reached. Liquidating at next open."
             )
             final_signal = 0
             confidence = 1.0
 
-        # Institutional assumptions: Slippage and Commission
-        slippage = 0.001  # 0.1%
-        commission_per_share = 0.005
-
-        # INSTITUTIONAL UPGRADE: Kelly Sizing
+        # Queue order for NEXT TRADING SESSION (i+1 Open)
         kelly_fraction = calculate_full_kelly(0.55, 1.2)  # Defaults from risk_manager
         position_size_pct = kelly_fraction * confidence
 
         if final_signal == 2 and confidence > 0.7:
-            # BUY using Kelly
-            max_spend = capital * position_size_pct
-            buy_price = current_price * (1 + slippage)
-            buy_shares = int(max_spend / buy_price)
-            if buy_shares > 0:
-                shares += buy_shares
-                capital -= (buy_shares * buy_price) + (
-                    buy_shares * commission_per_share
-                )
+            pending_order = "BUY"
+            pending_position_size = position_size_pct
         elif final_signal == 0 and confidence > 0.7 and shares > 0:
-            # SELL All
-            sell_price = current_price * (1 - slippage)
-            capital += (shares * sell_price) - (shares * commission_per_share)
-            shares = 0
-
-        equity_curve.append(capital + (shares * current_price))
+            pending_order = "SELL"
+            pending_position_size = 0.0
+        else:
+            pending_order = None
 
     return equity_curve, df_filtered.index[time_steps - 1 :]
 

@@ -23,6 +23,7 @@ from src.execution.governance_engine import SignalGovernanceAnalytics
 from src.execution.live_inference import (
     FEATURE_COLUMNS,
     add_upgraded_features,
+    check_bar_forming_status,
     compute_shap_explanation,
     fetch_live_data,
     fetch_live_news,
@@ -181,6 +182,13 @@ class InferenceService:
             if len(all_probs) == 1 and len(valid_indices) > 1:
                 all_probs = np.tile(all_probs, (len(valid_indices), 1))
 
+            # Zero-Repainting Mandate: Determine if the last candle in ticker_df is forming
+            is_forming, _ = check_bar_forming_status(ticker_df)
+            if is_forming and len(valid_indices) > 0:
+                # Strictly exclude the unfinished candle from confirmed signal evaluation
+                valid_indices = valid_indices[:-1]
+                all_probs = all_probs[:-1]
+
             # SMA200 and SPY SMA50 for causal macro trend filter
             close_s = df["Close"].reindex(valid_indices).ffill()
             sma200_s = close_s.rolling(window=200, min_periods=20).mean()
@@ -268,14 +276,16 @@ class InferenceService:
                         exec_target = (
                             next_idx.strftime("%Y-%m-%d")
                             if hasattr(next_idx, "strftime")
-                            else str(next_idx)
+                            else str(next_idx)[:10]
                         )
                         exec_price = (
                             float(df["Open"].iloc[orig_idx + 1]) * 1.0005
                         )  # 5 bps slippage
+                        exec_time_str = f"{exec_target} 09:30:00 EST"
                     else:
                         exec_target = "NEXT_SESSION_OPEN"
                         exec_price = float(df["Close"].iloc[orig_idx]) * 1.0005
+                        exec_time_str = "NEXT_SESSION_OPEN 09:30:00 EST"
 
                     self.signal_ledger.record_signal(
                         symbol=ticker,
@@ -291,6 +301,11 @@ class InferenceService:
                         metadata={
                             "source": "causal_replay",
                             "rule": "Open[t+1] + 5bps",
+                            "source_candle_timestamp": f"{bar_time} 16:00:00 EST",
+                            "signal_generation_timestamp": f"{bar_time} 16:00:00 EST",
+                            "execution_timestamp": exec_time_str,
+                            "execution_price": round(exec_price, 2),
+                            "signal_state": "CONFIRMED",
                         },
                     )
 
@@ -306,14 +321,16 @@ class InferenceService:
                         exec_target = (
                             next_idx.strftime("%Y-%m-%d")
                             if hasattr(next_idx, "strftime")
-                            else str(next_idx)
+                            else str(next_idx)[:10]
                         )
                         exec_price = (
                             float(df["Open"].iloc[orig_idx + 1]) * 0.9995
                         )  # 5 bps slippage
+                        exec_time_str = f"{exec_target} 09:30:00 EST"
                     else:
                         exec_target = "NEXT_SESSION_OPEN"
                         exec_price = float(df["Close"].iloc[orig_idx]) * 0.9995
+                        exec_time_str = "NEXT_SESSION_OPEN 09:30:00 EST"
 
                     self.signal_ledger.record_signal(
                         symbol=ticker,
@@ -329,6 +346,11 @@ class InferenceService:
                         metadata={
                             "source": "causal_replay",
                             "rule": "Open[t+1] - 5bps",
+                            "source_candle_timestamp": f"{bar_time} 16:00:00 EST",
+                            "signal_generation_timestamp": f"{bar_time} 16:00:00 EST",
+                            "execution_timestamp": exec_time_str,
+                            "execution_price": round(exec_price, 2),
+                            "signal_state": "CONFIRMED",
                         },
                     )
 
@@ -338,7 +360,7 @@ class InferenceService:
                 last_bar_time = (
                     last_v_idx.strftime("%Y-%m-%d")
                     if hasattr(last_v_idx, "strftime")
-                    else str(last_v_idx)
+                    else str(last_v_idx)[:10]
                 )
                 self.signal_ledger.record_signal(
                     symbol=ticker,
@@ -346,10 +368,16 @@ class InferenceService:
                     signal="HOLD" if current_pos == "FLAT" else "HOLD_LONG",
                     confidence=0.5,
                     execution_target_bar="NEXT_SESSION_OPEN",
-                    execution_price=round(float(df["Close"].iloc[-1]), 2),
+                    execution_price=round(float(df["Close"].loc[last_v_idx]), 2),
                     model_version="Institutional_Mesh_V2.1",
                     raw_features_hash="latest_bar_marker",
-                    metadata={"source": "causal_replay_checkpoint"},
+                    metadata={
+                        "source": "causal_replay_checkpoint",
+                        "source_candle_timestamp": f"{last_bar_time} 16:00:00 EST",
+                        "signal_generation_timestamp": f"{last_bar_time} 16:00:00 EST",
+                        "execution_timestamp": "NEXT_SESSION_OPEN 09:30:00 EST",
+                        "signal_state": "CONFIRMED",
+                    },
                 )
 
             return self.signal_ledger.get_signals(
@@ -368,29 +396,34 @@ class InferenceService:
     ) -> List[Dict[str, Any]]:
         """
         Retrieves verified causal markers from the immutable SignalLedger.
-        If the ledger does not have existing signals for this ticker up to the latest bar,
-        it executes a point-in-time sequential replay using strictly trailing data (t <= bar),
+        If the ledger does not have existing signals for this ticker up to the latest completed bar,
+        it executes a point-in-time sequential replay using strictly trailing completed data (t <= bar),
         commits the signals to the ledger, and returns them.
         """
-        latest_bar_date = None
+        latest_completed_bar_date = None
         if ticker_df is not None and not ticker_df.empty:
-            last_idx = ticker_df.index[-1]
-            latest_bar_date = (
-                last_idx.strftime("%Y-%m-%d")
-                if hasattr(last_idx, "strftime")
-                else str(last_idx)[:10]
-            )
+            is_forming, _ = check_bar_forming_status(ticker_df)
+            completed_slice = ticker_df.iloc[:-1] if is_forming and len(ticker_df) > 1 else ticker_df
+            if not completed_slice.empty:
+                last_idx = completed_slice.index[-1]
+                latest_completed_bar_date = (
+                    last_idx.strftime("%Y-%m-%d")
+                    if hasattr(last_idx, "strftime")
+                    else str(last_idx)[:10]
+                )
 
         latest_ledger_bar = self.signal_ledger.get_latest_bar_timestamp(ticker)
 
         if (
-            latest_bar_date is not None
+            latest_completed_bar_date is not None
             and latest_ledger_bar is not None
-            and latest_ledger_bar >= latest_bar_date
+            and latest_ledger_bar >= latest_completed_bar_date
         ):
-            return self.signal_ledger.get_signals(
+            all_signals = self.signal_ledger.get_signals(
                 symbol=ticker, actions_filter=["BUY", "SELL"]
             )
+            # Only return markers up to the completed bar; forming bar is NEVER included
+            return [s for s in all_signals if s.get("bar_timestamp", "") <= latest_completed_bar_date]
 
         return self._replay_causal_ml_signals(ticker, ticker_df, spy_df)
 
@@ -813,7 +846,7 @@ class InferenceService:
             bar_date = (
                 last_idx.strftime("%Y-%m-%d")
                 if hasattr(last_idx, "strftime")
-                else str(last_idx)
+                else str(last_idx)[:10]
             )
         else:
             bar_date = datetime.now().strftime("%Y-%m-%d")
@@ -827,19 +860,56 @@ class InferenceService:
         else:
             exec_price = round(current_price, 2)
 
+        # Causal Signal States Mandate: CONFIRMED vs PROVISIONAL
+        if is_bar_forming:
+            signal_state = "PROVISIONAL"
+            provisional_signal = final_signal if final_signal in ["BUY", "SELL"] else None
+            confirmed_signal = "HOLD"
+            provisional_marker = {
+                "time": bar_date,
+                "action": provisional_signal,
+                "position": "belowBar" if provisional_signal == "BUY" else "aboveBar",
+                "color": "#F59E0B",
+                "shape": "arrowUp" if provisional_signal == "BUY" else "arrowDown",
+                "text": f"PROVISIONAL {provisional_signal} (UNCONFIRMED)",
+                "signal_state": "PROVISIONAL",
+                "is_provisional": True,
+                "source_candle_timestamp": f"{bar_date} (FORMING)",
+                "execution_target": "PENDING_BAR_CLOSE",
+                "execution_price": exec_price,
+            } if provisional_signal else None
+            sig_gen_time = f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} (INTRADAY)"
+            source_candle_time = f"{bar_date} (FORMING)"
+            exec_time = "PENDING_BAR_CLOSE"
+        else:
+            signal_state = "CONFIRMED"
+            provisional_signal = None
+            provisional_marker = None
+            confirmed_signal = final_signal
+            sig_gen_time = f"{bar_date} 16:00:00 EST"
+            source_candle_time = f"{bar_date} 16:00:00 EST"
+            exec_time = "NEXT_SESSION_OPEN 09:30:00 EST"
+
+        response_data["signal"] = confirmed_signal
+        response_data["signal_state"] = signal_state
         response_data["is_bar_forming"] = is_bar_forming
         response_data["bar_state"] = bar_state
         response_data["provisional"] = is_bar_forming
+        response_data["provisional_signal"] = provisional_signal
+        response_data["provisional_marker"] = provisional_marker
+        response_data["source_candle_timestamp"] = source_candle_time
+        response_data["signal_generation_timestamp"] = sig_gen_time
+        response_data["execution_timestamp"] = exec_time
         response_data["execution_target_bar"] = execution_target
         response_data["execution_price"] = exec_price
 
         # Zero-Repainting Mandate: Commit confirmed signals to immutable SQLite ledger
-        if not is_bar_forming and final_signal in ["BUY", "SELL", "HOLD"]:
+        if not is_bar_forming and confirmed_signal in ["BUY", "SELL", "HOLD"]:
             features_hash = SignalLedger.compute_features_hash(tabular_row)
             self.signal_ledger.record_signal(
                 symbol=ticker,
                 bar_timestamp=bar_date,
-                signal=final_signal,
+                signal=confirmed_signal,
                 confidence=float(calibrated_prob / 100.0),
                 execution_target_bar=execution_target,
                 execution_price=exec_price,
@@ -851,6 +921,11 @@ class InferenceService:
                     "regime": regime_detailed,
                     "signal_note": signal_note,
                     "agreement_score": agreement_data["agreement_score"],
+                    "source_candle_timestamp": source_candle_time,
+                    "signal_generation_timestamp": sig_gen_time,
+                    "execution_timestamp": exec_time,
+                    "execution_price": exec_price,
+                    "signal_state": "CONFIRMED",
                 },
             )
 
@@ -872,6 +947,19 @@ class InferenceService:
         )
         response_data.update(reporting_data)
         response_data["signal_id"] = signal_id
+
+        # Preserve the causal fields after package_chart_data update
+        response_data["signal"] = confirmed_signal
+        response_data["signal_state"] = signal_state
+        response_data["is_bar_forming"] = is_bar_forming
+        response_data["bar_state"] = bar_state
+        response_data["provisional_signal"] = provisional_signal
+        response_data["provisional_marker"] = provisional_marker
+        response_data["source_candle_timestamp"] = source_candle_time
+        response_data["signal_generation_timestamp"] = sig_gen_time
+        response_data["execution_timestamp"] = exec_time
+        response_data["execution_target_bar"] = execution_target
+        response_data["execution_price"] = exec_price
 
         # Paper Trade Execution
         if auth_data["execution_state"] in ["EXECUTE LONG", "EXECUTE SHORT"]:

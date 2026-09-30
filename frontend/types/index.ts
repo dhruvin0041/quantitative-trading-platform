@@ -152,6 +152,30 @@ export interface ChartData {
   sentiment_score?: number;
   signal_note?: string | null;
   
+  // Causal Signal States and Timing Mandate
+  signal_state?: 'CONFIRMED' | 'PROVISIONAL' | 'HOLD' | 'NO_SIGNAL';
+  is_bar_forming?: boolean;
+  bar_state?: 'CONFIRMED' | 'FORMING';
+  provisional_signal?: string | null;
+  provisional_marker?: {
+    time: string;
+    action?: string;
+    position: 'belowBar' | 'aboveBar';
+    color: string;
+    shape: 'arrowUp' | 'arrowDown';
+    text: string;
+    signal_state: string;
+    is_provisional: boolean;
+    source_candle_timestamp?: string;
+    execution_target?: string;
+    execution_price?: number;
+  } | null;
+  signal_generation_timestamp?: string | null;
+  source_candle_timestamp?: string | null;
+  execution_timestamp?: string | null;
+  execution_target_bar?: string | null;
+  execution_price?: number | null;
+
   // Phase 3: Semantic Separation
   structural_regime: string;
   signal_bias: string;
@@ -241,8 +265,30 @@ export interface ChartData {
   clouds: { time: string; ribbon_upper: number; ribbon_lower: number; bb_upper: number; bb_lower: number; trailing_stop?: number | null }[];
   forecast_fan?: { time: string; p10: number; p50: number; p90: number }[];
   ai_report: AIReport; // Keep for legacy component compatibility
-  historical_markers: { time: string; action: string; probability: number; label?: string }[];
-  markers?: { time: string; action: string; probability: number; label?: string }[];
+  historical_markers: {
+    time: string;
+    action: string;
+    probability: number;
+    label?: string;
+    signal_state?: string;
+    is_provisional?: boolean;
+    execution_price?: number;
+    source_candle_timestamp?: string;
+    signal_generation_timestamp?: string;
+    execution_timestamp?: string;
+  }[];
+  markers?: {
+    time: string;
+    action: string;
+    probability: number;
+    label?: string;
+    signal_state?: string;
+    is_provisional?: boolean;
+    execution_price?: number;
+    source_candle_timestamp?: string;
+    signal_generation_timestamp?: string;
+    execution_timestamp?: string;
+  }[];
   portfolio: Portfolio;
   timestamp: string;
   metadata: AssetMetadata;
