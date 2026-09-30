@@ -45,7 +45,9 @@ from src.execution.paper_trading import PaperTradingEngine
 from src.execution.performance_analyzer import PerformanceAnalyzer
 from src.execution.reporting import ReportGenerator
 from src.execution.signal_journal import SignalJournal
+from src.execution.signal_ledger import SignalLedger
 from src.execution.smart_router import PredictiveSmartRouter
+from src.execution.strategy_governance import StrategyGovernanceEngine
 from src.models.model_loader import ModelManager
 from src.models.monitoring.drift_monitor import DriftMonitor
 from src.schemas import (
@@ -213,6 +215,8 @@ report_gen = ReportGenerator(kept_features_list)
 
 signal_journal = SignalJournal()
 validation_engine = ValidationAnalytics(signal_journal)
+signal_ledger = SignalLedger()
+governance_engine = StrategyGovernanceEngine()
 
 inference_service = InferenceService(
     model_manager,
@@ -429,6 +433,29 @@ async def get_fx_rates():
 @app.get("/validation", dependencies=[Depends(verify_api_key)])
 async def get_validation():
     return await asyncio.to_thread(validation_engine.get_full_dashboard_data)
+
+
+@app.get("/governance/status", dependencies=[Depends(verify_api_key)])
+async def get_governance_status():
+    return governance_engine.get_governance_status()
+
+
+@app.get("/prospective/summary", dependencies=[Depends(verify_api_key)])
+async def get_prospective_summary(ticker: str = "AAPL"):
+    ticker = sanitize_ticker(ticker)
+    summary = signal_ledger.get_prospective_summary(ticker)
+    summary["governance"] = governance_engine.get_governance_status()
+    return summary
+
+
+@app.get("/prospective/signals", dependencies=[Depends(verify_api_key)])
+async def get_prospective_signals(ticker: str = "AAPL"):
+    ticker = sanitize_ticker(ticker)
+    return {
+        "ticker": ticker,
+        "dataset": "UNTOUCHED_FORWARD_VALIDATION",
+        "signals": signal_ledger.get_prospective_signals(ticker),
+    }
 
 
 @app.post("/portfolio/base_currency", dependencies=[Depends(verify_api_key)])

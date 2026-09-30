@@ -81,4 +81,5 @@ backend/backtest_results/
 !backend/artifacts/latest_fusion_weights.weights.h5
 !backend/artifacts/latest_scaler.joblib
 !backend/artifacts/dqn_model.pth
+!backend/artifacts/frozen_strategy_manifest.json
 

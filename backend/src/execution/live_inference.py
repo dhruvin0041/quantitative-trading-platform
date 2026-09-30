@@ -175,7 +175,7 @@ def is_near_earnings(ticker):
         return False
 
 
-def add_upgraded_features(df, spy_df, vix_df):
+def add_upgraded_features(df, spy_df, vix_df, lag_vix: bool = True):
     # Ensure columns are flattened if MultiIndex exists
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
@@ -319,8 +319,17 @@ def add_upgraded_features(df, spy_df, vix_df):
     # Market Context Features - CROSS MARKET ALIGNMENT
     # Forward fill valid historical market prints and trim start date to valid overlap window
     df["SPY_Return"] = spy_close.pct_change().reindex(df.index).ffill().fillna(0.0)
-    df["VIX_Level"] = vix_close.reindex(df.index).ffill().fillna(20.0)
-    df["VIX_Change"] = vix_close.pct_change().reindex(df.index).ffill().fillna(0.0)
+    # Phase 3 Causal Purity Mandate:
+    # Cboe VIX settles at 16:15:00 ET, whereas AAPL equity closes at 16:00:00 ET.
+    # To guarantee zero lookahead bias from the 16:00-16:15 ET options window,
+    # VIX is strictly lagged by 1 day: VIX[t-1].
+    if lag_vix:
+        vix_lagged = vix_close.shift(1)
+        df["VIX_Level"] = vix_lagged.reindex(df.index).ffill().fillna(20.0)
+        df["VIX_Change"] = vix_lagged.pct_change().reindex(df.index).ffill().fillna(0.0)
+    else:
+        df["VIX_Level"] = vix_close.reindex(df.index).ffill().fillna(20.0)
+        df["VIX_Change"] = vix_close.pct_change().reindex(df.index).ffill().fillna(0.0)
     df["Relative_Strength"] = df["Return"] - df["SPY_Return"]
 
     # ==========================================

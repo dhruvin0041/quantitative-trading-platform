@@ -15,6 +15,16 @@ interface PaperTradingPerformanceProps {
 export function PaperTradingPerformance({ currency = '$' }: PaperTradingPerformanceProps) {
   return (
     <div className="flex flex-col gap-8">
+      {/* MANDATORY EVIDENCE CLASSIFICATION BANNER */}
+      <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        <span className="px-2.5 py-1 rounded text-[11px] font-bold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
+          PRELIMINARY HISTORICAL EVIDENCE
+        </span>
+        <p className="text-[12px] text-muted-foreground leading-relaxed">
+          The backtest metrics below (2024–2026) represent <strong className="text-foreground">Preliminary Historical Evidence</strong>. Because hyperparameters, probability thresholds, and cooldown rules were tuned using this historical period, these results must not be conflated with forward holdouts. Pure untouched forward tracking is monitored under <strong className="text-emerald-400">PROSPECTIVE PAPER TRADING</strong>.
+        </p>
+      </div>
+
       {/* PHASE 1: Signal Accuracy Intelligence */}
       <section>
         <div className="mb-4">

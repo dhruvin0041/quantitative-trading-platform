@@ -7,6 +7,7 @@ import { PortfolioAnalytics } from '@/components/dashboard/PortfolioAnalytics';
 import { RiskDashboard } from '@/components/dashboard/RiskDashboard';
 import { TechnicalSnapshot } from '@/components/dashboard/TechnicalSnapshot';
 import { PaperTradingPerformance } from '@/components/dashboard/PaperTradingPerformance';
+import { ProspectivePaperTrading } from '@/components/dashboard/ProspectivePaperTrading';
 import { IntegrityAudit } from '@/components/dashboard/IntegrityAudit';
 import { ChartData, UniverseStock } from '@/types';
 import { motion } from 'framer-motion';
@@ -17,7 +18,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { StockSearch } from '@/components/StockSearch';
 import { API_KEY, getBaseUrl } from '@/lib/config';
 
-type TabType = 'CONSENSUS' | 'RISK' | 'PORTFOLIO' | 'PERFORMANCE' | 'TECHNICAL';
+type TabType = 'CONSENSUS' | 'RISK' | 'PORTFOLIO' | 'PERFORMANCE' | 'PROSPECTIVE' | 'TECHNICAL';
 
 export default function HydraTerminal() {
   const [ticker, setTicker] = useState<string>("AAPL"); 
@@ -344,6 +345,7 @@ export default function HydraTerminal() {
               <div className="flex border-b border-border bg-card overflow-x-auto hide-scrollbar">
                 {[
                   { id: 'CONSENSUS', icon: Target, label: 'Model Consensus' },
+                  { id: 'PROSPECTIVE', icon: ShieldCheck, label: 'Prospective Paper Trading' },
                   { id: 'RISK', icon: Shield, label: 'Risk Engine' },
                   { id: 'PORTFOLIO', icon: Briefcase, label: 'Portfolio' },
                   { id: 'PERFORMANCE', icon: CheckCircle2, label: 'Validation Center' },
@@ -369,6 +371,11 @@ export default function HydraTerminal() {
                 {activeTab === 'CONSENSUS' && (
                   <div className="max-w-4xl">
                     <SignalIntelligence data={chartData} currency={currencySymbol} />
+                  </div>
+                )}
+                {activeTab === 'PROSPECTIVE' && (
+                  <div className="max-w-5xl">
+                    <ProspectivePaperTrading ticker={ticker} currency={currencySymbol} />
                   </div>
                 )}
                 {activeTab === 'RISK' && (

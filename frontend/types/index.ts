@@ -361,3 +361,84 @@ export interface PortfolioStatusResponse {
   timestamp: string;
 }
 
+export interface GovernanceStatus {
+  strategy_version: string;
+  freeze_timestamp_utc: string;
+  freeze_session_edt: string;
+  git_commit: string;
+  lock_active: boolean;
+  integrity_verified: boolean;
+  violations_count: number;
+  violations: string[];
+  frozen_hyperparameters: Record<string, unknown>;
+  validation_policy: {
+    checkpoints: number[];
+    metrics_tracked: string[];
+    minimum_samples_for_statistical_significance: number;
+  };
+}
+
+export interface ProspectiveSignal {
+  signal_id: string;
+  strategy_version: string;
+  symbol: string;
+  source_candle_timestamp: string;
+  signal_generation_timestamp: string;
+  signal: 'BUY' | 'SELL' | 'HOLD' | 'NO_SIGNAL';
+  probability: number;
+  confidence: number;
+  feature_hash: string;
+  model_hash: string;
+  execution_target_timestamp: string;
+  execution_price: number;
+  actual_market_open?: number | null;
+  slippage?: number | null;
+  commission?: number | null;
+  status: 'PENDING_EXECUTION' | 'EXECUTED' | 'COMPLETED';
+  outcome_evaluation_timestamp?: string | null;
+  return_1d?: number | null;
+  return_3d?: number | null;
+  return_5d?: number | null;
+  return_10d?: number | null;
+  outcome?: 'WIN' | 'LOSS' | 'SCRATCH' | null;
+  mae?: number | null;
+  mfe?: number | null;
+  dataset: string;
+  created_at: string;
+}
+
+export interface ProspectiveSummary {
+  strategy_version: string;
+  model_version: string;
+  validation_start_date: string;
+  dataset_label: string;
+  total_signals_generated: number;
+  confirmed_buy_signals: number;
+  confirmed_sell_signals: number;
+  hold_signals: number;
+  no_signal_count: number;
+  pending_outcomes: number;
+  completed_outcomes: number;
+  completed_trades_count: number;
+  pending_trades_count: number;
+  win_rate_1d: number;
+  win_rate_3d: number;
+  win_rate_5d: number;
+  win_rate_10d: number;
+  cumulative_return: number;
+  maximum_drawdown: number;
+  profit_factor: number;
+  average_win: number;
+  average_loss: number;
+  expectancy: number;
+  median_return: number;
+  exposure: number;
+  benchmark_buy_and_hold_return: number;
+  checkpoints: {
+    checkpoint_30_trades: { target: number; completed: number; reached: boolean; status: string };
+    checkpoint_50_trades: { target: number; completed: number; reached: boolean; status: string };
+    checkpoint_100_trades: { target: number; completed: number; reached: boolean; status: string };
+  };
+  governance?: GovernanceStatus;
+}
+
