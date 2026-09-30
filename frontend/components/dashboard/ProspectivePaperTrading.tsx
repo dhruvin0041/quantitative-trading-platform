@@ -345,9 +345,9 @@ export function ProspectivePaperTrading({ ticker = "AAPL", currency = "$" }: Pro
                       </td>
                       <td className="py-2 px-3">{(sig.probability * 100).toFixed(1)}%</td>
                       <td className="py-2 px-3 text-muted-foreground">{sig.execution_target_timestamp.slice(0, 10)}</td>
-                      <td className="py-2 px-3 text-right">{currency}{sig.execution_price.toFixed(2)}</td>
+                      <td className="py-2 px-3 text-right">{currency}{(sig.signal_reference_price ?? sig.execution_price ?? 0).toFixed(2)}</td>
                       <td className="py-2 px-3 text-right">
-                        {sig.actual_market_open ? `${currency}${sig.actual_market_open.toFixed(2)}` : '---'}
+                        {(sig.market_open_price ?? sig.actual_market_open) ? `${currency}${(sig.market_open_price ?? sig.actual_market_open)!.toFixed(2)}` : '---'}
                       </td>
                       <td className={cn(
                         "py-2 px-3 text-right font-bold",

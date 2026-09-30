@@ -397,13 +397,28 @@ export interface ProspectiveSignal {
   feature_hash: string;
   model_hash: string;
   execution_target_timestamp: string;
+
+  // SIGNAL-GENERATION-TIME FIELD (immutable, known at bar close)
+  signal_reference_price: number;            // Close[t] — the price that triggered the signal
+
+  // OBSERVED MARKET DATA (NULL until next-session open)
+  market_open_price?: number | null;         // Open[t+1] — observed, not modeled
+
+  // MODELED EXECUTION ASSUMPTIONS (NULL until next-session open, NOT real brokerage fills)
+  modeled_fill_price?: number | null;        // Open[t+1] * (1 ± 0.0005)
+  slippage_assumption_bps?: number | null;   // 5.0 bps fixed assumption
+  slippage_amount?: number | null;           // |modeled_fill_price - market_open_price|
+  commission_assumption?: number | null;     // $0.005/share fixed assumption
+
+  // Legacy aliases (backward compat with older API responses)
   expected_execution_price?: number;
-  execution_price: number;
+  execution_price?: number;
   actual_market_open?: number | null;
   actual_fill_price?: number | null;
   slippage_bps?: number | null;
   actual_slippage?: number | null;
   commission?: number | null;
+
   status: 'PENDING_EXECUTION' | 'EXECUTED' | 'COMPLETED';
   outcome_evaluation_timestamp?: string | null;
   return_1d?: number | null;

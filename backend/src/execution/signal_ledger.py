@@ -4,6 +4,21 @@ Immutable, append-only Signal Ledger.
 Guarantees ZERO look-ahead bias and ZERO repainting.
 Signals once committed for bar t are permanently locked and immutable.
 Separates Preliminary Historical Evidence from Untouched Forward Validation.
+
+SEMANTIC FIELD DEFINITIONS (Prospective Table):
+  SIGNAL-GENERATION-TIME FIELDS (immutable, known at bar close):
+    signal_reference_price  = Close[t]  (the price that triggered the signal)
+
+  OBSERVED MARKET DATA (populated only after next-session open):
+    market_open_price       = Open[t+1] (observed, not modeled)
+
+  MODELED EXECUTION ASSUMPTIONS (computed from observed data + model):
+    modeled_fill_price      = Open[t+1] * (1 ± 0.0005) for BUY/SELL
+    slippage_assumption_bps = 5.0 (fixed assumption)
+    slippage_amount         = |modeled_fill_price - market_open_price|
+    commission_assumption   = $0.005/share (fixed assumption)
+
+  None of these are real brokerage fills unless connected to a live execution venue.
 """
 import hashlib
 import json
@@ -94,6 +109,14 @@ class SignalLedger:
                 )
 
             # 2. Prospective Forward Signals Table (Untouched Forward Validation)
+            #
+            # SEMANTIC FIELD LAYOUT:
+            #   signal_reference_price    = Close[t], the price used to generate the signal (IMMUTABLE)
+            #   market_open_price         = Open[t+1], OBSERVED market data (NULL until next session)
+            #   modeled_fill_price        = Open[t+1] * (1 ± 0.0005), MODELED execution (NULL until next session)
+            #   slippage_assumption_bps   = 5.0, fixed assumption (NULL until next session)
+            #   slippage_amount           = |modeled_fill_price - market_open_price| (NULL until next session)
+            #   commission_assumption     = $0.005/share, fixed assumption (NULL until next session)
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS prospective_signals (
@@ -108,13 +131,12 @@ class SignalLedger:
                     feature_hash TEXT NOT NULL,
                     model_hash TEXT NOT NULL,
                     execution_target_timestamp TEXT NOT NULL,
-                    expected_execution_price REAL NOT NULL,
-                    execution_price REAL,
-                    actual_market_open REAL,
-                    actual_fill_price REAL,
-                    slippage_bps REAL,
-                    actual_slippage REAL,
-                    commission REAL,
+                    signal_reference_price REAL NOT NULL,
+                    market_open_price REAL,
+                    modeled_fill_price REAL,
+                    slippage_assumption_bps REAL,
+                    slippage_amount REAL,
+                    commission_assumption REAL,
                     status TEXT NOT NULL DEFAULT 'PENDING_EXECUTION',
                     outcome_evaluation_timestamp TEXT,
                     return_1d REAL,
@@ -137,18 +159,93 @@ class SignalLedger:
                 """
             )
 
-            # Schema migration for existing prospective_signals tables
+            # Schema migration for existing prospective_signals tables with old column names
             cursor.execute("PRAGMA table_info(prospective_signals);")
             p_cols = [row["name"] for row in cursor.fetchall()]
             if p_cols:
-                if "expected_execution_price" not in p_cols:
-                    conn.execute("ALTER TABLE prospective_signals ADD COLUMN expected_execution_price REAL;")
-                if "actual_fill_price" not in p_cols:
-                    conn.execute("ALTER TABLE prospective_signals ADD COLUMN actual_fill_price REAL;")
-                if "slippage_bps" not in p_cols:
-                    conn.execute("ALTER TABLE prospective_signals ADD COLUMN slippage_bps REAL;")
-                if "actual_slippage" not in p_cols:
-                    conn.execute("ALTER TABLE prospective_signals ADD COLUMN actual_slippage REAL;")
+                # Migrate old → new column names (SQLite doesn't support RENAME COLUMN in older versions,
+                # but we add new columns if missing and keep backward compat)
+                if "signal_reference_price" not in p_cols and "expected_execution_price" in p_cols:
+                    # Old schema: rename via alias. SQLite >= 3.25.0 supports ALTER TABLE RENAME COLUMN.
+                    try:
+                        conn.execute(
+                            "ALTER TABLE prospective_signals RENAME COLUMN expected_execution_price TO signal_reference_price;"
+                        )
+                    except sqlite3.OperationalError:
+                        # Fallback: add new column
+                        conn.execute("ALTER TABLE prospective_signals ADD COLUMN signal_reference_price REAL;")
+                        conn.execute(
+                            "UPDATE prospective_signals SET signal_reference_price = expected_execution_price WHERE signal_reference_price IS NULL;"
+                        )
+                elif "signal_reference_price" not in p_cols:
+                    conn.execute("ALTER TABLE prospective_signals ADD COLUMN signal_reference_price REAL;")
+
+                if "market_open_price" not in p_cols and "actual_market_open" in p_cols:
+                    try:
+                        conn.execute(
+                            "ALTER TABLE prospective_signals RENAME COLUMN actual_market_open TO market_open_price;"
+                        )
+                    except sqlite3.OperationalError:
+                        conn.execute("ALTER TABLE prospective_signals ADD COLUMN market_open_price REAL;")
+                        conn.execute(
+                            "UPDATE prospective_signals SET market_open_price = actual_market_open WHERE market_open_price IS NULL;"
+                        )
+                elif "market_open_price" not in p_cols:
+                    conn.execute("ALTER TABLE prospective_signals ADD COLUMN market_open_price REAL;")
+
+                if "modeled_fill_price" not in p_cols and "actual_fill_price" in p_cols:
+                    try:
+                        conn.execute(
+                            "ALTER TABLE prospective_signals RENAME COLUMN actual_fill_price TO modeled_fill_price;"
+                        )
+                    except sqlite3.OperationalError:
+                        conn.execute("ALTER TABLE prospective_signals ADD COLUMN modeled_fill_price REAL;")
+                        conn.execute(
+                            "UPDATE prospective_signals SET modeled_fill_price = actual_fill_price WHERE modeled_fill_price IS NULL;"
+                        )
+                elif "modeled_fill_price" not in p_cols:
+                    conn.execute("ALTER TABLE prospective_signals ADD COLUMN modeled_fill_price REAL;")
+
+                if "slippage_assumption_bps" not in p_cols and "slippage_bps" in p_cols:
+                    try:
+                        conn.execute(
+                            "ALTER TABLE prospective_signals RENAME COLUMN slippage_bps TO slippage_assumption_bps;"
+                        )
+                    except sqlite3.OperationalError:
+                        conn.execute("ALTER TABLE prospective_signals ADD COLUMN slippage_assumption_bps REAL;")
+                        conn.execute(
+                            "UPDATE prospective_signals SET slippage_assumption_bps = slippage_bps WHERE slippage_assumption_bps IS NULL;"
+                        )
+                elif "slippage_assumption_bps" not in p_cols:
+                    conn.execute("ALTER TABLE prospective_signals ADD COLUMN slippage_assumption_bps REAL;")
+
+                if "slippage_amount" not in p_cols and "actual_slippage" in p_cols:
+                    try:
+                        conn.execute(
+                            "ALTER TABLE prospective_signals RENAME COLUMN actual_slippage TO slippage_amount;"
+                        )
+                    except sqlite3.OperationalError:
+                        conn.execute("ALTER TABLE prospective_signals ADD COLUMN slippage_amount REAL;")
+                        conn.execute(
+                            "UPDATE prospective_signals SET slippage_amount = actual_slippage WHERE slippage_amount IS NULL;"
+                        )
+                elif "slippage_amount" not in p_cols:
+                    conn.execute("ALTER TABLE prospective_signals ADD COLUMN slippage_amount REAL;")
+
+                if "commission_assumption" not in p_cols and "commission" in p_cols:
+                    try:
+                        conn.execute(
+                            "ALTER TABLE prospective_signals RENAME COLUMN commission TO commission_assumption;"
+                        )
+                    except sqlite3.OperationalError:
+                        conn.execute("ALTER TABLE prospective_signals ADD COLUMN commission_assumption REAL;")
+                        conn.execute(
+                            "UPDATE prospective_signals SET commission_assumption = commission WHERE commission_assumption IS NULL;"
+                        )
+                elif "commission_assumption" not in p_cols:
+                    conn.execute("ALTER TABLE prospective_signals ADD COLUMN commission_assumption REAL;")
+
+                # Remove legacy execution_price column reference if it exists (keep data via signal_reference_price)
             conn.commit()
 
     @staticmethod
@@ -241,10 +338,12 @@ class SignalLedger:
         feature_hash: str,
         model_hash: str,
         execution_target_timestamp: str,
-        expected_execution_price: Optional[float] = None,
-        execution_price: Optional[float] = None,
+        signal_reference_price: Optional[float] = None,
         strategy_version: str = "HYDRA_PROSPECTIVE_V1.0",
         is_provisional: bool = False,
+        # Legacy parameter aliases (backward compat)
+        expected_execution_price: Optional[float] = None,
+        execution_price: Optional[float] = None,
     ) -> Optional[str]:
         """
         Phase 8 & 9: Records an untouched prospective forward trading signal.
@@ -252,10 +351,16 @@ class SignalLedger:
         Original fields are permanently immutable.
         Rejects provisional signals or forming candles.
 
-        Mandate:
-        An actual fill price, actual market open, slippage, and commission
-        MUST NOT be recorded before the future market open exists.
-        At signal generation time, only write information known at that time.
+        SEMANTIC MANDATE:
+        At signal generation time, ONLY write information known at that time:
+          signal_reference_price = Close[t]
+
+        The following MUST be NULL at generation time:
+          market_open_price       (observed next-session data)
+          modeled_fill_price      (computed from next-session data)
+          slippage_assumption_bps (applied at next-session evaluation)
+          slippage_amount         (computed from next-session data)
+          commission_assumption   (applied at next-session evaluation)
         """
         if is_provisional:
             logger.warning(
@@ -263,13 +368,12 @@ class SignalLedger:
             )
             return None
 
-        # Resolve expected execution price known at signal generation (from Close[t])
-        if expected_execution_price is not None:
-            expected_price = float(expected_execution_price)
-        elif execution_price is not None:
-            expected_price = float(execution_price)
+        # Resolve signal_reference_price (Close[t]) from available parameters
+        ref_price = signal_reference_price or expected_execution_price or execution_price
+        if ref_price is not None:
+            ref_price = float(ref_price)
         else:
-            raise ValueError("expected_execution_price must be provided at signal generation")
+            raise ValueError("signal_reference_price (Close[t]) must be provided at signal generation")
 
         symbol = symbol.upper().strip()
         signal = signal.upper().strip()
@@ -292,10 +396,11 @@ class SignalLedger:
                     signal_id, strategy_version, symbol, source_candle_timestamp,
                     signal_generation_timestamp, signal, probability, confidence,
                     feature_hash, model_hash, execution_target_timestamp,
-                    expected_execution_price, execution_price,
-                    actual_market_open, actual_fill_price, slippage_bps, actual_slippage, commission,
+                    signal_reference_price,
+                    market_open_price, modeled_fill_price,
+                    slippage_assumption_bps, slippage_amount, commission_assumption,
                     status, dataset, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, 'PENDING_EXECUTION', 'UNTOUCHED_FORWARD_VALIDATION', ?);
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, 'PENDING_EXECUTION', 'UNTOUCHED_FORWARD_VALIDATION', ?);
                 """,
                 (
                     signal_id,
@@ -309,15 +414,15 @@ class SignalLedger:
                     feature_hash,
                     model_hash,
                     tgt_utc,
-                    expected_price,
-                    expected_price,  # legacy alias
+                    ref_price,
                     now_utc,
                 ),
             )
             conn.commit()
             if cursor.rowcount > 0:
                 logger.info(
-                    f"[PROSPECTIVE COMMITTED] {signal_id}: {symbol} {signal} @ {src_utc} (Expected: ${expected_price:.2f})"
+                    f"[PROSPECTIVE COMMITTED] {signal_id}: {symbol} {signal} @ {src_utc} "
+                    f"(Reference: ${ref_price:.2f})"
                 )
                 return signal_id
             else:
@@ -329,12 +434,19 @@ class SignalLedger:
     def evaluate_prospective_outcomes(self, symbol: str, price_df: pd.DataFrame) -> int:
         """
         Phase 9: Evaluates realized future outcomes for prospective signals at next-session open.
-        Strictly applies the frozen 5-bps execution formula:
-            BUY:  Open[t+1] * (1 + 0.0005)
-            SELL: Open[t+1] * (1 - 0.0005)
-            Commission: $0.005/share
+
+        OBSERVED MARKET DATA:
+            market_open_price = Open[t+1] (directly observed, not modeled)
+
+        MODELED EXECUTION ASSUMPTIONS (not actual brokerage fills):
+            modeled_fill_price = Open[t+1] * (1 + 0.0005) for BUY
+                                 Open[t+1] * (1 - 0.0005) for SELL
+            slippage_assumption_bps = 5.0 (fixed institutional assumption)
+            slippage_amount = |modeled_fill_price - market_open_price|
+            commission_assumption = $0.005/share
+
         Separates signal generation from outcome evaluation.
-        Never alters or rewrites generation-time fields.
+        Never alters or rewrites generation-time fields (signal_reference_price, signal, probability, etc.).
         """
         symbol = symbol.upper().strip()
         if price_df.empty:
@@ -372,58 +484,56 @@ class SignalLedger:
 
                 # Future market open MUST exist (Open[loc+1]) before execution can occur
                 if loc + 1 >= len(date_indices):
-                    # Next market open does not yet exist. Do NOT record actual fill price!
+                    # Next market open does not yet exist. Do NOT record any fill data!
                     continue
 
-                actual_market_open = float(price_df["Open"].iloc[loc + 1])
+                # ---- OBSERVED MARKET DATA ----
+                market_open_price = float(price_df["Open"].iloc[loc + 1])
+
+                # ---- MODELED EXECUTION ASSUMPTIONS (not real brokerage fills) ----
                 sig_type = r["signal"]
-
-                # Frozen 5-bps execution formula:
-                # BUY:  Open[t+1] * (1 + 0.0005)
-                # SELL: Open[t+1] * (1 - 0.0005)
-                # Commission: $0.005/share
                 if sig_type == "BUY":
-                    actual_fill_price = round(actual_market_open * 1.0005, 4)
+                    modeled_fill_price = round(market_open_price * 1.0005, 4)
                 elif sig_type == "SELL":
-                    actual_fill_price = round(actual_market_open * 0.9995, 4)
+                    modeled_fill_price = round(market_open_price * 0.9995, 4)
                 else:
-                    actual_fill_price = round(actual_market_open, 4)
+                    modeled_fill_price = round(market_open_price, 4)
 
-                slippage_bps = 5.0
-                actual_slippage = round(abs(actual_fill_price - actual_market_open), 4)
-                commission = 0.005  # $0.005/share institutional standard
+                slippage_assumption_bps = 5.0
+                slippage_amount = round(abs(modeled_fill_price - market_open_price), 4)
+                commission_assumption = 0.005  # $0.005/share institutional standard
 
-                # Compute returns for future horizons relative to actual_fill_price
+                # Compute returns for future horizons relative to modeled_fill_price
                 ret_1d, ret_3d, ret_5d, ret_10d = None, None, None, None
                 mae, mfe = None, None
 
                 # Horizon 1D (Close of next session)
                 if loc + 1 < len(date_indices):
                     c1 = float(price_df["Close"].iloc[loc + 1])
-                    ret_1d = (c1 - actual_fill_price) / actual_fill_price if sig_type == "BUY" else (actual_fill_price - c1) / actual_fill_price
+                    ret_1d = (c1 - modeled_fill_price) / modeled_fill_price if sig_type == "BUY" else (modeled_fill_price - c1) / modeled_fill_price
 
                 # Horizon 3D
                 if loc + 3 < len(date_indices):
                     c3 = float(price_df["Close"].iloc[loc + 3])
-                    ret_3d = (c3 - actual_fill_price) / actual_fill_price if sig_type == "BUY" else (actual_fill_price - c3) / actual_fill_price
+                    ret_3d = (c3 - modeled_fill_price) / modeled_fill_price if sig_type == "BUY" else (modeled_fill_price - c3) / modeled_fill_price
 
                 # Horizon 5D
                 if loc + 5 < len(date_indices):
                     c5 = float(price_df["Close"].iloc[loc + 5])
-                    ret_5d = (c5 - actual_fill_price) / actual_fill_price if sig_type == "BUY" else (actual_fill_price - c5) / actual_fill_price
+                    ret_5d = (c5 - modeled_fill_price) / modeled_fill_price if sig_type == "BUY" else (modeled_fill_price - c5) / modeled_fill_price
                     highs = price_df["High"].iloc[loc + 1 : loc + 6].values
                     lows = price_df["Low"].iloc[loc + 1 : loc + 6].values
                     if sig_type == "BUY":
-                        mfe = round(float((np.max(highs) - actual_fill_price) / actual_fill_price), 4)
-                        mae = round(float((np.min(lows) - actual_fill_price) / actual_fill_price), 4)
+                        mfe = round(float((np.max(highs) - modeled_fill_price) / modeled_fill_price), 4)
+                        mae = round(float((np.min(lows) - modeled_fill_price) / modeled_fill_price), 4)
                     else:
-                        mfe = round(float((actual_fill_price - np.min(lows)) / actual_fill_price), 4)
-                        mae = round(float((actual_fill_price - np.max(highs)) / actual_fill_price), 4)
+                        mfe = round(float((modeled_fill_price - np.min(lows)) / modeled_fill_price), 4)
+                        mae = round(float((modeled_fill_price - np.max(highs)) / modeled_fill_price), 4)
 
                 # Horizon 10D
                 if loc + 10 < len(date_indices):
                     c10 = float(price_df["Close"].iloc[loc + 10])
-                    ret_10d = (c10 - actual_fill_price) / actual_fill_price if sig_type == "BUY" else (actual_fill_price - c10) / actual_fill_price
+                    ret_10d = (c10 - modeled_fill_price) / modeled_fill_price if sig_type == "BUY" else (modeled_fill_price - c10) / modeled_fill_price
 
                 outcome = None
                 status = "EXECUTED"
@@ -436,12 +546,11 @@ class SignalLedger:
                 conn.execute(
                     """
                     UPDATE prospective_signals
-                    SET actual_market_open = ?,
-                        actual_fill_price = ?,
-                        slippage_bps = ?,
-                        actual_slippage = ?,
-                        commission = ?,
-                        execution_price = ?,
+                    SET market_open_price = ?,
+                        modeled_fill_price = ?,
+                        slippage_assumption_bps = ?,
+                        slippage_amount = ?,
+                        commission_assumption = ?,
                         return_1d = ?,
                         return_3d = ?,
                         return_5d = ?,
@@ -454,12 +563,11 @@ class SignalLedger:
                     WHERE signal_id = ?;
                     """,
                     (
-                        round(actual_market_open, 2),
-                        actual_fill_price,
-                        slippage_bps,
-                        actual_slippage,
-                        commission,
-                        actual_fill_price,
+                        round(market_open_price, 2),
+                        modeled_fill_price,
+                        slippage_assumption_bps,
+                        slippage_amount,
+                        commission_assumption,
                         round(ret_1d, 4) if ret_1d is not None else None,
                         round(ret_3d, 4) if ret_3d is not None else None,
                         round(ret_5d, 4) if ret_5d is not None else None,
@@ -493,8 +601,24 @@ class SignalLedger:
         signals = []
         for r in rows:
             d = dict(r)
-            if d.get("expected_execution_price") is None and d.get("execution_price") is not None:
-                d["expected_execution_price"] = d["execution_price"]
+            # Backward compat: expose legacy field aliases for frontend
+            if "signal_reference_price" in d:
+                d["expected_execution_price"] = d["signal_reference_price"]
+                d["execution_price"] = d["signal_reference_price"]
+            elif "expected_execution_price" in d:
+                d["signal_reference_price"] = d["expected_execution_price"]
+                d["execution_price"] = d["expected_execution_price"]
+            # Map new field names to legacy aliases for frontend
+            if "market_open_price" in d:
+                d["actual_market_open"] = d["market_open_price"]
+            if "modeled_fill_price" in d:
+                d["actual_fill_price"] = d["modeled_fill_price"]
+            if "slippage_assumption_bps" in d:
+                d["slippage_bps"] = d["slippage_assumption_bps"]
+            if "slippage_amount" in d:
+                d["actual_slippage"] = d["slippage_amount"]
+            if "commission_assumption" in d:
+                d["commission"] = d["commission_assumption"]
             # Expose dynamic America/New_York display formatting
             d["source_candle_display"] = format_new_york_display(d["source_candle_timestamp"])
             d["signal_generation_display"] = format_new_york_display(d["signal_generation_timestamp"])

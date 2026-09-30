@@ -25,7 +25,7 @@
   "code_hashes": {
     "live_inference.py": "9d353993ef133c1bebd9098f34194dc76bcefccc2434bba8401c2840e8c8a17f",
     "inference_service.py": "b88bdfb9ebc99a7876ceae94f6828941b08b684ca15f5e572eb150229f80ea2b",
-    "signal_ledger.py": "81b71baccd81d1ebed3757500e6f8b2d1eb4baa8b97cec1961971ba73361c99a",
+    "signal_ledger.py": "571551a58793f5e0c54ed875696193185e83fd54847ee045f74d7347be812c7f",
     "backtest_service.py": "faa7afcefb8799e5b90763c3b01c329a55d1ba960b2cd8ded747cbf0ce47a04b"
   },
   "model_provenance": {

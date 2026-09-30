@@ -11,6 +11,7 @@ Comprehensive Validation Test Suite for:
 8. Strict segregation between Preliminary Historical Evidence and Untouched Forward Validation datasets
 9. Freeze timestamp and prospective sequence mathematical integrity (UTC vs America/New_York)
 10. Strict execution price semantics (NULL fills at generation time, 5-bps formula at next session open)
+11. Prospective ledger semantic field integrity (signal_reference_price, modeled_fill_price, immutability)
 """
 import copy
 import json
@@ -78,7 +79,7 @@ class TestStrategyFreezeAndProspective(unittest.TestCase):
             feature_hash="hash123",
             model_hash="model123",
             execution_target_timestamp="2026-10-01 09:30:00 EDT",
-            expected_execution_price=225.0,
+            signal_reference_price=225.0,
             is_provisional=True,
         )
         self.assertIsNone(res_prop, "Provisional signal must be rejected from prospective ledger")
@@ -162,18 +163,18 @@ class TestStrategyFreezeAndProspective(unittest.TestCase):
             feature_hash="orig_feat_hash",
             model_hash="orig_model_hash",
             execution_target_timestamp="2026-10-01 09:30:00 EDT",
-            expected_execution_price=225.50,
+            signal_reference_price=225.50,
         )
         self.assertIsNotNone(sig_id)
 
         # Record snapshot of original fields
         before = self.ledger.get_prospective_signals("AAPL")[0]
-        # At generation time, fill price and market open MUST BE NULL
-        self.assertIsNone(before["actual_market_open"])
-        self.assertIsNone(before["actual_fill_price"])
-        self.assertIsNone(before["slippage_bps"])
-        self.assertIsNone(before["commission"])
-        self.assertEqual(before["expected_execution_price"], 225.50)
+        # At generation time, fill-related fields MUST BE NULL
+        self.assertIsNone(before["market_open_price"])
+        self.assertIsNone(before["modeled_fill_price"])
+        self.assertIsNone(before["slippage_assumption_bps"])
+        self.assertIsNone(before["commission_assumption"])
+        self.assertEqual(before["signal_reference_price"], 225.50)
         self.assertEqual(before["status"], "PENDING_EXECUTION")
 
         # Simulate subsequent price bars
@@ -205,14 +206,16 @@ class TestStrategyFreezeAndProspective(unittest.TestCase):
         self.assertEqual(after["feature_hash"], before["feature_hash"])
         self.assertEqual(after["model_hash"], before["model_hash"])
         self.assertEqual(after["execution_target_timestamp"], before["execution_target_timestamp"])
-        self.assertEqual(after["expected_execution_price"], before["expected_execution_price"])
+        self.assertEqual(after["signal_reference_price"], before["signal_reference_price"])
 
-        # Outcome fields successfully populated with 5-bps formula:
+        # OBSERVED MARKET DATA populated:
+        self.assertEqual(after["market_open_price"], 226.0)
+
+        # MODELED EXECUTION ASSUMPTIONS populated with 5-bps formula:
         # BUY: Open[t+1] * (1 + 0.0005) = 226.0 * 1.0005 = 226.113
-        self.assertEqual(after["actual_market_open"], 226.0)
-        self.assertEqual(after["actual_fill_price"], 226.113)
-        self.assertEqual(after["slippage_bps"], 5.0)
-        self.assertEqual(after["commission"], 0.005)
+        self.assertEqual(after["modeled_fill_price"], 226.113)
+        self.assertEqual(after["slippage_assumption_bps"], 5.0)
+        self.assertEqual(after["commission_assumption"], 0.005)
         self.assertIsNotNone(after["return_1d"])
         self.assertEqual(after["status"], "COMPLETED")
         self.assertEqual(after["outcome"], "WIN")
@@ -269,7 +272,7 @@ class TestStrategyFreezeAndProspective(unittest.TestCase):
             feature_hash="h1",
             model_hash="m1",
             execution_target_timestamp="2026-10-01 09:30:00 EDT",
-            expected_execution_price=225.50,
+            signal_reference_price=225.50,
         )
         self.assertIsNotNone(sig_id)
 
@@ -285,11 +288,11 @@ class TestStrategyFreezeAndProspective(unittest.TestCase):
         self.ledger.evaluate_prospective_outcomes("AAPL", df_next)
 
         rec = self.ledger.get_prospective_signals("AAPL")[0]
-        self.assertEqual(rec["actual_market_open"], 226.10)
+        self.assertEqual(rec["market_open_price"], 226.10)
         # BUY: 226.10 * 1.0005 = 226.213
-        self.assertEqual(rec["actual_fill_price"], round(226.10 * 1.0005, 4))
-        self.assertEqual(rec["slippage_bps"], 5.0)
-        self.assertEqual(rec["commission"], 0.005)
+        self.assertEqual(rec["modeled_fill_price"], round(226.10 * 1.0005, 4))
+        self.assertEqual(rec["slippage_assumption_bps"], 5.0)
+        self.assertEqual(rec["commission_assumption"], 0.005)
         self.assertEqual(rec["execution_target_display"], "2026-10-01 09:30:00 EDT")
 
     def test_8_historical_and_prospective_datasets_remain_strictly_separate(self):
@@ -314,7 +317,7 @@ class TestStrategyFreezeAndProspective(unittest.TestCase):
             feature_hash="h2",
             model_hash="m2",
             execution_target_timestamp="2026-10-01 09:30:00 EDT",
-            expected_execution_price=225.50,
+            signal_reference_price=225.50,
         )
 
         hist = self.ledger.get_signals("AAPL")
@@ -376,7 +379,7 @@ class TestStrategyFreezeAndProspective(unittest.TestCase):
             feature_hash="fb",
             model_hash="mb",
             execution_target_timestamp="2026-10-01 09:30:00 EDT",
-            expected_execution_price=220.00,
+            signal_reference_price=220.00,
         )
         self.assertIsNotNone(buy_id)
 
@@ -391,7 +394,7 @@ class TestStrategyFreezeAndProspective(unittest.TestCase):
             feature_hash="fs",
             model_hash="ms",
             execution_target_timestamp="2026-10-01 09:30:00 EDT",
-            expected_execution_price=450.00,
+            signal_reference_price=450.00,
         )
         self.assertIsNotNone(sell_id)
 
@@ -421,16 +424,182 @@ class TestStrategyFreezeAndProspective(unittest.TestCase):
         msft_sig = self.ledger.get_prospective_signals("MSFT")[0]
 
         # BUY formula: Open[t+1] * (1 + 0.0005) = 200.0 * 1.0005 = 200.1000
-        self.assertEqual(aapl_sig["actual_fill_price"], 200.1)
-        self.assertEqual(aapl_sig["slippage_bps"], 5.0)
-        self.assertEqual(aapl_sig["actual_slippage"], 0.1)
-        self.assertEqual(aapl_sig["commission"], 0.005)
+        self.assertEqual(aapl_sig["modeled_fill_price"], 200.1)
+        self.assertEqual(aapl_sig["slippage_assumption_bps"], 5.0)
+        self.assertEqual(aapl_sig["slippage_amount"], 0.1)
+        self.assertEqual(aapl_sig["commission_assumption"], 0.005)
 
         # SELL formula: Open[t+1] * (1 - 0.0005) = 400.0 * 0.9995 = 399.8000
-        self.assertEqual(msft_sig["actual_fill_price"], 399.8)
-        self.assertEqual(msft_sig["slippage_bps"], 5.0)
-        self.assertEqual(msft_sig["actual_slippage"], 0.2)
-        self.assertEqual(msft_sig["commission"], 0.005)
+        self.assertEqual(msft_sig["modeled_fill_price"], 399.8)
+        self.assertEqual(msft_sig["slippage_assumption_bps"], 5.0)
+        self.assertEqual(msft_sig["slippage_amount"], 0.2)
+        self.assertEqual(msft_sig["commission_assumption"], 0.005)
+
+    def test_11_prospective_ledger_semantic_field_integrity(self):
+        """
+        Proof 12: Comprehensive semantic field integrity of the prospective ledger.
+
+        Verifies:
+        1. No future market-open price exists in a signal at generation time
+        2. signal_reference_price equals Close[t]
+        3. modeled_fill_price is NULL until next-session open
+        4. modeled_fill_price uses exactly ±5 bps
+        5. commission_assumption is $0.005/share
+        6. Original signal fields remain immutable after outcome evaluation
+        7. Correct semantic distinction between OBSERVED MARKET DATA and MODELED EXECUTION ASSUMPTIONS
+        """
+        close_t = 300.00  # Close[t] = $300.00
+        open_t1 = 302.50  # Open[t+1] = $302.50
+
+        # --- STEP 1: Record a BUY signal at generation time ---
+        sig_id = self.ledger.record_prospective_signal(
+            symbol="AAPL",
+            source_candle_timestamp="2026-09-30 16:00:00 EDT",
+            signal_generation_timestamp="2026-09-30 16:00:00 EDT",
+            signal="BUY",
+            probability=0.82,
+            confidence=0.82,
+            feature_hash="semantic_test_feat",
+            model_hash="semantic_test_model",
+            execution_target_timestamp="2026-10-01 09:30:00 EDT",
+            signal_reference_price=close_t,
+        )
+        self.assertIsNotNone(sig_id, "Signal must be successfully recorded")
+
+        gen_snapshot = self.ledger.get_prospective_signals("AAPL")[0]
+
+        # --- VERIFICATION 1: signal_reference_price == Close[t] ---
+        self.assertEqual(
+            gen_snapshot["signal_reference_price"], close_t,
+            f"signal_reference_price must equal Close[t] = {close_t}"
+        )
+
+        # --- VERIFICATION 2: All fill-related fields are NULL at generation time ---
+        self.assertIsNone(
+            gen_snapshot["market_open_price"],
+            "market_open_price (OBSERVED) must be NULL at signal generation time"
+        )
+        self.assertIsNone(
+            gen_snapshot["modeled_fill_price"],
+            "modeled_fill_price (MODELED) must be NULL at signal generation time"
+        )
+        self.assertIsNone(
+            gen_snapshot["slippage_assumption_bps"],
+            "slippage_assumption_bps must be NULL at signal generation time"
+        )
+        self.assertIsNone(
+            gen_snapshot["slippage_amount"],
+            "slippage_amount must be NULL at signal generation time"
+        )
+        self.assertIsNone(
+            gen_snapshot["commission_assumption"],
+            "commission_assumption must be NULL at signal generation time"
+        )
+
+        # --- VERIFICATION 3: Status is PENDING_EXECUTION ---
+        self.assertEqual(gen_snapshot["status"], "PENDING_EXECUTION")
+
+        # --- STEP 2: Evaluate outcomes with next-session data ---
+        price_df = pd.DataFrame(
+            {
+                "Open": [299.0, open_t1, 303.0, 304.0, 305.0, 306.0],
+                "High": [301.0, 304.0, 305.0, 306.0, 307.0, 308.0],
+                "Low": [298.0, 301.0, 302.0, 303.0, 304.0, 305.0],
+                "Close": [close_t, 303.0, 304.0, 305.0, 306.0, 307.0],
+            },
+            index=["2026-09-30", "2026-10-01", "2026-10-02", "2026-10-05", "2026-10-06", "2026-10-07"],
+        )
+        n_evaluated = self.ledger.evaluate_prospective_outcomes("AAPL", price_df)
+        self.assertEqual(n_evaluated, 1)
+
+        eval_snapshot = self.ledger.get_prospective_signals("AAPL")[0]
+
+        # --- VERIFICATION 4: OBSERVED MARKET DATA populated correctly ---
+        self.assertEqual(
+            eval_snapshot["market_open_price"], open_t1,
+            f"market_open_price must equal Open[t+1] = {open_t1}"
+        )
+
+        # --- VERIFICATION 5: MODELED EXECUTION uses exactly ±5 bps ---
+        expected_modeled_fill = round(open_t1 * 1.0005, 4)  # BUY: Open[t+1] * (1 + 0.0005)
+        self.assertEqual(
+            eval_snapshot["modeled_fill_price"], expected_modeled_fill,
+            f"modeled_fill_price must be Open[t+1] * 1.0005 = {expected_modeled_fill}"
+        )
+
+        # --- VERIFICATION 6: Slippage is exactly 5.0 bps ---
+        self.assertEqual(
+            eval_snapshot["slippage_assumption_bps"], 5.0,
+            "slippage_assumption_bps must be exactly 5.0"
+        )
+        expected_slippage_amount = round(abs(expected_modeled_fill - open_t1), 4)
+        self.assertEqual(
+            eval_snapshot["slippage_amount"], expected_slippage_amount,
+            f"slippage_amount must be |modeled_fill - market_open| = {expected_slippage_amount}"
+        )
+
+        # --- VERIFICATION 7: Commission assumption is $0.005/share ---
+        self.assertEqual(
+            eval_snapshot["commission_assumption"], 0.005,
+            "commission_assumption must be $0.005/share"
+        )
+
+        # --- VERIFICATION 8: Original generation-time fields are immutable ---
+        self.assertEqual(eval_snapshot["signal_reference_price"], gen_snapshot["signal_reference_price"],
+                         "signal_reference_price must not change after evaluation")
+        self.assertEqual(eval_snapshot["signal_id"], gen_snapshot["signal_id"],
+                         "signal_id must not change after evaluation")
+        self.assertEqual(eval_snapshot["signal"], gen_snapshot["signal"],
+                         "signal must not change after evaluation")
+        self.assertEqual(eval_snapshot["probability"], gen_snapshot["probability"],
+                         "probability must not change after evaluation")
+        self.assertEqual(eval_snapshot["confidence"], gen_snapshot["confidence"],
+                         "confidence must not change after evaluation")
+        self.assertEqual(eval_snapshot["feature_hash"], gen_snapshot["feature_hash"],
+                         "feature_hash must not change after evaluation")
+        self.assertEqual(eval_snapshot["model_hash"], gen_snapshot["model_hash"],
+                         "model_hash must not change after evaluation")
+        self.assertEqual(eval_snapshot["source_candle_timestamp"], gen_snapshot["source_candle_timestamp"],
+                         "source_candle_timestamp must not change after evaluation")
+        self.assertEqual(eval_snapshot["signal_generation_timestamp"], gen_snapshot["signal_generation_timestamp"],
+                         "signal_generation_timestamp must not change after evaluation")
+        self.assertEqual(eval_snapshot["execution_target_timestamp"], gen_snapshot["execution_target_timestamp"],
+                         "execution_target_timestamp must not change after evaluation")
+
+        # --- VERIFICATION 9: Semantic separation clarity ---
+        # signal_reference_price is Close[t], NOT Open[t+1]
+        self.assertNotEqual(
+            eval_snapshot["signal_reference_price"], eval_snapshot["market_open_price"],
+            "signal_reference_price (Close[t]) must differ from market_open_price (Open[t+1])"
+        )
+        # modeled_fill_price is NOT the raw market_open_price
+        self.assertNotEqual(
+            eval_snapshot["modeled_fill_price"], eval_snapshot["market_open_price"],
+            "modeled_fill_price must include slippage and differ from raw market_open_price"
+        )
+
+    def test_12_legacy_parameter_backward_compatibility(self):
+        """Proof 13: Legacy parameter names (expected_execution_price) still work via aliases."""
+        sig_id = self.ledger.record_prospective_signal(
+            symbol="AAPL",
+            source_candle_timestamp="2026-09-30 16:00:00 EDT",
+            signal_generation_timestamp="2026-09-30 16:00:00 EDT",
+            signal="BUY",
+            probability=0.70,
+            confidence=0.70,
+            feature_hash="legacy_h",
+            model_hash="legacy_m",
+            execution_target_timestamp="2026-10-01 09:30:00 EDT",
+            expected_execution_price=250.00,  # Legacy parameter name
+        )
+        self.assertIsNotNone(sig_id)
+
+        rec = self.ledger.get_prospective_signals("AAPL")[0]
+        # The legacy parameter should map to signal_reference_price
+        self.assertEqual(rec["signal_reference_price"], 250.00)
+        # Legacy aliases should also be exposed
+        self.assertEqual(rec["expected_execution_price"], 250.00)
+        self.assertEqual(rec["execution_price"], 250.00)
 
 
 if __name__ == "__main__":
