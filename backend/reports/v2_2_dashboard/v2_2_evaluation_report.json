@@ -1,0 +1,922 @@
+{
+  "strategy_version": "HYDRA_PROSPECTIVE_V2.2",
+  "evaluation_timestamp_utc": "2026-10-01T12:37:19.880071Z",
+  "evaluation_type": "READ_ONLY_FROZEN_MODEL_EVALUATION",
+  "periods": {
+    "Development (2020-2024)": {
+      "role": "DEVELOPMENT",
+      "classification_metrics": {
+        "XGBoost": {
+          "model": "XGBoost",
+          "n_samples": 1242,
+          "accuracy": 0.6465,
+          "accuracy_ci_95": "[0.6195, 0.6726]",
+          "balanced_accuracy": 0.7069,
+          "precision_per_class": {
+            "SELL": 0.5923,
+            "HOLD": 0.2826,
+            "BUY": 0.8851
+          },
+          "recall_per_class": {
+            "SELL": 0.6726,
+            "HOLD": 0.8387,
+            "BUY": 0.6095
+          },
+          "f1_per_class": {
+            "SELL": 0.6299,
+            "HOLD": 0.4228,
+            "BUY": 0.7219
+          },
+          "support_per_class": {
+            "SELL": 391,
+            "HOLD": 93,
+            "BUY": 758
+          },
+          "confusion_matrix": [
+            [
+              263,
+              73,
+              55
+            ],
+            [
+              10,
+              78,
+              5
+            ],
+            [
+              171,
+              125,
+              462
+            ]
+          ],
+          "brier_score": 0.5215,
+          "log_loss": 0.8759,
+          "ece": 0.1795
+        },
+        "LightGBM": {
+          "model": "LightGBM",
+          "n_samples": 1242,
+          "accuracy": 0.6135,
+          "accuracy_ci_95": "[0.5861, 0.6402]",
+          "balanced_accuracy": 0.7194,
+          "precision_per_class": {
+            "SELL": 0.5939,
+            "HOLD": 0.2602,
+            "BUY": 0.8861
+          },
+          "recall_per_class": {
+            "SELL": 0.6471,
+            "HOLD": 0.957,
+            "BUY": 0.5541
+          },
+          "f1_per_class": {
+            "SELL": 0.6193,
+            "HOLD": 0.4092,
+            "BUY": 0.6818
+          },
+          "support_per_class": {
+            "SELL": 391,
+            "HOLD": 93,
+            "BUY": 758
+          },
+          "confusion_matrix": [
+            [
+              253,
+              86,
+              52
+            ],
+            [
+              2,
+              89,
+              2
+            ],
+            [
+              171,
+              167,
+              420
+            ]
+          ],
+          "brier_score": 0.5253,
+          "log_loss": 0.8759,
+          "ece": 0.1269
+        },
+        "DL Fusion": {
+          "model": "DL Fusion",
+          "n_samples": 1242,
+          "accuracy": 0.0749,
+          "accuracy_ci_95": "[0.0615, 0.0909]",
+          "balanced_accuracy": 0.3333,
+          "precision_per_class": {
+            "SELL": 0.0,
+            "HOLD": 0.0749,
+            "BUY": 0.0
+          },
+          "recall_per_class": {
+            "SELL": 0.0,
+            "HOLD": 1.0,
+            "BUY": 0.0
+          },
+          "f1_per_class": {
+            "SELL": 0.0,
+            "HOLD": 0.1393,
+            "BUY": 0.0
+          },
+          "support_per_class": {
+            "SELL": 391,
+            "HOLD": 93,
+            "BUY": 758
+          },
+          "confusion_matrix": [
+            [
+              0,
+              391,
+              0
+            ],
+            [
+              0,
+              93,
+              0
+            ],
+            [
+              0,
+              758,
+              0
+            ]
+          ],
+          "brier_score": 0.745,
+          "log_loss": 1.1715,
+          "ece": 0.4275
+        },
+        "DQN": {
+          "model": "DQN",
+          "n_samples": 1242,
+          "accuracy": 0.3148,
+          "accuracy_ci_95": "[0.2896, 0.3412]",
+          "balanced_accuracy": 0.3333,
+          "precision_per_class": {
+            "SELL": 0.3148,
+            "HOLD": 0.0,
+            "BUY": 0.0
+          },
+          "recall_per_class": {
+            "SELL": 1.0,
+            "HOLD": 0.0,
+            "BUY": 0.0
+          },
+          "f1_per_class": {
+            "SELL": 0.4789,
+            "HOLD": 0.0,
+            "BUY": 0.0
+          },
+          "support_per_class": {
+            "SELL": 391,
+            "HOLD": 93,
+            "BUY": 758
+          },
+          "confusion_matrix": [
+            [
+              391,
+              0,
+              0
+            ],
+            [
+              93,
+              0,
+              0
+            ],
+            [
+              758,
+              0,
+              0
+            ]
+          ],
+          "brier_score": 1.3704,
+          "log_loss": 24.6966,
+          "ece": 0.6852
+        },
+        "Meta-Ensemble": {
+          "model": "Meta-Ensemble",
+          "n_samples": 1242,
+          "accuracy": 0.2601,
+          "accuracy_ci_95": "[0.2364, 0.2852]",
+          "balanced_accuracy": 0.4313,
+          "precision_per_class": {
+            "SELL": 0.0,
+            "HOLD": 0.0939,
+            "BUY": 0.8817
+          },
+          "recall_per_class": {
+            "SELL": 0.0,
+            "HOLD": 0.9892,
+            "BUY": 0.3047
+          },
+          "f1_per_class": {
+            "SELL": 0.0,
+            "HOLD": 0.1715,
+            "BUY": 0.4529
+          },
+          "support_per_class": {
+            "SELL": 391,
+            "HOLD": 93,
+            "BUY": 758
+          },
+          "confusion_matrix": [
+            [
+              0,
+              361,
+              30
+            ],
+            [
+              0,
+              92,
+              1
+            ],
+            [
+              0,
+              527,
+              231
+            ]
+          ],
+          "brier_score": 0.7094,
+          "log_loss": 1.1511,
+          "ece": 0.2159
+        },
+        "HYDRA Final": {
+          "model": "HYDRA Final",
+          "n_samples": 1242,
+          "accuracy": 0.0749,
+          "accuracy_ci_95": "[0.0615, 0.0909]",
+          "balanced_accuracy": 0.3333,
+          "precision_per_class": {
+            "SELL": 0.0,
+            "HOLD": 0.0749,
+            "BUY": 0.0
+          },
+          "recall_per_class": {
+            "SELL": 0.0,
+            "HOLD": 1.0,
+            "BUY": 0.0
+          },
+          "f1_per_class": {
+            "SELL": 0.0,
+            "HOLD": 0.1393,
+            "BUY": 0.0
+          },
+          "support_per_class": {
+            "SELL": 391,
+            "HOLD": 93,
+            "BUY": 758
+          },
+          "confusion_matrix": [
+            [
+              0,
+              391,
+              0
+            ],
+            [
+              0,
+              93,
+              0
+            ],
+            [
+              0,
+              758,
+              0
+            ]
+          ],
+          "brier_score": 0.7094,
+          "log_loss": 1.1511,
+          "ece": 0.2159
+        }
+      },
+      "trading_performance": {
+        "total_trades": 0
+      },
+      "trading_performance_xgb_argmax": {
+        "total_trades": 32,
+        "winning_trades": 24,
+        "losing_trades": 8,
+        "win_rate": 75.0,
+        "gross_profit_pct": 158.3887,
+        "gross_loss_pct": 21.9137,
+        "profit_factor": 7.2278,
+        "avg_profit_per_trade_pct": 6.5995,
+        "avg_loss_per_trade_pct": -2.7392,
+        "net_return_pct": 253.0145,
+        "max_drawdown_pct": -10.2622,
+        "sharpe_ratio": 2.413,
+        "sortino_ratio": 10.6334,
+        "avg_holding_days": 14.9,
+        "modeled_costs_description": "5 bps slippage per side (10 bps round trip) + $0.005/share institutional commission"
+      }
+    },
+    "Calibration H1 (2025 Q1-Q2)": {
+      "role": "CALIBRATION_H1",
+      "classification_metrics": {
+        "XGBoost": {
+          "model": "XGBoost",
+          "n_samples": 106,
+          "accuracy": 0.3962,
+          "accuracy_ci_95": "[0.3083, 0.4914]",
+          "balanced_accuracy": 0.3966,
+          "precision_per_class": {
+            "SELL": 0.875,
+            "HOLD": 0.2778,
+            "BUY": 0.2143
+          },
+          "recall_per_class": {
+            "SELL": 0.4468,
+            "HOLD": 0.5556,
+            "BUY": 0.1875
+          },
+          "f1_per_class": {
+            "SELL": 0.5915,
+            "HOLD": 0.3704,
+            "BUY": 0.2
+          },
+          "support_per_class": {
+            "SELL": 47,
+            "HOLD": 27,
+            "BUY": 32
+          },
+          "confusion_matrix": [
+            [
+              21,
+              15,
+              11
+            ],
+            [
+              1,
+              15,
+              11
+            ],
+            [
+              2,
+              24,
+              6
+            ]
+          ],
+          "brier_score": 0.6941,
+          "log_loss": 1.158,
+          "ece": 0.1037
+        },
+        "LightGBM": {
+          "model": "LightGBM",
+          "n_samples": 106,
+          "accuracy": 0.3868,
+          "accuracy_ci_95": "[0.2996, 0.4819]",
+          "balanced_accuracy": 0.3895,
+          "precision_per_class": {
+            "SELL": 0.9091,
+            "HOLD": 0.2542,
+            "BUY": 0.24
+          },
+          "recall_per_class": {
+            "SELL": 0.4255,
+            "HOLD": 0.5556,
+            "BUY": 0.1875
+          },
+          "f1_per_class": {
+            "SELL": 0.5797,
+            "HOLD": 0.3488,
+            "BUY": 0.2105
+          },
+          "support_per_class": {
+            "SELL": 47,
+            "HOLD": 27,
+            "BUY": 32
+          },
+          "confusion_matrix": [
+            [
+              20,
+              18,
+              9
+            ],
+            [
+              2,
+              15,
+              10
+            ],
+            [
+              0,
+              26,
+              6
+            ]
+          ],
+          "brier_score": 0.7092,
+          "log_loss": 1.1957,
+          "ece": 0.1177
+        },
+        "DL Fusion": {
+          "model": "DL Fusion",
+          "n_samples": 106,
+          "accuracy": 0.2547,
+          "accuracy_ci_95": "[0.1814, 0.3452]",
+          "balanced_accuracy": 0.3333,
+          "precision_per_class": {
+            "SELL": 0.0,
+            "HOLD": 0.2547,
+            "BUY": 0.0
+          },
+          "recall_per_class": {
+            "SELL": 0.0,
+            "HOLD": 1.0,
+            "BUY": 0.0
+          },
+          "f1_per_class": {
+            "SELL": 0.0,
+            "HOLD": 0.406,
+            "BUY": 0.0
+          },
+          "support_per_class": {
+            "SELL": 47,
+            "HOLD": 27,
+            "BUY": 32
+          },
+          "confusion_matrix": [
+            [
+              0,
+              47,
+              0
+            ],
+            [
+              0,
+              27,
+              0
+            ],
+            [
+              0,
+              32,
+              0
+            ]
+          ],
+          "brier_score": 0.7517,
+          "log_loss": 1.2135,
+          "ece": 0.2559
+        },
+        "DQN": {
+          "model": "DQN",
+          "n_samples": 106,
+          "accuracy": 0.4434,
+          "accuracy_ci_95": "[0.3524, 0.5383]",
+          "balanced_accuracy": 0.3333,
+          "precision_per_class": {
+            "SELL": 0.4434,
+            "HOLD": 0.0,
+            "BUY": 0.0
+          },
+          "recall_per_class": {
+            "SELL": 1.0,
+            "HOLD": 0.0,
+            "BUY": 0.0
+          },
+          "f1_per_class": {
+            "SELL": 0.6144,
+            "HOLD": 0.0,
+            "BUY": 0.0
+          },
+          "support_per_class": {
+            "SELL": 47,
+            "HOLD": 27,
+            "BUY": 32
+          },
+          "confusion_matrix": [
+            [
+              47,
+              0,
+              0
+            ],
+            [
+              27,
+              0,
+              0
+            ],
+            [
+              32,
+              0,
+              0
+            ]
+          ],
+          "brier_score": 1.1132,
+          "log_loss": 20.062,
+          "ece": 0.5566
+        },
+        "Meta-Ensemble": {
+          "model": "Meta-Ensemble",
+          "n_samples": 106,
+          "accuracy": 0.1887,
+          "accuracy_ci_95": "[0.1256, 0.2735]",
+          "balanced_accuracy": 0.2411,
+          "precision_per_class": {
+            "SELL": 0.0,
+            "HOLD": 0.2125,
+            "BUY": 0.1154
+          },
+          "recall_per_class": {
+            "SELL": 0.0,
+            "HOLD": 0.6296,
+            "BUY": 0.0938
+          },
+          "f1_per_class": {
+            "SELL": 0.0,
+            "HOLD": 0.3178,
+            "BUY": 0.1034
+          },
+          "support_per_class": {
+            "SELL": 47,
+            "HOLD": 27,
+            "BUY": 32
+          },
+          "confusion_matrix": [
+            [
+              0,
+              34,
+              13
+            ],
+            [
+              0,
+              17,
+              10
+            ],
+            [
+              0,
+              29,
+              3
+            ]
+          ],
+          "brier_score": 0.7844,
+          "log_loss": 1.288,
+          "ece": 0.3155
+        },
+        "HYDRA Final": {
+          "model": "HYDRA Final",
+          "n_samples": 106,
+          "accuracy": 0.2547,
+          "accuracy_ci_95": "[0.1814, 0.3452]",
+          "balanced_accuracy": 0.3333,
+          "precision_per_class": {
+            "SELL": 0.0,
+            "HOLD": 0.2547,
+            "BUY": 0.0
+          },
+          "recall_per_class": {
+            "SELL": 0.0,
+            "HOLD": 1.0,
+            "BUY": 0.0
+          },
+          "f1_per_class": {
+            "SELL": 0.0,
+            "HOLD": 0.406,
+            "BUY": 0.0
+          },
+          "support_per_class": {
+            "SELL": 47,
+            "HOLD": 27,
+            "BUY": 32
+          },
+          "confusion_matrix": [
+            [
+              0,
+              47,
+              0
+            ],
+            [
+              0,
+              27,
+              0
+            ],
+            [
+              0,
+              32,
+              0
+            ]
+          ],
+          "brier_score": 0.7844,
+          "log_loss": 1.288,
+          "ece": 0.3155
+        }
+      },
+      "trading_performance": {
+        "total_trades": 0
+      },
+      "trading_performance_xgb_argmax": {
+        "total_trades": 0,
+        "modeled_costs_description": "5 bps slippage per side (10 bps round trip) + $0.005/share institutional commission"
+      }
+    },
+    "Evaluation H2 (2025 Q3-Q4)": {
+      "role": "EVALUATION_H2",
+      "classification_metrics": {
+        "XGBoost": {
+          "model": "XGBoost",
+          "n_samples": 112,
+          "accuracy": 0.2054,
+          "accuracy_ci_95": "[0.1409, 0.2893]",
+          "balanced_accuracy": 0.2454,
+          "precision_per_class": {
+            "SELL": 0.1429,
+            "HOLD": 0.3333,
+            "BUY": 0.2222
+          },
+          "recall_per_class": {
+            "SELL": 0.1944,
+            "HOLD": 0.375,
+            "BUY": 0.1667
+          },
+          "f1_per_class": {
+            "SELL": 0.1647,
+            "HOLD": 0.3529,
+            "BUY": 0.1905
+          },
+          "support_per_class": {
+            "SELL": 36,
+            "HOLD": 16,
+            "BUY": 60
+          },
+          "confusion_matrix": [
+            [
+              7,
+              2,
+              27
+            ],
+            [
+              2,
+              6,
+              8
+            ],
+            [
+              40,
+              10,
+              10
+            ]
+          ],
+          "brier_score": 0.6852,
+          "log_loss": 1.0866,
+          "ece": 0.2526
+        },
+        "LightGBM": {
+          "model": "LightGBM",
+          "n_samples": 112,
+          "accuracy": 0.2679,
+          "accuracy_ci_95": "[0.1945, 0.3566]",
+          "balanced_accuracy": 0.3333,
+          "precision_per_class": {
+            "SELL": 0.2449,
+            "HOLD": 0.2963,
+            "BUY": 0.2778
+          },
+          "recall_per_class": {
+            "SELL": 0.3333,
+            "HOLD": 0.5,
+            "BUY": 0.1667
+          },
+          "f1_per_class": {
+            "SELL": 0.2824,
+            "HOLD": 0.3721,
+            "BUY": 0.2083
+          },
+          "support_per_class": {
+            "SELL": 36,
+            "HOLD": 16,
+            "BUY": 60
+          },
+          "confusion_matrix": [
+            [
+              12,
+              5,
+              19
+            ],
+            [
+              1,
+              8,
+              7
+            ],
+            [
+              36,
+              14,
+              10
+            ]
+          ],
+          "brier_score": 0.7059,
+          "log_loss": 1.1144,
+          "ece": 0.2162
+        },
+        "DL Fusion": {
+          "model": "DL Fusion",
+          "n_samples": 112,
+          "accuracy": 0.1429,
+          "accuracy_ci_95": "[0.0899, 0.2195]",
+          "balanced_accuracy": 0.3333,
+          "precision_per_class": {
+            "SELL": 0.0,
+            "HOLD": 0.1429,
+            "BUY": 0.0
+          },
+          "recall_per_class": {
+            "SELL": 0.0,
+            "HOLD": 1.0,
+            "BUY": 0.0
+          },
+          "f1_per_class": {
+            "SELL": 0.0,
+            "HOLD": 0.25,
+            "BUY": 0.0
+          },
+          "support_per_class": {
+            "SELL": 36,
+            "HOLD": 16,
+            "BUY": 60
+          },
+          "confusion_matrix": [
+            [
+              0,
+              36,
+              0
+            ],
+            [
+              0,
+              16,
+              0
+            ],
+            [
+              0,
+              60,
+              0
+            ]
+          ],
+          "brier_score": 0.8308,
+          "log_loss": 1.3549,
+          "ece": 0.357
+        },
+        "DQN": {
+          "model": "DQN",
+          "n_samples": 112,
+          "accuracy": 0.3214,
+          "accuracy_ci_95": "[0.2421, 0.4126]",
+          "balanced_accuracy": 0.3333,
+          "precision_per_class": {
+            "SELL": 0.3214,
+            "HOLD": 0.0,
+            "BUY": 0.0
+          },
+          "recall_per_class": {
+            "SELL": 1.0,
+            "HOLD": 0.0,
+            "BUY": 0.0
+          },
+          "f1_per_class": {
+            "SELL": 0.4865,
+            "HOLD": 0.0,
+            "BUY": 0.0
+          },
+          "support_per_class": {
+            "SELL": 36,
+            "HOLD": 16,
+            "BUY": 60
+          },
+          "confusion_matrix": [
+            [
+              36,
+              0,
+              0
+            ],
+            [
+              16,
+              0,
+              0
+            ],
+            [
+              60,
+              0,
+              0
+            ]
+          ],
+          "brier_score": 1.3571,
+          "log_loss": 24.4582,
+          "ece": 0.6786
+        },
+        "Meta-Ensemble": {
+          "model": "Meta-Ensemble",
+          "n_samples": 112,
+          "accuracy": 0.3393,
+          "accuracy_ci_95": "[0.2582, 0.4310]",
+          "balanced_accuracy": 0.4556,
+          "precision_per_class": {
+            "SELL": 0.0,
+            "HOLD": 0.2105,
+            "BUY": 0.6111
+          },
+          "recall_per_class": {
+            "SELL": 0.0,
+            "HOLD": 1.0,
+            "BUY": 0.3667
+          },
+          "f1_per_class": {
+            "SELL": 0.0,
+            "HOLD": 0.3478,
+            "BUY": 0.4583
+          },
+          "support_per_class": {
+            "SELL": 36,
+            "HOLD": 16,
+            "BUY": 60
+          },
+          "confusion_matrix": [
+            [
+              0,
+              22,
+              14
+            ],
+            [
+              0,
+              16,
+              0
+            ],
+            [
+              0,
+              38,
+              22
+            ]
+          ],
+          "brier_score": 0.707,
+          "log_loss": 1.1618,
+          "ece": 0.1352
+        },
+        "HYDRA Final": {
+          "model": "HYDRA Final",
+          "n_samples": 112,
+          "accuracy": 0.1429,
+          "accuracy_ci_95": "[0.0899, 0.2195]",
+          "balanced_accuracy": 0.3333,
+          "precision_per_class": {
+            "SELL": 0.0,
+            "HOLD": 0.1429,
+            "BUY": 0.0
+          },
+          "recall_per_class": {
+            "SELL": 0.0,
+            "HOLD": 1.0,
+            "BUY": 0.0
+          },
+          "f1_per_class": {
+            "SELL": 0.0,
+            "HOLD": 0.25,
+            "BUY": 0.0
+          },
+          "support_per_class": {
+            "SELL": 36,
+            "HOLD": 16,
+            "BUY": 60
+          },
+          "confusion_matrix": [
+            [
+              0,
+              36,
+              0
+            ],
+            [
+              0,
+              16,
+              0
+            ],
+            [
+              0,
+              60,
+              0
+            ]
+          ],
+          "brier_score": 0.707,
+          "log_loss": 1.1618,
+          "ece": 0.1352
+        }
+      },
+      "trading_performance": {
+        "total_trades": 0
+      },
+      "trading_performance_xgb_argmax": {
+        "total_trades": 5,
+        "winning_trades": 2,
+        "losing_trades": 3,
+        "win_rate": 40.0,
+        "gross_profit_pct": 4.3066,
+        "gross_loss_pct": 7.9466,
+        "profit_factor": 0.5419,
+        "avg_profit_per_trade_pct": 2.1533,
+        "avg_loss_per_trade_pct": -2.6489,
+        "net_return_pct": -3.7739,
+        "max_drawdown_pct": -5.6674,
+        "sharpe_ratio": -1.2245,
+        "sortino_ratio": -9.3146,
+        "avg_holding_days": 13.0,
+        "modeled_costs_description": "5 bps slippage per side (10 bps round trip) + $0.005/share institutional commission"
+      }
+    }
+  },
+  "data_quality_warnings": [
+    "Development (2020-2024)/DQN: Brier 1.3704 > 0.8 indicates poor calibration",
+    "Calibration H1 (2025 Q1-Q2)/DQN: Brier 1.1132 > 0.8 indicates poor calibration",
+    "Evaluation H2 (2025 Q3-Q4)/DL Fusion: Brier 0.8308 > 0.8 indicates poor calibration",
+    "Evaluation H2 (2025 Q3-Q4)/DQN: Brier 1.3571 > 0.8 indicates poor calibration"
+  ],
+  "prospective_note": "No V2.2 prospective signals exist yet. First eligible: 2026-10-01 16:00:02 EDT."
+}
