@@ -1,9 +1,90 @@
 {
     "calibration_period": {
-        "split": "H1_2025",
+        "split": "H1_2025_PURGED_ELIGIBLE",
         "start_date": "2025-03-31",
-        "end_date": "2025-06-30",
-        "sample_count": 63
+        "end_date": "2025-06-06",
+        "total_h1_bars": 63,
+        "purged_crossing_bars": 15,
+        "eligible_sample_count": 48,
+        "purged_records": [
+            {
+                "observation_date": "2025-06-09",
+                "label_end_date": "2025-07-01",
+                "reason": "15-session triple-barrier horizon crosses into H2 (post-2025-06-30)"
+            },
+            {
+                "observation_date": "2025-06-10",
+                "label_end_date": "2025-07-02",
+                "reason": "15-session triple-barrier horizon crosses into H2 (post-2025-06-30)"
+            },
+            {
+                "observation_date": "2025-06-11",
+                "label_end_date": "2025-07-03",
+                "reason": "15-session triple-barrier horizon crosses into H2 (post-2025-06-30)"
+            },
+            {
+                "observation_date": "2025-06-12",
+                "label_end_date": "2025-07-07",
+                "reason": "15-session triple-barrier horizon crosses into H2 (post-2025-06-30)"
+            },
+            {
+                "observation_date": "2025-06-13",
+                "label_end_date": "2025-07-08",
+                "reason": "15-session triple-barrier horizon crosses into H2 (post-2025-06-30)"
+            },
+            {
+                "observation_date": "2025-06-16",
+                "label_end_date": "2025-07-09",
+                "reason": "15-session triple-barrier horizon crosses into H2 (post-2025-06-30)"
+            },
+            {
+                "observation_date": "2025-06-17",
+                "label_end_date": "2025-07-10",
+                "reason": "15-session triple-barrier horizon crosses into H2 (post-2025-06-30)"
+            },
+            {
+                "observation_date": "2025-06-18",
+                "label_end_date": "2025-07-11",
+                "reason": "15-session triple-barrier horizon crosses into H2 (post-2025-06-30)"
+            },
+            {
+                "observation_date": "2025-06-20",
+                "label_end_date": "2025-07-14",
+                "reason": "15-session triple-barrier horizon crosses into H2 (post-2025-06-30)"
+            },
+            {
+                "observation_date": "2025-06-23",
+                "label_end_date": "2025-07-15",
+                "reason": "15-session triple-barrier horizon crosses into H2 (post-2025-06-30)"
+            },
+            {
+                "observation_date": "2025-06-24",
+                "label_end_date": "2025-07-16",
+                "reason": "15-session triple-barrier horizon crosses into H2 (post-2025-06-30)"
+            },
+            {
+                "observation_date": "2025-06-25",
+                "label_end_date": "2025-07-17",
+                "reason": "15-session triple-barrier horizon crosses into H2 (post-2025-06-30)"
+            },
+            {
+                "observation_date": "2025-06-26",
+                "label_end_date": "2025-07-18",
+                "reason": "15-session triple-barrier horizon crosses into H2 (post-2025-06-30)"
+            },
+            {
+                "observation_date": "2025-06-27",
+                "label_end_date": "2025-07-21",
+                "reason": "15-session triple-barrier horizon crosses into H2 (post-2025-06-30)"
+            },
+            {
+                "observation_date": "2025-06-30",
+                "label_end_date": "2025-07-22",
+                "reason": "15-session triple-barrier horizon crosses into H2 (post-2025-06-30)"
+            }
+        ],
+        "boundary_leakage_prevented": true,
+        "zero_h2_prices_used_in_calibration": true
     },
     "evaluation_period": {
         "split": "H2_2025_INDEPENDENT",
@@ -11,121 +92,127 @@
         "end_date": "2025-12-08",
         "sample_count": 112,
         "refitted": false,
-        "notes": "Calibrator was NOT refit on H2. Evaluated strictly out-of-sample."
+        "notes": "Calibrator was NOT refit on H2. Evaluated strictly out-of-sample.",
+        "price_sharing_with_calibration": "None. Calibration label horizon terminates <= 2025-06-30. H2 evaluation begins 2025-07-01."
     },
     "sample_size_limitation": "H2 sample count is 112 bars. Standard error on accuracy is ~0.094. Results are reported with honest sample-size bounds.",
+    "calibration_methods": {
+        "DL_FUSION": "sigmoid (Platt scaling)",
+        "XGB": "raw (Pass-through identity)",
+        "LGBM": "raw (Pass-through identity)"
+    },
     "models": {
         "DL_FUSION": {
             "brier_score": {
-                "raw": 1.0630000603105354,
-                "calibrated": 0.8274249874073689,
-                "reduction": 0.23557507290316648
+                "raw": 1.0512739788914485,
+                "calibrated": 0.8325462119627193,
+                "reduction": 0.2187277669287292
             },
             "log_loss": {
-                "raw": 2.3527831259743834,
-                "calibrated": 5.8450397765263915,
-                "reduction": -3.492256650552008
+                "raw": 3.483223387495985,
+                "calibrated": 1.3614326513239317,
+                "reduction": 2.121790736172053
             },
             "accuracy": {
-                "raw": 0.33035714285714285,
-                "calibrated": 0.41964285714285715
+                "raw": 0.4375,
+                "calibrated": 0.14285714285714285
             },
             "ece": {
-                "raw": 0.49947273119219715,
-                "calibrated": 0.2513237238994666
+                "raw": 0.5066593063196966,
+                "calibrated": 0.35505457009587965
             },
             "class_metrics": {
                 "SELL": {
                     "actual_frequency": 0.32142857142857145,
-                    "raw_mean_predicted_prob": 0.5517163872718811,
-                    "calibrated_mean_predicted_prob": 0.35899630188941956
+                    "raw_mean_predicted_prob": 0.37796419858932495,
+                    "calibrated_mean_predicted_prob": 0.27959421277046204
                 },
                 "HOLD": {
                     "actual_frequency": 0.14285714285714285,
-                    "raw_mean_predicted_prob": 0.07481767237186432,
-                    "calibrated_mean_predicted_prob": 0.25181740522384644
+                    "raw_mean_predicted_prob": 0.024859094992280006,
+                    "calibrated_mean_predicted_prob": 0.497911661863327
                 },
                 "BUY": {
                     "actual_frequency": 0.5357142857142857,
-                    "raw_mean_predicted_prob": 0.37346595525741577,
-                    "calibrated_mean_predicted_prob": 0.3891863226890564
+                    "raw_mean_predicted_prob": 0.5971766710281372,
+                    "calibrated_mean_predicted_prob": 0.22249411046504974
                 }
             }
         },
         "XGB": {
             "brier_score": {
-                "raw": 0.6846145327108273,
-                "calibrated": 0.7663205319785936,
-                "reduction": -0.08170599926776634
+                "raw": 0.6861913010261261,
+                "calibrated": 0.6861913010261261,
+                "reduction": 0.0
             },
             "log_loss": {
-                "raw": 1.0874314254948072,
-                "calibrated": 1.2250532847163933,
-                "reduction": -0.1376218592215861
+                "raw": 1.0882952410195554,
+                "calibrated": 1.0882952410195554,
+                "reduction": 0.0
             },
             "accuracy": {
-                "raw": 0.22321428571428573,
-                "calibrated": 0.125
+                "raw": 0.21428571428571427,
+                "calibrated": 0.21428571428571427
             },
             "ece": {
-                "raw": 0.2336953766644001,
-                "calibrated": 0.3527963677687304
+                "raw": 0.2428645252117089,
+                "calibrated": 0.2428645252117089
             },
             "class_metrics": {
                 "SELL": {
                     "actual_frequency": 0.32142857142857145,
-                    "raw_mean_predicted_prob": 0.3770902752876282,
-                    "calibrated_mean_predicted_prob": 0.25643348693847656
+                    "raw_mean_predicted_prob": 0.3818514943122864,
+                    "calibrated_mean_predicted_prob": 0.3818514943122864
                 },
                 "HOLD": {
                     "actual_frequency": 0.14285714285714285,
-                    "raw_mean_predicted_prob": 0.24011431634426117,
-                    "calibrated_mean_predicted_prob": 0.41967007517814636
+                    "raw_mean_predicted_prob": 0.23556949198246002,
+                    "calibrated_mean_predicted_prob": 0.23556949198246002
                 },
                 "BUY": {
                     "actual_frequency": 0.5357142857142857,
-                    "raw_mean_predicted_prob": 0.38279539346694946,
-                    "calibrated_mean_predicted_prob": 0.3238965570926666
+                    "raw_mean_predicted_prob": 0.3825790286064148,
+                    "calibrated_mean_predicted_prob": 0.3825790286064148
                 }
             }
         },
         "LGBM": {
             "brier_score": {
-                "raw": 0.7074294512051823,
-                "calibrated": 0.7832047217974955,
-                "reduction": -0.07577527059231315
+                "raw": 0.7077084648730558,
+                "calibrated": 0.7077084648730558,
+                "reduction": 0.0
             },
             "log_loss": {
-                "raw": 1.1166241771051457,
-                "calibrated": 1.2584873007233064,
-                "reduction": -0.14186312361816067
+                "raw": 1.1168896375291038,
+                "calibrated": 1.1168896375291038,
+                "reduction": 0.0
             },
             "accuracy": {
-                "raw": 0.25892857142857145,
-                "calibrated": 0.24107142857142858
+                "raw": 0.25,
+                "calibrated": 0.25
             },
             "ece": {
-                "raw": 0.22238695779495737,
-                "calibrated": 0.25219166404449705
+                "raw": 0.23390956411216374,
+                "calibrated": 0.23390956411216374
             },
             "class_metrics": {
                 "SELL": {
                     "actual_frequency": 0.32142857142857145,
-                    "raw_mean_predicted_prob": 0.37854164779208305,
-                    "calibrated_mean_predicted_prob": 0.351421935814521
+                    "raw_mean_predicted_prob": 0.3785387510757518,
+                    "calibrated_mean_predicted_prob": 0.3785387510757518
                 },
                 "HOLD": {
                     "actual_frequency": 0.14285714285714285,
-                    "raw_mean_predicted_prob": 0.24394757622306892,
-                    "calibrated_mean_predicted_prob": 0.36930158071886066
+                    "raw_mean_predicted_prob": 0.24725296379907644,
+                    "calibrated_mean_predicted_prob": 0.24725296379907644
                 },
                 "BUY": {
                     "actual_frequency": 0.5357142857142857,
-                    "raw_mean_predicted_prob": 0.37751077598484795,
-                    "calibrated_mean_predicted_prob": 0.2792764834666183
+                    "raw_mean_predicted_prob": 0.3742082851251717,
+                    "calibrated_mean_predicted_prob": 0.3742082851251717
                 }
             }
         }
     },
-    "sha256": "cbb2216e4f52d2c89eb258fca582e1722a6f2cdf676f85f862e0cb5d22e47bd8"
+    "sha256": "1946ac5491bd342720cdec55dec8d5e628184776351348d9d5ee97368bf84f2c"
 }

@@ -83,7 +83,10 @@ class StrategyGovernanceEngine:
         for rel_path, expected_hash in manifest.get("code_hashes", {}).items():
             full_path = self.backend_dir / rel_path
             if not full_path.exists():
-                full_path = self.backend_dir / "src" / "execution" / rel_path.split("/")[-1]
+                fname = rel_path.split("/")[-1]
+                matches = list((self.backend_dir / "src").glob(f"**/{fname}"))
+                if matches:
+                    full_path = matches[0]
             actual_hash = self.compute_file_hash(full_path)
             if actual_hash != expected_hash:
                 violations.append(

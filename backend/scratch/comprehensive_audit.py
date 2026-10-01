@@ -1,15 +1,14 @@
 import sqlite3
+
 import numpy as np
-import pandas as pd
 from scipy import stats
-import yfinance as yf
 
 # pyrefly: ignore [missing-import]
 from scripts.evaluation.point_in_time_validation import (
-    fetch_aligned_market_data,
-    run_point_in_time_signal_generation,
     calculate_horizon_performance,
     compute_aggregate_metrics,
+    fetch_aligned_market_data,
+    run_point_in_time_signal_generation,
 )
 
 print("=" * 80)
@@ -56,10 +55,10 @@ ledger_metrics = compute_aggregate_metrics(ledger_eval, len(ledger_sigs))
 # =========================================================
 def analyze_expectancy_and_stats(eval_records, horizon=5):
     valid = [r for r in eval_records if r["horizons"].get(horizon) is not None]
-    
+
     buy_recs = [r for r in valid if r["signal"] == "BUY"]
     sell_recs = [r for r in valid if r["signal"] == "SELL"]
-    
+
     def get_stats_for_subset(subset):
         if not subset:
             return {}
@@ -67,38 +66,38 @@ def analyze_expectancy_and_stats(eval_records, horizon=5):
         n_trades = len(rets)
         wins = [r for r in rets if r > 0]
         losses = [r for r in rets if r <= 0]
-        
+
         n_win = len(wins)
         n_loss = len(losses)
         win_rate = n_win / n_trades if n_trades > 0 else 0
         loss_rate = n_loss / n_trades if n_trades > 0 else 0
-        
+
         avg_win = float(np.mean(wins)) if wins else 0.0
         avg_loss = float(np.mean(losses)) if losses else 0.0
         win_loss_ratio = abs(avg_win / avg_loss) if avg_loss != 0 else float("inf")
-        
+
         expectancy = (win_rate * avg_win) + (loss_rate * avg_loss)
         median_ret = float(np.median(rets))
         std_ret = float(np.std(rets, ddof=1)) if len(rets) > 1 else 0.0
-        
+
         # Cumulative return & Max Drawdown
         cum_equity = np.cumprod(1 + np.array(rets))
         peak = np.maximum.accumulate(cum_equity)
         dd = (cum_equity - peak) / peak
         max_dd = float(np.min(dd)) if len(dd) > 0 else 0.0
         cum_ret = float(cum_equity[-1] - 1.0) if len(cum_equity) > 0 else 0.0
-        
+
         # Profit factor
         sum_gains = sum(wins) if wins else 0.0
         sum_losses = abs(sum(losses)) if losses else 0.0
         profit_factor = sum_gains / sum_losses if sum_losses > 0 else float("inf")
-        
+
         # Sharpe (per trade annualized: ~252 / 5 = ~50 trades/year)
         sharpe = (np.mean(rets) / std_ret) * np.sqrt(50) if std_ret > 0 else 0.0
-        
+
         # 95% Confidence Interval for win rate
         ci_low, ci_high = stats.binomtest(n_win, n_trades).proportion_ci(confidence_level=0.95, method="wilson")
-        
+
         return {
             "n_trades": n_trades,
             "n_win": n_win,
@@ -118,7 +117,7 @@ def analyze_expectancy_and_stats(eval_records, horizon=5):
             "sharpe": sharpe,
             "rets": rets,
         }
-    
+
     return {
         "ALL": get_stats_for_subset(valid),
         "BUY": get_stats_for_subset(buy_recs),

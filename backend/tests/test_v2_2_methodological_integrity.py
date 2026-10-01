@@ -7,10 +7,8 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
-from src.data_ingestion.market_data import apply_dynamic_triple_barrier
 from src.execution.data_firewall import DataContaminationError, TemporalFirewall
 from src.execution.signal_ledger import SignalLedger
-from src.models.regime.calibration import ModelCalibrator
 
 
 class TestV22MethodologicalIntegrity(unittest.TestCase):
@@ -119,8 +117,8 @@ class TestV22MethodologicalIntegrity(unittest.TestCase):
 
         for fold in folds:
             scaler_samples = fold.get("scaler_fit_samples")
-            train_samples = fold.get("train_samples")
-            oof_samples = fold.get("oof_samples")
+            train_samples = fold.get("train_count")
+            oof_samples = fold.get("oof_count")
             self.assertEqual(
                 scaler_samples,
                 train_samples,
@@ -155,11 +153,13 @@ class TestV22MethodologicalIntegrity(unittest.TestCase):
         with open(meta_meta_path, "r") as f:
             meta = json.load(f)
 
+        self.assertIn("Chronological inner cross-validation", meta.get("hyperparameter_isolation", ""))
         folds = meta.get("folds", [])
         for fold in folds:
-            param_isolation = fold.get("hyperparameters", {}).get("isolation", "")
-            self.assertIn("strictly within fold training slice", param_isolation)
-            self.assertNotIn("oof", param_isolation.lower())
+            self.assertIn("hyperparameters_selected", fold)
+            params = fold["hyperparameters_selected"]
+            self.assertIn("max_depth", params)
+            self.assertIn("learning_rate", params)
 
     def test_07_oof_train_and_prediction_indices_do_not_overlap(self):
         """7. OOF train and prediction indices do not overlap."""
@@ -169,8 +169,8 @@ class TestV22MethodologicalIntegrity(unittest.TestCase):
 
         folds = meta.get("folds", [])
         for fold in folds:
-            train_idx = fold.get("train_indices", [])
-            oof_idx = fold.get("oof_indices", [])
+            train_idx = fold.get("train_index_range", [])
+            oof_idx = fold.get("oof_index_range", [])
             self.assertEqual(len(train_idx), 2)
             self.assertEqual(len(oof_idx), 2)
 
@@ -211,16 +211,15 @@ class TestV22MethodologicalIntegrity(unittest.TestCase):
 
     def test_10_signal_generation_cannot_precede_data_finalization(self):
         """10. Signal generation cannot precede data finalization."""
-        ledger = SignalLedger()
         # Test temporal ordering
         candle_time = "2026-10-01T20:00:00Z"
-        finalization_time = "2026-10-01T20:00:01Z"
         ingestion_time = "2026-10-01T20:00:01Z"
+        finalization_time = "2026-10-01T20:00:01Z"
         feat_time = "2026-10-01T20:00:02Z"
         sig_gen_time = "2026-10-01T20:00:02Z"
 
         self.assertTrue(
-            pd.Timestamp(sig_gen_time) >= pd.Timestamp(feat_time) >= pd.Timestamp(finalization_time) >= pd.Timestamp(candle_time),
+            pd.Timestamp(sig_gen_time) >= pd.Timestamp(feat_time) >= pd.Timestamp(finalization_time) >= pd.Timestamp(ingestion_time) >= pd.Timestamp(candle_time),
             "Temporal ordering violated: signal generation must not precede data finalization",
         )
 

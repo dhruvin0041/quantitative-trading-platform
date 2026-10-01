@@ -1,9 +1,9 @@
 import sqlite3
-import pandas as pd
+
 # pyrefly: ignore [missing-import]
 from scripts.evaluation.point_in_time_validation import (
-    fetch_aligned_market_data,
     calculate_horizon_performance,
+    fetch_aligned_market_data,
     format_eastern_timestamp,
 )
 
@@ -44,17 +44,17 @@ for r in eval_recs[-24:]:
     sig = r['signal']
     sig_p = f"${r['signal_price']:.2f}"
     nxt_o = f"${r['next_open']:.2f}"
-    
+
     h1 = r['horizons'].get(1)
     h3 = r['horizons'].get(3)
     h5 = r['horizons'].get(5)
     h10 = r['horizons'].get(10)
-    
+
     r1_str = f"{h1['return_net']*100:+.2f}%" if h1 else "N/A"
     r3_str = f"{h3['return_net']*100:+.2f}%" if h3 else "N/A"
     r5_str = f"{h5['return_net']*100:+.2f}%" if h5 else "N/A"
     r10_str = f"{h10['return_net']*100:+.2f}%" if h10 else "N/A"
     fut_p = f"${h5['exit_close']:.2f}" if h5 else "N/A"
     outcome = "CORRECT" if (h5 and h5['is_correct']) else ("INCORRECT" if h5 else "PENDING")
-    
+
     print(f"{d:<12} | {sig:<6} | {sig_p:<12} | {nxt_o:<10} | {fut_p:<10} | {r1_str:<10} | {r3_str:<10} | {r5_str:<10} | {r10_str:<11} | {outcome:<10}")

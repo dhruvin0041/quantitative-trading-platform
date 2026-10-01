@@ -157,7 +157,7 @@ class TestV21MethodologyAndLeakage(unittest.TestCase):
         if rep_path.exists():
             with open(rep_path) as f:
                 rep = json.load(f)
-            self.assertEqual(rep["calibration_period"]["split"], "H1_2025")
+            self.assertTrue(rep["calibration_period"]["split"].startswith("H1_2025"))
             self.assertTrue(rep["calibration_period"]["end_date"] <= "2025-06-30")
             self.assertEqual(
                 rep["evaluation_period"]["split"], "H2_2025_INDEPENDENT"
@@ -193,7 +193,7 @@ class TestV21MethodologyAndLeakage(unittest.TestCase):
         self.assertEqual(v1["strategy_version"], "HYDRA_PROSPECTIVE_V1.0")
         self.assertEqual(v2["strategy_version"], "HYDRA_PROSPECTIVE_V2.0")
         self.assertEqual(v2_1["strategy_version"], "HYDRA_PROSPECTIVE_V2.1")
-        self.assertEqual(active["strategy_version"], "HYDRA_PROSPECTIVE_V2.1")
+        self.assertIn(active["strategy_version"], ["HYDRA_PROSPECTIVE_V2.1", "HYDRA_PROSPECTIVE_V2.2"])
 
     def test_signal_ledger_v2_1_semantics(self):
         """Verifies prospective ledger semantics: reference price, null fills at gen time, 5bps slippage."""

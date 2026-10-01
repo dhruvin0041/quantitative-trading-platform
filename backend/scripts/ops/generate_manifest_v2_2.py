@@ -8,9 +8,9 @@ Records exact SHA-256 hashes of all models, preprocessing scalers, calibrators, 
 import hashlib
 import json
 import subprocess
+import zoneinfo
 from datetime import datetime, timezone
 from pathlib import Path
-import zoneinfo
 
 
 def compute_sha256(path: Path) -> str:
@@ -77,16 +77,22 @@ def main():
         config_hashes[cf] = compute_sha256(p)
 
     # 3. Core Execution & Modeling Code Hashes
-    code_files = {
-        "live_inference.py": src_dir / "inference" / "live_inference.py",
-        "inference_service.py": src_dir / "services" / "inference_service.py",
-        "signal_ledger.py": src_dir / "execution" / "signal_ledger.py",
-        "backtest_service.py": src_dir / "services" / "backtest_service.py",
-        "data_firewall.py": src_dir / "execution" / "data_firewall.py",
-        "calibration.py": src_dir / "models" / "regime" / "calibration.py",
-        "meta_ensemble.py": src_dir / "models" / "ensemble" / "meta_ensemble.py",
-    }
-    code_hashes = {k: compute_sha256(v) for k, v in code_files.items()}
+    code_file_names = [
+        "live_inference.py",
+        "inference_service.py",
+        "signal_ledger.py",
+        "backtest_service.py",
+        "data_firewall.py",
+        "calibration.py",
+        "meta_ensemble.py",
+    ]
+    code_hashes = {}
+    for cfn in code_file_names:
+        matches = list(src_dir.glob(f"**/{cfn}"))
+        if matches:
+            code_hashes[cfn] = compute_sha256(matches[0])
+        else:
+            code_hashes[cfn] = f"MISSING_{cfn}"
 
     # 4. Git Commit
     git_commit = get_git_commit(backend_dir)
