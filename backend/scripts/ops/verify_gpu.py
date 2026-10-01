@@ -24,7 +24,7 @@ def verify_pytorch():
         print(f"  Device Name: {torch.cuda.get_device_name(0)}")
         print(f"  Device Count: {torch.cuda.device_count()}")
         props = torch.cuda.get_device_properties(0)
-        print(f"  Total VRAM: {props.total_mem / (1024**3):.2f} GB")
+        print(f"  Total VRAM: {props.total_memory / (1024**3):.2f} GB")
         print(f"  Compute Capability: {props.major}.{props.minor}")
         print(f"  cuDNN Version: {torch.backends.cudnn.version()}")
 

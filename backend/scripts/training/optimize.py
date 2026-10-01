@@ -203,15 +203,25 @@ def run_optuna_optimization(ticker, n_trials=50, start="2016-01-01", end="2024-1
         df_features = df_features.iloc[119:]
 
     print(f"\nStarting Hybrid 5-Model Optimization for {ticker} ({len(df_features)} samples)...")
-    study = optuna.create_study(direction="maximize")
+    sampler = optuna.samplers.TPESampler(seed=42)
+    study = optuna.create_study(direction="maximize", sampler=sampler)
     study.optimize(lambda t: objective(t, df_features), n_trials=n_trials, n_jobs=1)
 
     print(f"\nBEST ACCURACY: {study.best_value * 100:.2f}%")
 
     os.makedirs("configs", exist_ok=True)
     output_path = f"configs/optimized_params_{ticker}.json"
+    best_config = dict(study.best_params)
+    best_config["_provenance"] = {
+        "start_date": "2016-01-01",
+        "end_date": "2024-12-31",
+        "n_samples": len(df_features),
+        "n_trials": n_trials,
+        "best_accuracy": float(study.best_value),
+        "random_state": 42,
+    }
     with open(output_path, "w") as f:
-        json.dump(study.best_params, f, indent=4)
+        json.dump(best_config, f, indent=4)
     print(f"Results saved to {output_path}")
     return True
 

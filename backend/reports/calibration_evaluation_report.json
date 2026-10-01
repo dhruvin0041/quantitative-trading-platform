@@ -1,0 +1,131 @@
+{
+    "calibration_period": {
+        "split": "H1_2025",
+        "start_date": "2025-03-31",
+        "end_date": "2025-06-30",
+        "sample_count": 63
+    },
+    "evaluation_period": {
+        "split": "H2_2025_INDEPENDENT",
+        "start_date": "2025-07-01",
+        "end_date": "2025-12-08",
+        "sample_count": 112,
+        "refitted": false,
+        "notes": "Calibrator was NOT refit on H2. Evaluated strictly out-of-sample."
+    },
+    "sample_size_limitation": "H2 sample count is 112 bars. Standard error on accuracy is ~0.094. Results are reported with honest sample-size bounds.",
+    "models": {
+        "DL_FUSION": {
+            "brier_score": {
+                "raw": 1.0630000603105354,
+                "calibrated": 0.8274249874073689,
+                "reduction": 0.23557507290316648
+            },
+            "log_loss": {
+                "raw": 2.3527831259743834,
+                "calibrated": 5.8450397765263915,
+                "reduction": -3.492256650552008
+            },
+            "accuracy": {
+                "raw": 0.33035714285714285,
+                "calibrated": 0.41964285714285715
+            },
+            "ece": {
+                "raw": 0.49947273119219715,
+                "calibrated": 0.2513237238994666
+            },
+            "class_metrics": {
+                "SELL": {
+                    "actual_frequency": 0.32142857142857145,
+                    "raw_mean_predicted_prob": 0.5517163872718811,
+                    "calibrated_mean_predicted_prob": 0.35899630188941956
+                },
+                "HOLD": {
+                    "actual_frequency": 0.14285714285714285,
+                    "raw_mean_predicted_prob": 0.07481767237186432,
+                    "calibrated_mean_predicted_prob": 0.25181740522384644
+                },
+                "BUY": {
+                    "actual_frequency": 0.5357142857142857,
+                    "raw_mean_predicted_prob": 0.37346595525741577,
+                    "calibrated_mean_predicted_prob": 0.3891863226890564
+                }
+            }
+        },
+        "XGB": {
+            "brier_score": {
+                "raw": 0.6846145327108273,
+                "calibrated": 0.7663205319785936,
+                "reduction": -0.08170599926776634
+            },
+            "log_loss": {
+                "raw": 1.0874314254948072,
+                "calibrated": 1.2250532847163933,
+                "reduction": -0.1376218592215861
+            },
+            "accuracy": {
+                "raw": 0.22321428571428573,
+                "calibrated": 0.125
+            },
+            "ece": {
+                "raw": 0.2336953766644001,
+                "calibrated": 0.3527963677687304
+            },
+            "class_metrics": {
+                "SELL": {
+                    "actual_frequency": 0.32142857142857145,
+                    "raw_mean_predicted_prob": 0.3770902752876282,
+                    "calibrated_mean_predicted_prob": 0.25643348693847656
+                },
+                "HOLD": {
+                    "actual_frequency": 0.14285714285714285,
+                    "raw_mean_predicted_prob": 0.24011431634426117,
+                    "calibrated_mean_predicted_prob": 0.41967007517814636
+                },
+                "BUY": {
+                    "actual_frequency": 0.5357142857142857,
+                    "raw_mean_predicted_prob": 0.38279539346694946,
+                    "calibrated_mean_predicted_prob": 0.3238965570926666
+                }
+            }
+        },
+        "LGBM": {
+            "brier_score": {
+                "raw": 0.7074294512051823,
+                "calibrated": 0.7832047217974955,
+                "reduction": -0.07577527059231315
+            },
+            "log_loss": {
+                "raw": 1.1166241771051457,
+                "calibrated": 1.2584873007233064,
+                "reduction": -0.14186312361816067
+            },
+            "accuracy": {
+                "raw": 0.25892857142857145,
+                "calibrated": 0.24107142857142858
+            },
+            "ece": {
+                "raw": 0.22238695779495737,
+                "calibrated": 0.25219166404449705
+            },
+            "class_metrics": {
+                "SELL": {
+                    "actual_frequency": 0.32142857142857145,
+                    "raw_mean_predicted_prob": 0.37854164779208305,
+                    "calibrated_mean_predicted_prob": 0.351421935814521
+                },
+                "HOLD": {
+                    "actual_frequency": 0.14285714285714285,
+                    "raw_mean_predicted_prob": 0.24394757622306892,
+                    "calibrated_mean_predicted_prob": 0.36930158071886066
+                },
+                "BUY": {
+                    "actual_frequency": 0.5357142857142857,
+                    "raw_mean_predicted_prob": 0.37751077598484795,
+                    "calibrated_mean_predicted_prob": 0.2792764834666183
+                }
+            }
+        }
+    },
+    "sha256": "cbb2216e4f52d2c89eb258fca582e1722a6f2cdf676f85f862e0cb5d22e47bd8"
+}

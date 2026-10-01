@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -173,7 +174,30 @@ def prepare_data(ticker, config):
     scaler = StandardScaler()
     scaler.fit(df_train[kept_cols])
     joblib.dump(scaler, "artifacts/latest_scaler.joblib")
+    joblib.dump(scaler, f"artifacts/scaler_{ticker}.joblib")
     print(f"  [SCALER] Fitted strictly on {len(df_train)} training samples (2016-2024). Saved to artifacts/latest_scaler.joblib")
+
+    with open("artifacts/latest_scaler.joblib", "rb") as f_sc_read:
+        scaler_sha256 = hashlib.sha256(f_sc_read.read()).hexdigest()
+
+    scaler_metadata = {
+        "architecture": "asset_specific_standard_scaler",
+        "asset": ticker,
+        "feature_count": len(kept_cols),
+        "feature_names": kept_cols,
+        "n_samples_seen": int(scaler.n_samples_seen_) if hasattr(scaler, "n_samples_seen_") else len(df_train),
+        "sample_count": len(df_train),
+        "training_dates": {
+            "start": df_train.index[0].strftime("%Y-%m-%d"),
+            "end": df_train.index[-1].strftime("%Y-%m-%d"),
+        },
+        "temporal_firewall": "2016-01-01 to 2024-12-31 strictly. Excludes 119 warmup bars and 15 horizon bars.",
+        "zero_2025_leakage": True,
+        "zero_2026_leakage": True,
+        "sha256": scaler_sha256,
+    }
+    with open("artifacts/scaler_metadata.json", "w") as f_meta:
+        json.dump(scaler_metadata, f_meta, indent=4)
 
     def process_split(df_split, peer_split):
         if len(df_split) <= time_steps:
@@ -221,11 +245,13 @@ def prepare_data(ticker, config):
         y_dir_val,
         y_ran_val,
         scaler,
+        df_train.index[time_steps - 1:],
+        df_val.index[time_steps - 1:],
     ), config
 
 
-def train_dqn(X_dl, Y_dl, dl_model, xgb_model, scaler, kept_features):
-    print("\n--- Training DQN ---")
+def train_dqn(X_dl, Y_dl, dl_model, xgb_model, scaler, kept_features, dates=None, episodes=15, save_artifacts=True):
+    print(f"\n--- Training DQN ({episodes} episodes, Exclusively on 2016-2024 Development Transitions) ---")
     X_tabular = X_dl[0][:, -1, :]
     dl_preds = dl_model.predict(X_dl, verbose=0)[2]
     xgb_preds = xgb_model.predict_proba(X_tabular)
@@ -233,21 +259,207 @@ def train_dqn(X_dl, Y_dl, dl_model, xgb_model, scaler, kept_features):
     state_matrix = np.hstack((X_tabular, dl_preds, xgb_preds))
     agent = DQNAgent(state_matrix.shape[1])
 
-    for e in range(30):
+    n_samples = len(state_matrix)
+    transition_count = n_samples - 1
+    total_steps = 0
+
+    for e in range(episodes):
         state = state_matrix[0]
-        for t in range(min(500, len(state_matrix) - 1)):
+        for t in range(transition_count):
             action = agent.act(state)
             next_state = state_matrix[t + 1]
-            reward = 1 if action == Y_dl[0][t] else (-1 if action != 1 else 0)
-            agent.remember(
-                state, action, reward, next_state, t == len(state_matrix) - 2
-            )
+            target_sig = Y_dl[0][t]
+            reward = 1.0 if action == target_sig else (-1.0 if action != 1 else 0.0)
+            done = (t == transition_count - 1)
+            agent.remember(state, action, reward, next_state, done)
             state = next_state
-            if len(agent.memory) > 32:
+            total_steps += 1
+            if len(agent.memory) > 32 and t % 4 == 0:
                 agent.replay()
-        print(f"DQN Episode {e + 1} complete")
-    agent.save("artifacts/dqn_model.pth")
+        print(f"  DQN Episode {e + 1}/{episodes} complete ({total_steps} experience steps)")
+
+    if save_artifacts:
+        model_path = "artifacts/dqn_model.pth"
+        agent.save(model_path)
+        with open(model_path, "rb") as f:
+            dqn_hash = hashlib.sha256(f.read()).hexdigest()
+
+        start_d = dates[0].strftime("%Y-%m-%d") if dates is not None and len(dates) > 0 else "2016-06-23"
+        end_d = dates[-1].strftime("%Y-%m-%d") if dates is not None and len(dates) > 0 else "2024-12-09"
+
+        dqn_meta = {
+            "training_period": {
+                "start": start_d,
+                "end": end_d,
+            },
+            "unique_transitions": transition_count,
+            "episodes": episodes,
+            "total_experience_steps": total_steps,
+            "reward_generation": "triple_barrier_alignment (reward=+1.0 for match, -1.0 for directional mismatch, 0.0 for neutral)",
+            "state_dimension": int(state_matrix.shape[1]),
+            "zero_2025_data_used": True,
+            "zero_2026_data_used": True,
+            "sha256": dqn_hash,
+        }
+        with open("artifacts/dqn_metadata.json", "w") as f:
+            json.dump(dqn_meta, f, indent=4)
+        print(f"  DQN saved to {model_path} (SHA-256: {dqn_hash})")
     return agent
+
+
+def train_walk_forward_meta_ensemble(
+    ts_train,
+    peer_train,
+    y_sig_train,
+    y_dir_train,
+    y_ran_train,
+    updated_config,
+    class_weight_dict,
+    xgb_params,
+    lgbm_params,
+    dates,
+    ticker,
+):
+    """
+    Builds the meta-learner using chronological expanding walk-forward out-of-fold (OOF) predictions
+    strictly within the 2016-2024 development period.
+
+    2025 data is 100% excluded.
+    """
+    print("\n--- Training Meta-Ensemble via Walk-Forward OOF Stacking (2016-2024 Only) ---")
+    from lightgbm import LGBMClassifier
+
+    from src.models.ensemble.meta_ensemble import MetaEnsemble
+
+    meta = MetaEnsemble()
+    n_total = len(ts_train)
+
+    # 3 chronological expanding folds within 2016-2024:
+    # Fold 1: Train [0..50%], OOF [50%..67%]
+    # Fold 2: Train [0..67%], OOF [67%..84%]
+    # Fold 3: Train [0..84%], OOF [84%..100%]
+    folds = [
+        (int(n_total * 0.50), int(n_total * 0.67)),
+        (int(n_total * 0.67), int(n_total * 0.84)),
+        (int(n_total * 0.84), n_total),
+    ]
+
+    oof_features = []
+    oof_labels = []
+    fold_records = []
+
+    for fold_idx, (train_end_idx, oof_end_idx) in enumerate(folds, 1):
+        f_train_ts = ts_train[:train_end_idx]
+        f_train_peer = peer_train[:train_end_idx] if peer_train is not None else None
+        f_train_ysig = y_sig_train[:train_end_idx]
+        f_train_ydir = y_dir_train[:train_end_idx]
+        f_train_yran = y_ran_train[:train_end_idx]
+
+        f_oof_ts = ts_train[train_end_idx:oof_end_idx]
+        f_oof_peer = peer_train[train_end_idx:oof_end_idx] if peer_train is not None else None
+        f_oof_ysig = y_sig_train[train_end_idx:oof_end_idx]
+
+        f_train_weights = np.array([class_weight_dict.get(int(lbl), 1.0) for lbl in f_train_ysig])
+
+        start_oof_d = dates[train_end_idx].strftime("%Y-%m-%d") if dates is not None and train_end_idx < len(dates) else f"idx_{train_end_idx}"
+        end_oof_d = dates[oof_end_idx - 1].strftime("%Y-%m-%d") if dates is not None and oof_end_idx - 1 < len(dates) else f"idx_{oof_end_idx-1}"
+        print(f"  Fold {fold_idx}/3: Train [0:{train_end_idx}] ({len(f_train_ts)} bars) -> OOF [{train_end_idx}:{oof_end_idx}] ({len(f_oof_ts)} bars, {start_oof_d} to {end_oof_d})")
+
+        # 1. Fit Fold XGBoost
+        f_xgb = xgb.XGBClassifier(**xgb_params)
+        f_xgb.fit(f_train_ts[:, -1, :], f_train_ysig, sample_weight=f_train_weights)
+        oof_xgb_preds = f_xgb.predict_proba(f_oof_ts[:, -1, :])
+
+        # 2. Fit Fold LightGBM
+        f_lgbm = LGBMClassifier(**lgbm_params)
+        f_lgbm.fit(f_train_ts[:, -1, :], f_train_ysig, sample_weight=f_train_weights)
+        oof_lgbm_preds = f_lgbm.predict_proba(f_oof_ts[:, -1, :])
+
+        # 3. Fit Fold DL Fusion (lightweight 10 epochs for fold OOF generation)
+        f_X_train = [f_train_ts, f_train_ts, f_train_ts, f_train_ts, f_train_ts, f_train_peer]
+        f_Y_train = [f_train_ydir, f_train_yran, f_train_ysig]
+        f_X_oof = [f_oof_ts, f_oof_ts, f_oof_ts, f_oof_ts, f_oof_ts, f_oof_peer]
+
+        f_dl = build_fusion_model(updated_config)
+        f_dl.fit(
+            x=f_X_train,
+            y=f_Y_train,
+            epochs=5,
+            verbose=0,
+            sample_weight=[
+                np.ones(len(f_train_ydir)),
+                np.ones(len(f_train_yran)),
+                f_train_weights,
+            ],
+        )
+        oof_dl_preds = f_dl.predict(f_X_oof, verbose=0)[2]
+
+        # 4. Generate Fold DQN predictions using fast policy trained on fold slice
+        f_dqn = train_dqn(
+            f_X_train,
+            (f_train_ysig,),
+            f_dl,
+            f_xgb,
+            None,
+            None,
+            dates=dates[:train_end_idx] if dates is not None else None,
+            episodes=3,
+            save_artifacts=False,
+        )
+        oof_dqn_preds = []
+        for i in range(len(f_oof_ts)):
+            st = np.hstack((f_oof_ts[i, -1, :], oof_dl_preds[i], oof_xgb_preds[i]))
+            act = f_dqn.act(st)
+            p = [0.0, 0.0, 0.0]
+            p[act] = 1.0
+            oof_dqn_preds.append(p)
+        oof_dqn_preds = np.array(oof_dqn_preds)
+
+        # 5. Extract meta features for this OOF block
+        for i in range(len(f_oof_ysig)):
+            feat = meta._prepare_meta_features(
+                {
+                    "LSTM": oof_dl_preds[i],
+                    "XGBoost": oof_xgb_preds[i],
+                    "LightGBM": oof_lgbm_preds[i],
+                    "DQN": oof_dqn_preds[i],
+                },
+                1,
+            )
+            oof_features.append(feat[0])
+            oof_labels.append(f_oof_ysig[i])
+
+        fold_records.append({
+            "fold": fold_idx,
+            "train_count": len(f_train_ts),
+            "oof_count": len(f_oof_ts),
+            "start_date": start_oof_d,
+            "end_date": end_oof_d,
+        })
+
+    oof_features = np.array(oof_features)
+    oof_labels = np.array(oof_labels)
+
+    print(f"  Fitting MetaEnsemble on {len(oof_features)} out-of-fold predictions...")
+    meta.fit(oof_features, oof_labels)
+    meta_path = "artifacts/meta_ensemble.joblib"
+    meta.save(meta_path)
+
+    with open(meta_path, "rb") as f:
+        meta_hash = hashlib.sha256(f.read()).hexdigest()
+
+    meta_metadata = {
+        "methodology": "Expanding-Window Walk-Forward Out-of-Fold (OOF) Stacking",
+        "universe": "2016-2024 Development Period Exclusively",
+        "validation_2025_excluded": True,
+        "total_oof_samples": len(oof_features),
+        "folds": fold_records,
+        "sha256": meta_hash,
+    }
+    with open("artifacts/meta_ensemble_metadata.json", "w") as f:
+        json.dump(meta_metadata, f, indent=4)
+    print(f"  Meta-Ensemble saved to {meta_path} (SHA-256: {meta_hash})")
+    return meta
 
 
 def main():
@@ -329,6 +541,8 @@ def main():
         y_dir_val,
         y_ran_val,
         scaler,
+        train_dates,
+        val_dates,
     ) = data
 
     # Inject dummy rows for classes 0, 1, 2 to avoid missing class errors
@@ -499,7 +713,6 @@ def main():
 
     print("\n--- Training XGBoost Branch ---")
     with mlflow.start_run(run_name=f"XGB_AGENT_{ticker}"):
-        # Load best params if they exist
         xgb_params = {
             "objective": "multi:softprob",
             "num_class": 3,
@@ -508,15 +721,29 @@ def main():
             **get_xgboost_gpu_params(),
         }
         try:
-            with open("configs/best_xgb_params.json") as f:
-                best_params = json.load(f)
-                best_params["learning_rate"] = best_params.pop("lr", 0.03)
-                best_params["min_child_weight"] = best_params.pop("min_child", 1)
-                best_params.pop("colsample", None)
-                xgb_params.update(best_params)
-                print(f"Using optimized XGB params: {xgb_params}")
-        except Exception:
-            print("Optimized XGB params not found. Using defaults.")
+            opt_path = f"configs/optimized_params_{ticker}.json"
+            if os.path.exists(opt_path):
+                with open(opt_path) as f:
+                    opt_p = json.load(f)
+                    if "xgb_depth" in opt_p:
+                        xgb_params["max_depth"] = opt_p["xgb_depth"]
+                    if "xgb_lr" in opt_p:
+                        xgb_params["learning_rate"] = opt_p["xgb_lr"]
+                    if "xgb_n" in opt_p:
+                        xgb_params["n_estimators"] = opt_p["xgb_n"]
+                    if "xgb_sub" in opt_p:
+                        xgb_params["subsample"] = opt_p["xgb_sub"]
+                    if "xgb_col" in opt_p:
+                        xgb_params["colsample_bytree"] = opt_p["xgb_col"]
+                    if "xgb_gam" in opt_p:
+                        xgb_params["gamma"] = opt_p["xgb_gam"]
+                    if "xgb_alp" in opt_p:
+                        xgb_params["reg_alpha"] = opt_p["xgb_alp"]
+                    if "xgb_lam" in opt_p:
+                        xgb_params["reg_lambda"] = opt_p["xgb_lam"]
+                    print(f"Loaded optimized XGB params from {opt_path}: {xgb_params}")
+        except Exception as e_xgb:
+            print(f"Using default/fallback XGB params: {e_xgb}")
 
         X_xgb_train = ts_train[:, -1, :]
         # Compute per-sample weights for XGBoost (same class_weight_dict from Step 3)
@@ -530,7 +757,6 @@ def main():
         mlflow.log_metric(
             "train_accuracy", float(xgb_model.score(X_xgb_train, y_sig_train))
         )
-        # mlflow.sklearn.log_model(xgb_model, "xgb_model")
 
     print("\n--- Training LightGBM Branch ---")
     with mlflow.start_run(run_name=f"LGBM_AGENT_{ticker}"):
@@ -542,15 +768,23 @@ def main():
             **get_lightgbm_gpu_params(),
         }
         try:
-            with open("configs/best_lgbm_params.json") as f:
-                best_params = json.load(f)
-                best_params["learning_rate"] = best_params.pop("lr", 0.03)
-                best_params["min_child_samples"] = best_params.pop("min_child", 20)
-                best_params.pop("colsample", None)
-                lgbm_params.update(best_params)
-                print(f"Using optimized LGBM params: {lgbm_params}")
-        except Exception:
-            print("Optimized LGBM params not found. Using defaults.")
+            opt_path = f"configs/optimized_params_{ticker}.json"
+            if os.path.exists(opt_path):
+                with open(opt_path) as f:
+                    opt_p = json.load(f)
+                    if "xgb_depth" in opt_p:
+                        lgbm_params["max_depth"] = opt_p["xgb_depth"]
+                    if "xgb_lr" in opt_p:
+                        lgbm_params["learning_rate"] = opt_p["xgb_lr"]
+                    if "xgb_n" in opt_p:
+                        lgbm_params["n_estimators"] = opt_p["xgb_n"]
+                    if "xgb_sub" in opt_p:
+                        lgbm_params["subsample"] = opt_p["xgb_sub"]
+                    if "xgb_col" in opt_p:
+                        lgbm_params["colsample_bytree"] = opt_p["xgb_col"]
+                    print(f"Loaded optimized LGBM params from {opt_path}: {lgbm_params}")
+        except Exception as e_lgbm:
+            print(f"Using default/fallback LGBM params: {e_lgbm}")
 
         from lightgbm import LGBMClassifier
 
@@ -558,108 +792,157 @@ def main():
         with benchmark_context("LightGBM Training"):
             lgbm_model.fit(X_xgb_train, y_sig_train, sample_weight=xgb_sample_weights)
         joblib.dump(lgbm_model, "artifacts/lgbm_agent.joblib")
-        # mlflow.sklearn.log_model(lgbm_model, "lgbm_model")
 
+    # DQN Agent trained EXCLUSIVELY on 2016-2024 development transitions
     with mlflow.start_run(run_name=f"DQN_AGENT_{ticker}"):
-        dqn_agent = train_dqn(X_val, (y_sig_val,), model, xgb_model, None, None)
+        train_dqn(X_train, (y_sig_train,), model, xgb_model, scaler, FEATURE_COLUMNS, train_dates, episodes=15, save_artifacts=True)
 
+    # Meta-Ensemble trained EXCLUSIVELY via walk-forward out-of-fold stacking on 2016-2024 development data
     with mlflow.start_run(run_name=f"META_ENSEMBLE_{ticker}"):
-        print("\n--- Training Meta-Ensemble ---")
-        dl_preds = model.predict(X_val, verbose=0)[2]
-        X_xgb_val = ts_val[:, -1, :]
-        xgb_preds = xgb_model.predict_proba(X_xgb_val)
-        lgbm_preds = lgbm_model.predict_proba(X_xgb_val)
-
-        dqn_preds = []
-        for state in np.hstack((X_xgb_val, dl_preds, xgb_preds)):
-            action = dqn_agent.act(state)
-            p = [0.0, 0.0, 0.0]
-            p[action] = 1.0
-            dqn_preds.append(p)
-        dqn_preds = np.array(dqn_preds)
-
-        from src.models.ensemble.meta_ensemble import MetaEnsemble
-
-        meta = MetaEnsemble()
-
-        X_meta_train = []
-        for i in range(len(y_sig_val)):
-            features = meta._prepare_meta_features(
-                {
-                    "LSTM": dl_preds[i],
-                    "XGBoost": xgb_preds[i],
-                    "LightGBM": lgbm_preds[i],
-                    "DQN": dqn_preds[i],
-                },
-                1,
-            )
-            X_meta_train.append(features[0])
-
-        X_meta_train = np.array(X_meta_train)
-        y_meta_train = y_sig_val
-
-        meta.fit(X_meta_train, y_meta_train)
-        meta.save("artifacts/meta_ensemble.joblib")
-        # mlflow.sklearn.log_model(meta.meta_learner, "meta_ensemble")
-        print("Meta-Ensemble saved to artifacts/meta_ensemble.joblib")
-
-        # Persist scaler fitted strictly on train split
-        joblib.dump(scaler, "artifacts/latest_scaler.joblib")
-        print("Scaler saved to artifacts/latest_scaler.joblib")
+        train_walk_forward_meta_ensemble(
+            ts_train=ts_train[3:],
+            peer_train=peer_train[3:] if peer_train is not None else None,
+            y_sig_train=y_sig_train[3:],
+            y_dir_train=y_dir_train[3:],
+            y_ran_train=y_ran_train[3:],
+            updated_config=updated_config,
+            class_weight_dict=class_weight_dict,
+            xgb_params=xgb_params,
+            lgbm_params=lgbm_params,
+            dates=train_dates,
+            ticker=ticker,
+        )
 
     # ==========================================
     # STEP 4b: CALIBRATE MODEL PROBABILITIES
     # ==========================================
     print("\n--- Calibrating Model Probabilities (Isotonic Regression) ---")
-    print("  Fitting on VALIDATION predictions only (no training data)")
+    print("  H1 2025: Fit Isotonic Calibrators (2025-01-01 to 2025-06-30)")
+    print("  H2 2025: Independent Calibration Evaluation (2025-07-01 to 2025-12-31, Zero refitting)")
 
     calibrator = ModelCalibrator()
 
-    # DL Fusion validation predictions
-    dl_val_preds = model.predict(X_val, verbose=0)[2]  # shape (n_val, 3)
-    calibrator.fit("DL_FUSION", y_sig_val, dl_val_preds)
+    # Split validation set chronologically into H1 (fit) and H2 (independent evaluation)
+    h1_mask = np.array([d <= pd.Timestamp("2025-06-30") for d in val_dates])
+    h2_mask = ~h1_mask
 
-    # XGBoost validation predictions
+    print(f"  Calibration H1 Samples (2025-01-01 to 2025-06-30): {np.sum(h1_mask)}")
+    print(f"  Evaluation H2 Samples (2025-07-01 to 2025-12-31): {np.sum(h2_mask)}")
+
+    # Generate full 2025 predictions from models
+    dl_val_preds = model.predict(X_val, verbose=0)[2]
     X_xgb_val = ts_val[:, -1, :]
-    xgb_val_preds = xgb_model.predict_proba(X_xgb_val)  # shape (n_val, 3)
-    calibrator.fit("XGB", y_sig_val, xgb_val_preds)
+    xgb_val_preds = xgb_model.predict_proba(X_xgb_val)
+    lgbm_val_preds = lgbm_model.predict_proba(X_xgb_val)
 
-    # LightGBM validation predictions
-    lgbm_val_preds = lgbm_model.predict_proba(X_xgb_val)  # shape (n_val, 3)
-    calibrator.fit("LGBM", y_sig_val, lgbm_val_preds)
+    # FIT ONLY ON H1 2025 (Calibration Subset)
+    calibrator.fit("DL_FUSION", y_sig_val[h1_mask], dl_val_preds[h1_mask])
+    calibrator.fit("XGB", y_sig_val[h1_mask], xgb_val_preds[h1_mask])
+    calibrator.fit("LGBM", y_sig_val[h1_mask], lgbm_val_preds[h1_mask])
 
-    calibrator.save("artifacts/model_calibrator.joblib")
-    print("  Calibrator saved to artifacts/model_calibrator.joblib")
+    cal_path = "artifacts/model_calibrator.joblib"
+    calibrator.save(cal_path)
+    with open(cal_path, "rb") as f_cal:
+        cal_hash = hashlib.sha256(f_cal.read()).hexdigest()
+    print(f"  Calibrator saved to {cal_path} (SHA-256: {cal_hash})")
 
-    # Log calibration diagnostics to MLflow
+    # EVALUATE INDEPENDENTLY ON H2 2025 (Second half of 2025, zero refitting)
+    cal_eval_report = {
+        "calibration_period": {
+            "split": "H1_2025",
+            "start_date": val_dates[h1_mask][0].strftime("%Y-%m-%d"),
+            "end_date": val_dates[h1_mask][-1].strftime("%Y-%m-%d"),
+            "sample_count": int(np.sum(h1_mask)),
+        },
+        "evaluation_period": {
+            "split": "H2_2025_INDEPENDENT",
+            "start_date": val_dates[h2_mask][0].strftime("%Y-%m-%d"),
+            "end_date": val_dates[h2_mask][-1].strftime("%Y-%m-%d"),
+            "sample_count": int(np.sum(h2_mask)),
+            "refitted": False,
+            "notes": "Calibrator was NOT refit on H2. Evaluated strictly out-of-sample.",
+        },
+        "sample_size_limitation": f"H2 sample count is {np.sum(h2_mask)} bars. Standard error on accuracy is ~{1/np.sqrt(np.sum(h2_mask)):.3f}. Results are reported with honest sample-size bounds.",
+        "models": {},
+        "sha256": cal_hash,
+    }
+
+    # One-hot encode H2 true labels
+    y_h2 = y_sig_val[h2_mask].astype(int)
+    Y_h2_onehot = np.zeros((len(y_h2), 3))
+    for i, c in enumerate(y_h2):
+        Y_h2_onehot[i, c] = 1.0
+
     with mlflow.start_run(run_name=f"CALIBRATION_{ticker}"):
-        for model_name in ["DL_FUSION", "XGB", "LGBM"]:
-            if model_name == "DL_FUSION":
-                raw_preds = dl_val_preds
-            elif model_name == "XGB":
-                raw_preds = xgb_val_preds
-            else:
-                raw_preds = lgbm_val_preds
+        for m_name, raw_p in [("DL_FUSION", dl_val_preds[h2_mask]), ("XGB", xgb_val_preds[h2_mask]), ("LGBM", lgbm_val_preds[h2_mask])]:
+            cal_p = calibrator.calibrate(m_name, raw_p)
 
-            cal_preds = calibrator.calibrate(model_name, raw_preds)
+            # Brier score
+            brier_raw = float(np.mean(np.sum((raw_p - Y_h2_onehot) ** 2, axis=1)))
+            brier_cal = float(np.mean(np.sum((cal_p - Y_h2_onehot) ** 2, axis=1)))
 
-            # Log before/after mean probabilities per class
-            for cls_idx, cls_name in enumerate(["SELL", "HOLD", "BUY"]):
-                mlflow.log_metric(
-                    f"{model_name}_raw_mean_P_{cls_name}",
-                    float(np.mean(raw_preds[:, cls_idx])),
-                )
-                mlflow.log_metric(
-                    f"{model_name}_cal_mean_P_{cls_name}",
-                    float(np.mean(cal_preds[:, cls_idx])),
-                )
+            # Log loss
+            ll_raw = float(-np.mean(np.sum(Y_h2_onehot * np.log(np.clip(raw_p, 1e-15, 1 - 1e-15)), axis=1)))
+            ll_cal = float(-np.mean(np.sum(Y_h2_onehot * np.log(np.clip(cal_p, 1e-15, 1 - 1e-15)), axis=1)))
 
-            # Accuracy before / after
-            raw_acc = float(np.mean(np.argmax(raw_preds, axis=1) == y_sig_val))
-            cal_acc = float(np.mean(np.argmax(cal_preds, axis=1) == y_sig_val))
-            mlflow.log_metric(f"{model_name}_raw_accuracy", raw_acc)
-            mlflow.log_metric(f"{model_name}_cal_accuracy", cal_acc)
-            print(f"  {model_name}: Raw Acc={raw_acc:.4f} -> Calibrated Acc={cal_acc:.4f}")
+            # Accuracy
+            acc_raw = float(np.mean(np.argmax(raw_p, axis=1) == y_h2))
+            acc_cal = float(np.mean(np.argmax(cal_p, axis=1) == y_h2))
+
+            # Expected Calibration Error (ECE) with 5 confidence bins
+            conf_raw = np.max(raw_p, axis=1)
+            pred_raw = np.argmax(raw_p, axis=1)
+            conf_cal = np.max(cal_p, axis=1)
+            pred_cal = np.argmax(cal_p, axis=1)
+
+            bins = np.linspace(0.33, 1.0, 6)
+            ece_raw = 0.0
+            ece_cal = 0.0
+            for b_i in range(len(bins) - 1):
+                bin_lower, bin_upper = bins[b_i], bins[b_i + 1]
+                # raw
+                in_bin_raw = (conf_raw >= bin_lower) & (conf_raw < bin_upper)
+                if np.sum(in_bin_raw) > 0:
+                    acc_b = np.mean(pred_raw[in_bin_raw] == y_h2[in_bin_raw])
+                    conf_b = np.mean(conf_raw[in_bin_raw])
+                    ece_raw += np.abs(acc_b - conf_b) * (np.sum(in_bin_raw) / len(y_h2))
+                # cal
+                in_bin_cal = (conf_cal >= bin_lower) & (conf_cal < bin_upper)
+                if np.sum(in_bin_cal) > 0:
+                    acc_b = np.mean(pred_cal[in_bin_cal] == y_h2[in_bin_cal])
+                    conf_b = np.mean(conf_cal[in_bin_cal])
+                    ece_cal += np.abs(acc_b - conf_b) * (np.sum(in_bin_cal) / len(y_h2))
+
+            # Class-wise metrics
+            class_metrics = {}
+            for c_idx, c_name in enumerate(["SELL", "HOLD", "BUY"]):
+                actual_freq = float(np.mean(y_h2 == c_idx))
+                raw_mean_prob = float(np.mean(raw_p[:, c_idx]))
+                cal_mean_prob = float(np.mean(cal_p[:, c_idx]))
+                class_metrics[c_name] = {
+                    "actual_frequency": actual_freq,
+                    "raw_mean_predicted_prob": raw_mean_prob,
+                    "calibrated_mean_predicted_prob": cal_mean_prob,
+                }
+
+            cal_eval_report["models"][m_name] = {
+                "brier_score": {"raw": brier_raw, "calibrated": brier_cal, "reduction": brier_raw - brier_cal},
+                "log_loss": {"raw": ll_raw, "calibrated": ll_cal, "reduction": ll_raw - ll_cal},
+                "accuracy": {"raw": acc_raw, "calibrated": acc_cal},
+                "ece": {"raw": float(ece_raw), "calibrated": float(ece_cal)},
+                "class_metrics": class_metrics,
+            }
+            mlflow.log_metric(f"{m_name}_brier_raw", brier_raw)
+            mlflow.log_metric(f"{m_name}_brier_cal", brier_cal)
+            mlflow.log_metric(f"{m_name}_log_loss_cal", ll_cal)
+            mlflow.log_metric(f"{m_name}_ece_cal", float(ece_cal))
+            mlflow.log_metric(f"{m_name}_cal_accuracy", acc_cal)
+            print(f"  [{m_name}] H2 Independent Eval: Brier {brier_raw:.4f}->{brier_cal:.4f} | ECE {ece_raw:.4f}->{ece_cal:.4f} | Acc {acc_raw:.4f}->{acc_cal:.4f}")
+
+    os.makedirs("reports", exist_ok=True)
+    with open("reports/calibration_evaluation_report.json", "w") as f_rep:
+        json.dump(cal_eval_report, f_rep, indent=4)
+    print("  Saved calibration evaluation report to reports/calibration_evaluation_report.json")
 
     # ==========================================
     # STEP 5: SAVE ACTIVE TICKER

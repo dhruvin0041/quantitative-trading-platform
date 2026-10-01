@@ -1,0 +1,185 @@
+{
+  "strategy_version": "HYDRA_PROSPECTIVE_V2.1",
+  "previous_version": "HYDRA_PROSPECTIVE_V2.0",
+  "historical_predecessor": "HYDRA_PROSPECTIVE_V1.0",
+  "freeze_timestamp_utc": "2026-10-01T08:38:05Z",
+  "freeze_timestamp_new_york": "2026-10-01T04:38:05-04:00",
+  "freeze_display_new_york": "2026-10-01 04:38:05 EDT",
+  "freeze_session_tz": "2026-10-01 04:38:05 EDT",
+  "git_commit": "4b3013b4d1fbe2c543d73d82e8935620ca495423",
+  "status": "FROZEN_FOR_PROSPECTIVE_VALIDATION",
+  "anti_overfitting_lock": true,
+  "methodology_corrections_v2_1": {
+    "dqn_retraining": "Trained exclusively on 2016-2024 development transitions. Zero 2025 observations or rewards.",
+    "meta_ensemble_stacking": "Fitted exclusively on chronological walk-forward out-of-fold (OOF) predictions within 2016-2024. 2025 completely excluded.",
+    "probability_calibration_split": "2025 partitioned chronologically: H1 2025 (fit isotonic calibrator) and H2 2025 (independent evaluation with zero refitting).",
+    "scaler_architecture_alignment": "Formally established Asset-Specific StandardScaler (Option B, AAPL). Declared sample count matches artifact exactly (2,130 bars).",
+    "hyperparameter_provenance_audit": "Disclosed that historical studies before commit 4b3013b accessed 2025-2026 data via datetime.now(). Parameters re-optimized cleanly strictly on 2016-2024.",
+    "first_prospective_start": "First genuinely untouched prospective date established as 2026-10-01 16:00:00 EDT (post-freeze)."
+  },
+  "model_hashes": {
+    "xgb_ensemble.json": "922ba0bd1c263db7347edfbe0a8963df9b78df345a648abf28033b36cd13deb5",
+    "latest_fusion_weights.weights.h5": "65cd6a9edb1a06282ce2a310a189c83f88fcc2671370a58d0e70954dfd4cbad1",
+    "lgbm_agent.joblib": "84654df9164120095fd4dbb7bbc158e23fdb405f42f5ef0a407f7bd5a5f95ea2",
+    "dqn_model.pth": "af531a3339285849027b08ae5605da3aae4d46b4fb61a0c05b390804a6361bec",
+    "latest_scaler.joblib": "8309c7b515870b7314dea3a8228a3342e92a83908cc91eb7d68070b4032e80d7",
+    "model_calibrator.joblib": "cbb2216e4f52d2c89eb258fca582e1722a6f2cdf676f85f862e0cb5d22e47bd8",
+    "meta_ensemble.joblib": "12bb1c29b40aee782dc2e47f0d01605b3b5e2d84a83a87f6d851ebd5bcc4749c",
+    "tft_quantile_weights.weights.h5": "6b1a194c0b6301f88611e1a0ea1ad71765b6a43cebc98a5775b85ff6bf1e8922"
+  },
+  "config_hashes": {
+    "model_params.yaml": "53f271e8c54269ff125f2d14245c81d0daddaaeaa6eebb5e9911970df7524647",
+    "optimized_params_AAPL.json": "c6c31b710517c60eee5d7e219988e54464c83e5d46c78fac4cd99b17c0dea3d6",
+    "kept_features.json": "debe3e4b82edf843b0b2fa3397c372f8f8826d64f75bf2d816d1a60819156b17"
+  },
+  "code_hashes": {
+    "live_inference.py": "9d353993ef133c1bebd9098f34194dc76bcefccc2434bba8401c2840e8c8a17f",
+    "inference_service.py": "b88bdfb9ebc99a7876ceae94f6828941b08b684ca15f5e572eb150229f80ea2b",
+    "signal_ledger.py": "43f031bf9ce707a3b6b1eff3ab617c89916387cac3f04d35f2f44e6fc12cee60",
+    "backtest_service.py": "faa7afcefb8799e5b90763c3b01c329a55d1ba960b2cd8ded747cbf0ce47a04b",
+    "data_firewall.py": "ec46bb4e12f0d24ee4e6d9022810b07b8124e4c2c69d0ef7117e5325ea34d760"
+  },
+  "model_provenance": {
+    "core_model_training": {
+      "components": [
+        "xgb_ensemble.json",
+        "lgbm_agent.joblib",
+        "latest_fusion_weights.weights.h5",
+        "tft_quantile_weights.weights.h5"
+      ],
+      "start_date": "2016-06-23",
+      "end_date": "2024-12-09",
+      "sample_count": 2130,
+      "description": "2016-2024 Model Development Universe: 2,130 training bars after 119 warmup bars and 15 incomplete-label bars dropped (zero 2025/2026 data used)"
+    },
+    "scaler_fitting": {
+      "components": [
+        "latest_scaler.joblib",
+        "scaler_AAPL.joblib"
+      ],
+      "architecture": "Asset-Specific StandardScaler (Option B, AAPL)",
+      "start_date": "2016-06-23",
+      "end_date": "2024-12-09",
+      "sample_count": 2130,
+      "feature_count": 27,
+      "description": "Asset-specific StandardScaler fitted exclusively on AAPL 2016-2024 development samples (2,130 bars, 27 features). Fully aligned with live inference."
+    },
+    "downstream_calibration": {
+      "components": [
+        "model_calibrator.joblib"
+      ],
+      "calibration_subset_h1": {
+        "start_date": "2025-01-02",
+        "end_date": "2025-06-30",
+        "sample_count": 65,
+        "role": "Isotonic regression fit partition"
+      },
+      "evaluation_subset_h2": {
+        "start_date": "2025-07-01",
+        "end_date": "2025-12-08",
+        "sample_count": 110,
+        "role": "Independent out-of-sample calibration evaluation (zero refitting)"
+      },
+      "description": "Probability calibrator fitted strictly on H1 2025 validation subset and evaluated independently on H2 2025."
+    },
+    "meta_ensemble_training": {
+      "components": [
+        "meta_ensemble.joblib"
+      ],
+      "start_date": "2020-09-15",
+      "end_date": "2024-12-09",
+      "total_oof_samples": 1065,
+      "folds": 3,
+      "methodology": "Expanding-Window Walk-Forward Out-of-Fold (OOF) Stacking",
+      "description": "ElasticNet Logistic Regression fitted strictly on out-of-fold predictions within 2016-2024 development period. 2025 completely excluded."
+    },
+    "dqn_rl_training": {
+      "components": [
+        "dqn_model.pth"
+      ],
+      "start_date": "2016-06-23",
+      "end_date": "2024-12-09",
+      "unique_transitions": 2070,
+      "episodes": 15,
+      "description": "Deep Q-Network sequential policy replay trained exclusively on 2016-2024 development transitions. Rewards derived from 2016-2024 triple-barrier labels. Replay buffer and gradient updates restricted strictly to development data."
+    },
+    "hyperparameter_optimization": {
+      "components": [
+        "optimized_params_AAPL.json"
+      ],
+      "start_date": "2016-01-04",
+      "end_date": "2024-12-30",
+      "sampler": "TPESampler(seed=42)",
+      "description": "Clean Optuna study for barrier ATR multipliers (1.5x TP, 2.0x SL, 15d horizon), tree parameters, cooldown, and threshold strictly within 2016-2024 development universe"
+    },
+    "historical_optimization_provenance_audit": {
+      "finding": "Historical runs prior to commit 4b3013b used datetime.now(), consuming 2025-2026 data. Retrained cleanly on 2016-2024.",
+      "status": "FIXED_IN_V2.1"
+    },
+    "prospective_validation": {
+      "dataset": "TRUE_UNTOUCHED_OUT_OF_SAMPLE",
+      "freeze_timestamp_utc": "2026-10-01T08:38:05Z",
+      "freeze_timestamp_new_york": "2026-10-01T04:38:05-04:00",
+      "start_date": "2026-10-01",
+      "start_timestamp": "2026-10-01 16:00:00 EDT",
+      "description": "Untouched forward out-of-sample paper trading experiment strictly from 2026-10-01 16:00:00 EDT onward protected by hard firewall"
+    }
+  },
+  "prospective_sequence": {
+    "strategy_freeze_utc": "2026-10-01T08:38:05Z",
+    "strategy_freeze_new_york": "2026-10-01T04:38:05-04:00",
+    "first_eligible_completed_candle_utc": "2026-10-01T20:00:00Z",
+    "first_eligible_completed_candle_new_york": "2026-10-01 16:00:00 EDT",
+    "first_prospective_signal_utc": "2026-10-01T20:00:02Z",
+    "first_prospective_signal_new_york": "2026-10-01 16:00:02 EDT",
+    "first_next_session_execution_utc": "2026-10-02T13:30:00Z",
+    "first_next_session_execution_new_york": "2026-10-02 09:30:00 EDT"
+  },
+  "frozen_hyperparameters": {
+    "target_symbol": "AAPL",
+    "probability_threshold": 0.6,
+    "min_cooldown_bars": 5,
+    "triple_barrier_labeling": {
+      "tp_atr_multiplier": 1.5,
+      "sl_atr_multiplier": 2.0,
+      "horizon_bars": 15
+    },
+    "macro_regime_filter": {
+      "long_condition": "AAPL_Close >= SMA200 AND SPY_Close >= SPY_SMA50",
+      "short_condition": "AAPL_Close < SMA200 OR SPY_Close < SPY_SMA50"
+    },
+    "exit_rules": {
+      "long_exit": "SELL signal closes LONG unconditionally (decoupled from macro bear filter)"
+    },
+    "timestamp_policy": {
+      "vix_treatment": "VIX[t-1] strictly lagged by 1 trading session (zero post-16:00 ET leak)",
+      "spy_treatment": "Contemporaneous 16:00:00 ET close cross",
+      "execution_window": "Next trading session Open[t+1] at 09:30:00 ET"
+    },
+    "execution_assumptions": {
+      "slippage_bps": 5.0,
+      "buy_execution_formula": "Open[t+1] * (1 + 0.0005)",
+      "sell_execution_formula": "Open[t+1] * (1 - 0.0005)",
+      "commission_per_share_usd": 0.005
+    }
+  },
+  "validation_policy": {
+    "checkpoints": [
+      30,
+      50,
+      100
+    ],
+    "metrics_tracked": [
+      "win_rate",
+      "wilson_confidence_interval",
+      "average_return",
+      "median_return",
+      "expectancy",
+      "profit_factor",
+      "max_drawdown",
+      "cumulative_return",
+      "benchmark_return"
+    ],
+    "minimum_samples_for_statistical_significance": 30
+  }
+}
