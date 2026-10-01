@@ -2,11 +2,11 @@
   "strategy_version": "HYDRA_PROSPECTIVE_V2.2",
   "previous_version": "HYDRA_PROSPECTIVE_V2.1",
   "historical_predecessor": "HYDRA_PROSPECTIVE_V2.0",
-  "freeze_timestamp_utc": "2026-10-01T09:37:15Z",
-  "freeze_timestamp_new_york": "2026-10-01T05:37:15-0400",
-  "freeze_display_new_york": "2026-10-01 05:37:15 EDT",
-  "freeze_session_tz": "2026-10-01 05:37:15 EDT",
-  "git_commit": "7c1d21f3ae5abd0a6e2ec148cff171292269f865",
+  "freeze_timestamp_utc": "2026-10-01T09:39:11Z",
+  "freeze_timestamp_new_york": "2026-10-01T05:39:11-0400",
+  "freeze_display_new_york": "2026-10-01 05:39:11 EDT",
+  "freeze_session_tz": "2026-10-01 05:39:11 EDT",
+  "git_commit": "e687e2321da9159dca2b10c6744f2166fb44a506",
   "status": "FROZEN_FOR_PROSPECTIVE_VALIDATION",
   "anti_overfitting_lock": true,
   "methodology_corrections_v2_2": {
@@ -127,16 +127,16 @@
     },
     "prospective_validation": {
       "dataset": "TRUE_UNTOUCHED_OUT_OF_SAMPLE",
-      "freeze_timestamp_utc": "2026-10-01T09:37:15Z",
-      "freeze_timestamp_new_york": "2026-10-01T05:37:15-0400",
+      "freeze_timestamp_utc": "2026-10-01T09:39:11Z",
+      "freeze_timestamp_new_york": "2026-10-01T05:39:11-0400",
       "start_date": "2026-10-01",
       "start_timestamp": "2026-10-01 16:00:00 EDT",
       "description": "Untouched forward out-of-sample paper trading experiment strictly from 2026-10-01 16:00:00 EDT onward protected by hard firewall"
     }
   },
   "prospective_sequence": {
-    "strategy_freeze_utc": "2026-10-01T09:37:15Z",
-    "strategy_freeze_new_york": "2026-10-01T05:37:15-0400",
+    "strategy_freeze_utc": "2026-10-01T09:39:11Z",
+    "strategy_freeze_new_york": "2026-10-01T05:39:11-0400",
     "first_eligible_completed_candle_utc": "2026-10-01T20:00:00Z",
     "first_eligible_completed_candle_new_york": "2026-10-01 16:00:00 EDT",
     "first_prospective_signal_utc": "2026-10-01T20:00:02Z",
