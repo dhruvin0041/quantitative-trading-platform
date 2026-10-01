@@ -1,0 +1,151 @@
+{
+  "strategy_version": "HYDRA_PROSPECTIVE_V1.0",
+  "freeze_timestamp_utc": "2026-09-30T10:39:57Z",
+  "freeze_timestamp_new_york": "2026-09-30T06:39:57-04:00",
+  "freeze_display_new_york": "2026-09-30 06:39:57 EDT",
+  "freeze_session_edt": "2026-09-30 06:39:57 EDT",
+  "git_commit": "355b77020913be7ae8aa6305dd25fa265ed0365a",
+  "status": "FROZEN_FOR_PROSPECTIVE_VALIDATION",
+  "anti_overfitting_lock": true,
+  "model_hashes": {
+    "xgb_ensemble.json": "a240066d454b0ea1ac299b1ab8c530480c5efd0cdbc818c304a7ccadac452d51",
+    "latest_fusion_weights.weights.h5": "5072cbc0f49e9f7bc5bd5c16ca4d96a2a1b855a47b1437765db0e30e7bf098e6",
+    "lgbm_agent.joblib": "0985647bb6d7dcf2078d190c24512eeff4fc09814ca8b684c8e7f2c361d147d4",
+    "dqn_model.pth": "788bb43099fb0f57c19f2cd5f7d558cc2e8995952b23d32e4cf52546083a1f05",
+    "latest_scaler.joblib": "b5f351bb399c94bdb4a29e5015ddda0ed1f26f35007e06246915dc0f9c3acfc2",
+    "model_calibrator.joblib": "b796acd80845899c98f5637390125173c45a6e2d486d62fd68a6bcd523dbeb0d",
+    "meta_ensemble.joblib": "9576f864795119fc1f64376485b550cb175d694ed42178633a11572c499ac361",
+    "tft_quantile_weights.weights.h5": "1a1290bf9a5c245d274339692b061d303b8ff86f08fe7f1984deb42088a2721e"
+  },
+  "config_hashes": {
+    "model_params.yaml": "53f271e8c54269ff125f2d14245c81d0daddaaeaa6eebb5e9911970df7524647",
+    "optimized_params_AAPL.json": "3b8a7be172e2829a0e1b993087d573218397f21cfe0f3faa6a65dc3aee9c2166",
+    "kept_features.json": "debe3e4b82edf843b0b2fa3397c372f8f8826d64f75bf2d816d1a60819156b17"
+  },
+  "code_hashes": {
+    "live_inference.py": "9d353993ef133c1bebd9098f34194dc76bcefccc2434bba8401c2840e8c8a17f",
+    "inference_service.py": "b88bdfb9ebc99a7876ceae94f6828941b08b684ca15f5e572eb150229f80ea2b",
+    "signal_ledger.py": "571551a58793f5e0c54ed875696193185e83fd54847ee045f74d7347be812c7f",
+    "backtest_service.py": "faa7afcefb8799e5b90763c3b01c329a55d1ba960b2cd8ded747cbf0ce47a04b"
+  },
+  "model_provenance": {
+    "core_model_training": {
+      "components": [
+        "xgb_ensemble.json",
+        "lgbm_agent.joblib",
+        "latest_fusion_weights.weights.h5",
+        "tft_quantile_weights.weights.h5"
+      ],
+      "start_date": "2019-01-02",
+      "end_date": "2023-12-29",
+      "description": "5-year core feature and multi-branch ML neural network training partition"
+    },
+    "scaler_fitting": {
+      "components": [
+        "latest_scaler.joblib"
+      ],
+      "start_date": "2019-01-02",
+      "end_date": "2023-12-29",
+      "description": "Robust feature normalization fitted strictly on core training set to prevent scaling snooping"
+    },
+    "downstream_calibration": {
+      "components": [
+        "model_calibrator.joblib"
+      ],
+      "start_date": "2024-01-02",
+      "end_date": "2024-06-06",
+      "description": "Isotonic probability calibrator fitted on out-of-fold validation set"
+    },
+    "meta_ensemble_training": {
+      "components": [
+        "meta_ensemble.joblib"
+      ],
+      "start_date": "2024-01-02",
+      "end_date": "2024-06-06",
+      "description": "Stacking meta-learner weighting raw branch probabilities on validation set"
+    },
+    "dqn_rl_training": {
+      "components": [
+        "dqn_model.pth"
+      ],
+      "start_date": "2024-01-02",
+      "end_date": "2024-06-06",
+      "description": "Deep Q-Network sequential policy replay trained on validation set state transitions"
+    },
+    "hyperparameter_optimization": {
+      "components": [
+        "optimized_params_AAPL.json",
+        "model_params.yaml"
+      ],
+      "start_date": "2020-01-01",
+      "end_date": "2026-09-28",
+      "description": "Optuna study for barrier ATR multipliers, cooldown, and probability threshold on preliminary historical evidence"
+    },
+    "prospective_validation": {
+      "dataset": "UNTOUCHED_FORWARD_VALIDATION",
+      "freeze_timestamp_utc": "2026-09-30T10:39:57Z",
+      "freeze_timestamp_new_york": "2026-09-30 06:39:57 EDT",
+      "start_date": "2026-09-30",
+      "first_signal_date": "2026-09-30",
+      "first_execution_date": "2026-10-01",
+      "description": "Untouched forward out-of-sample paper trading experiment"
+    }
+  },
+  "prospective_sequence": {
+    "strategy_freeze_utc": "2026-09-30T10:39:57Z",
+    "strategy_freeze_new_york": "2026-09-30 06:39:57 EDT",
+    "first_eligible_completed_candle_utc": "2026-09-30T20:00:00Z",
+    "first_eligible_completed_candle_new_york": "2026-09-30 16:00:00 EDT",
+    "first_prospective_signal_utc": "2026-09-30T20:00:02Z",
+    "first_prospective_signal_new_york": "2026-09-30 16:00:02 EDT",
+    "first_next_session_execution_utc": "2026-10-01T13:30:00Z",
+    "first_next_session_execution_new_york": "2026-10-01 09:30:00 EDT"
+  },
+  "frozen_hyperparameters": {
+    "target_symbol": "AAPL",
+    "probability_threshold": 0.6,
+    "min_cooldown_bars": 5,
+    "triple_barrier_labeling": {
+      "tp_atr_multiplier": 3.0,
+      "sl_atr_multiplier": 0.5,
+      "horizon_bars": 15
+    },
+    "macro_regime_filter": {
+      "long_condition": "AAPL_Close >= SMA200 AND SPY_Close >= SPY_SMA50",
+      "short_condition": "AAPL_Close < SMA200 OR SPY_Close < SPY_SMA50"
+    },
+    "exit_rules": {
+      "long_exit": "SELL signal closes LONG unconditionally (decoupled from macro bear filter)"
+    },
+    "timestamp_policy": {
+      "vix_treatment": "VIX[t-1] strictly lagged by 1 trading session (zero post-16:00 ET leak)",
+      "spy_treatment": "Contemporaneous 16:00:00 ET close cross",
+      "execution_window": "Next trading session Open[t+1] at 09:30:00 ET"
+    },
+    "execution_assumptions": {
+      "slippage_bps": 5.0,
+      "buy_execution_formula": "Open[t+1] * (1 + 0.0005)",
+      "sell_execution_formula": "Open[t+1] * (1 - 0.0005)",
+      "commission_per_share_usd": 0.005
+    }
+  },
+  "validation_policy": {
+    "checkpoints": [
+      30,
+      50,
+      100
+    ],
+    "metrics_tracked": [
+      "win_rate",
+      "wilson_confidence_interval",
+      "average_return",
+      "median_return",
+      "expectancy",
+      "profit_factor",
+      "max_drawdown",
+      "cumulative_return",
+      "benchmark_return"
+    ],
+    "minimum_samples_for_statistical_significance": 30
+  }
+}

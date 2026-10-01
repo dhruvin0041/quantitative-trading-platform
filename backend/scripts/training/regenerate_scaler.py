@@ -1,5 +1,10 @@
-# regenerate_scaler.py
 import json
+import sys
+from pathlib import Path
+
+BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
 
 import joblib
 import pandas as pd
@@ -27,34 +32,33 @@ def regenerate():
     ]
     all_data = []
 
-    spy_df = yf.download("SPY", period="2y", interval="1d", progress=False)
-    vix_df = yf.download("^VIX", period="2y", interval="1d", progress=False)
+    spy_df = yf.download(
+        "SPY", start="2016-01-01", end="2024-12-31", interval="1d", progress=False
+    )
+    vix_df = yf.download(
+        "^VIX", start="2016-01-01", end="2024-12-31", interval="1d", progress=False
+    )
 
     if isinstance(spy_df.columns, pd.MultiIndex):
         spy_df.columns = spy_df.columns.droplevel(1)
     if isinstance(vix_df.columns, pd.MultiIndex):
         vix_df.columns = vix_df.columns.droplevel(1)
 
+    from src.execution.data_firewall import TemporalFirewall
+
     for t in tickers:
         try:
             print(f"Processing {t}...")
-            # Fetch up to end of 2023 for scaler fitting to avoid data leakage
-            df = fetch_historical_data(t, "2019-01-01", "2023-12-31")
+            # Fetch strictly 2016-2024 for development/scaler fitting (zero 2025/2026 leakage)
+            df = fetch_historical_data(t, "2016-01-01", "2024-12-31")
+            TemporalFirewall.validate_development_data(df, f"scaler_{t}")
             df = add_upgraded_features(df, spy_df, vix_df)
 
-            # Target generation just to match preprocessing, though not needed for scaling features
-            df["target_direction"] = (
-                df["Close"].shift(-5) > df["Close"] * 1.02
-            ).astype(int)
-            df["target_min"] = (
-                df["Low"].rolling(5).min().shift(-5) - df["Close"]
-            ) / df["Close"]
-            df["target_max"] = (
-                df["High"].rolling(5).max().shift(-5) - df["Close"]
-            ) / df["Close"]
+            # Drop uninitialized warmup period (first 119 bars for rolling 120-bar indicators)
+            if len(df) > 120:
+                df = df.iloc[119:]
 
-            df = df.dropna()
-
+            df = df.dropna(subset=FEATURE_COLUMNS)
             all_data.append(df[FEATURE_COLUMNS])
         except Exception as e:
             print(f"Error processing {t}: {e}")
@@ -64,6 +68,9 @@ def regenerate():
         return
 
     full_df = pd.concat(all_data)
+    TemporalFirewall.validate_development_data(full_df, "global_scaler_full_df")
+    TemporalFirewall.validate_no_2026_leakage(full_df, "global_scaler_full_df")
+
     scaler = StandardScaler()
     scaler.fit(full_df)
 
@@ -73,7 +80,7 @@ def regenerate():
         json.dump(FEATURE_COLUMNS, f)
 
     print(
-        f"Scaler fitted on {len(FEATURE_COLUMNS)} features. Saved to artifacts/latest_scaler.joblib"
+        f"Scaler fitted on {len(FEATURE_COLUMNS)} features across {len(full_df)} samples strictly within 2016-2024."
     )
 
 

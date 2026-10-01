@@ -61,76 +61,119 @@ mlflow.set_experiment("hydra_terminal_signals")
 
 
 def prepare_data(ticker, config):
-    print(f"--- Preparing Data for {ticker} ---")
-    df = fetch_historical_data(ticker, start_date="2019-01-01", end_date="2024-07-01")
+    print(f"--- Preparing Data for {ticker} (2016-2024 Dev, 2025 Val) ---")
+    from src.execution.data_firewall import TemporalFirewall
+
+    # Fetch strictly up to 2025-12-31 (zero 2026 data fetched)
+    df = fetch_historical_data(ticker, start_date="2016-01-01", end_date="2025-12-31")
 
     spy_df = yf.download(
-        "SPY", start="2019-01-01", end="2024-07-01", interval="1d", progress=False
+        "SPY", start="2016-01-01", end="2025-12-31", interval="1d", progress=False
     )
     vix_df = yf.download(
-        "^VIX", start="2019-01-01", end="2024-07-01", interval="1d", progress=False
+        "^VIX", start="2016-01-01", end="2025-12-31", interval="1d", progress=False
     )
     if isinstance(spy_df.columns, pd.MultiIndex):
         spy_df.columns = spy_df.columns.droplevel(1)
     if isinstance(vix_df.columns, pd.MultiIndex):
         vix_df.columns = vix_df.columns.droplevel(1)
 
-    df = add_upgraded_features(df, spy_df, vix_df)
     peer_ticker = get_sector_peer(ticker)
     peer_df = fetch_historical_data(
-        peer_ticker, start_date="2019-01-01", end_date="2024-07-01"
+        peer_ticker, start_date="2016-01-01", end_date="2025-12-31"
     )
+
+    # Hard Firewall: ensure no 2026 data exists
+    TemporalFirewall.validate_no_2026_leakage(df, f"raw_{ticker}")
+    TemporalFirewall.validate_no_2026_leakage(spy_df, "raw_SPY")
+    TemporalFirewall.validate_no_2026_leakage(vix_df, "raw_VIX")
+    TemporalFirewall.validate_no_2026_leakage(peer_df, f"raw_{peer_ticker}")
+
+    # Compute features continuously so 2025 indicators have proper warmup
+    df = add_upgraded_features(df, spy_df, vix_df)
     peer_df = add_upgraded_features(peer_df, spy_df, vix_df)
 
-    # ROOT CAUSE 4: Fix Target Label Lookahead
-    # Targets are now calculated by apply_dynamic_triple_barrier
-    tp_mult, sl_mult, horizon = 2.0, 1.0, 10
+    kept_cols = FEATURE_COLUMNS
+    with open("configs/kept_features.json", "w") as f:
+        json.dump(kept_cols, f)
+
+    common_idx = df.index.intersection(peer_df.index)
+    df_aligned = df.loc[common_idx].copy()
+    peer_aligned = peer_df.loc[common_idx][kept_cols].ffill().fillna(0)
+
+    # Separate Partitions
+    TRAIN_END = "2024-12-31"
+    VAL_START = "2025-01-01"
+    VAL_END = "2025-12-31"
+
+    df_dev_raw = df_aligned[df_aligned.index <= TRAIN_END].copy()
+    peer_dev_raw = peer_aligned[peer_aligned.index <= TRAIN_END].copy()
+
+    df_val_raw = df_aligned[(df_aligned.index >= VAL_START) & (df_aligned.index <= VAL_END)].copy()
+    peer_val_raw = peer_aligned[(peer_aligned.index >= VAL_START) & (peer_aligned.index <= VAL_END)].copy()
+
+    # Temporal Firewall checks on partitions
+    TemporalFirewall.validate_development_data(df_dev_raw, "df_dev_raw")
+    TemporalFirewall.validate_validation_data(df_val_raw, "df_val_raw")
+
+    # Warmup Removal on Training Set (Section 6: No hidden pre-2016 data)
+    # The longest indicator window is 120 bars (rolling z-score).
+    # Drop first 119 bars from development set.
+    warmup_bars = 119
+    if len(df_dev_raw) > warmup_bars:
+        df_dev_warm = df_dev_raw.iloc[warmup_bars:].copy()
+        peer_dev_warm = peer_dev_raw.iloc[warmup_bars:].copy()
+        print(f"  [WARMUP REMOVAL] Removed {warmup_bars} uninitialized warmup bars (first valid training bar: {df_dev_warm.index[0].strftime('%Y-%m-%d')})")
+    else:
+        df_dev_warm = df_dev_raw.copy()
+        peer_dev_warm = peer_dev_raw.copy()
+
+    # Target Labeling with Zero Future-Label Contamination (Section 5)
+    tp_mult, sl_mult, horizon = 3.0, 0.5, 15
     opt_path = f"configs/optimized_params_{ticker}.json"
     if os.path.exists(opt_path):
         try:
             with open(opt_path, "r") as f:
                 best_params = json.load(f)
-                tp_mult = best_params.get("tp_atr_multiplier", 2.0)
-                sl_mult = best_params.get("sl_atr_multiplier", 1.0)
-                horizon = best_params.get("horizon", 10)
+                tp_mult = best_params.get("tp_atr_multiplier", 3.0)
+                sl_mult = best_params.get("sl_atr_multiplier", 0.5)
+                horizon = best_params.get("horizon", 15)
         except Exception:
             pass
 
-    df = apply_dynamic_triple_barrier(
-        df, tp_atr_multiplier=tp_mult, sl_atr_multiplier=sl_mult, horizon=horizon
+    # A. Labeling Development Set: run apply_dynamic_triple_barrier on df_dev_warm ONLY.
+    # Because df_dev_warm ends on 2024-12-30, future prices into 2025 are completely absent.
+    # The last horizon rows naturally have NaN future targets and are dropped.
+    dev_before_labeling = len(df_dev_warm)
+    df_train = apply_dynamic_triple_barrier(
+        df_dev_warm, tp_atr_multiplier=tp_mult, sl_atr_multiplier=sl_mult, horizon=horizon
     )
+    incomplete_dev_labels = dev_before_labeling - len(df_train)
+    print(f"  [LABEL HORIZON] Dropped {incomplete_dev_labels} incomplete-label bars at end of 2024 (horizon={horizon}). Zero 2025 data used.")
+    print(f"  [FINAL TRAIN SAMPLES] {len(df_train)} bars ({df_train.index[0].strftime('%Y-%m-%d')} to {df_train.index[-1].strftime('%Y-%m-%d')})")
 
-    # Note: apply_dynamic_triple_barrier drops the last horizon rows from df.
-    # The common_idx intersection below will align peer_df automatically.
+    peer_train = peer_dev_warm.loc[df_train.index]
 
-    kept_cols = FEATURE_COLUMNS
+    # B. Labeling Validation Set: run apply_dynamic_triple_barrier on df_val_raw ONLY.
+    # Because df_val_raw ends on 2025-12-30, future prices into 2026 are completely absent.
+    # The last horizon rows naturally have NaN future targets and are dropped.
+    val_before_labeling = len(df_val_raw)
+    df_val = apply_dynamic_triple_barrier(
+        df_val_raw, tp_atr_multiplier=tp_mult, sl_atr_multiplier=sl_mult, horizon=horizon
+    )
+    incomplete_val_labels = val_before_labeling - len(df_val)
+    print(f"  [LABEL HORIZON] Dropped {incomplete_val_labels} incomplete-label bars at end of 2025 (horizon={horizon}). Zero 2026 data used.")
+    print(f"  [FINAL VAL SAMPLES] {len(df_val)} bars ({df_val.index[0].strftime('%Y-%m-%d')} to {df_val.index[-1].strftime('%Y-%m-%d')})")
 
-    with open("configs/kept_features.json", "w") as f:
-        json.dump(kept_cols, f)
-
-    # Align indices
-    common_idx = df.index.intersection(peer_df.index)
-    df_ready = df.loc[common_idx].copy()
-    peer_ready = peer_df.loc[common_idx][kept_cols].ffill().fillna(0)
-
-    # Temporal split
-    TRAIN_END = "2023-12-31"
-    VAL_END = "2024-06-30"
-
-    df_train = df_ready[df_ready.index <= TRAIN_END]
-    df_val = df_ready[(df_ready.index > TRAIN_END) & (df_ready.index <= VAL_END)]
-
-    peer_train = peer_ready[peer_ready.index <= TRAIN_END]
-    peer_val = peer_ready[
-        (peer_ready.index > TRAIN_END) & (peer_ready.index <= VAL_END)
-    ]
+    peer_val = peer_val_raw.loc[df_val.index]
 
     time_steps = config["data"]["time_steps"]
 
-    # Fit scaler ONLY on train
+    # Fit scaler ONLY on train split (zero validation leakage)
     scaler = StandardScaler()
     scaler.fit(df_train[kept_cols])
     joblib.dump(scaler, "artifacts/latest_scaler.joblib")
+    print(f"  [SCALER] Fitted strictly on {len(df_train)} training samples (2016-2024). Saved to artifacts/latest_scaler.joblib")
 
     def process_split(df_split, peer_split):
         if len(df_split) <= time_steps:
@@ -210,7 +253,7 @@ def train_dqn(X_dl, Y_dl, dl_model, xgb_model, scaler, kept_features):
 def main():
     parser = argparse.ArgumentParser(description="Unified Training Pipeline")
     parser.add_argument(
-        "--ticker", type=str, default="RELIANCE.NS", help="Stock ticker symbol"
+        "--ticker", type=str, default="AAPL", help="Stock ticker symbol"
     )
     parser.add_argument(
         "--trials", type=int, default=50, help="Number of Optuna trials"
@@ -221,11 +264,17 @@ def main():
         default=100,
         help="Number of epochs for deep learning models (default: 100)",
     )
+    parser.add_argument(
+        "--skip-optimization",
+        action="store_true",
+        help="Skip Bayesian and Optuna re-optimization and train using existing configurations",
+    )
     args = parser.parse_args()
 
     ticker = args.ticker.upper()
     n_trials = args.trials
     epochs = args.epochs
+    skip_optimization = args.skip_optimization
 
     pipeline_start = time.time()
 
@@ -247,7 +296,11 @@ def main():
     print(f"\n[1/5] Cleaning artifacts for {ticker}...")
     step_start = time.time()
     try:
-        run_cleanup(["--ticker", ticker])
+        if skip_optimization:
+            from scripts.ops.clean_artifacts import clean_training_artifacts
+            clean_training_artifacts()
+        else:
+            run_cleanup(["--ticker", ticker])
         print(f"  >>> Step 1 Complete ({time.time() - step_start:.2f}s)")
     except Exception as e:
         print(f"  [FATAL ERROR] Step 1 Failed: {e}")
@@ -299,20 +352,23 @@ def main():
     joblib.dump(ts_val[:, -1, :], "artifacts/X_val_tabular.joblib")
     joblib.dump(y_sig_val, "artifacts/y_val_sig.joblib")
 
-    if not run_bayesian_optimization(n_trials=n_trials):
-        print("  [FATAL ERROR] Step 2 Failed.")
-        return
-    print(f"  >>> Step 2 Complete ({time.time() - step_start:.2f}s)")
+    if not skip_optimization:
+        if not run_bayesian_optimization(n_trials=n_trials):
+            print("  [FATAL ERROR] Step 2 Failed.")
+            return
+        print(f"  >>> Step 2 Complete ({time.time() - step_start:.2f}s)")
 
-    # ==========================================
-    # STEP 3: OPTUNA OPTIMIZATION
-    # ==========================================
-    print(f"\n[3/5] Running Optuna optimization for {ticker} ({n_trials} trials)...")
-    step_start = time.time()
-    if not run_optuna_optimization(ticker=ticker, n_trials=n_trials):
-        print("  [FATAL ERROR] Step 3 Failed.")
-        return
-    print(f"  >>> Step 3 Complete ({time.time() - step_start:.2f}s)")
+        # ==========================================
+        # STEP 3: OPTUNA OPTIMIZATION
+        # ==========================================
+        print(f"\n[3/5] Running Optuna optimization for {ticker} ({n_trials} trials)...")
+        step_start = time.time()
+        if not run_optuna_optimization(ticker=ticker, n_trials=n_trials):
+            print("  [FATAL ERROR] Step 3 Failed.")
+            return
+        print(f"  >>> Step 3 Complete ({time.time() - step_start:.2f}s)")
+    else:
+        print("\n[2/5 & 3/5] Skipping hyperparameter re-optimization (--skip-optimization active). Using frozen 2016-2024 configs.")
 
     # ==========================================
     # STEP 4: FINAL TRAINING

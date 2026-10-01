@@ -339,7 +339,7 @@ class SignalLedger:
         model_hash: str,
         execution_target_timestamp: str,
         signal_reference_price: Optional[float] = None,
-        strategy_version: str = "HYDRA_PROSPECTIVE_V1.0",
+        strategy_version: str = "HYDRA_PROSPECTIVE_V2.0",
         is_provisional: bool = False,
         # Legacy parameter aliases (backward compat)
         expected_execution_price: Optional[float] = None,
@@ -669,7 +669,7 @@ class SignalLedger:
         max_dd = float(np.min(drawdowns)) if len(drawdowns) > 0 else 0.0
 
         return {
-            "strategy_version": "HYDRA_PROSPECTIVE_V1.0",
+            "strategy_version": "HYDRA_PROSPECTIVE_V2.0",
             "model_version": "Institutional_Mesh_V2.1",
             "validation_start_date": "2026-09-30",
             "dataset_label": "UNTOUCHED FORWARD VALIDATION",

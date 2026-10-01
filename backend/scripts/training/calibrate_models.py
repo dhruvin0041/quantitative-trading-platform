@@ -1,3 +1,10 @@
+import sys
+from pathlib import Path
+
+BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
 import joblib
 import numpy as np
 import pandas as pd
@@ -10,7 +17,7 @@ from src.execution.live_inference import FEATURE_COLUMNS, add_upgraded_features
 
 
 def calibrate():
-    print("Fetching validation data (2024-01-01 to 2024-06-30)...")
+    print("Fetching validation data (2025-01-01 to 2025-12-31)...")
     tickers = [
         "AAPL",
         "MSFT",
@@ -24,11 +31,13 @@ def calibrate():
         "XOM",
     ]
 
+    from src.execution.data_firewall import TemporalFirewall
+
     spy_df = yf.download(
-        "SPY", start="2023-01-01", end="2024-07-01", interval="1d", progress=False
+        "SPY", start="2024-01-01", end="2025-12-31", interval="1d", progress=False
     )
     vix_df = yf.download(
-        "^VIX", start="2023-01-01", end="2024-07-01", interval="1d", progress=False
+        "^VIX", start="2024-01-01", end="2025-12-31", interval="1d", progress=False
     )
     if isinstance(spy_df.columns, pd.MultiIndex):
         spy_df.columns = spy_df.columns.droplevel(1)
@@ -41,22 +50,29 @@ def calibrate():
 
     for t in tickers:
         try:
+            # Fetch strictly through 2025-12-31 (continuous from 2024 for feature warmup, zero 2026 leakage)
             df = fetch_historical_data(
-                t, start_date="2023-01-01", end_date="2024-06-30"
+                t, start_date="2024-01-01", end_date="2025-12-31"
             )
+            TemporalFirewall.validate_validation_data(df, f"calib_fetch_{t}")
+            TemporalFirewall.validate_no_2026_leakage(df, f"calib_fetch_{t}")
+
             df = add_upgraded_features(df, spy_df, vix_df)
 
-            # Using 5-day future returns for labels
+            # Using 5-day future returns for labels, evaluated strictly within <= 2025-12-31
             future_ret = df["Close"].shift(-5) / df["Close"] - 1
             # Class 2: BUY (> 2%)
             df["target_buy"] = (future_ret > 0.02).astype(int)
             # Class 0: SELL (< -2%)
             df["target_sell"] = (future_ret < -0.02).astype(int)
 
-            df = df.iloc[:-10]  # drop lookahead NaNs
+            # Drop lookahead rows at the end of 2025 so no 2026 prices are ever peered into
+            df = df.iloc[:-10]
 
-            # Filter just the validation period to avoid training leakage
-            df_val = df[(df.index >= "2024-01-01") & (df.index <= "2024-06-30")]
+            # Filter strictly the 2025 validation period
+            df_val = df[(df.index >= "2025-01-01") & (df.index <= "2025-12-31")]
+            TemporalFirewall.validate_validation_data(df_val, f"calib_val_{t}")
+            TemporalFirewall.validate_no_2026_leakage(df_val, f"calib_val_{t}")
 
             if len(df_val) > 0:
                 val_data.append(df_val[FEATURE_COLUMNS])

@@ -3,10 +3,10 @@ import argparse
 import contextlib
 import json
 import os
-from datetime import datetime
 
 import numpy as np
 import optuna
+import pandas as pd
 from sklearn.metrics import accuracy_score
 
 from src.data_ingestion.market_data import (
@@ -33,21 +33,31 @@ UNIVERSAL_TICKERS = [
 
 parser = argparse.ArgumentParser(description="Universal Hybrid Ensemble Optimizer")
 parser.add_argument("--trials", type=int, default=30, help="Number of Optuna trials")
-parser.add_argument("--start", type=str, default="2019-01-01", help="Start date")
+parser.add_argument("--start", type=str, default="2016-01-01", help="Start date")
 parser.add_argument(
-    "--end", type=str, default=datetime.now().strftime("%Y-%m-%d"), help="End date"
+    "--end", type=str, default="2024-12-31", help="End date (strictly <= 2024-12-31)"
 )
 args = parser.parse_args()
+
+from src.execution.data_firewall import DataContaminationError, TemporalFirewall
+
+if pd.Timestamp(args.end) > pd.Timestamp("2024-12-31"):
+    raise DataContaminationError(
+        f"Hyperparameter optimization boundary breached: end date {args.end} > 2024-12-31! "
+        "All optimization must remain strictly within 2016-2024."
+    )
 
 # ==========================================
 # FETCH DATA ONCE
 # ==========================================
-print(f"Building Universal Dataset from {len(UNIVERSAL_TICKERS)} tickers...")
+print(f"Building Universal Dataset from {len(UNIVERSAL_TICKERS)} tickers (2016-2024)...")
 ticker_dataframes = {}
 for ticker in UNIVERSAL_TICKERS:
     try:
         df = fetch_historical_data(ticker, start_date=args.start, end_date=args.end)
         if df is not None and len(df) > 500:
+            TemporalFirewall.validate_development_data(df, f"opt_univ_{ticker}")
+            TemporalFirewall.validate_no_2026_leakage(df, f"opt_univ_{ticker}")
             ticker_dataframes[ticker] = add_advanced_features(df)
             print(f"  [SUCCESS] {ticker}")
     except Exception:

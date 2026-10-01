@@ -12,7 +12,6 @@ os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
 import argparse
 import json
-from datetime import datetime
 
 import numpy as np
 import optuna
@@ -163,9 +162,17 @@ def objective(trial, df_features):
         return 0.0
 
 
-def run_optuna_optimization(ticker, n_trials=50, start="2020-01-01", end=None):
-    if end is None:
-        end = datetime.now().strftime("%Y-%m-%d")
+def run_optuna_optimization(ticker, n_trials=50, start="2016-01-01", end="2024-12-31"):
+    if end is None or end > "2024-12-31":
+        end = "2024-12-31"
+
+    from src.execution.data_firewall import DataContaminationError, TemporalFirewall
+
+    if pd.Timestamp(end) > pd.Timestamp("2024-12-31"):
+        raise DataContaminationError(
+            f"Hyperparameter optimization boundary breached: end date {end} > 2024-12-31! "
+            "All optimization must remain strictly within 2016-2024."
+        )
 
     ticker = ticker.upper()
     get_compute_backend()
@@ -177,8 +184,11 @@ def run_optuna_optimization(ticker, n_trials=50, start="2020-01-01", end=None):
     # ==========================================
     # FETCH DATA ONCE
     # ==========================================
-    print(f"--- Preparing Optimization Data for {ticker} ---")
+    print(f"--- Preparing Optimization Data for {ticker} (2016-2024) ---")
     df_raw = fetch_historical_data(ticker, start_date=start, end_date=end)
+    TemporalFirewall.validate_development_data(df_raw, "optimization_df_raw")
+    TemporalFirewall.validate_no_2026_leakage(df_raw, "optimization_df_raw")
+
     spy_df = yf.download("SPY", start=start, end=end, interval="1d", progress=False)
     vix_df = yf.download("^VIX", start=start, end=end, interval="1d", progress=False)
 
@@ -188,8 +198,11 @@ def run_optuna_optimization(ticker, n_trials=50, start="2020-01-01", end=None):
         vix_df.columns = vix_df.columns.droplevel(1)
 
     df_features = add_upgraded_features(df_raw.copy(), spy_df, vix_df)
+    # Drop uninitialized warmup period (first 119 bars for rolling 120-bar indicators)
+    if len(df_features) > 120:
+        df_features = df_features.iloc[119:]
 
-    print(f"\nStarting Hybrid 5-Model Optimization for {ticker}...")
+    print(f"\nStarting Hybrid 5-Model Optimization for {ticker} ({len(df_features)} samples)...")
     study = optuna.create_study(direction="maximize")
     study.optimize(lambda t: objective(t, df_features), n_trials=n_trials, n_jobs=1)
 
@@ -214,9 +227,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--trials", type=int, default=50, help="Number of Optuna trials (default: 50)"
     )
-    parser.add_argument("--start", type=str, default="2020-01-01", help="Start date")
+    parser.add_argument("--start", type=str, default="2016-01-01", help="Start date")
     parser.add_argument(
-        "--end", type=str, default=datetime.now().strftime("%Y-%m-%d"), help="End date"
+        "--end", type=str, default="2024-12-31", help="End date (strictly <= 2024-12-31)"
     )
     args = parser.parse_args()
 
