@@ -74,6 +74,7 @@ backend/data/
 backend/mlflow.db
 backend/mlruns/
 backend/artifacts/v2_0/
+backend/artifacts/v2_1/
 backend/backtest_results/
 
 # Allow specific trained models for institutional baseline

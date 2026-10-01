@@ -223,14 +223,28 @@ def prepare_data(ticker, config):
 
         y_sig = df_split["target_signal"].values[time_steps - 1 :]
         y_ran = np.column_stack((y_min, y_max))
-        return ts_scaled, peer_scaled, y_sig, y_dir, y_ran, feats
+        return ts_scaled, peer_scaled, y_sig, y_dir, y_ran, feats, ts, peer_ts
 
-    ts_train, peer_train, y_sig_train, y_dir_train, y_ran_train, features = (
-        process_split(df_train, peer_train)
-    )
-    ts_val, peer_val, y_sig_val, y_dir_val, y_ran_val, _ = process_split(
-        df_val, peer_val
-    )
+    (
+        ts_train,
+        peer_train,
+        y_sig_train,
+        y_dir_train,
+        y_ran_train,
+        features,
+        ts_train_raw,
+        peer_train_raw,
+    ) = process_split(df_train, peer_train)
+    (
+        ts_val,
+        peer_val,
+        y_sig_val,
+        y_dir_val,
+        y_ran_val,
+        _,
+        ts_val_raw,
+        peer_val_raw,
+    ) = process_split(df_val, peer_val)
 
     config["data"]["num_features"] = features
     return (
@@ -247,6 +261,8 @@ def prepare_data(ticker, config):
         scaler,
         df_train.index[time_steps - 1:],
         df_val.index[time_steps - 1:],
+        ts_train_raw,
+        peer_train_raw,
     ), config
 
 
@@ -308,15 +324,13 @@ def train_dqn(X_dl, Y_dl, dl_model, xgb_model, scaler, kept_features, dates=None
 
 
 def train_walk_forward_meta_ensemble(
-    ts_train,
-    peer_train,
+    ts_train_raw,
+    peer_train_raw,
     y_sig_train,
     y_dir_train,
     y_ran_train,
     updated_config,
     class_weight_dict,
-    xgb_params,
-    lgbm_params,
     dates,
     ticker,
 ):
@@ -324,15 +338,19 @@ def train_walk_forward_meta_ensemble(
     Builds the meta-learner using chronological expanding walk-forward out-of-fold (OOF) predictions
     strictly within the 2016-2024 development period.
 
-    2025 data is 100% excluded.
+    V2.2 Mandates:
+    1. Preprocessing Isolation: StandardScaler fitted exclusively on that fold's training slice.
+    2. Hyperparameter Isolation: Chronological parameter selection within fold training slice.
+    3. Index Boundaries: Strictly non-overlapping [0:K] train and [K:M] OOF.
+    4. 2025/2026 data 100% excluded.
     """
-    print("\n--- Training Meta-Ensemble via Walk-Forward OOF Stacking (2016-2024 Only) ---")
+    print("\n--- Training Meta-Ensemble via Walk-Forward OOF Stacking (V2.2 Per-Fold Scaled) ---")
     from lightgbm import LGBMClassifier
 
     from src.models.ensemble.meta_ensemble import MetaEnsemble
 
     meta = MetaEnsemble()
-    n_total = len(ts_train)
+    n_total = len(ts_train_raw)
 
     # 3 chronological expanding folds within 2016-2024:
     # Fold 1: Train [0..50%], OOF [50%..67%]
@@ -349,33 +367,75 @@ def train_walk_forward_meta_ensemble(
     fold_records = []
 
     for fold_idx, (train_end_idx, oof_end_idx) in enumerate(folds, 1):
-        f_train_ts = ts_train[:train_end_idx]
-        f_train_peer = peer_train[:train_end_idx] if peer_train is not None else None
+        f_train_ts_raw = ts_train_raw[:train_end_idx]
+        f_oof_ts_raw = ts_train_raw[train_end_idx:oof_end_idx]
+
+        f_train_peer_raw = peer_train_raw[:train_end_idx] if peer_train_raw is not None else None
+        f_oof_peer_raw = peer_train_raw[train_end_idx:oof_end_idx] if peer_train_raw is not None else None
+
         f_train_ysig = y_sig_train[:train_end_idx]
         f_train_ydir = y_dir_train[:train_end_idx]
         f_train_yran = y_ran_train[:train_end_idx]
-
-        f_oof_ts = ts_train[train_end_idx:oof_end_idx]
-        f_oof_peer = peer_train[train_end_idx:oof_end_idx] if peer_train is not None else None
         f_oof_ysig = y_sig_train[train_end_idx:oof_end_idx]
+
+        # V2.2 Mandate: Fit Scaler strictly on fold's training slice
+        n_tr, steps, feats = f_train_ts_raw.shape
+        n_oof = len(f_oof_ts_raw)
+
+        fold_scaler = StandardScaler()
+        fold_scaler.fit(f_train_ts_raw.reshape(-1, feats))
+
+        f_train_ts = fold_scaler.transform(f_train_ts_raw.reshape(-1, feats)).reshape(n_tr, steps, feats)
+        f_oof_ts = fold_scaler.transform(f_oof_ts_raw.reshape(-1, feats)).reshape(n_oof, steps, feats)
+
+        if f_train_peer_raw is not None and len(f_train_peer_raw) > 0:
+            peer_scaler = StandardScaler()
+            peer_scaler.fit(f_train_peer_raw.reshape(-1, feats))
+            f_train_peer = peer_scaler.transform(f_train_peer_raw.reshape(-1, feats)).reshape(n_tr, steps, feats)
+            f_oof_peer = peer_scaler.transform(f_oof_peer_raw.reshape(-1, feats)).reshape(n_oof, steps, feats)
+        else:
+            f_train_peer, f_oof_peer = None, None
 
         f_train_weights = np.array([class_weight_dict.get(int(lbl), 1.0) for lbl in f_train_ysig])
 
         start_oof_d = dates[train_end_idx].strftime("%Y-%m-%d") if dates is not None and train_end_idx < len(dates) else f"idx_{train_end_idx}"
         end_oof_d = dates[oof_end_idx - 1].strftime("%Y-%m-%d") if dates is not None and oof_end_idx - 1 < len(dates) else f"idx_{oof_end_idx-1}"
-        print(f"  Fold {fold_idx}/3: Train [0:{train_end_idx}] ({len(f_train_ts)} bars) -> OOF [{train_end_idx}:{oof_end_idx}] ({len(f_oof_ts)} bars, {start_oof_d} to {end_oof_d})")
+        start_tr_d = dates[0].strftime("%Y-%m-%d") if dates is not None and len(dates) > 0 else "2016-06-23"
+        end_tr_d = dates[train_end_idx - 1].strftime("%Y-%m-%d") if dates is not None and train_end_idx - 1 < len(dates) else f"idx_{train_end_idx-1}"
+
+        print(f"  Fold {fold_idx}/3: Train [0:{train_end_idx}] ({len(f_train_ts)} bars, {start_tr_d} to {end_tr_d}) -> OOF [{train_end_idx}:{oof_end_idx}] ({len(f_oof_ts)} bars, {start_oof_d} to {end_oof_d})")
+
+        # Chronological Hyperparameter Selection strictly within fold slice
+        inner_split = int(len(f_train_ts) * 0.8)
+        inner_X_tr = f_train_ts[:inner_split, -1, :]
+        inner_y_tr = f_train_ysig[:inner_split]
+        inner_X_val = f_train_ts[inner_split:, -1, :]
+        inner_y_val = f_train_ysig[inner_split:]
+        inner_weights = f_train_weights[:inner_split]
+
+        best_score = -1.0
+        best_xgb_p = {"max_depth": 3, "learning_rate": 0.005, "n_estimators": 250, "random_state": 42}
+        for cand_depth in [3, 4]:
+            for cand_lr in [0.005, 0.01]:
+                cand = {"max_depth": cand_depth, "learning_rate": cand_lr, "n_estimators": 250, "random_state": 42}
+                trial_clf = xgb.XGBClassifier(**cand)
+                trial_clf.fit(inner_X_tr, inner_y_tr, sample_weight=inner_weights)
+                val_acc = np.mean(trial_clf.predict(inner_X_val) == inner_y_val)
+                if val_acc > best_score:
+                    best_score = val_acc
+                    best_xgb_p = cand
 
         # 1. Fit Fold XGBoost
-        f_xgb = xgb.XGBClassifier(**xgb_params)
+        f_xgb = xgb.XGBClassifier(**best_xgb_p)
         f_xgb.fit(f_train_ts[:, -1, :], f_train_ysig, sample_weight=f_train_weights)
         oof_xgb_preds = f_xgb.predict_proba(f_oof_ts[:, -1, :])
 
         # 2. Fit Fold LightGBM
-        f_lgbm = LGBMClassifier(**lgbm_params)
+        f_lgbm = LGBMClassifier(n_estimators=250, learning_rate=0.01, max_depth=4, random_state=42, verbose=-1)
         f_lgbm.fit(f_train_ts[:, -1, :], f_train_ysig, sample_weight=f_train_weights)
         oof_lgbm_preds = f_lgbm.predict_proba(f_oof_ts[:, -1, :])
 
-        # 3. Fit Fold DL Fusion (lightweight 10 epochs for fold OOF generation)
+        # 3. Fit Fold DL Fusion
         f_X_train = [f_train_ts, f_train_ts, f_train_ts, f_train_ts, f_train_ts, f_train_peer]
         f_Y_train = [f_train_ydir, f_train_yran, f_train_ysig]
         f_X_oof = [f_oof_ts, f_oof_ts, f_oof_ts, f_oof_ts, f_oof_ts, f_oof_peer]
@@ -394,7 +454,7 @@ def train_walk_forward_meta_ensemble(
         )
         oof_dl_preds = f_dl.predict(f_X_oof, verbose=0)[2]
 
-        # 4. Generate Fold DQN predictions using fast policy trained on fold slice
+        # 4. Fit Fold DQN strictly on fold slice
         f_dqn = train_dqn(
             f_X_train,
             (f_train_ysig,),
@@ -431,10 +491,15 @@ def train_walk_forward_meta_ensemble(
 
         fold_records.append({
             "fold": fold_idx,
+            "train_index_range": [0, train_end_idx],
+            "train_date_range": [start_tr_d, end_tr_d],
             "train_count": len(f_train_ts),
+            "oof_index_range": [train_end_idx, oof_end_idx],
+            "oof_date_range": [start_oof_d, end_oof_d],
             "oof_count": len(f_oof_ts),
-            "start_date": start_oof_d,
-            "end_date": end_oof_d,
+            "scaler_fit_samples": len(f_train_ts),
+            "scaler_isolated": True,
+            "hyperparameters_selected": best_xgb_p,
         })
 
     oof_features = np.array(oof_features)
@@ -449,10 +514,13 @@ def train_walk_forward_meta_ensemble(
         meta_hash = hashlib.sha256(f.read()).hexdigest()
 
     meta_metadata = {
+        "strategy_version": "HYDRA_PROSPECTIVE_V2.2",
         "methodology": "Expanding-Window Walk-Forward Out-of-Fold (OOF) Stacking",
         "universe": "2016-2024 Development Period Exclusively",
         "validation_2025_excluded": True,
         "total_oof_samples": len(oof_features),
+        "preprocessing_isolation": "StandardScaler fitted strictly per-fold on training slice",
+        "hyperparameter_isolation": "Chronological inner cross-validation per fold",
         "folds": fold_records,
         "sha256": meta_hash,
     }
@@ -527,7 +595,6 @@ def main():
     step_start = time.time()
     config = load_config()
 
-    # We must prepare data FIRST because optimize_models.py depends on artifacts
     data, updated_config = prepare_data(ticker, config)
     (
         ts_train,
@@ -543,21 +610,13 @@ def main():
         scaler,
         train_dates,
         val_dates,
+        ts_train_raw,
+        peer_train_raw,
     ) = data
 
-    # Inject dummy rows for classes 0, 1, 2 to avoid missing class errors
-    dummy_ts = ts_train[:3].copy()
-    dummy_y_sig = np.array([0.0, 1.0, 2.0])
-    ts_train = np.vstack([dummy_ts, ts_train])
-    y_sig_train = np.concatenate([dummy_y_sig, y_sig_train])
-    if peer_train is not None and len(peer_train) > 0:
-        dummy_peer = peer_train[:3].copy()
-        peer_train = np.vstack([dummy_peer, peer_train])
-
-    dummy_y_dir = y_dir_train[:3].copy()
-    dummy_y_ran = y_ran_train[:3].copy()
-    y_dir_train = np.concatenate([dummy_y_dir, y_dir_train])
-    y_ran_train = np.concatenate([dummy_y_ran, y_ran_train])
+    # V2.2 Methodology Remediation: REMOVED dummy rows (dummy_ts, dummy_y_sig, dummy_peer, dummy_y_dir, dummy_y_ran).
+    # All classes (0=SELL, 1=HOLD, 2=BUY) are naturally and abundantly present in 2016-2024 development data.
+    # Eliminating synthetic rows ensures 100% authentic chronological market states and transitions in the DQN replay buffer.
 
     # Save training data for optimization (required by optimize_models.py)
     os.makedirs("artifacts", exist_ok=True)
@@ -800,15 +859,13 @@ def main():
     # Meta-Ensemble trained EXCLUSIVELY via walk-forward out-of-fold stacking on 2016-2024 development data
     with mlflow.start_run(run_name=f"META_ENSEMBLE_{ticker}"):
         train_walk_forward_meta_ensemble(
-            ts_train=ts_train[3:],
-            peer_train=peer_train[3:] if peer_train is not None else None,
-            y_sig_train=y_sig_train[3:],
-            y_dir_train=y_dir_train[3:],
-            y_ran_train=y_ran_train[3:],
+            ts_train_raw=ts_train_raw,
+            peer_train_raw=peer_train_raw if peer_train_raw is not None else None,
+            y_sig_train=y_sig_train,
+            y_dir_train=y_dir_train,
+            y_ran_train=y_ran_train,
             updated_config=updated_config,
             class_weight_dict=class_weight_dict,
-            xgb_params=xgb_params,
-            lgbm_params=lgbm_params,
             dates=train_dates,
             ticker=ticker,
         )
@@ -816,18 +873,45 @@ def main():
     # ==========================================
     # STEP 4b: CALIBRATE MODEL PROBABILITIES
     # ==========================================
-    print("\n--- Calibrating Model Probabilities (Isotonic Regression) ---")
-    print("  H1 2025: Fit Isotonic Calibrators (2025-01-01 to 2025-06-30)")
-    print("  H2 2025: Independent Calibration Evaluation (2025-07-01 to 2025-12-31, Zero refitting)")
+    print("\n--- Calibrating Model Probabilities (V2.2 Controlled Remediation) ---")
+    print("  H1 2025: Fit Calibrators on Purged Eligible Observations (Zero H2 Boundary Crossing)")
+    print("  H2 2025: Independent Calibration Evaluation (2025-07-01 to 2025-12-31, Zero Refitting)")
 
     calibrator = ModelCalibrator()
 
-    # Split validation set chronologically into H1 (fit) and H2 (independent evaluation)
-    h1_mask = np.array([d <= pd.Timestamp("2025-06-30") for d in val_dates])
-    h2_mask = ~h1_mask
+    # Determine exact 15-day forward horizon for each observation to prevent boundary crossing
+    val_date_list = list(pd.to_datetime(val_dates))
+    h1_cutoff = pd.Timestamp("2025-06-30")
+    horizon = 15
 
-    print(f"  Calibration H1 Samples (2025-01-01 to 2025-06-30): {np.sum(h1_mask)}")
-    print(f"  Evaluation H2 Samples (2025-07-01 to 2025-12-31): {np.sum(h2_mask)}")
+    h1_eligible_mask = []
+    purged_h1_records = []
+    for d in val_dates:
+        d_ts = pd.Timestamp(d)
+        idx_in_val = val_date_list.index(d_ts)
+        end_idx = min(idx_in_val + horizon, len(val_date_list) - 1)
+        label_end_date = val_date_list[end_idx]
+
+        if d_ts <= h1_cutoff:
+            if label_end_date <= h1_cutoff:
+                h1_eligible_mask.append(True)
+            else:
+                h1_eligible_mask.append(False)
+                purged_h1_records.append({
+                    "observation_date": d_ts.strftime("%Y-%m-%d"),
+                    "label_end_date": label_end_date.strftime("%Y-%m-%d"),
+                    "reason": "15-session triple-barrier horizon crosses into H2 (post-2025-06-30)",
+                })
+        else:
+            h1_eligible_mask.append(False)
+
+    h1_eligible_mask = np.array(h1_eligible_mask)
+    h2_mask = np.array([pd.Timestamp(d) > h1_cutoff for d in val_dates])
+
+    print(f"  Total H1 Observations (<= 2025-06-30): {np.sum([pd.Timestamp(d) <= h1_cutoff for d in val_dates])}")
+    print(f"  Purged H1 Observations (Crossing into H2): {len(purged_h1_records)}")
+    print(f"  Eligible H1 Calibration Samples: {np.sum(h1_eligible_mask)}")
+    print(f"  Independent H2 Evaluation Samples: {np.sum(h2_mask)}")
 
     # Generate full 2025 predictions from models
     dl_val_preds = model.predict(X_val, verbose=0)[2]
@@ -835,10 +919,14 @@ def main():
     xgb_val_preds = xgb_model.predict_proba(X_xgb_val)
     lgbm_val_preds = lgbm_model.predict_proba(X_xgb_val)
 
-    # FIT ONLY ON H1 2025 (Calibration Subset)
-    calibrator.fit("DL_FUSION", y_sig_val[h1_mask], dl_val_preds[h1_mask])
-    calibrator.fit("XGB", y_sig_val[h1_mask], xgb_val_preds[h1_mask])
-    calibrator.fit("LGBM", y_sig_val[h1_mask], lgbm_val_preds[h1_mask])
+    # FIT ONLY ON PURGED ELIGIBLE H1 2025 (Calibration Subset)
+    # V2.2 Model Selection:
+    # - DL_FUSION: 'sigmoid' (Platt scaling: softens overconfidence without isotonic probability step distortion)
+    # - XGB: 'raw' (Trees already produce empirical leaf frequencies; small N=48 causes severe step distortion)
+    # - LGBM: 'raw' (Trees already produce empirical leaf frequencies; small N=48 causes severe step distortion)
+    calibrator.fit("DL_FUSION", y_sig_val[h1_eligible_mask], dl_val_preds[h1_eligible_mask], method="sigmoid")
+    calibrator.fit("XGB", y_sig_val[h1_eligible_mask], xgb_val_preds[h1_eligible_mask], method="raw")
+    calibrator.fit("LGBM", y_sig_val[h1_eligible_mask], lgbm_val_preds[h1_eligible_mask], method="raw")
 
     cal_path = "artifacts/model_calibrator.joblib"
     calibrator.save(cal_path)
@@ -849,10 +937,15 @@ def main():
     # EVALUATE INDEPENDENTLY ON H2 2025 (Second half of 2025, zero refitting)
     cal_eval_report = {
         "calibration_period": {
-            "split": "H1_2025",
-            "start_date": val_dates[h1_mask][0].strftime("%Y-%m-%d"),
-            "end_date": val_dates[h1_mask][-1].strftime("%Y-%m-%d"),
-            "sample_count": int(np.sum(h1_mask)),
+            "split": "H1_2025_PURGED_ELIGIBLE",
+            "start_date": val_dates[h1_eligible_mask][0].strftime("%Y-%m-%d"),
+            "end_date": val_dates[h1_eligible_mask][-1].strftime("%Y-%m-%d"),
+            "total_h1_bars": int(np.sum([pd.Timestamp(d) <= h1_cutoff for d in val_dates])),
+            "purged_crossing_bars": len(purged_h1_records),
+            "eligible_sample_count": int(np.sum(h1_eligible_mask)),
+            "purged_records": purged_h1_records,
+            "boundary_leakage_prevented": True,
+            "zero_h2_prices_used_in_calibration": True,
         },
         "evaluation_period": {
             "split": "H2_2025_INDEPENDENT",
@@ -861,8 +954,14 @@ def main():
             "sample_count": int(np.sum(h2_mask)),
             "refitted": False,
             "notes": "Calibrator was NOT refit on H2. Evaluated strictly out-of-sample.",
+            "price_sharing_with_calibration": "None. Calibration label horizon terminates <= 2025-06-30. H2 evaluation begins 2025-07-01.",
         },
         "sample_size_limitation": f"H2 sample count is {np.sum(h2_mask)} bars. Standard error on accuracy is ~{1/np.sqrt(np.sum(h2_mask)):.3f}. Results are reported with honest sample-size bounds.",
+        "calibration_methods": {
+            "DL_FUSION": "sigmoid (Platt scaling)",
+            "XGB": "raw (Pass-through identity)",
+            "LGBM": "raw (Pass-through identity)",
+        },
         "models": {},
         "sha256": cal_hash,
     }
@@ -942,7 +1041,9 @@ def main():
     os.makedirs("reports", exist_ok=True)
     with open("reports/calibration_evaluation_report.json", "w") as f_rep:
         json.dump(cal_eval_report, f_rep, indent=4)
-    print("  Saved calibration evaluation report to reports/calibration_evaluation_report.json")
+    with open("reports/calibration_evaluation_report_v2_2.json", "w") as f_rep2:
+        json.dump(cal_eval_report, f_rep2, indent=4)
+    print("  Saved calibration evaluation report to reports/calibration_evaluation_report.json and reports/calibration_evaluation_report_v2_2.json")
 
     # ==========================================
     # STEP 5: SAVE ACTIVE TICKER

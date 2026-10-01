@@ -26,15 +26,15 @@ class ModelCalibrator:
     CLASS_NAMES = {0: "SELL", 1: "HOLD", 2: "BUY"}
 
     def __init__(self):
-        # calibrators[model_name][class_idx] = IsotonicRegression
-        self.calibrators: dict[str, dict[int, IsotonicRegression]] = {}
+        # calibrators[model_name] = {"method": str, "models": dict[int, Any]}
+        self.calibrators: dict[str, dict] = {}
 
     # ------------------------------------------------------------------
     # Fitting
     # ------------------------------------------------------------------
-    def fit(self, model_name: str, y_true: np.ndarray, y_prob: np.ndarray):
+    def fit(self, model_name: str, y_true: np.ndarray, y_prob: np.ndarray, method: str = "isotonic"):
         """
-        Fit per-class isotonic regressors.
+        Fit per-class calibrators using the specified method: 'isotonic', 'sigmoid', or 'raw'.
 
         Parameters
         ----------
@@ -44,32 +44,49 @@ class ModelCalibrator:
             Integer class labels {0, 1, 2}.
         y_prob : np.ndarray, shape (n_samples, 3)
             Predicted probability matrix [P(SELL), P(HOLD), P(BUY)].
+        method : str, default="isotonic"
+            One of 'isotonic', 'sigmoid' (Platt scaling), or 'raw'.
         """
+        if method == "raw":
+            self.calibrators[model_name] = {"method": "raw", "models": {}}
+            logger.info("Configured raw pass-through calibration for %s (N=%d)", model_name, len(y_true))
+            return
+
         if y_prob.ndim == 1:
             raise ValueError(
                 f"y_prob must be 2-D (n_samples, {self.NUM_CLASSES}), got 1-D."
             )
 
-        self.calibrators[model_name] = {}
+        from sklearn.linear_model import LogisticRegression
+
+        class_models = {}
         for cls_idx in range(self.NUM_CLASSES):
-            ir = IsotonicRegression(out_of_bounds="clip")
             binary_target = (y_true == cls_idx).astype(float)
-            ir.fit(y_prob[:, cls_idx], binary_target)
-            self.calibrators[model_name][cls_idx] = ir
-            logger.info(
-                "Fitted calibrator for %s / class %s (%s) on %d samples",
-                model_name,
-                cls_idx,
-                self.CLASS_NAMES[cls_idx],
-                len(y_true),
-            )
+            if method == "sigmoid":
+                clf = LogisticRegression(C=1.0)
+                clf.fit(y_prob[:, cls_idx : cls_idx + 1], binary_target.astype(int))
+                class_models[cls_idx] = clf
+            elif method == "isotonic":
+                ir = IsotonicRegression(out_of_bounds="clip")
+                ir.fit(y_prob[:, cls_idx], binary_target)
+                class_models[cls_idx] = ir
+            else:
+                raise ValueError(f"Unknown calibration method: {method}. Must be 'isotonic', 'sigmoid', or 'raw'.")
+
+        self.calibrators[model_name] = {"method": method, "models": class_models}
+        logger.info(
+            "Fitted %s calibrator for %s on %d samples",
+            method,
+            model_name,
+            len(y_true),
+        )
 
     # ------------------------------------------------------------------
     # Calibration
     # ------------------------------------------------------------------
     def calibrate(self, model_name: str, y_prob: np.ndarray) -> np.ndarray:
         """
-        Calibrate a probability vector (or matrix) through isotonic regressors.
+        Calibrate a probability vector (or matrix) through fitted calibrators.
 
         Parameters
         ----------
@@ -84,15 +101,29 @@ class ModelCalibrator:
             logger.warning("No calibrator for model '%s'. Returning raw probs.", model_name)
             return y_prob
 
+        entry = self.calibrators[model_name]
+        # Backward compatibility for legacy dictionary structure
+        if isinstance(entry, dict) and "method" not in entry:
+            entry = {"method": "isotonic", "models": entry}
+
+        method = entry.get("method", "isotonic")
+        if method == "raw":
+            return y_prob
+
         single = y_prob.ndim == 1
         if single:
             y_prob = y_prob.reshape(1, -1)
 
         calibrated = np.zeros_like(y_prob)
+        models_dict = entry.get("models", {})
         for cls_idx in range(self.NUM_CLASSES):
-            calibrated[:, cls_idx] = self.calibrators[model_name][cls_idx].predict(
-                y_prob[:, cls_idx]
-            )
+            est = models_dict.get(cls_idx)
+            if est is None:
+                calibrated[:, cls_idx] = y_prob[:, cls_idx]
+            elif method == "sigmoid":
+                calibrated[:, cls_idx] = est.predict_proba(y_prob[:, cls_idx : cls_idx + 1])[:, 1]
+            elif method == "isotonic":
+                calibrated[:, cls_idx] = est.predict(y_prob[:, cls_idx])
 
         # Re-normalise so each row sums to 1
         row_sums = calibrated.sum(axis=1, keepdims=True)

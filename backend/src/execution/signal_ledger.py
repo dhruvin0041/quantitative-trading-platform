@@ -206,6 +206,18 @@ class SignalLedger:
                 elif "modeled_fill_price" not in p_cols:
                     conn.execute("ALTER TABLE prospective_signals ADD COLUMN modeled_fill_price REAL;")
 
+                # Timestamp integrity audit columns (V2.2 mandate)
+                for audit_col, audit_type in [
+                    ("candle_finalization_timestamp", "TEXT"),
+                    ("data_ingestion_timestamp", "TEXT"),
+                    ("feature_computation_timestamp", "TEXT"),
+                    ("order_submission_timestamp", "TEXT"),
+                    ("vix_reference_date", "TEXT"),
+                    ("manifest_hash", "TEXT"),
+                ]:
+                    if audit_col not in p_cols:
+                        conn.execute(f"ALTER TABLE prospective_signals ADD COLUMN {audit_col} {audit_type};")
+
                 if "slippage_assumption_bps" not in p_cols and "slippage_bps" in p_cols:
                     try:
                         conn.execute(
@@ -339,8 +351,15 @@ class SignalLedger:
         model_hash: str,
         execution_target_timestamp: str,
         signal_reference_price: Optional[float] = None,
-        strategy_version: str = "HYDRA_PROSPECTIVE_V2.1",
+        strategy_version: str = "HYDRA_PROSPECTIVE_V2.2",
         is_provisional: bool = False,
+        # Timestamp integrity audit fields (V2.2 mandate)
+        candle_finalization_timestamp: Optional[str] = None,
+        data_ingestion_timestamp: Optional[str] = None,
+        feature_computation_timestamp: Optional[str] = None,
+        order_submission_timestamp: Optional[str] = None,
+        vix_reference_date: Optional[str] = None,
+        manifest_hash: Optional[str] = None,
         # Legacy parameter aliases (backward compat)
         expected_execution_price: Optional[float] = None,
         execution_price: Optional[float] = None,
@@ -399,8 +418,11 @@ class SignalLedger:
                     signal_reference_price,
                     market_open_price, modeled_fill_price,
                     slippage_assumption_bps, slippage_amount, commission_assumption,
-                    status, dataset, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, 'PENDING_EXECUTION', 'UNTOUCHED_FORWARD_VALIDATION', ?);
+                    status, dataset, created_at,
+                    candle_finalization_timestamp, data_ingestion_timestamp,
+                    feature_computation_timestamp, order_submission_timestamp,
+                    vix_reference_date, manifest_hash
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, 'PENDING_EXECUTION', 'UNTOUCHED_FORWARD_VALIDATION', ?, ?, ?, ?, ?, ?, ?);
                 """,
                 (
                     signal_id,
@@ -416,6 +438,12 @@ class SignalLedger:
                     tgt_utc,
                     ref_price,
                     now_utc,
+                    candle_finalization_timestamp,
+                    data_ingestion_timestamp,
+                    feature_computation_timestamp,
+                    order_submission_timestamp,
+                    vix_reference_date,
+                    manifest_hash,
                 ),
             )
             conn.commit()
