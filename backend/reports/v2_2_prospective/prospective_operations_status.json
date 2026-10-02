@@ -57,28 +57,28 @@
       "completed": 0,
       "reached": false,
       "progress_pct": 0.0,
-      "review_milestone": "Initial execution fidelity and pipeline calibration review"
+      "review_milestone": "Operational Review Milestone 1: Initial execution fidelity, slippage tracking, and ledger integrity audit. (Exploratory review only; strictly non-statistically significant; zero parameter/model modifications permitted)."
     },
     "checkpoint_2_30_trades": {
       "target": 30,
       "completed": 0,
       "reached": false,
       "progress_pct": 0.0,
-      "review_milestone": "Minimum sample size for preliminary statistical testing"
+      "review_milestone": "Operational Review Milestone 2: Preliminary sample size review and distribution stationarity check. (Exploratory review milestone; no automatic claims of statistical significance; zero retraining permitted)."
     },
     "checkpoint_3_50_trades": {
       "target": 50,
       "completed": 0,
       "reached": false,
       "progress_pct": 0.0,
-      "review_milestone": "Intermediate statistical power and drawdown envelope audit"
+      "review_milestone": "Operational Review Milestone 3: Intermediate operational review and drawdown envelope audit. (Statistical power remains limited; zero retraining or threshold modifications permitted)."
     },
     "checkpoint_4_100_trades": {
       "target": 100,
       "completed": 0,
       "reached": false,
       "progress_pct": 0.0,
-      "review_milestone": "Formal institutional hypothesis validation and stationarity audit"
+      "review_milestone": "Operational Review Milestone 4: Extended prospective sample review for out-of-sample operational consistency. (Formal review milestone; strategy V2.2 remains permanently frozen; zero automatic retraining or recalibration)."
     }
   },
   "operational_integrity": {
@@ -89,7 +89,11 @@
     "manifest_hash_mismatch": false,
     "open_incomplete_positions": 0,
     "active_open_trade": null,
-    "sqlite_wal_persistence_verified": true
+    "sqlite_wal_persistence_verified": true,
+    "hash_chain_verified": true,
+    "hash_chain_length": 1,
+    "hash_chain_violations": [],
+    "immutable_triggers_enforced": true
   },
   "completed_trades": []
 }
