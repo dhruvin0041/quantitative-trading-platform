@@ -291,6 +291,23 @@
       },
       "trading_performance": {
         "total_trades": 0
+      },
+      "trading_performance_xgb_argmax": {
+        "total_trades": 32,
+        "winning_trades": 24,
+        "losing_trades": 8,
+        "win_rate": 75.0,
+        "gross_profit_pct": 158.3884,
+        "gross_loss_pct": 21.9136,
+        "profit_factor": 7.2279,
+        "avg_profit_per_trade_pct": 6.5995,
+        "avg_loss_per_trade_pct": -2.7392,
+        "net_return_pct": 253.0144,
+        "max_drawdown_pct": -10.2622,
+        "sharpe_ratio": 2.413,
+        "sortino_ratio": 10.6335,
+        "avg_holding_days": 14.9,
+        "modeled_costs_description": "5 bps slippage per side (10 bps round trip) + $0.005/share institutional commission"
       }
     },
     "Calibration H1 (2025 Q1-Q2)": {
@@ -581,6 +598,10 @@
       },
       "trading_performance": {
         "total_trades": 0
+      },
+      "trading_performance_xgb_argmax": {
+        "total_trades": 0,
+        "modeled_costs_description": "5 bps slippage per side (10 bps round trip) + $0.005/share institutional commission"
       }
     },
     "Evaluation H2 (2025 Q3-Q4)": {
@@ -871,6 +892,23 @@
       },
       "trading_performance": {
         "total_trades": 0
+      },
+      "trading_performance_xgb_argmax": {
+        "total_trades": 5,
+        "winning_trades": 2,
+        "losing_trades": 3,
+        "win_rate": 40.0,
+        "gross_profit_pct": 4.3066,
+        "gross_loss_pct": 7.9466,
+        "profit_factor": 0.5419,
+        "avg_profit_per_trade_pct": 2.1533,
+        "avg_loss_per_trade_pct": -2.6489,
+        "net_return_pct": -3.7739,
+        "max_drawdown_pct": -5.6674,
+        "sharpe_ratio": -1.2245,
+        "sortino_ratio": -9.3146,
+        "avg_holding_days": 13.0,
+        "modeled_costs_description": "5 bps slippage per side (10 bps round trip) + $0.005/share institutional commission"
       }
     }
   },
