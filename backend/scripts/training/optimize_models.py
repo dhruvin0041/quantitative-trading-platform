@@ -15,7 +15,7 @@ import optuna
 from catboost import CatBoostClassifier
 from lightgbm import LGBMClassifier
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import f1_score
 from sklearn.model_selection import TimeSeriesSplit
 from xgboost import XGBClassifier
 
@@ -51,12 +51,9 @@ def objective_xgb(trial, X_train, y_train):
         "colsample_bylevel": trial.suggest_categorical(
             "colsample_bylevel", [0.5, 0.7, 0.85, 1.0]
         ),
-        "max_delta_step": trial.suggest_categorical("max_delta_step", [0, 1, 5, 10]),
-        "scale_pos_weight": trial.suggest_categorical(
-            "scale_pos_weight", [1, 2, 5, 10]
-        ),
         "objective": "multi:softprob",
         "num_class": 3,
+        "eval_metric": "mlogloss",
         "random_state": 42,
         "n_jobs": -1,
         **get_xgboost_gpu_params()
@@ -70,12 +67,10 @@ def objective_xgb(trial, X_train, y_train):
 
         model = XGBClassifier(**params)
         model.fit(X_t, y_t)
-        prob = model.predict_proba(X_v)[:, 2]
-        y_v_bin = (y_v == 2).astype(int)
-        if len(np.unique(y_v_bin)) > 1:
-            scores.append(roc_auc_score(y_v_bin, prob))
+        preds = model.predict(X_v)
+        scores.append(f1_score(y_v, preds, average="macro", zero_division=0))
 
-    return np.mean(scores) if scores else 0.5
+    return float(np.mean(scores)) if scores else 0.33
 
 
 def objective_lgbm(trial, X_train, y_train):
@@ -124,12 +119,10 @@ def objective_lgbm(trial, X_train, y_train):
         y_t, y_v = y_train[train_idx], y_train[val_idx]
         model = LGBMClassifier(**params)
         model.fit(X_t, y_t)
-        prob = model.predict_proba(X_v)[:, 2]
-        y_v_bin = (y_v == 2).astype(int)
-        if len(np.unique(y_v_bin)) > 1:
-            scores.append(roc_auc_score(y_v_bin, prob))
+        preds = model.predict(X_v)
+        scores.append(f1_score(y_v, preds, average="macro", zero_division=0))
 
-    return np.mean(scores) if scores else 0.5
+    return float(np.mean(scores)) if scores else 0.33
 
 
 def objective_catboost(trial, X_train, y_train):
@@ -164,11 +157,9 @@ def objective_catboost(trial, X_train, y_train):
         y_t, y_v = y_train[train_idx], y_train[val_idx]
         model = CatBoostClassifier(**params)
         model.fit(X_t, y_t)
-        prob = model.predict_proba(X_v)[:, 2]
-        y_v_bin = (y_v == 2).astype(int)
-        if len(np.unique(y_v_bin)) > 1:
-            scores.append(roc_auc_score(y_v_bin, prob))
-    return np.mean(scores) if scores else 0.5
+        preds = model.predict(X_v)
+        scores.append(f1_score(y_v, preds, average="macro", zero_division=0))
+    return float(np.mean(scores)) if scores else 0.33
 
 
 def objective_rf(trial, X_train, y_train):
@@ -198,27 +189,29 @@ def objective_rf(trial, X_train, y_train):
         y_t, y_v = y_train[train_idx], y_train[val_idx]
         model = RandomForestClassifier(**params)
         model.fit(X_t, y_t)
-        prob = model.predict_proba(X_v)[:, 2]
-        y_v_bin = (y_v == 2).astype(int)
-        if len(np.unique(y_v_bin)) > 1:
-            scores.append(roc_auc_score(y_v_bin, prob))
-    return np.mean(scores) if scores else 0.5
+        preds = model.predict(X_v)
+        scores.append(f1_score(y_v, preds, average="macro", zero_division=0))
+    return float(np.mean(scores)) if scores else 0.33
 
 
 def run_optimization(n_trials: int = 50) -> bool:
     from src.utils.gpu_utils import get_compute_backend
 
     get_compute_backend()
-    # Load training data saved by train.py
-    if not os.path.exists("artifacts/X_train_tabular.joblib") or not os.path.exists(
-        "artifacts/y_train_sig.joblib"
-    ):
+    artifacts_dir = BACKEND_DIR / "artifacts"
+    configs_dir = BACKEND_DIR / "configs"
+    configs_dir.mkdir(parents=True, exist_ok=True)
+
+    x_train_path = artifacts_dir / "X_train_tabular.joblib"
+    y_train_path = artifacts_dir / "y_train_sig.joblib"
+
+    if not x_train_path.exists() or not y_train_path.exists():
         print(" [ERROR] Required data artifacts not found. Run data preparation first.")
         return False
 
     print("--- Loading Data for Bayesian Optimization ---")
-    X_train = joblib.load("artifacts/X_train_tabular.joblib")
-    y_train = joblib.load("artifacts/y_train_sig.joblib")
+    X_train = joblib.load(x_train_path)
+    y_train = joblib.load(y_train_path)
 
     print(
         f"Running Bayesian Optimization for 4 models with {n_trials} trials each..."
@@ -234,8 +227,8 @@ def run_optimization(n_trials: int = 50) -> bool:
         study.optimize(
             lambda t: obj_func(t, X_train, y_train), n_trials=n_trials, n_jobs=1
         )
-        print(f"Best {model_name} AUC: {study.best_value}")
-        with open(f"configs/best_{model_name}_params.json", "w") as f:
+        print(f"Best {model_name} Macro-F1: {study.best_value:.4f}")
+        with open(configs_dir / f"best_{model_name}_params.json", "w") as f:
             json.dump(study.best_params, f, indent=2)
     return True
 

@@ -91,16 +91,21 @@ class WeightedConsensusEngine:
     def _get_empirical_accuracy(self, model_key: str) -> float:
         """Anchor smoothing probability strictly to empirical out-of-sample validation accuracy."""
         try:
-            with open("configs/model_accuracies.json", "r") as f:
+            from pathlib import Path
+            path = Path("configs/model_accuracies.json")
+            if not path.exists():
+                path = Path(__file__).resolve().parent.parent.parent / "configs" / "model_accuracies.json"
+            with open(path, "r") as f:
                 accs = json.load(f)
-            if "DQN" in model_key.upper():
-                return float(accs.get("dqn_accuracy", 0.50))
-            elif "XGB" in model_key.upper():
-                return float(accs.get("xgb_accuracy", 0.55))
-            elif "LGBM" in model_key.upper():
-                return float(accs.get("lgbm_accuracy", 0.53))
-            elif "DL" in model_key.upper():
-                return float(accs.get("dl_accuracy", 0.50))
+            key_upper = model_key.upper()
+            if "DQN" in key_upper:
+                return float(accs.get("dqn_accuracy", accs.get("dqn", 0.3800)))
+            elif "XGB" in key_upper:
+                return float(accs.get("xgb_accuracy", accs.get("xgb", 0.4968)))
+            elif "LGBM" in key_upper:
+                return float(accs.get("lgbm_accuracy", accs.get("lgbm", 0.4559)))
+            elif "DL" in key_upper:
+                return float(accs.get("dl_accuracy", accs.get("dl_fusion", 0.3547)))
         except Exception:
             pass
         return 0.50

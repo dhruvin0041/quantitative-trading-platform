@@ -6,6 +6,7 @@ os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
 import json
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import joblib
 import numpy as np
@@ -30,14 +31,25 @@ def run_backtest(ticker="AAPL", start_date="2023-01-01", end_date=None):
     )
 
     # 1. Load Everything
-    with open("configs/model_params.yaml", "r") as f:
+    backend_dir = Path(__file__).resolve().parent.parent.parent
+
+    def resolve_p(rel: str) -> Path:
+        p = Path(rel)
+        if p.exists():
+            return p
+        bp = backend_dir / rel
+        if bp.exists():
+            return bp
+        return p
+
+    with open(resolve_p("configs/model_params.yaml"), "r") as f:
         config = yaml.safe_load(f)
-    with open("configs/kept_features.json", "r") as f:
+    with open(resolve_p("configs/kept_features.json"), "r") as f:
         kept_features = json.load(f)
-    with open("configs/model_accuracies.json", "r") as f:
+    with open(resolve_p("configs/model_accuracies.json"), "r") as f:
         accs = json.load(f)
 
-    scaler = joblib.load("artifacts/latest_scaler.joblib")
+    scaler = joblib.load(resolve_p("artifacts/latest_scaler.joblib"))
 
     # Models
     config["data"]["num_features"] = len(kept_features)

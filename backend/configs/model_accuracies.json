@@ -1,1 +1,10 @@
-{"dl_accuracy": 0.4968553459119497, "xgb_accuracy": 0.4559748427672956, "dqn_accuracy": 0.5}
+{
+  "dl_accuracy": 0.3547,
+  "xgb_accuracy": 0.4968,
+  "lgbm_accuracy": 0.4559,
+  "dqn_accuracy": 0.3800,
+  "dl_fusion": 0.3547,
+  "xgb": 0.4968,
+  "lgbm": 0.4559,
+  "dqn": 0.3800
+}

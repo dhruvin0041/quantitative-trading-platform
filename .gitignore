@@ -76,6 +76,8 @@ backend/mlruns/
 backend/artifacts/v2_0/
 backend/artifacts/v2_1/
 backend/backtest_results/
+backtest_results/
+mlruns/
 
 # Allow specific trained models for institutional baseline
 !backend/artifacts/lgbm_agent.joblib

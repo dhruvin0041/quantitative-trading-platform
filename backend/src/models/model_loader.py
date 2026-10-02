@@ -155,15 +155,22 @@ class ModelManager:
 
     def _load_accuracies(self):
         try:
-            with open("configs/model_accuracies.json", "r") as f:
+            from pathlib import Path
+            path = Path("configs/model_accuracies.json")
+            if not path.exists():
+                path = Path(__file__).resolve().parent.parent.parent / "configs" / "model_accuracies.json"
+            with open(path, "r") as f:
                 self.accuracies = json.load(f)
         except Exception:
             self.accuracies = {
-                "ensemble_accuracy": 54.6,
-                "dl_accuracy": 52.1,
-                "xgb_accuracy": 55.4,
-                "lgbm_accuracy": 53.2,
-                "dqn_accuracy": 48.9,
+                "xgb_accuracy": 0.4968,
+                "lgbm_accuracy": 0.4559,
+                "dl_accuracy": 0.3547,
+                "dqn_accuracy": 0.3800,
+                "xgb": 0.4968,
+                "lgbm": 0.4559,
+                "dl_fusion": 0.3547,
+                "dqn": 0.3800,
             }
 
     def _load_lstm(self):

@@ -96,8 +96,12 @@ def objective(trial, df_features):
     from sklearn.preprocessing import StandardScaler
     df_ready = df_labeled[FEATURE_COLUMNS + ["target_direction", "target_min", "target_max", "target_signal"]].copy()
 
+    # Temporal split index before scaling to prevent validation/test leakage
+    split_idx = int(len(df_ready) * 0.8)
+
     scaler = StandardScaler()
-    df_ready[FEATURE_COLUMNS] = scaler.fit_transform(df_ready[FEATURE_COLUMNS])
+    scaler.fit(df_ready.iloc[:split_idx][FEATURE_COLUMNS])
+    df_ready[FEATURE_COLUMNS] = scaler.transform(df_ready[FEATURE_COLUMNS])
 
     time_steps = 60
     ts_seq, y_dir, y_min, y_max = create_time_series_sequences(df_ready, time_steps)
@@ -209,8 +213,9 @@ def run_optuna_optimization(ticker, n_trials=50, start="2016-01-01", end="2024-1
 
     print(f"\nBEST ACCURACY: {study.best_value * 100:.2f}%")
 
-    os.makedirs("configs", exist_ok=True)
-    output_path = f"configs/optimized_params_{ticker}.json"
+    configs_dir = BACKEND_DIR / "configs"
+    configs_dir.mkdir(parents=True, exist_ok=True)
+    output_path = configs_dir / f"optimized_params_{ticker}.json"
     best_config = dict(study.best_params)
     best_config["_provenance"] = {
         "start_date": "2016-01-01",

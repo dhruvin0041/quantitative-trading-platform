@@ -1,0 +1,3 @@
+# Ensure cryptographic manifest byte consistency across platforms
+backend/src/execution/live_inference.py text eol=crlf
+backend/artifacts/*.json text eol=lf
