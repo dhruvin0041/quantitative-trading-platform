@@ -1,0 +1,95 @@
+{
+  "total_observations": 1,
+  "signal_counts": {
+    "BUY": 0,
+    "SELL": 0,
+    "HOLD": 1
+  },
+  "model_prediction_distributions": {
+    "XGBoost": {
+      "BUY": 0,
+      "HOLD": 0,
+      "SELL": 1
+    },
+    "LightGBM": {
+      "BUY": 0,
+      "HOLD": 0,
+      "SELL": 1
+    },
+    "DL_Fusion_Raw": {
+      "BUY": 1,
+      "HOLD": 0,
+      "SELL": 0
+    },
+    "DL_Fusion_Calibrated": {
+      "BUY": 0,
+      "HOLD": 1,
+      "SELL": 0
+    },
+    "DQN": {
+      "BUY": 1,
+      "HOLD": 0,
+      "SELL": 0
+    },
+    "Meta_Ensemble": {
+      "BUY": 1,
+      "HOLD": 0,
+      "SELL": 0
+    },
+    "Final_Production_Path": {
+      "BUY": 0,
+      "HOLD": 1,
+      "SELL": 0
+    }
+  },
+  "completed_trades_count": 0,
+  "open_incomplete_trades_count": 0,
+  "win_rate_pct": null,
+  "profit_factor": null,
+  "net_compounded_return_pct": 0.0,
+  "max_drawdown_pct": 0.0,
+  "sharpe_ratio": null,
+  "sortino_ratio": null,
+  "total_modeled_transaction_costs_usd": 0,
+  "checkpoints": {
+    "checkpoint_1_10_trades": {
+      "target": 10,
+      "completed": 0,
+      "reached": false,
+      "progress_pct": 0.0,
+      "review_milestone": "Initial execution fidelity and pipeline calibration review"
+    },
+    "checkpoint_2_30_trades": {
+      "target": 30,
+      "completed": 0,
+      "reached": false,
+      "progress_pct": 0.0,
+      "review_milestone": "Minimum sample size for preliminary statistical testing"
+    },
+    "checkpoint_3_50_trades": {
+      "target": 50,
+      "completed": 0,
+      "reached": false,
+      "progress_pct": 0.0,
+      "review_milestone": "Intermediate statistical power and drawdown envelope audit"
+    },
+    "checkpoint_4_100_trades": {
+      "target": 100,
+      "completed": 0,
+      "reached": false,
+      "progress_pct": 0.0,
+      "review_milestone": "Formal institutional hypothesis validation and stationarity audit"
+    }
+  },
+  "operational_integrity": {
+    "missing_market_data": false,
+    "duplicate_signals_detected": 0,
+    "timestamp_monotonicity_verified": true,
+    "model_loading_failures": 0,
+    "manifest_hash_mismatch": false,
+    "open_incomplete_positions": 0,
+    "active_open_trade": null,
+    "sqlite_wal_persistence_verified": true
+  },
+  "completed_trades": []
+}
