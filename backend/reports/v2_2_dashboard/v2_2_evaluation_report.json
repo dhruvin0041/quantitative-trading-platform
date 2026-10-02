@@ -1,6 +1,6 @@
 {
   "strategy_version": "HYDRA_PROSPECTIVE_V2.2",
-  "evaluation_timestamp_utc": "2026-10-01T12:37:19.880071Z",
+  "evaluation_timestamp_utc": "2026-10-02T08:26:29.287374Z",
   "evaluation_type": "READ_ONLY_FROZEN_MODEL_EVALUATION",
   "periods": {
     "Development (2020-2024)": {
@@ -9,22 +9,22 @@
         "XGBoost": {
           "model": "XGBoost",
           "n_samples": 1242,
-          "accuracy": 0.6465,
-          "accuracy_ci_95": "[0.6195, 0.6726]",
-          "balanced_accuracy": 0.7069,
+          "accuracy": 0.6481,
+          "accuracy_ci_95": "[0.6212, 0.6742]",
+          "balanced_accuracy": 0.7141,
           "precision_per_class": {
-            "SELL": 0.5923,
-            "HOLD": 0.2826,
+            "SELL": 0.595,
+            "HOLD": 0.2878,
             "BUY": 0.8851
           },
           "recall_per_class": {
             "SELL": 0.6726,
-            "HOLD": 0.8387,
+            "HOLD": 0.8602,
             "BUY": 0.6095
           },
           "f1_per_class": {
-            "SELL": 0.6299,
-            "HOLD": 0.4228,
+            "SELL": 0.6315,
+            "HOLD": 0.4313,
             "BUY": 0.7219
           },
           "support_per_class": {
@@ -39,8 +39,8 @@
               55
             ],
             [
-              10,
-              78,
+              8,
+              80,
               5
             ],
             [
@@ -49,9 +49,9 @@
               462
             ]
           ],
-          "brier_score": 0.5215,
-          "log_loss": 0.8759,
-          "ece": 0.1795
+          "brier_score": 0.5216,
+          "log_loss": 0.8761,
+          "ece": 0.1812
         },
         "LightGBM": {
           "model": "LightGBM",
@@ -197,23 +197,23 @@
         "Meta-Ensemble": {
           "model": "Meta-Ensemble",
           "n_samples": 1242,
-          "accuracy": 0.2601,
-          "accuracy_ci_95": "[0.2364, 0.2852]",
-          "balanced_accuracy": 0.4313,
+          "accuracy": 0.2609,
+          "accuracy_ci_95": "[0.2372, 0.2860]",
+          "balanced_accuracy": 0.4318,
           "precision_per_class": {
             "SELL": 0.0,
-            "HOLD": 0.0939,
-            "BUY": 0.8817
+            "HOLD": 0.094,
+            "BUY": 0.8821
           },
           "recall_per_class": {
             "SELL": 0.0,
             "HOLD": 0.9892,
-            "BUY": 0.3047
+            "BUY": 0.3061
           },
           "f1_per_class": {
             "SELL": 0.0,
-            "HOLD": 0.1715,
-            "BUY": 0.4529
+            "HOLD": 0.1716,
+            "BUY": 0.4545
           },
           "support_per_class": {
             "SELL": 391,
@@ -233,13 +233,13 @@
             ],
             [
               0,
-              527,
-              231
+              526,
+              232
             ]
           ],
           "brier_score": 0.7094,
-          "log_loss": 1.1511,
-          "ece": 0.2159
+          "log_loss": 1.1512,
+          "ece": 0.2151
         },
         "HYDRA Final": {
           "model": "HYDRA Final",
@@ -285,29 +285,12 @@
             ]
           ],
           "brier_score": 0.7094,
-          "log_loss": 1.1511,
-          "ece": 0.2159
+          "log_loss": 1.1512,
+          "ece": 0.2151
         }
       },
       "trading_performance": {
         "total_trades": 0
-      },
-      "trading_performance_xgb_argmax": {
-        "total_trades": 32,
-        "winning_trades": 24,
-        "losing_trades": 8,
-        "win_rate": 75.0,
-        "gross_profit_pct": 158.3887,
-        "gross_loss_pct": 21.9137,
-        "profit_factor": 7.2278,
-        "avg_profit_per_trade_pct": 6.5995,
-        "avg_loss_per_trade_pct": -2.7392,
-        "net_return_pct": 253.0145,
-        "max_drawdown_pct": -10.2622,
-        "sharpe_ratio": 2.413,
-        "sortino_ratio": 10.6334,
-        "avg_holding_days": 14.9,
-        "modeled_costs_description": "5 bps slippage per side (10 bps round trip) + $0.005/share institutional commission"
       }
     },
     "Calibration H1 (2025 Q1-Q2)": {
@@ -598,10 +581,6 @@
       },
       "trading_performance": {
         "total_trades": 0
-      },
-      "trading_performance_xgb_argmax": {
-        "total_trades": 0,
-        "modeled_costs_description": "5 bps slippage per side (10 bps round trip) + $0.005/share institutional commission"
       }
     },
     "Evaluation H2 (2025 Q3-Q4)": {
@@ -651,7 +630,7 @@
             ]
           ],
           "brier_score": 0.6852,
-          "log_loss": 1.0866,
+          "log_loss": 1.0867,
           "ece": 0.2526
         },
         "LightGBM": {
@@ -892,23 +871,6 @@
       },
       "trading_performance": {
         "total_trades": 0
-      },
-      "trading_performance_xgb_argmax": {
-        "total_trades": 5,
-        "winning_trades": 2,
-        "losing_trades": 3,
-        "win_rate": 40.0,
-        "gross_profit_pct": 4.3066,
-        "gross_loss_pct": 7.9466,
-        "profit_factor": 0.5419,
-        "avg_profit_per_trade_pct": 2.1533,
-        "avg_loss_per_trade_pct": -2.6489,
-        "net_return_pct": -3.7739,
-        "max_drawdown_pct": -5.6674,
-        "sharpe_ratio": -1.2245,
-        "sortino_ratio": -9.3146,
-        "avg_holding_days": 13.0,
-        "modeled_costs_description": "5 bps slippage per side (10 bps round trip) + $0.005/share institutional commission"
       }
     }
   },
