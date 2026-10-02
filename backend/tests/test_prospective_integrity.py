@@ -26,6 +26,7 @@ import shutil
 import sqlite3
 import tempfile
 import unittest
+from pathlib import Path
 
 import numpy as np
 
@@ -42,7 +43,9 @@ class TestProspectiveIntegrity(unittest.TestCase):
         self.temp_dir = tempfile.mkdtemp()
         self.temp_db_path = os.path.join(self.temp_dir, "test_integrity.db")
         self.manager = ProspectiveValidationManager(
-            backend_dir=BACKEND_DIR, db_path=self.temp_db_path
+            backend_dir=BACKEND_DIR,
+            db_path=self.temp_db_path,
+            reports_dir=Path(self.temp_dir) / "reports",
         )
 
     def tearDown(self):

@@ -70,11 +70,20 @@ class ProspectiveValidationManager:
     execution event separation, hash-chain auditing, and checkpoint reporting.
     """
 
-    def __init__(self, backend_dir: Optional[Path] = None, db_path: Optional[str] = None):
+    def __init__(
+        self,
+        backend_dir: Optional[Path] = None,
+        db_path: Optional[str] = None,
+        reports_dir: Optional[Path] = None,
+    ):
         self.backend_dir = backend_dir or BACKEND_DIR
         self.artifacts_dir = self.backend_dir / "artifacts"
         self.configs_dir = self.backend_dir / "configs"
-        self.reports_dir = self.backend_dir / "reports" / "v2_2_prospective"
+        self.reports_dir = (
+            Path(reports_dir)
+            if reports_dir
+            else (self.backend_dir / "reports" / "v2_2_prospective")
+        )
         self.reports_dir.mkdir(parents=True, exist_ok=True)
 
         self.manifest_path = self.artifacts_dir / "frozen_strategy_manifest_v2.2.json"
@@ -424,7 +433,7 @@ class ProspectiveValidationManager:
                 """
                 SELECT * FROM prospective_observations
                 WHERE source_asset = ?
-                ORDER BY source_candle_date ASC;
+                ORDER BY rowid ASC;
                 """,
                 (asset,),
             ).fetchall()
@@ -448,19 +457,35 @@ class ProspectiveValidationManager:
             recorded_canon = r_dict.get("canonical_signal_hash")
             recorded_obs = r_dict.get("observation_hash")
 
-            # 1. Verify link to previous observation
+            # 1. Chronological order check
+            if idx > 0:
+                prev_date = rows[idx - 1]["source_candle_date"]
+                curr_date = r_dict["source_candle_date"]
+                if curr_date <= prev_date:
+                    violations.append(
+                        {
+                            "index": idx,
+                            "signal_id": r_dict["signal_id"],
+                            "error": "CHRONOLOGICAL_SEQUENCE_VIOLATION",
+                            "prev_date": prev_date,
+                            "curr_date": curr_date,
+                        }
+                    )
+
+            # 2. Verify link to previous observation / genesis
             if actual_prev != expected_prev_hash:
+                err_type = "GENESIS_HASH_MISMATCH" if idx == 0 else "PREDECESSOR_HASH_MISMATCH"
                 violations.append(
                     {
                         "index": idx,
                         "signal_id": r_dict["signal_id"],
-                        "error": "PREV_HASH_MISMATCH",
+                        "error": err_type,
                         "expected_prev": expected_prev_hash,
                         "actual_prev": actual_prev,
                     }
                 )
 
-            # 2. Recompute and verify canonical signal hash
+            # 3. Recompute and verify canonical signal hash
             recomputed_canon = self.compute_canonical_signal_hash(r_dict)
             if recomputed_canon != recorded_canon:
                 violations.append(
@@ -473,7 +498,7 @@ class ProspectiveValidationManager:
                     }
                 )
 
-            # 3. Recompute and verify chained observation hash
+            # 4. Recompute and verify chained observation hash
             recomputed_obs = hashlib.sha256(
                 f"{actual_prev}:{recomputed_canon}".encode("utf-8")
             ).hexdigest()
@@ -496,6 +521,178 @@ class ProspectiveValidationManager:
             "genesis_hash": rows[0]["prev_observation_hash"] if rows else None,
             "latest_hash": rows[-1]["observation_hash"] if rows else None,
             "violations": violations,
+        }
+
+    def backup_ledger(self, dest_path: str) -> Dict[str, Any]:
+        """
+        Performs an online, crash-consistent backup of the prospective SQLite ledger
+        using SQLite's online backup API (PRAGMA wal_checkpoint + conn.backup).
+        """
+        dest_path_obj = Path(dest_path)
+        dest_path_obj.parent.mkdir(parents=True, exist_ok=True)
+
+        with self._get_connection() as src_conn:
+            src_conn.execute("PRAGMA wal_checkpoint(FULL);")
+            with sqlite3.connect(str(dest_path_obj)) as dest_conn:
+                src_conn.backup(dest_conn, pages=100)
+
+        backup_bytes = dest_path_obj.read_bytes()
+        backup_sha256 = hashlib.sha256(backup_bytes).hexdigest()
+
+        return {
+            "status": "BACKUP_COMPLETED",
+            "backup_path": str(dest_path_obj),
+            "backup_size_bytes": len(backup_bytes),
+            "backup_sha256": backup_sha256,
+            "backup_timestamp": get_high_precision_utc_now(),
+        }
+
+    @classmethod
+    def restore_ledger(
+        cls,
+        backup_path: str,
+        restore_db_path: str,
+        backend_dir: Optional[Path] = None,
+    ) -> "ProspectiveValidationManager":
+        """
+        Restores a prospective ledger database backup to an isolated target location
+        and verifies hash chain integrity upon startup.
+        """
+        b_path = Path(backup_path)
+        r_path = Path(restore_db_path)
+        if not b_path.exists():
+            raise FileNotFoundError(f"Backup file not found: {b_path}")
+
+        r_path.parent.mkdir(parents=True, exist_ok=True)
+        if r_path.exists():
+            r_path.unlink()
+
+        with sqlite3.connect(str(b_path)) as src_conn:
+            with sqlite3.connect(str(r_path)) as dest_conn:
+                src_conn.backup(dest_conn, pages=100)
+
+        restored_mgr = cls(backend_dir=backend_dir, db_path=str(r_path))
+        chain_audit = restored_mgr.verify_hash_chain()
+        if not chain_audit["verified"]:
+            raise RuntimeError(
+                f"Restored ledger failed hash chain verification! Violations: {chain_audit['violations']}"
+            )
+        return restored_mgr
+
+    def reconcile_legacy_and_immutable_ledgers(self, asset: str = "AAPL") -> Dict[str, Any]:
+        """
+        Performs cross-table reconciliation between the authoritative immutable table
+        (prospective_observations) and the legacy mutable table (prospective_signals).
+        Detects any discrepancies in signal decisions, reference prices, or manifest hashes.
+        """
+        with self._get_connection() as conn:
+            obs_rows = conn.execute(
+                """
+                SELECT * FROM prospective_observations
+                WHERE source_asset = ?
+                ORDER BY source_candle_date ASC;
+                """,
+                (asset,),
+            ).fetchall()
+
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='prospective_signals';"
+            )
+            has_legacy = cursor.fetchone() is not None
+
+            if not has_legacy:
+                return {
+                    "reconciled": True,
+                    "authoritative_count": len(obs_rows),
+                    "legacy_count": 0,
+                    "status": "LEGACY_TABLE_ABSENT",
+                    "discrepancies": [],
+                }
+
+            legacy_rows = conn.execute(
+                """
+                SELECT * FROM prospective_signals
+                WHERE symbol = ?
+                ORDER BY source_candle_timestamp ASC;
+                """,
+                (asset,),
+            ).fetchall()
+
+        discrepancies = []
+        obs_map = {r["source_candle_date"]: dict(r) for r in obs_rows}
+        legacy_map = {}
+        for r in legacy_rows:
+            c_ts = r["source_candle_timestamp"]
+            d_str = c_ts[:10]
+            legacy_map[d_str] = dict(r)
+
+        all_dates = sorted(set(obs_map.keys()) | set(legacy_map.keys()))
+
+        for d in all_dates:
+            o = obs_map.get(d)
+            l_row = legacy_map.get(d)
+
+            if o is None:
+                discrepancies.append(
+                    {
+                        "date": d,
+                        "type": "ORPHAN_LEGACY_RECORD",
+                        "detail": f"Signal exists in legacy prospective_signals ({l_row.get('signal_id')}) but absent from authoritative prospective_observations.",
+                    }
+                )
+                continue
+
+            if l_row is None:
+                discrepancies.append(
+                    {
+                        "date": d,
+                        "type": "MISSING_LEGACY_RECORD",
+                        "detail": f"Signal exists in authoritative prospective_observations ({o.get('signal_id')}) but missing from legacy prospective_signals.",
+                    }
+                )
+                continue
+
+            # Check decision match
+            if o["final_trading_decision"] != l_row["signal"]:
+                discrepancies.append(
+                    {
+                        "date": d,
+                        "type": "DECISION_MISMATCH",
+                        "detail": f"Decision divergence on {d}: authoritative='{o['final_trading_decision']}' vs legacy='{l_row['signal']}'.",
+                    }
+                )
+
+            # Check reference price
+            if abs(float(o["signal_reference_price"]) - float(l_row["signal_reference_price"])) > 0.01:
+                discrepancies.append(
+                    {
+                        "date": d,
+                        "type": "REFERENCE_PRICE_MISMATCH",
+                        "detail": f"Reference price divergence on {d}: authoritative=${o['signal_reference_price']:.2f} vs legacy=${l_row['signal_reference_price']:.2f}.",
+                    }
+                )
+
+            # Check manifest hash
+            if o["manifest_hash"] != l_row.get("manifest_hash"):
+                discrepancies.append(
+                    {
+                        "date": d,
+                        "type": "MANIFEST_HASH_MISMATCH",
+                        "detail": f"Manifest hash divergence on {d}: authoritative='{o['manifest_hash'][:12]}...' vs legacy='{str(l_row.get('manifest_hash'))[:12]}...'.",
+                    }
+                )
+
+        is_reconciled = len(discrepancies) == 0
+        return {
+            "reconciled": is_reconciled,
+            "authoritative_count": len(obs_rows),
+            "legacy_count": len(legacy_rows),
+            "authoritative_table": "prospective_observations",
+            "legacy_table": "prospective_signals (DEPRECATED / NON-AUTHORITATIVE)",
+            "discrepancies_count": len(discrepancies),
+            "discrepancies": discrepancies,
+            "reconciliation_timestamp": get_high_precision_utc_now(),
         }
 
     def record_execution_event(
@@ -1462,6 +1659,9 @@ class ProspectiveValidationManager:
         # Hash Chain Verification
         chain_audit = self.verify_hash_chain(asset=ticker)
 
+        # Cross-Table Legacy Reconciliation Audit (Task F)
+        reconciliation_audit = self.reconcile_legacy_and_immutable_ledgers(asset=ticker)
+
         # Operational integrity metrics
         integrity_audit = {
             "missing_market_data": False,
@@ -1502,6 +1702,7 @@ class ProspectiveValidationManager:
             "total_modeled_transaction_costs_usd": round(total_modeled_costs, 2),
             "checkpoints": checkpoints_status,
             "operational_integrity": integrity_audit,
+            "legacy_ledger_reconciliation": reconciliation_audit,
             "completed_trades": completed_trades,
         }
 
@@ -1528,6 +1729,12 @@ def main() -> None:
     chain = mgr.verify_hash_chain("AAPL")
     logger.info(
         f"Hash Chain Integrity: Verified={chain['verified']}, Length={chain['chain_length']}"
+    )
+
+    logger.info("Step 2b: Reconciling legacy and immutable ledgers...")
+    recon = mgr.reconcile_legacy_and_immutable_ledgers("AAPL")
+    logger.info(
+        f"Legacy Reconciliation: Reconciled={recon['reconciled']}, Discrepancies={recon['discrepancies_count']}"
     )
 
     logger.info("Step 3: Calculating performance evaluation and checkpoint metrics...")

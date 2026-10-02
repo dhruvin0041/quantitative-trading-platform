@@ -95,5 +95,15 @@
     "hash_chain_violations": [],
     "immutable_triggers_enforced": true
   },
+  "legacy_ledger_reconciliation": {
+    "reconciled": true,
+    "authoritative_count": 1,
+    "legacy_count": 1,
+    "authoritative_table": "prospective_observations",
+    "legacy_table": "prospective_signals (DEPRECATED / NON-AUTHORITATIVE)",
+    "discrepancies_count": 0,
+    "discrepancies": [],
+    "reconciliation_timestamp": "2026-10-02T09:26:22.138495Z"
+  },
   "completed_trades": []
 }
