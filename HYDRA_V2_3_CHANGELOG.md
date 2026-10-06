@@ -1,6 +1,7 @@
 # HYDRA V2.3 ENGINEERING CHANGELOG & MIGRATION SPECIFICATION
 **Version:** HYDRA V2.3 (Reconciled Tooling & Research Baseline)  
-**Baseline Version:** HYDRA V2.2 (Frozen Production Baseline at `60e0705a`)  
+**Code-Freeze Baseline Commit:** `e687e2321da9159dca2b10c6744f2166fb44a506` (V2.2 Frozen Strategy Manifest)  
+**Evaluation Reporting Commit:** `60e0705a56c01a9eb1569dbc618dac55fe3289eb` (V2.2 Evaluation Documentation Update)  
 **Repository Branch:** `main` (Tracking `origin/main`)  
 **Classification:** Institutional Platform Engineering Overhaul & Quantitative Tooling Reclassification  
 **Date:** October 2026

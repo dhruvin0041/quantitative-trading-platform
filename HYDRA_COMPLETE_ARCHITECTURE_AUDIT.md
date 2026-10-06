@@ -3,8 +3,9 @@
 **Classification:** Institutional Quantitative Trading Platform Architecture (Unvalidated Research Baseline)  
 **Author:** Quantitative Research & Architecture Team  
 **Date:** October 2026  
-**Repository Baseline Commit:** `60e0705a56c01a9eb1569dbc618dac55fe3289eb` (V2.2 Frozen Release)  
-**Repository Branch:** `main` (Tracking `origin/main`)
+**Code-Freeze Baseline Commit:** `e687e2321da9159dca2b10c6744f2166fb44a506` (V2.2 Frozen Strategy Manifest)  
+**Evaluation Reporting Commit:** `60e0705a56c01a9eb1569dbc618dac55fe3289eb` (V2.2 Evaluation Documentation Update)  
+**Repository Branch:** `main` (Preserving V2.2 under Anti-Overfitting Lock)
 
 ---
 
@@ -187,10 +188,10 @@ Stock_Indicator/
 - **Active Boosters:**
   - **XGBoost:** Gradient boosted tree ensemble with multi-softprob objective across 3 classes.
   - **LightGBM:** Fast histogram-based gradient booster with multiclass objective.
-- **Calibrator:** Multinomial logistic calibrator ([model_calibrator.joblib](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/artifacts/model_calibrator.joblib)) trained on validation out-of-fold outputs to transform raw confidence scores into calibrated probabilities summing to 1.0.
-- **Quarantined Components:**
-  - **DL Fusion (`latest_fusion_weights.weights.h5`):** Quarantined due to probability collapse (>0.99 constant BUY).
-  - **DQN (`dqn_model.pth`):** Quarantined from active consensus due to pseudo-RL training rewards and input distribution mismatch.
+- **Calibrator:** Per-class Isotonic / Platt Sigmoid Calibrator ([model_calibrator.joblib](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/artifacts/model_calibrator.joblib), [calibration.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/src/models/regime/calibration.py)). In the frozen V2.2 protocol, tree boosters (XGBoost and LightGBM) use raw pass-through probabilities to avoid small-sample step distortion, while DL Fusion utilizes per-class Sigmoid Platt scaling.
+- **Model Registry & Governance Roles:**
+  - **DL Fusion (`latest_fusion_weights.weights.h5`):** `QUARANTINED` across all consensus layers due to predictive collapse (>0.99 constant BUY across non-bull regimes).
+  - **DQN (`dqn_model.pth`):** `ACTIVE` as `SECONDARY_VETO` in multi-agent mesh intelligence ([asset_intelligence.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/src/execution/asset_intelligence.py), [consensus_engine.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/src/execution/consensus_engine.py)), while in the frozen V2.2 baseline inference service ([inference_service.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/src/execution/inference_service.py)) veto checks are bypassed by default (`veto_threshold=1.01`).
 
 ### 4.4 Multi-Agent Consensus & Governance
 - **Modules:** [orchestrator.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/src/agents/orchestrator.py), [alpha_agent.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/src/agents/alpha_agent.py), [risk_agent.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/src/agents/risk_agent.py), [execution_agent.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/src/agents/execution_agent.py), [strategy_governance.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/src/execution/strategy_governance.py).

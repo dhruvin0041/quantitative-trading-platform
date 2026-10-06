@@ -55,35 +55,35 @@ The canonical feature list in [backend/configs/kept_features.json](file:///d:/Da
 
 | Index | Feature Column | Definition / Formula | Stationarization Mechanism |
 |---|---|---|---|
-| 0 | `Return_1d` | $(P_t / P_{t-1}) - 1$ | 1-day percentage change |
-| 1 | `Return_5d` | $(P_t / P_{t-5}) - 1$ | 5-day percentage change |
-| 2 | `Return_20d` | $(P_t / P_{t-20}) - 1$ | 20-day percentage change |
-| 3 | `Return_60d` | $(P_t / P_{t-60}) - 1$ | 60-day percentage change |
-| 4 | `Vol_5d` | $\text{std}(R_{1d}, 5)$ | 5-day rolling volatility |
-| 5 | `Vol_20d` | $\text{std}(R_{1d}, 20)$ | 20-day rolling volatility |
-| 6 | `Vol_60d` | $\text{std}(R_{1d}, 60)$ | 60-day rolling volatility |
-| 7 | `Vol_Ratio_5_60` | $\text{Vol}_{5d} / \text{Vol}_{60d}$ | Volatility regime ratio |
-| 8 | `MA5_vs_MA20` | $(\text{SMA}_5 - \text{SMA}_{20}) / \text{SMA}_{20}$ | Fast trend spread |
-| 9 | `MA20_vs_MA50` | $(\text{SMA}_{20} - \text{SMA}_{50}) / \text{SMA}_{50}$ | Medium trend spread |
-| 10 | `MA50_vs_MA200` | $(\text{SMA}_{50} - \text{SMA}_{200}) / \text{SMA}_{200}$ | Macro trend spread |
-| 11 | `ZScore_Close_20` | $(P_t - \mu_{20}) / \sigma_{20}$ | Rolling 20-day price Z-score |
-| 12 | `ZScore_RSI_20` | $(\text{RSI}_{14} - \mu_{\text{RSI}, 20}) / \sigma_{\text{RSI}, 20}$ | RSI oscillator Z-score |
-| 13 | `ZScore_MACD_20` | $(\text{MACD} - \mu_{\text{MACD}, 20}) / \sigma_{\text{MACD}, 20}$ | MACD signal Z-score |
-| 14 | `ZScore_Vol_20` | $(V_t - \mu_{V, 20}) / \sigma_{V, 20}$ | Volume Z-score |
-| 15 | `ATR_Regime_Ratio` | $\text{ATR}_{14} / \text{SMA}_{20}(\text{ATR}_{14})$ | Volatility expansion indicator |
-| 16 | `Day_of_Week` | Day of week integer (0–4) | Calendar cycle scalar |
-| 17 | `Month_of_Year` | Month integer (1–12) | Seasonality scalar |
-| 18 | `SPY_Return_1d` | SPY $(P_t / P_{t-1}) - 1$ | Market benchmark 1d return |
-| 19 | `SPY_Return_5d` | SPY $(P_t / P_{t-5}) - 1$ | Market benchmark 5d return |
-| 20 | `SPY_Beta_60d` | $\text{cov}(R_i, R_{\text{SPY}}, 60) / \text{var}(R_{\text{SPY}}, 60)$ | 60-day rolling market beta |
-| 21 | `QQQ_Return_1d` | QQQ $(P_t / P_{t-1}) - 1$ | Tech benchmark 1d return |
-| 22 | `QQQ_Beta_60d` | $\text{cov}(R_i, R_{\text{QQQ}}, 60) / \text{var}(R_{\text{QQQ}}, 60)$ | 60-day rolling tech beta |
-| 23 | `VIX_Level` | CBOE VIX close level | Bounded volatility index |
-| 24 | `VIX_Change_5d` | $(VIX_t / VIX_{t-5}) - 1$ | 5-day implied volatility change |
-| 25 | `Sector_Rel_Return_5d`| $R_{5d, \text{asset}} - R_{5d, \text{sector}}$ | 5-day sector excess return |
-| 26 | `Sector_Rel_Return_20d`| $R_{20d, \text{asset}} - R_{20d, \text{sector}}$ | 20-day sector excess return |
+| 0 | `MA20_vs_MA50` | $(\text{SMA}_{20} - \text{SMA}_{50}) / \text{SMA}_{50}$ | Medium trend spread |
+| 1 | `EMA9_vs_EMA21` | $(\text{EMA}_{9} - \text{EMA}_{21}) / \text{EMA}_{21}$ | Fast trend momentum spread |
+| 2 | `Price_vs_EMA9` | $(P_t - \text{EMA}_{9}) / \text{EMA}_{9}$ | Fast moving average divergence |
+| 3 | `Price_vs_EMA21` | $(P_t - \text{EMA}_{21}) / \text{EMA}_{21}$ | Medium moving average divergence |
+| 4 | `VIX_Level` | CBOE VIX close level | Bounded volatility index |
+| 5 | `BB_Width` | $(\text{Upper}_{20} - \text{Lower}_{20}) / \text{SMA}_{20}$ | Normalized Bollinger Band width |
+| 6 | `BB_Position` | $(P_t - \text{Lower}) / (\text{Upper} - \text{Lower} + \epsilon)$ | Percentile rank within Bollinger envelope |
+| 7 | `RSI` | 14-period Relative Strength Index | Bounded momentum oscillator $[0, 100]$ |
+| 8 | `ADX` | 14-period Average Directional Index | Bounded trend strength metric |
+| 9 | `MACD_Hist` | $\text{MACD Line} - \text{Signal Line}$ | Momentum convergence spread |
+| 10 | `Relative_Strength`| $R_{20d, \text{ticker}} - R_{20d, \text{SPY}}$ | 20-day excess benchmark return |
+| 11 | `OBV_Change` | $(OBV_t - OBV_{t-5}) / |OBV_{t-5}|$ | 5-day volume flow momentum |
+| 12 | `Return` | $\ln(P_t / P_{t-1})$ | 1-day logarithmic return |
+| 13 | `Volume_Ratio` | $V_t / \text{SMA}_{20}(V)$ | Normalized volume activity ratio |
+| 14 | `ZScore_RSI_20` | $(\text{RSI}_t - \mu_{20}) / \sigma_{20}$ | 20-bar rolling RSI Z-score |
+| 15 | `ZScore_RSI_50` | $(\text{RSI}_t - \mu_{50}) / \sigma_{50}$ | 50-bar rolling RSI Z-score |
+| 16 | `ZScore_RSI_120` | $(\text{RSI}_t - \mu_{120}) / \sigma_{120}$ | 120-bar rolling RSI Z-score |
+| 17 | `ZScore_BB_Position_20` | $(\text{BBP}_t - \mu_{20}) / \sigma_{20}$ | 20-bar rolling Bollinger position Z-score |
+| 18 | `ZScore_BB_Position_50` | $(\text{BBP}_t - \mu_{50}) / \sigma_{50}$ | 50-bar rolling Bollinger position Z-score |
+| 19 | `ZScore_MACD_Hist_20` | $(\text{MACDH}_t - \mu_{20}) / \sigma_{20}$ | 20-bar rolling MACD histogram Z-score |
+| 20 | `ZScore_MACD_Hist_50` | $(\text{MACDH}_t - \mu_{50}) / \sigma_{50}$ | 50-bar rolling MACD histogram Z-score |
+| 21 | `ZScore_Return_20` | $(R_t - \mu_{20}) / \sigma_{20}$ | 20-bar rolling return Z-score |
+| 22 | `ZScore_Return_50` | $(R_t - \mu_{50}) / \sigma_{50}$ | 50-bar rolling return Z-score |
+| 23 | `ZScore_Return_120` | $(R_t - \mu_{120}) / \sigma_{120}$ | 120-bar rolling return Z-score |
+| 24 | `ZScore_Volume_Ratio_20` | $(\text{VR}_t - \mu_{20}) / \sigma_{20}$ | 20-bar rolling volume ratio Z-score |
+| 25 | `ZScore_Volume_Ratio_50` | $(\text{VR}_t - \mu_{50}) / \sigma_{50}$ | 50-bar rolling volume ratio Z-score |
+| 26 | `ATR_Regime_Ratio` | $\text{ATR}_{5} / (\text{ATR}_{50} + \epsilon)$ | Volatility expansion / contraction ratio |
 
-**Integrity Verification:** Zero raw non-stationary price levels exist in the deployed 27-feature vector. All features are stationary returns, bounded oscillators, rolling Z-scores, or normalized ratios.
+**Integrity Verification:** Zero raw non-stationary price levels exist in the deployed 27-feature vector. All features are stationary returns, bounded oscillators, rolling Z-scores, or normalized ratios matching [backend/configs/kept_features.json](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/configs/kept_features.json) and [HYDRA_FEATURE_ENGINEERING_AUDIT.md](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/HYDRA_FEATURE_ENGINEERING_AUDIT.md).
 
 ---
 

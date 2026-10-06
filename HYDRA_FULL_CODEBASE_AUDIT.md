@@ -1,7 +1,8 @@
 # HYDRA FULL CODEBASE AUDIT & FORENSIC CODE REVIEW
 **Document Version:** 1.1.0  
-**Classification:** Comprehensive Static & Dynamic Codebase Inspection (Reconciled Research Baseline)  
-**Repository Branch:** `main` (Preserving V2.2 at `60e0705a`)  
+**Code-Freeze Baseline Commit:** `e687e2321da9159dca2b10c6744f2166fb44a506` (V2.2 Frozen Strategy Manifest)  
+**Evaluation Reporting Commit:** `60e0705a56c01a9eb1569dbc618dac55fe3289eb` (V2.2 Evaluation Documentation Update)  
+**Repository Branch:** `main` (Preserving V2.2 under Anti-Overfitting Lock)  
 **Date:** October 2026
 
 ---

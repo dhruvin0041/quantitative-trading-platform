@@ -1,10 +1,11 @@
 # HYDRA V2.3 FINAL RELEASE READINESS & RECONCILIATION VERDICT REPORT
-**Document Version:** 2.0.0 (Post-Reconciliation Audit)  
+**Document Version:** 2.1.0 (Post-Audit Forensic Reconciliation)  
 **Classification:** Institutional Forensic Audit, Reconciliation Verdict & Governance Assessment  
 **Author:** Quantitative Systems, Risk & Software Architecture Team  
-**Repository Baseline Commit:** `60e0705a56c01a9eb1569dbc618dac55fe3289eb` (V2.2 Frozen Release)  
+**Code-Freeze Baseline Commit:** `e687e2321da9159dca2b10c6744f2166fb44a506` (V2.2 Frozen Strategy Manifest)  
+**Evaluation Reporting Commit:** `60e0705a56c01a9eb1569dbc618dac55fe3289eb` (V2.2 Evaluation Documentation Update)  
 **Manifest Hash:** `e34d9d472505d6b2d7a79924cbdf1fc6c0aa2346f67c72f9c0afd94b5352b195`  
-**Active Production Branch:** `main` (Commit `1de635b` + Reconciliation Patches)  
+**Active Production Branch:** `main` (Preserving V2.2 under Anti-Overfitting Lock)  
 **Date:** October 2026
 
 ---
@@ -14,8 +15,8 @@
 **VERDICT: RELEASE CANDIDATE REJECTED FOR LIVE CAPITAL — RECLASSIFIED AS UNVALIDATED RESEARCH-ONLY (HYDRA V2.3)**
 
 ### Formal Reclassification Summary:
-* **V2.2 Frozen Production Baseline:** 100% PRESERVED. All 8 manifest-listed model/scaler artifacts, 3 config files, and 7 frozen source files match their SHA-256 values. Immutable prospective observations in `signal_ledger.db` are intact.
-* **V2.3 Tooling & Code Changes:** PARTIALLY DEMONSTRATED. Real engineering fixes were verified (broken backtest startup fixed, scaler leakage eliminated in `optimize.py`, macro-F1 objective in `optimize_models.py`, decimal accuracy units standardized, DL Fusion quarantined, frontend static checks passed).
+* **V2.2 Frozen Production Baseline:** 100% PRESERVED. Code-freeze commit `e687e2321da9159dca2b10c6744f2166fb44a506` established the frozen baseline recorded in `frozen_strategy_manifest_v2.2.json`. All 8 manifest-listed model/scaler artifacts, 3 config files, and 7 frozen source files match their SHA-256 values. Immutable prospective observations in `signal_ledger.db` remain cryptographically intact.
+* **V2.3 Tooling & Code Changes:** PARTIALLY DEMONSTRATED & RIGOROUSLY CONSTRAINED. Genuinely verified engineering improvements include: event-driven backtesting with intraday High/Low barrier checks and two-sided commissions; offline deterministic snapshot dataset support; fold-local scaler fitting and Macro-F1 optimization in `optimize_models.py`; removal of fake calibration placeholders; frontend typecheck and linting integrity; and frontend API alignment with backend `MODEL_REGISTRY`.
 * **Validation & Performance Evidence:** FAILED RECONCILIATION. Prior claims of "institutionally certified calibrated consensus," "multinomial logistic calibration," and positive trailing backtest metrics (Sharpe 1.53, win rate 59.03%, max DD -3.93%) are **WITHDRAWN** as decision-grade evidence. They resulted from non-chronological multi-asset compounding, one-sided slippage, close exits, arithmetic contradictions in confusion matrices, and unpinned market data.
 * **Capital Deployment Status:** **STRICTLY PROHIBITED.** No live or prospective capital deployment is authorized under V2.3.
 
@@ -25,41 +26,38 @@
 
 | Dimension | Reconciliation Status | Independent Evidence & Audit Finding | Remediation Applied |
 |---|:---:|---|---|
-| **V2.2 Preservation** | **VERIFIED** | All SHA-256 hashes of frozen artifacts, configs, and code match the manifest exactly. | Baseline permanently preserved. |
-| **Calibration Architecture** | **RECONCILED** | Prior reports claimed multinomial-logistic calibration. Actual `ModelCalibrator` implements per-class isotonic/sigmoid; frozen manifest applies raw pass-through to XGB and LGBM, and sigmoid to DL Fusion. | Reports corrected; module-level `LogisticRegression` import added; raw/sigmoid reality documented. |
-| **Authoritative Consensus** | **RECONCILED** | Production `inference_service.py:537-545` defaulted to `veto_threshold=1.01` (veto disabled) and primary threshold 0.60, conflicting with the reported 0.45 / 0.15 design. | Single authoritative policy enforced: Primary XGBoost (≥0.60), Secondary LightGBM Veto (≥0.65), Macro SPY 200 SMA. |
-| **DQN Retirement** | **RECONCILED** | DQN remained marked `ACTIVE` as secondary veto in `asset_intelligence.py:104-108`. | Formally marked `QUARANTINED` in `MODEL_REGISTRY`, bypassed in `model_loader.py`, and removed from `veto_candidates`. |
+| **V2.2 Baseline Preservation** | **VERIFIED** | All SHA-256 hashes of frozen artifacts, configs, and source files match `frozen_strategy_manifest_v2.2.json`. Provenance explicitly distinguishes Code-Freeze Commit `e687e232` from Evaluation Reporting Commit `60e0705a`. | Baseline permanently preserved under anti-overfitting lock. |
+| **Calibration Architecture** | **RECONCILED** | Prior reports claimed multinomial-logistic calibration. Actual `ModelCalibrator` implements per-class isotonic/sigmoid; frozen manifest applies raw pass-through to XGB and LGBM, and sigmoid to DL Fusion. | Reports corrected across all 17 documents; raw pass-through and sigmoid Platt reality accurately documented. |
+| **Authoritative Consensus & DQN Role** | **RECONCILED** | In `asset_intelligence.py:104` and `consensus_engine.py:236`, `DQN_AGENT` remains `ACTIVE` as `SECONDARY_VETO` (threshold 0.65). In frozen baseline `inference_service.py:537`, production defaults to pure XGBoost with `veto_threshold=1.01`. `DL_FUSION` is `QUARANTINED`. | Model registry and roles truthfully documented; frontend dashboard and `/api/governance/models` aligned with backend source code. |
 | **Walk-Forward CV** | **RECONCILED** | `optimize_models.py` previously used ordinary `TimeSeriesSplit` without embargo/purge; pre-scaled features were shared across folds. | Replaced with `purged_walk_forward_cv`: 15-bar embargo, fold-level scaler fitting, multi-class Macro-F1 optimization. |
-| **Execution Realism** | **RECONCILED** | Backtester applied adverse slippage only at entry, exited at Close, and lacked exit slippage or commission modeling. | Replaced with full two-sided execution model: T+1 Open entry (+5 bps slippage, commission), Open exit (-5 bps slippage, commission). |
+| **Backtest Accounting & Realism** | **RECONCILED** | Backtester previously only inspected Open, lacked intraday High/Low barrier checks, omitted entry commission from `net_pnl`, and relied on live mutable Yahoo data. | Remediated in `backtest.py`: checks Open gap, intraday High/Low for TP/SL with Stop-Loss precedence on ambiguous bars; stores entry commission; reconciles cash delta == `net_pnl`; supports immutable offline snapshots (`--use-snapshots`). |
 | **Multi-Asset Compounding** | **RECONCILED** | Trades were accumulated and compounded ticker-by-ticker, generating invalid portfolio statistics. | Replaced with true chronological daily portfolio simulation with explicit cash and positions. |
-| **Production Price Parity** | **RECONCILED** | `inference_service.py` labeled executions as `NEXT_SESSION_OPEN` but derived prices from today's Close * 1.0005. | Real-time pending open orders now record `signal_state: PENDING_EXECUTION` with no manufactured close-derived fill price. |
-| **Dashboard Parity** | **RECONCILED** | `ModelReliabilityDashboard.tsx` contained hardcoded mock models (win rate 69.5%, reliability 92); backend returned fake Brier/ECE placeholders. | Hardcoded mocks removed; authentic model registry, roles, and quarantine status displayed; mock Brier/ECE removed. |
-| **Feature Schema Alignment**| **RECONCILED** | Audit document named features (`returns_1d`, `weather_disruption_index`, etc.) that did not match the actual 27-feature schema (`MA20_vs_MA50`, `ZScore_RSI_20`, `ATR_Regime_Ratio`). | Feature engineering audit rewritten to match the actual 27 deployed features in `kept_features.json`. |
-| **Ledger Dual-State** | **RECONCILED** | `run_prospective_validation.py` cross-logged to mutable legacy `prospective_signals`. | Cross-logging hard-disabled; immutable `prospective_observations` established as sole prospective authority. |
-| **Backend Test Integrity** | **RECONCILED** | Virtual environment path discrepancy and static method count (131 `def test_*`) vs runtime discovery (139 executed instances). | Root-level sys.path fixed in `test_api_portfolio_status.py`; test execution verified across all 139 runtime test cases. |
+| **Causal Execution Pricing** | **RECONCILED** | Frozen `inference_service.py` synthesizes `NEXT_SESSION_OPEN` from Close * 1.0005 in single-bar live inference mode when no future bar exists. Frozen code remains unmutated. | Documented as known frozen V2.2 legacy behavior; event-driven backtester strictly enforces causal next-day Open fills with adverse slippage. |
+| **Dashboard Parity** | **RECONCILED** | `ModelReliabilityDashboard.tsx` had hardcoded mock figures and marked DQN quarantined, contradicting backend source code. | Replaced with dynamic `/api/governance/models` fetch; synchronized fallback reflects authentic backend status (`DQN_AGENT: ACTIVE / SECONDARY_VETO`, `DL_FUSION: QUARANTINED`). |
+| **Feature Schema Alignment**| **RECONCILED** | Data Integrity Audit §3 previously listed an obsolete feature table (`Return_1d`, `SPY_Beta_60d`). | Data Integrity Audit §3 and Feature Engineering Audit now 100% synchronized with the authentic 27 features in `backend/configs/kept_features.json`. |
+| **Ledger Single-Authority** | **RECONCILED** | `run_prospective_validation.py` previously cross-logged to mutable legacy `prospective_signals`. | Cross-logging bypassed; immutable `prospective_observations` with hash-chaining and SQLite triggers serves as sole prospective authority. |
+| **Backend Test Integrity** | **VERIFIED** | Verified test suite execution: 139 passing unit and integration tests (`Ran 139 tests ... OK`), zero Ruff lint errors across `src`, `scripts`, and `tests`. | Test discovery verified from `backend/` working directory; dedicated `test_backtest_accounting.py` added. |
 
 ---
 
 ## 3. Direct Answers to the 10 Institutional Questions
 
 ### 1. What was wrong with HYDRA?
-1. **Flawed Evaluation & Execution Accounting:** Backtests compounded trades ticker-by-ticker, applied one-sided slippage, exited at Close without commissions, and downloaded unpinned live data.
-2. **Disconnected Strategy Policies:** Production `InferenceService` defaulted to pure XGBoost 0.60 with veto disabled (`veto_threshold=1.01`), while audit reports claimed a 0.45 consensus / 0.15 delta veto.
+1. **Flawed Evaluation & Execution Accounting:** Backtests compounded trades ticker-by-ticker, applied one-sided slippage, exited at Close without commissions, inspected only Open for barrier exits, and downloaded unpinned live data.
+2. **Disconnected Strategy Policies:** Production `InferenceService` defaulted to pure XGBoost 0.60 with veto disabled (`veto_threshold=1.01`), while multi-agent mesh intelligence maintained `DQN_AGENT` as an active secondary veto and audit reports claimed a 0.45 consensus / 0.15 delta veto.
 3. **Contradictory Calibration Documentation:** Reports claimed multinomial logistic regression, while the actual artifact applies raw pass-through to tree models and sigmoid Platt scaling to DL Fusion.
-4. **Active Quarantined Models:** DQN remained listed as an active secondary veto in `asset_intelligence.py` despite being uncalibrated.
-5. **Dashboard & Backend Placeholders:** Frontend dashboard used hardcoded mock numbers (69.5% win rate, 92 reliability score) and backend returned hardcoded Brier (0.18) and ECE (0.05) placeholders.
-6. **Feature Audit Incoherence:** The feature engineering documentation analyzed an imaginary feature set rather than the actual 27 features in `kept_features.json`.
-7. **Causal Inconsistency in Live Inference:** Live inference recorded `NEXT_SESSION_OPEN` execution targets with prices manufactured from today's Close.
+4. **Dashboard & Backend Placeholders:** Frontend dashboard used hardcoded mock numbers (69.5% win rate, 92 reliability score) and backend returned hardcoded Brier (0.18) and ECE (0.05) placeholders.
+5. **Feature Audit Incoherence:** The data integrity audit previously documented an obsolete feature set rather than the actual 27 features in `kept_features.json`.
+6. **Provenance Conflation:** Reports conflated the code-freeze commit `e687e232` with the subsequent evaluation documentation commit `60e0705a`.
 
 ### 2. What did you fix?
-1. **Chronological Multi-Asset Portfolio Backtest:** Completely replaced `backtest.py` with a calendar-aligned multi-asset portfolio simulation tracking cash, explicit positions, dynamic triple barrier exits (1.5x ATR TP, 2.0x ATR SL, 15-day horizon), two-sided slippage (5 bps both sides), and per-share commissions.
-2. **Unified Authoritative Production Policy:** Aligned `inference_service.py` to single authoritative policy: Primary Alpha = XGBoost (≥0.60), Secondary Veto = LightGBM (≥0.65), Macro Gate = SPY 200 SMA.
-3. **Quarantined DQN & DL Fusion:** Formally set both to `QUARANTINED` in `asset_intelligence.py`, bypassed weight loading in `model_loader.py`, and removed them from veto authority in `consensus_engine.py`.
-4. **Purged Walk-Forward CV:** Replaced standard `TimeSeriesSplit` in `optimize_models.py` with 15-bar embargoed expanding-window cross-validation, fitting scalers strictly on training folds and optimizing Macro-F1.
-5. **Removed Mock Dashboard & Backend Metrics:** Eliminated fake numbers in `ModelReliabilityDashboard.tsx` and removed placeholder Brier/ECE values in `signal_intelligence.py`.
-6. **Corrected Causal Execution Prices:** In `inference_service.py`, pending open executions no longer manufacture fill prices from today's Close.
-7. **Isolated Immutable Prospective Authority:** Hard-disabled cross-logging to mutable `prospective_signals` in `run_prospective_validation.py`.
-8. **Corrected All Audit Deliverables:** Synchronized feature names, calibration descriptions, confusion matrix mathematics, and Calmar ratio definitions across all 17 audit reports.
+1. **Chronological Multi-Asset Portfolio Backtest:** Completely overhauled `backtest.py` with calendar-aligned multi-asset portfolio simulation tracking cash, explicit positions, intraday High/Low barrier checks (1.5x ATR TP, 2.0x ATR SL with Stop-Loss precedence), two-sided slippage (5 bps both sides), two-sided commissions, and exact cash delta reconciliation.
+2. **Deterministic Offline Snapshot Support:** Added `--use-snapshots` loading from immutable Parquet datasets in `backend/data/snapshots/` (AAPL, MSFT, NVDA, AMZN, SPY, ^VIX).
+3. **Synchronized Documentation with Code Reality:** Documented that `DQN_AGENT` is `ACTIVE` as `SECONDARY_VETO` (threshold 0.65) in mesh intelligence, while suppressed in frozen baseline inference by default (`veto_threshold=1.01`); `DL_FUSION` is `QUARANTINED`.
+4. **Purged Walk-Forward CV:** Implemented `purged_walk_forward_cv` in `optimize_models.py` with a 15-bar embargo, fold-level scaler fitting, and multi-class Macro-F1 optimization.
+5. **Removed Mock Dashboard & Backend Metrics:** Eliminated fake numbers in `ModelReliabilityDashboard.tsx`, added `/api/governance/models` API endpoint, and returned `None` for unvalidated Brier/ECE metrics.
+6. **Isolated Immutable Prospective Authority:** Bypassed cross-logging to mutable `prospective_signals` in `run_prospective_validation.py`.
+7. **Corrected All Audit Deliverables:** Synchronized feature names, calibration descriptions, confusion matrix mathematics, and baseline provenance across all 17 audit reports.
 
 ### 3. What did you improve?
 * **Methodological Truth:** Eliminated manufactured performance claims, placeholder metrics, and conflicting policy defaults.

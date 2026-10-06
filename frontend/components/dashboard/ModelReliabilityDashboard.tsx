@@ -28,63 +28,70 @@ export function ModelReliabilityDashboard({}: ModelReliabilityDashboardProps) {
   useEffect(() => {
     const fetchGovernance = async () => {
       try {
-        // Institutional registry: reflects authentic MODEL_REGISTRY from backend
-        const authoritativeRegistry: ModelGovernanceItem[] = [
-          {
-            id: 'xgb_agent',
-            name: 'XGBoost Alpha Driver',
-            role: 'PRIMARY_ALPHA_DRIVER',
-            status: 'ACTIVE',
-            threshold_label: 'Conviction ≥ 0.60',
-            description: 'Primary alpha trade generator for equity universe.',
-            validation_status: 'Unvalidated Research-Only',
-          },
-          {
-            id: 'lgbm_agent',
-            name: 'LightGBM Core Veto',
-            role: 'SECONDARY_VETO',
-            status: 'ACTIVE',
-            threshold_label: 'Veto Threshold ≥ 0.65',
-            description: 'Asymmetric downside & counter-trend risk veto filter.',
-            validation_status: 'Unvalidated Research-Only',
-          },
-          {
-            id: 'tft_agent',
-            name: 'Temporal Fusion Transformer',
-            role: 'FORECAST_ORACLE',
-            status: 'ACTIVE',
-            threshold_label: 'Quantile Projection',
-            description: 'Quantile volatility & price trajectory projections.',
-            validation_status: 'Unvalidated Research-Only',
-          },
-          {
-            id: 'dl_fusion',
-            name: 'Deep Learning 4-Branch Fusion',
-            role: 'QUARANTINED',
-            status: 'QUARANTINED',
-            threshold_label: 'Weight: 0.0 (Bypassed)',
-            description: 'Quarantined pending retraining with symmetric loss; severe BUY-state collapse.',
-            validation_status: 'Quarantined / Defective',
-            quarantine_reason: 'Predictive collapse (>0.99 BUY concentration) across non-bull regimes.',
-          },
-          {
-            id: 'dqn_agent',
-            name: 'Deep Q-Network (DQN)',
-            role: 'QUARANTINED',
-            status: 'QUARANTINED',
-            threshold_label: 'Weight: 0.0 (Bypassed)',
-            description: 'Quarantined due to environment disconnect and uncalibrated action-preferences.',
-            validation_status: 'Quarantined / Defective',
-            quarantine_reason: 'Trained on static categorical proxy rather than dynamic sequential MDP.',
-          },
-        ];
-
-        setModels(authoritativeRegistry);
+        const res = await fetch(`${API_URL}/api/governance/models`);
+        if (res.ok) {
+          const data: ModelGovernanceItem[] = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setModels(data);
+            return;
+          }
+        }
       } catch (err) {
-        console.error("Failed to load model governance registry", err);
-      } finally {
-        setLoading(false);
+        console.warn("API governance registry fetch failed, using synchronized fallback:", err);
       }
+
+      // Synchronized fallback: strictly mirrors backend MODEL_REGISTRY from asset_intelligence.py
+      const authoritativeRegistry: ModelGovernanceItem[] = [
+        {
+          id: 'xgb_agent',
+          name: 'XGBoost Alpha Driver',
+          role: 'PRIMARY_ALPHA_DRIVER',
+          status: 'ACTIVE',
+          threshold_label: 'Conviction ≥ 0.60',
+          description: 'Primary alpha trade generator for equity universe.',
+          validation_status: 'Unvalidated Research-Only',
+        },
+        {
+          id: 'lgbm_agent',
+          name: 'LightGBM Core Veto',
+          role: 'SECONDARY_VETO',
+          status: 'ACTIVE',
+          threshold_label: 'Veto Threshold ≥ 0.65',
+          description: 'Asymmetric downside & counter-trend risk veto filter.',
+          validation_status: 'Unvalidated Research-Only',
+        },
+        {
+          id: 'dqn_agent',
+          name: 'Deep Q-Network (DQN)',
+          role: 'SECONDARY_VETO',
+          status: 'ACTIVE',
+          threshold_label: 'Veto Threshold ≥ 0.65',
+          description: 'Sequential policy veto filter for execution safety (Active secondary veto in mesh; suppressed in legacy frozen inference by default veto_threshold 1.01).',
+          validation_status: 'Unvalidated Research-Only',
+        },
+        {
+          id: 'tft_agent',
+          name: 'Temporal Fusion Transformer',
+          role: 'FORECAST_ORACLE',
+          status: 'ACTIVE',
+          threshold_label: 'Quantile Projection',
+          description: 'Quantile volatility & price trajectory projections.',
+          validation_status: 'Unvalidated Research-Only',
+        },
+        {
+          id: 'dl_fusion',
+          name: 'Deep Learning 4-Branch Fusion',
+          role: 'QUARANTINED',
+          status: 'QUARANTINED',
+          threshold_label: 'Weight: 0.0 (Bypassed)',
+          description: 'Quarantined pending retraining with symmetric loss; severe BUY-state collapse.',
+          validation_status: 'Quarantined / Defective',
+          quarantine_reason: 'Predictive collapse (>0.99 BUY concentration) across non-bull regimes.',
+        },
+      ];
+
+      setModels(authoritativeRegistry);
+      setLoading(false);
     };
 
     fetchGovernance();

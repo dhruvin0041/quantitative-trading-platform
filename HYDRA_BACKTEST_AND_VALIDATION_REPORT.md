@@ -36,16 +36,26 @@ In accordance with institutional quantitative standards, `backend/scripts/evalua
 * **Entry Execution ($T+1$ Open):**
   $$P_{\text{fill, entry}} = P_{T+1}^{\text{Open}} \times (1 + \text{Slippage Bps} \times 10^{-4}) \quad (\text{BUY})$$
   $$\text{Commission}_{\text{entry}} = \max(\$1.00, \text{Shares} \times \$0.005)$$
-* **Exit Execution ($T+N$ Open):**
-  $$P_{\text{fill, exit}} = P_{T+N}^{\text{Open}} \times (1 - \text{Slippage Bps} \times 10^{-4}) \quad (\text{BUY Exit})$$
+* **Exit Execution:**
+  $$P_{\text{fill, exit}} = P_{\text{exit\_base}} \times (1 - \text{Slippage Bps} \times 10^{-4}) \quad (\text{BUY Exit})$$
   $$\text{Commission}_{\text{exit}} = \max(\$1.00, \text{Shares} \times \$0.005)$$
+* **Full Net PnL Accounting:**
+  $$\text{Net PnL} = \text{Gross PnL} - \text{Commission}_{\text{entry}} - \text{Commission}_{\text{exit}}$$
+  $$\Delta \text{Cash} \equiv \text{Net PnL}$$
+  Every trade deducts both entry and exit brokerage commissions; the portfolio cash delta over the trade lifecycle strictly reconciles to the reported `net_pnl`.
 
-### 2.3 Dynamic Triple Barrier Exits
+### 2.3 Dynamic Triple Barrier Exits (Intraday & Gap Semantics)
 Active positions are monitored daily against ATR-scaled volatility boundaries:
-* **Take-Profit:** Entry Fill $+ 1.5 \times \text{ATR}_{14}$
-* **Stop-Loss:** Entry Fill $- 2.0 \times \text{ATR}_{14}$
-* **Maximum Horizon:** 15 trading sessions.
-When any barrier is crossed, the position closes at the next market Open with adverse exit slippage and commission.
+* **Overnight Gap Check:** If $P_{T+1}^{\text{Open}} \ge \text{TP}$ or $P_{T+1}^{\text{Open}} \le \text{SL}$, the position closes immediately at Open with adverse slippage.
+* **Intraday Barrier Check:** If no overnight gap occurs, the bar's `High` and `Low` are evaluated against boundaries:
+  - Take-Profit: Entry Fill $+ 1.5 \times \text{ATR}_{14}$
+  - Stop-Loss: Entry Fill $- 2.0 \times \text{ATR}_{14}$
+  - **Conservative Tie-Breaking:** If both barriers are breached within the same session ($P^{\text{Low}} \le \text{SL}$ and $P^{\text{High}} \ge \text{TP}$), Stop-Loss precedence is strictly enforced.
+* **Maximum Horizon:** 15 trading sessions; liquidated at session Close with adverse exit slippage.
+* **Forced Liquidation at End-of-Backtest:** Any remaining positions at the end of the simulation are liquidated at the final bar Close with exit slippage, exit commission, and entry commission deducted.
+
+### 2.4 Immutable Offline Market Data Snapshots
+To guarantee 100% reproducible execution and eliminate reliance on mutable external Yahoo Finance downloads, the engine supports `--use-snapshots` with versioned Parquet datasets in `backend/data/snapshots/` (AAPL, MSFT, NVDA, AMZN, SPY, ^VIX). All inputs and outputs are deterministically reproducible.
 
 ---
 

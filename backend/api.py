@@ -36,6 +36,7 @@ from src.data_ingestion.supply_chain_graph import SupplyChainGraph
 # Core System Imports
 from src.data_ingestion.universes import UNIVERSES_METADATA
 from src.execution.alerts import AlertSystem
+from src.execution.asset_intelligence import MODEL_REGISTRY
 from src.execution.backtest_service import BacktestService
 from src.execution.empirical_validation import ValidationAnalytics
 from src.execution.fx_engine import FXEngine
@@ -484,6 +485,50 @@ async def get_portfolio_status(db_path: Optional[str] = None):
         raise HTTPException(
             status_code=500, detail=f"Failed to fetch portfolio status: {str(e)}"
         )
+
+
+@app.get("/api/governance/models")
+@app.get("/api/v1/governance/models")
+async def get_model_governance_registry():
+    """
+    Returns the authoritative model governance registry directly from asset_intelligence.py.
+    Provides system-wide parity between backend models and frontend displays.
+    """
+    items = []
+    display_names = {
+        "XGB_AGENT": "XGBoost Alpha Driver",
+        "LGBM_AGENT": "LightGBM Core Veto",
+        "DQN_AGENT": "Deep Q-Network (DQN)",
+        "DL_FUSION": "Deep Learning 4-Branch Fusion",
+        "TFT_AGENT": "Temporal Fusion Transformer",
+    }
+    for model_id, meta in MODEL_REGISTRY.items():
+        role_val = meta["role"].value if hasattr(meta["role"], "value") else str(meta["role"])
+        status_val = meta.get("status", "ACTIVE")
+        thresh_label = "Active"
+        if "conviction_threshold" in meta:
+            thresh_label = f"Conviction >= {meta['conviction_threshold']:.2f}" if meta['conviction_threshold'] > 0 else "Weight: 0.0 (Bypassed)"
+        elif "veto_threshold" in meta:
+            thresh_label = f"Veto Threshold >= {meta['veto_threshold']:.2f}"
+        elif role_val == "FORECAST_ORACLE":
+            thresh_label = "Quantile Projection"
+
+        val_status = "Unvalidated Research-Only" if status_val == "ACTIVE" else "Quarantined / Defective"
+        quarantine_reason = None
+        if status_val == "QUARANTINED":
+            quarantine_reason = "Predictive collapse (>0.99 BUY concentration) across non-bull regimes."
+
+        items.append({
+            "id": model_id.lower(),
+            "name": display_names.get(model_id, model_id),
+            "role": role_val,
+            "status": status_val,
+            "threshold_label": thresh_label,
+            "description": meta.get("description", ""),
+            "validation_status": val_status,
+            "quarantine_reason": quarantine_reason,
+        })
+    return items
 
 
 from fastapi.responses import StreamingResponse

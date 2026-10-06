@@ -1,7 +1,8 @@
 # HYDRA TEST EXECUTION & REGRESSION VERIFICATION REPORT
 **Document Version:** 1.1.0  
-**Classification:** Automated Test Suite Execution, Formal Verification & Regression Audit (Reconciled Baseline)  
-**Repository Branch:** `main` (Preserving V2.2 baseline at `60e0705a`)  
+**Code-Freeze Baseline Commit:** `e687e2321da9159dca2b10c6744f2166fb44a506` (V2.2 Frozen Strategy Manifest)  
+**Evaluation Reporting Commit:** `60e0705a56c01a9eb1569dbc618dac55fe3289eb` (V2.2 Evaluation Documentation Update)  
+**Repository Branch:** `main` (Preserving V2.2 under Anti-Overfitting Lock)  
 **Test Suite Path:** `backend/tests/`  
 **Date:** October 2026
 

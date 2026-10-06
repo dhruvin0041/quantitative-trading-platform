@@ -51,8 +51,21 @@ def fetch_and_prepare_data(
     vix_df: pd.DataFrame,
     period: str = "2y",
     cache_dir: Optional[Path] = None,
+    snapshot_dir: Optional[Path] = None,
 ) -> pd.DataFrame:
-    """Fetch and engineer stationarized features with optional disk caching."""
+    """Fetch and engineer stationarized features with optional disk snapshot / caching."""
+    # 1. Check snapshot directory first for immutable deterministic reproduction
+    if snapshot_dir:
+        snapshot_file = snapshot_dir / f"{ticker}_features.parquet"
+        if snapshot_file.exists():
+            try:
+                df = pd.read_parquet(snapshot_file)
+                logger.info("Loaded immutable snapshot dataset for %s (%d rows)", ticker, len(df))
+                return df
+            except Exception as e:
+                logger.warning("Snapshot read failed for %s (%s). Falling back.", ticker, e)
+
+    # 2. Check cache directory
     if cache_dir:
         cache_dir.mkdir(parents=True, exist_ok=True)
         cache_file = cache_dir / f"{ticker}_{period}_features.parquet"
@@ -94,6 +107,13 @@ def fetch_and_prepare_data(
         except Exception:
             pass
 
+    if snapshot_dir:
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            df_ready.to_parquet(snapshot_dir / f"{ticker}_features.parquet")
+        except Exception:
+            pass
+
     return df_ready
 
 
@@ -106,6 +126,8 @@ def run_chronological_backtest(
     commission_per_share: float = 0.005,
     min_commission: float = 1.00,
     output_dir: str = "backtest_results",
+    snapshot_dir: Optional[str] = None,
+    use_snapshots: bool = False,
 ) -> Optional[Dict]:
     """
     Executes a causal, chronological multi-asset portfolio simulation.
@@ -115,6 +137,10 @@ def run_chronological_backtest(
     artifacts_dir = BACKEND_DIR / "artifacts"
     configs_dir = BACKEND_DIR / "configs"
     cache_dir = BACKEND_DIR / "data" / "cache"
+    resolved_snapshot_dir: Optional[Path] = None
+    if use_snapshots or snapshot_dir:
+        resolved_snapshot_dir = Path(snapshot_dir) if snapshot_dir else (BACKEND_DIR / "data" / "snapshots")
+        resolved_snapshot_dir.mkdir(parents=True, exist_ok=True)
 
     scaler_path = artifacts_dir / "latest_scaler.joblib"
     xgb_path = artifacts_dir / "xgb_ensemble.json"
@@ -146,15 +172,37 @@ def run_chronological_backtest(
     elif hasattr(calibrator_obj, "calibrators"):
         calibrator = calibrator_obj
 
-    # Pre-fetch benchmark data
-    logger.info("Fetching SPY and ^VIX benchmark data (%s)...", period)
-    spy_df = yf.download("SPY", period=period, progress=False)
-    if isinstance(spy_df.columns, pd.MultiIndex):
-        spy_df.columns = spy_df.columns.get_level_values(0)
+    # Pre-fetch or load benchmark data
+    spy_df: Optional[pd.DataFrame] = None
+    vix_df: Optional[pd.DataFrame] = None
 
-    vix_df = yf.download("^VIX", period=period, progress=False)
-    if isinstance(vix_df.columns, pd.MultiIndex):
-        vix_df.columns = vix_df.columns.get_level_values(0)
+    if resolved_snapshot_dir:
+        spy_snap = resolved_snapshot_dir / "SPY_benchmark.parquet"
+        vix_snap = resolved_snapshot_dir / "VIX_benchmark.parquet"
+        if spy_snap.exists() and vix_snap.exists():
+            try:
+                spy_df = pd.read_parquet(spy_snap)
+                vix_df = pd.read_parquet(vix_snap)
+                logger.info("Loaded benchmark snapshots for SPY and ^VIX from %s", str(resolved_snapshot_dir))
+            except Exception as e:
+                logger.warning("Failed to load benchmark snapshots: %s", e)
+
+    if spy_df is None or vix_df is None:
+        logger.info("Fetching SPY and ^VIX benchmark data (%s)...", period)
+        spy_df = yf.download("SPY", period=period, progress=False)
+        if isinstance(spy_df.columns, pd.MultiIndex):
+            spy_df.columns = spy_df.columns.get_level_values(0)
+
+        vix_df = yf.download("^VIX", period=period, progress=False)
+        if isinstance(vix_df.columns, pd.MultiIndex):
+            vix_df.columns = vix_df.columns.get_level_values(0)
+
+        if resolved_snapshot_dir:
+            try:
+                spy_df.to_parquet(resolved_snapshot_dir / "SPY_benchmark.parquet")
+                vix_df.to_parquet(resolved_snapshot_dir / "VIX_benchmark.parquet")
+            except Exception:
+                pass
 
     if tickers is None or len(tickers) == 0:
         tickers = ["AAPL", "MSFT", "NVDA", "AMZN"]
@@ -163,7 +211,9 @@ def run_chronological_backtest(
     ticker_dfs: Dict[str, pd.DataFrame] = {}
     for t in tickers:
         try:
-            df_t = fetch_and_prepare_data(t, spy_df, vix_df, period=period, cache_dir=cache_dir)
+            df_t = fetch_and_prepare_data(
+                t, spy_df, vix_df, period=period, cache_dir=cache_dir, snapshot_dir=resolved_snapshot_dir
+            )
             if len(df_t) >= 60:
                 ticker_dfs[t] = df_t
         except Exception as e:
@@ -200,49 +250,95 @@ def run_chronological_backtest(
 
     # Chronological day-by-day loop
     for current_date in all_dates:
-        # 1. MORNING EXECUTION: Process pending barrier exits and pending entry orders at today's OPEN
-        # 1a. Check active positions for barrier hits against today's open price
+        # 1. MORNING & INTRADAY EXECUTION: Process pending barrier exits and pending entry orders
+        # 1a. Check active positions for barrier hits (overnight gap at Open or intraday High/Low)
         positions_to_close = []
         for sym, pos in open_positions.items():
             if current_date not in ticker_dfs[sym].index:
                 continue
             bar_today = ticker_dfs[sym].loc[current_date]
             open_p = float(bar_today["Open"])
+            high_p = float(bar_today["High"])
+            low_p = float(bar_today["Low"])
+            close_p = float(bar_today["Close"])
             pos["bars_held"] += 1
 
             exit_reason = None
+            exit_fill_base = None
+
             if pos["side"] == "LONG":
+                # Check overnight gap beyond barriers at Open first
                 if open_p >= pos["tp_price"]:
                     exit_reason = "TAKE_PROFIT"
+                    exit_fill_base = open_p
                 elif open_p <= pos["sl_price"]:
                     exit_reason = "STOP_LOSS"
-                elif pos["bars_held"] >= 15:
-                    exit_reason = "MAX_HORIZON"
+                    exit_fill_base = open_p
+                else:
+                    # Intraday barrier inspection:
+                    # Conservative tie-breaking: if both hit in the same bar, Stop-Loss triggers first
+                    hit_sl = low_p <= pos["sl_price"]
+                    hit_tp = high_p >= pos["tp_price"]
+                    if hit_sl and hit_tp:
+                        exit_reason = "STOP_LOSS"
+                        exit_fill_base = pos["sl_price"]
+                    elif hit_sl:
+                        exit_reason = "STOP_LOSS"
+                        exit_fill_base = pos["sl_price"]
+                    elif hit_tp:
+                        exit_reason = "TAKE_PROFIT"
+                        exit_fill_base = pos["tp_price"]
+                    elif pos["bars_held"] >= 15:
+                        exit_reason = "MAX_HORIZON"
+                        exit_fill_base = close_p
             elif pos["side"] == "SHORT":
+                # Check overnight gap beyond barriers at Open first
                 if open_p <= pos["tp_price"]:
                     exit_reason = "TAKE_PROFIT"
+                    exit_fill_base = open_p
                 elif open_p >= pos["sl_price"]:
                     exit_reason = "STOP_LOSS"
-                elif pos["bars_held"] >= 15:
-                    exit_reason = "MAX_HORIZON"
+                    exit_fill_base = open_p
+                else:
+                    # Intraday barrier inspection:
+                    hit_sl = high_p >= pos["sl_price"]
+                    hit_tp = low_p <= pos["tp_price"]
+                    if hit_sl and hit_tp:
+                        exit_reason = "STOP_LOSS"
+                        exit_fill_base = pos["sl_price"]
+                    elif hit_sl:
+                        exit_reason = "STOP_LOSS"
+                        exit_fill_base = pos["sl_price"]
+                    elif hit_tp:
+                        exit_reason = "TAKE_PROFIT"
+                        exit_fill_base = pos["tp_price"]
+                    elif pos["bars_held"] >= 15:
+                        exit_reason = "MAX_HORIZON"
+                        exit_fill_base = close_p
 
             if exit_reason:
-                positions_to_close.append((sym, exit_reason, open_p))
+                positions_to_close.append((sym, exit_reason, exit_fill_base))
 
-        # Execute position exits at Open with adverse exit slippage & commission
-        for sym, reason, open_p in positions_to_close:
+        # Execute position exits with adverse exit slippage & commission
+        for sym, reason, exit_fill_base in positions_to_close:
             pos = open_positions.pop(sym)
             shares = pos["shares"]
             if pos["side"] == "LONG":
-                exit_fill = open_p * (1.0 - slippage_rate)
+                exit_fill = exit_fill_base * (1.0 - slippage_rate)
                 gross_pnl = (exit_fill - pos["entry_fill"]) * shares
             else:
-                exit_fill = open_p * (1.0 + slippage_rate)
+                exit_fill = exit_fill_base * (1.0 + slippage_rate)
                 gross_pnl = (pos["entry_fill"] - exit_fill) * shares
 
             exit_commission = max(min_commission, shares * commission_per_share)
-            net_pnl = gross_pnl - exit_commission
-            cash += (shares * exit_fill) - exit_commission if pos["side"] == "LONG" else (pos["entry_fill"] * shares + net_pnl)
+            entry_commission = pos.get("entry_commission", 0.0)
+            net_pnl = gross_pnl - exit_commission - entry_commission
+
+            if pos["side"] == "LONG":
+                cash += (shares * exit_fill) - exit_commission
+            else:
+                cash += (shares * (2.0 * pos["entry_fill"] - exit_fill)) - exit_commission
+
             ret_pct = (net_pnl / (pos["entry_fill"] * shares)) * 100.0
 
             closed_trades.append({
@@ -255,6 +351,9 @@ def run_chronological_backtest(
                 "exit_fill": round(exit_fill, 2),
                 "shares": shares,
                 "exit_reason": reason,
+                "entry_commission": round(entry_commission, 2),
+                "exit_commission": round(exit_commission, 2),
+                "gross_pnl": round(gross_pnl, 2),
                 "net_pnl": round(net_pnl, 2),
                 "return_pct": round(ret_pct, 2),
                 "was_profitable": net_pnl > 0,
@@ -311,6 +410,7 @@ def run_chronological_backtest(
                 "side": "LONG" if side == "BUY" else "SHORT",
                 "shares": shares,
                 "entry_fill": entry_fill,
+                "entry_commission": entry_commission,
                 "entry_date": current_date,
                 "entry_atr": atr_val,
                 "tp_price": tp,
@@ -420,8 +520,14 @@ def run_chronological_backtest(
                 exit_fill = close_p * (1.0 - slippage_rate) if pos["side"] == "LONG" else close_p * (1.0 + slippage_rate)
                 gross_pnl = (exit_fill - pos["entry_fill"]) * shares if pos["side"] == "LONG" else (pos["entry_fill"] - exit_fill) * shares
                 exit_comm = max(min_commission, shares * commission_per_share)
-                net_pnl = gross_pnl - exit_comm
-                cash += (shares * exit_fill) - exit_comm if pos["side"] == "LONG" else (pos["entry_fill"] * shares + net_pnl)
+                entry_comm = pos.get("entry_commission", 0.0)
+                net_pnl = gross_pnl - exit_comm - entry_comm
+
+                if pos["side"] == "LONG":
+                    cash += (shares * exit_fill) - exit_comm
+                else:
+                    cash += (shares * (2.0 * pos["entry_fill"] - exit_fill)) - exit_comm
+
                 ret_pct = (net_pnl / (pos["entry_fill"] * shares)) * 100.0
                 closed_trades.append({
                     "ticker": sym,
@@ -433,6 +539,9 @@ def run_chronological_backtest(
                     "exit_fill": round(exit_fill, 2),
                     "shares": shares,
                     "exit_reason": "END_OF_BACKTEST",
+                    "entry_commission": round(entry_comm, 2),
+                    "exit_commission": round(exit_comm, 2),
+                    "gross_pnl": round(gross_pnl, 2),
                     "net_pnl": round(net_pnl, 2),
                     "return_pct": round(ret_pct, 2),
                     "was_profitable": net_pnl > 0,
@@ -547,7 +656,15 @@ if __name__ == "__main__":
     parser.add_argument("--ticker", type=str, help="Specific ticker to backtest")
     parser.add_argument("--period", type=str, default="2y", help="Historical period (e.g. 1y, 2y, 5y)")
     parser.add_argument("--output", type=str, default="backtest_results", help="Output directory")
+    parser.add_argument("--use-snapshots", action="store_true", help="Use local immutable market snapshots")
+    parser.add_argument("--snapshot-dir", type=str, help="Path to immutable snapshot directory")
     args = parser.parse_args()
 
     target_tickers = [args.ticker.upper()] if args.ticker else ["AAPL", "MSFT", "NVDA", "AMZN"]
-    run_chronological_backtest(tickers=target_tickers, period=args.period, output_dir=args.output)
+    run_chronological_backtest(
+        tickers=target_tickers,
+        period=args.period,
+        output_dir=args.output,
+        use_snapshots=args.use_snapshots,
+        snapshot_dir=args.snapshot_dir,
+    )
