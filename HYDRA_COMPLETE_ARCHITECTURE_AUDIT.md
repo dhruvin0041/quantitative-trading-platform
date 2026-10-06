@@ -1,10 +1,10 @@
 # HYDRA COMPLETE ARCHITECTURE AUDIT
-**Document Version:** 1.0.0 (Forensic Baseline & V2.3 Evolution)  
-**Classification:** Institutional Quantitative Trading Platform Architecture  
+**Document Version:** 1.1.0 (Forensic Baseline & V2.3 Evolution)  
+**Classification:** Institutional Quantitative Trading Platform Architecture (Unvalidated Research Baseline)  
 **Author:** Quantitative Research & Architecture Team  
 **Date:** October 2026  
 **Repository Baseline Commit:** `60e0705a56c01a9eb1569dbc618dac55fe3289eb` (V2.2 Frozen Release)  
-**Target Architecture Branch:** `hydra-v2.3`
+**Repository Branch:** `main` (Tracking `origin/main`)
 
 ---
 
@@ -12,8 +12,11 @@
 
 HYDRA is an institutional quantitative trading and signal intelligence system designed to ingest multi-modal physical and financial time series, construct stationarized features, infer predictive probability distributions across three market actions (`Class 0: SELL`, `Class 1: HOLD`, `Class 2: BUY`), execute asymmetric multi-agent risk consensus, simulate broker execution with rigorous transaction friction accounting, and track prospective out-of-sample forward observations within an immutable cryptographic ledger.
 
+> [!WARNING]
+> **RECONCILIATION NOTICE:** Following forensic audit reconciliation, HYDRA V2.3 is classified as **Unvalidated Research-Only**. Previous claims of "institutional certification" and specific backtest performance metrics have been formally withdrawn. The system architecture described herein represents the reconciled engineering foundation.
+
 The platform is partitioned into two primary functional domains:
-1. **The Backend Engine (`backend/`):** A high-performance Python 3.11 asynchronous micro-mesh exposing a FastAPI interface at `http://localhost:8000`, containing automated feature extraction, model inference, Bayesian/temperature calibration, multi-agent consensus, execution paper runners, and SQLite transactional accounting.
+1. **The Backend Engine (`backend/`):** A high-performance Python 3.11 asynchronous micro-mesh exposing a FastAPI interface at `http://localhost:8000`, containing automated feature extraction, model inference, probability calibration, multi-agent consensus, execution paper runners, and SQLite transactional accounting.
 2. **The Command Center (`frontend/`):** A Next.js 16.2 / React 19 institutional web dashboard at `http://localhost:3000` providing real-time signal monitoring, multi-model probability transparency, reliability calibration diagrams, prospective ledger audit inspection, portfolio equity tracking, and agent debate streams.
 
 ---
@@ -29,9 +32,9 @@ Stock_Indicator/
 │   │   ├── lgbm_agent.joblib      <- Trained LightGBM booster
 │   │   ├── xgb_ensemble.json      <- Trained XGBoost booster
 │   │   ├── latest_scaler.joblib   <- Fitted StandardScaler on 2016-2024 train partition
-│   │   ├── model_calibrator.joblib<- 3-class multinomial calibration matrix
+│   │   ├── model_calibrator.joblib<- Calibration artifact (raw tree pass-through, DL Platt sigmoid)
 │   │   ├── meta_ensemble.joblib   <- Stacking meta-classifier
-│   │   ├── dqn_model.pth          <- PyTorch Deep Q-Network weights
+│   │   ├── dqn_model.pth          <- PyTorch Deep Q-Network weights (Quarantined)
 │   │   └── latest_fusion_weights.weights.h5 <- Keras DL Fusion weights (Quarantined)
 │   ├── configs/                   <- Configuration files, parameters, and feature definitions
 │   │   ├── kept_features.json     <- 27 stationarized feature columns (canonical order)
@@ -45,7 +48,7 @@ Stock_Indicator/
 │   │   ├── ops/                   <- Ledger audit, paper runner, clean artifacts
 │   │   ├── research/              <- Physical proxy research, timegan stress test
 │   │   ├── training/              <- train.py, optimize.py, calibrate_models.py
-│   │   └── evaluation/            <- backtest.py, reconcile_prospective_ledger.py
+│   │   └── evaluation/            <- backtest.py (chronological event-driven simulator), reconcile_prospective_ledger.py
 │   ├── src/                       <- Core backend source code
 │   │   ├── agents/                <- Multi-agent mesh: Alpha, Risk, Execution, Orchestrator
 │   │   ├── api/                   <- FastAPI routes, endpoints, SSE streams, middleware
@@ -55,7 +58,7 @@ Stock_Indicator/
 │   │   ├── models/                <- Model wrappers: boosting, neural, RL, regime, calibration
 │   │   ├── optimization/          <- Optuna objectives, search spaces, pruning rules
 │   │   └── utils/                 <- GPU device utilities, caching, timezone normalization
-│   └── tests/                     <- Comprehensive unit, integration, and integrity test suite
+│   └── tests/                     <- Comprehensive unit, integration, and integrity test suite (17 suites)
 ├── frontend/
 │   ├── app/                       <- Next.js App Router (pages: /, /agents, /performance, /validation)
 │   ├── components/                <- React UI components (AnalystGrid, TradeCard, PriceChart, etc.)
@@ -111,8 +114,8 @@ Stock_Indicator/
                      +---------------------------------------+
                      |        ACTIVE MODEL INFERENCE         |
                      |  (src/api/asset_intelligence.py)      |
-                     |  - XGBoost Ensemble (Class 0, 1, 2)   |
-                     |  - LightGBM Booster (Class 0, 1, 2)   |
+                     |  - XGBoost Ensemble (Primary Engine)  |
+                     |  - LightGBM Booster (Veto Candidate)  |
                      |  - (DL Fusion & DQN Quarantined)      |
                      +---------------------------------------+
                                          |
@@ -120,7 +123,9 @@ Stock_Indicator/
                      +---------------------------------------+
                      |        PROBABILITY CALIBRATION        |
                      |  (src/models/regime/calibration.py)   |
-                     |  - Multinomial Logistic Regression    |
+                     |  - ModelCalibrator dictionary:        |
+                     |    * XGB & LGBM: Raw pass-through     |
+                     |    * DL Fusion: Sigmoid Platt scaling |
                      |  - Output: P(SELL), P(HOLD), P(BUY)   |
                      +---------------------------------------+
                                          |
@@ -128,28 +133,28 @@ Stock_Indicator/
                      +---------------------------------------+
                      |       MULTI-AGENT RISK CONSENSUS      |
                      |  (src/agents/orchestrator.py)         |
-                     |  - Alpha Agent: Direction & Conviction|
-                     |  - Risk Agent: VaR, Volatility Veto   |
-                     |  - Asymmetric Veto: 0.15 Delta Rule   |
-                     |  - Macro Regime Gate (SPY trend)      |
+                     |  - Primary Engine: XGBoost (>= 0.60)  |
+                     |  - Secondary Veto: LGBM (>= 0.65)     |
+                     |  - Macro Regime Gate (SPY 200 SMA)    |
+                     |  - Execution Cooldown (5 bars)        |
                      +---------------------------------------+
                                          |
                                          v
                      +---------------------------------------+
                      |      DECISION & SIGNAL GENERATION     |
-                     |  - Conviction Threshold (e.g. 0.45)   |
-                     |  - Cooldown Enforcement (5 bars)      |
-                     |  - Output Action: BUY / SELL / HOLD   |
+                     |  - Action: BUY / SELL / HOLD          |
+                     |  - Pending execution recorded         |
+                     |  - No same-close price lookahead      |
                      +---------------------------------------+
                                          |
                                          v
                      +---------------------------------------+
                      |      EXECUTION SIMULATION & LEDGER    |
                      |  (src/execution/paper_trading.py)     |
-                     |  - Execution at T+1 Open              |
-                     |  - Friction: 5 bps Slippage + Fee     |
-                     |  - Written to signal_ledger.db        |
-                     |  - Cryptographic Hash Chaining        |
+                     |  - Causal Execution at T+1 Open       |
+                     |  - Friction: 5 bps Slippage + Comm    |
+                     |  - Authoritative: prospective_obs     |
+                     |  - Cryptographic SHA-256 Hash Chaining|
                      +---------------------------------------+
                                          |
                                          v
@@ -157,7 +162,8 @@ Stock_Indicator/
                      |        INSTITUTIONAL DASHBOARD        |
                      |  (Next.js Frontend on port 3000)      |
                      |  - Real-time SSE Agent Stream         |
-                     |  - Calibration Curve Transparency     |
+                     |  - Model Governance Registry          |
+                     |  - Honest unvalidated metrics         |
                      |  - Prospective Ledger Verification    |
                      +---------------------------------------+
 ```

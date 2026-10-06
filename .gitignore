@@ -59,6 +59,7 @@ backend/catboost_info/
 # Local-Only Institutional Assets
 graphify-out/
 GEMINI.md
+.obsidian/
 
 # Virtual Environments
 backend/venv/

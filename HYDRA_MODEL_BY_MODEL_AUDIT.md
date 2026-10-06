@@ -98,29 +98,44 @@ This audit evaluates every machine learning and quantitative predictive model im
      `reward = 1.0 if action == target_sig else (-1.0 if action != 1 else 0.0)`.
      This is not true reinforcement learning based on sequential portfolio returns or Sharpe optimization; it is an inefficient supervised classification approximation using Q-learning.
   2. **State Vector Train-Inference Mismatch:** The training state vector included predictions from the collapsed DL model. In production, DL is quarantined (replaced with dummy `[0, 1, 0]`), meaning the DQN policy network receives out-of-distribution inputs.
-- **Verdict:** **DEPRECATED / ISOLATED.** Reinforcement learning under this configuration degrades consensus performance. It was properly excluded from active voting in V2.2 and should remain quarantined.
+  3. **Formal Quarantine in V2.3:** While previously claimed to be retired, DQN remained marked as `ACTIVE` with `SECONDARY` role in `asset_intelligence.py`. In V2.3 reconciliation, DQN was formally quarantined:
+     - `MODEL_REGISTRY["DQN_AGENT"]["role"] = ModelRole.QUARANTINED`
+     - `MODEL_REGISTRY["DQN_AGENT"]["status"] = ModelStatus.QUARANTINED`
+     - `model_loader.py` updated to bypass DQN weights when quarantined.
+     - `consensus_engine.py` updated to exclude DQN from secondary veto authority (`veto_candidates = ["LGBM_AGENT"]`).
+- **Verdict:** **PERMANENTLY QUARANTINED.** Excluded from production inference and consensus veto authority.
 
 ---
 
 ### 2.5 Probability Calibrator & Meta-Ensemble
 - **Implementation:** [backend/src/models/regime/calibration.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/src/models/regime/calibration.py) & [backend/src/models/ensemble/meta_ensemble.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/src/models/ensemble/meta_ensemble.py)
 - **Artifacts:** `backend/artifacts/model_calibrator.joblib` and `backend/artifacts/meta_ensemble.joblib`
-- **Methodology:** Multinomial Logistic Regression calibrated on out-of-fold validation predictions.
-- **Output:** Calibrated 3-class posterior distribution:
-  $$\sum_{c=0}^2 P(c) = 1.0, \quad P(c) \in [0, 1]$$
-- **Audit Verification:** Output probabilities are rigorously checked for numerical bounds and unit-sum property.
-- **Verdict:** **HIGH VALUE.** Calibration transforms raw, overconfident tree scores into reliable risk probabilities, enabling institutional conviction filtering.
+- **Actual Calibrator Artifact Structure:**
+  Inspection of `model_calibrator.joblib` confirms it is a dictionary defining:
+  ```python
+  {
+      'DL_FUSION': {'method': 'sigmoid', 'models': {0: LogReg, 1: LogReg, 2: LogReg}},
+      'XGB': {'method': 'raw', 'models': {}},
+      'LGBM': {'method': 'raw', 'models': {}}
+  }
+  ```
+  - `XGB` and `LGBM` are configured for **raw pass-through**, while `DL_FUSION` uses per-class Sigmoid Platt scaling.
+  - Previous documentation claiming a unified "3-class multinomial logistic regression calibrator" was inaccurate.
+- **Verdict:** Accurately documented in V2.3. Tree models operate with raw calibrated probabilities from their boosting objectives; DL Fusion is quarantined.
 
 ---
 
-## 3. Comparative Model Performance Summary
+## 3. Comparative Model Performance Status
 
-| Model / Configuration | 2025 Out-of-Sample Balanced Accuracy | Multiclass Brier Score | Log Loss | Status / Action |
-|---|---|---|---|---|
-| **XGBoost (Standalone)** | 49.68% | 0.5841 | 0.9823 | Active |
-| **LightGBM (Standalone)** | 45.59% | 0.6120 | 1.0214 | Active |
-| **Active Consensus (XGB + LGBM + Calibrator)** | **51.84%** | **0.5512** | **0.9340** | **Production Baseline** |
-| **Full Ensemble (inc. DL & DQN)** | 37.10% | 0.7420 | 1.4890 | Degraded (Collapsed) |
-| **Buy & Hold Baseline** | 33.33% | N/A | N/A | Benchmark |
+> [!WARNING]
+> **RECONCILIATION WITHDRAWAL:** The previously published performance metrics (51.84% accuracy, Brier 0.5512, Log Loss 0.9340) derived from flawed single-ticker accumulation and single 80/20 train/test splits are **formally withdrawn**. The confusion matrix previously reported was mathematically incompatible with the published metrics.
 
-**Key Research Finding:** The pruned, well-calibrated ensemble combining XGBoost and LightGBM with asymmetric risk veto delivers the highest out-of-sample predictive accuracy and lowest calibration error. Forcing over-parameterized neural networks and flawed RL approximations into the ensemble degrades predictive alpha by over 14 percentage points.
+| Model / Configuration | Historical Estimate (Withdrawn) | Reconciliation Status | Operational Action in V2.3 |
+|---|---|---|---|
+| **XGBoost (Standalone)** | 49.68% | Unvalidated Baseline | **ACTIVE (Primary Engine, 0.60 threshold)** |
+| **LightGBM (Standalone)** | 45.59% | Unvalidated Baseline | **ACTIVE (Veto Candidate, 0.65 threshold)** |
+| **Active Consensus** | *51.84% (Withdrawn)* | Unvalidated Research-Only | Production Policy Defined |
+| **Deep Learning Fusion** | *Collapsed (>0.99 BUY)* | Degenerate Local Optimum | **QUARANTINED** |
+| **Deep Q-Network (RL)** | *Degraded* | Mismatched Reward / State | **QUARANTINED** |
+
+**Key Research Finding:** Forcing over-parameterized neural networks and pseudo-RL approximations into the tabular pipeline degraded generalization. In V2.3, the system isolates to the robust tree models (XGBoost and LightGBM) under strict multi-agent governance, pending rigorous walk-forward empirical validation.

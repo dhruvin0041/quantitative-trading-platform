@@ -1,7 +1,7 @@
 # HYDRA SECURITY & DEPENDENCY AUDIT
-**Document Version:** 1.0.0  
-**Classification:** Cybersecurity, Dependency Vulnerability & Infrastructure Audit  
-**Repository Branch:** `hydra-v2.3`  
+**Document Version:** 1.1.0  
+**Classification:** Cybersecurity, Dependency Vulnerability & Infrastructure Audit (Reconciled Research Baseline)  
+**Repository Branch:** `main`  
 **Date:** October 2026
 
 ---
@@ -10,10 +10,13 @@
 
 This forensic audit evaluates the cybersecurity posture, software supply chain dependencies, deserialization safety, input sanitization, and infrastructure reliability of HYDRA.
 
+> [!WARNING]
+> **RECONCILIATION NOTICE:** In accordance with the Reconciliation Verdict, claims of demonstrated inline runtime deserialization security controls are clarified below. V2.3 is reclassified as **Unvalidated Research-Only**.
+
 ### Overall Security Status
 - **Secrets Management:** **CLEAN.** No hardcoded production API keys or credentials detected in version control. `.env` and `.env.local` are appropriately git-ignored.
 - **SQL Injection:** **SAFE.** All database queries in `signal_ledger.py` and `paper_trading.py` use parameterized SQL statements (`?` placeholders). Zero raw string concatenation into SQL commands.
-- **Deserialization Risks:** **MODERATE.** Presence of `joblib.load()` and PyTorch `torch.load()` requires strict file integrity controls and hash validation to prevent arbitrary code execution via poisoned artifacts.
+- **Deserialization Risks:** **MODERATE / CONDITIONAL.** Pre-flight SHA-256 verification exists via `StrategyGovernanceEngine.verify_integrity()`. However, runtime loaders in `model_loader.py` directly deserialize artifacts without inline hash checking.
 - **CORS & Network Security:** FastAPI configured with explicit CORS origin middleware.
 - **Dependency Health:** Python 3.11 with Torch 2.5.1+cu121, TensorFlow 2.21.0, XGBoost 3.2.0, LightGBM 4.6.0, scikit-learn 1.9.0. Next.js 16.2.0 on Node 20+.
 
@@ -53,10 +56,10 @@ This forensic audit evaluates the cybersecurity posture, software supply chain d
   - `torch.load()`: Used to load `dqn_model.pth`.
   - `keras.models.load_model()` / `load_weights()`: Used for `.weights.h5`.
 - **Threat Vector:** Python `pickle` (underlying `joblib` and `torch.load`) allows arbitrary code execution if an attacker replaces artifact files with malicious payloads.
-- **Remediation & Defense in Depth:**
-  1. HYDRA implements **Cryptographic Manifest Verification**: [backend/artifacts/frozen_strategy_manifest_v2.2.json](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/artifacts/frozen_strategy_manifest_v2.2.json) records the exact SHA-256 hash of every artifact file.
-  2. In V2.3, the model loader verifies file SHA-256 hashes against the manifest *before* invoking `joblib.load()` or `torch.load()`.
-  3. PyTorch loading is updated to use `weights_only=True` to eliminate unpickling execution pathways.
+- **Audit Finding & Reconciliation Reality:**
+  1. **Pre-flight Integrity Control:** `StrategyGovernanceEngine.verify_integrity()` verifies the SHA-256 hash of all 8 model/scaler artifacts against `frozen_strategy_manifest_v2.2.json` before test execution or deployment checks.
+  2. **Runtime Loading Boundary:** In the active application runtime, `model_loader.py` calls `joblib.load()` and `torch.load()` directly without an inline hash check inside each loader function.
+  3. **Operational Recommendation:** System startup scripts should mandate `StrategyGovernanceEngine().verify_integrity()` execution prior to model instantiation to ensure untampered artifacts.
 
 ### 2.4 API Input Validation & Sanitization
 - **Audit:** Examined FastAPI endpoints in [backend/src/api/api.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/src/api/api.py).

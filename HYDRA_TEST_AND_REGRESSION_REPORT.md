@@ -1,7 +1,7 @@
 # HYDRA TEST EXECUTION & REGRESSION VERIFICATION REPORT
-**Document Version:** 1.0.0  
-**Classification:** Automated Test Suite Execution, Formal Verification & Regression Audit  
-**Repository Branch:** `hydra-v2.3` (Preserving V2.2 at `60e0705a`)  
+**Document Version:** 1.1.0  
+**Classification:** Automated Test Suite Execution, Formal Verification & Regression Audit (Reconciled Baseline)  
+**Repository Branch:** `main` (Preserving V2.2 baseline at `60e0705a`)  
 **Test Suite Path:** `backend/tests/`  
 **Date:** October 2026
 
@@ -11,17 +11,20 @@
 
 This report documents the formal verification and automated regression testing of the HYDRA institutional quantitative trading platform. 
 
-Every test file, assertion, mathematical invariant, and temporal firewall was executed against the active environment. **Zero tests were deleted, weakened, or skipped.**
+> [!WARNING]
+> **RECONCILIATION NOTICE:** In accordance with the Reconciliation Verdict, test suite passage establishes internal unit contracts, invariant guards, and baseline freeze verification. It does **not** constitute empirical validation of live market profitability or institutional release certification.
 
 ### Overall Test Execution Status
-- **Total Test Suites Executed:** 17
-- **Total Individual Tests Executed:** 139
+- **Test Modules Executed:** 17 test files
+- **Statically Declared Test Methods:** 131 `def test_*` functions
+- **Runtime Test Cases Discovered & Executed:** 139 test cases (via `unittest discover` accounting for class inheritance and fixtures)
 - **Tests Passed:** 139 (100.0%)
 - **Tests Failed:** 0 (0.0%)
 - **Tests Errored:** 0 (0.0%)
 - **Tests Skipped:** 0 (0.0%)
-- **Total Execution Time:** 19.76 seconds
+- **Total Execution Time:** ~19.8 seconds
 - **Regression Status:** **100% CLEAN. Zero regressions detected against the frozen V2.2 baseline.**
+- **Runtime Environment:** Python 3.11.9 (`backend/venv/Scripts/python.exe`), PyTorch 2.5.1+cu121, TensorFlow 2.21.0, XGBoost 3.2.0, LightGBM 4.6.0.
 
 ---
 

@@ -1,59 +1,45 @@
 # HYDRA PERFORMANCE BENCHMARK & COMPARATIVE EVALUATION REPORT
-**Document Version:** 1.0.0  
-**Classification:** Institutional Benchmark Comparison, Factor Risk Attribution & Cost Sensitivity  
-**Repository Branch:** `hydra-v2.3`  
+**Document Version:** 1.1.0  
+**Classification:** Institutional Benchmark Comparison & Infrastructure Profile (Reconciled Research Baseline)  
+**Repository Branch:** `main`  
 **Date:** October 2026
 
 ---
 
 ## 1. Executive Summary
 
-This report establishes the institutional quantitative benchmarks against which HYDRA V2.3 is evaluated. In quantitative research, claiming performance without comparison to standard null models (Buy-and-Hold, Majority Class, Random Walk, Simple Momentum) or without sensitivity analysis across varying transaction costs is unscientific.
+This report establishes the institutional quantitative benchmarks and hardware performance profiles for HYDRA. In rigorous quantitative research, claiming performance without comparison to standard null models (Buy-and-Hold, Majority Class, Random Walk, Simple Momentum) or without sensitivity analysis across varying transaction costs is unscientific.
 
-### Benchmark Evaluation Matrix (2024–2026 Trailing 2-Year Horizon)
-| Strategy / Model | Annualized Return | Annualized Volatility | Sharpe Ratio | Sortino Ratio | Max Drawdown | Jensen's Alpha ($\alpha$) | Market Beta ($\beta$) | Information Ratio |
-|---|---|---|---|---|---|---|---|---|
-| **HYDRA V2.3 (Production)** | **+3.01%** | **1.97%** | **1.53** | **2.21** | **-3.93%** | **+2.45%** | **0.08** | **1.42** |
-| HYDRA V2.2 (Baseline) | +2.94% | 1.99% | 1.48 | 2.14 | -4.10% | +2.38% | 0.08 | 1.38 |
-| Standalone XGBoost | +1.71% | 1.82% | 0.94 | 1.35 | -6.85% | +1.12% | 0.12 | 0.88 |
-| Standalone LightGBM | +1.08% | 1.50% | 0.72 | 1.04 | -8.20% | +0.65% | 0.10 | 0.65 |
-| Momentum Baseline (SMA 20/50) | +0.45% | 4.80% | 0.09 | 0.14 | -14.20% | -1.20% | 0.35 | 0.10 |
-| Majority Class (Always BUY) | +7.10% | 10.92% | 0.65 | 0.88 | -22.10% | -0.85% | 0.72 | 0.42 |
-| Random Decision Baseline | -6.20% | 13.78% | -0.45 | -0.60 | -28.90% | -7.10% | 0.02 | -1.15 |
-| SPY Benchmark (Buy & Hold) | +14.20% | 12.05% | 1.18 | 1.62 | -18.40% | 0.00% | 1.00 | N/A |
+> [!WARNING]
+> **FORMAL PERFORMANCE WITHDRAWAL:** In accordance with the Reconciliation Verdict, all previously reported backtest figures (e.g. +3.01% annualized return, 1.53 Sharpe, 59.03% win rate, -3.93% Max Drawdown) derived from non-chronological multi-asset accumulation, one-sided slippage, and uncalibrated tree probabilities are **formally withdrawn**.
+> 
+> HYDRA V2.3 is reclassified as **Unvalidated Research-Only**. The comparative figures below reflect theoretical baseline hypotheses pending formal execution on the overhauled chronological event-driven simulator with versioned historical snapshots.
+
+### Benchmark Evaluation Status (Trailing 2-Year Horizon)
+| Strategy / Model | Annualized Return | Sharpe Ratio | Max Drawdown | Status & Integrity Classification |
+|---|---|---|---|---|
+| **HYDRA V2.3 (Production Mesh)** | *[WITHDRAWN]* | *[WITHDRAWN]* | *[WITHDRAWN]* | **Reconciled Event-Driven Engine Ready / Unvalidated** |
+| HYDRA V2.2 (Baseline) | *[WITHDRAWN]* | *[WITHDRAWN]* | *[WITHDRAWN]* | Frozen Production Artifacts Intact |
+| Standalone XGBoost | *[WITHDRAWN]* | *[WITHDRAWN]* | *[WITHDRAWN]* | Primary Engine Candidate |
+| Standalone LightGBM | *[WITHDRAWN]* | *[WITHDRAWN]* | *[WITHDRAWN]* | Secondary Veto Candidate |
+| SPY Benchmark (Buy & Hold) | +14.20% | 1.18 | -18.40% | Market Benchmark (Historical Reference) |
+| Equal-Weight Cash Baseline | 0.00% | 0.00 | 0.00% | Risk-Free Null Floor |
 
 ---
 
-## 2. Factor Attribution & Risk Metrics
+## 2. Factor Attribution & Risk Framework
 
-### 2.1 Market Beta Neutrality ($\beta = 0.08$)
+### 2.1 Theoretical Beta Neutrality Objective
 - Conventional equity strategies carry a market beta ($\beta$) near 1.0, generating returns purely from systematic market exposure.
-- HYDRA V2.3 operates with an empirical beta of **0.08**, indicating near-total beta neutrality.
-- The strategy's returns are derived from idiosyncratic directional predictability rather than passive market drift.
+- HYDRA's risk governance is architected for market-neutral idiosyncratic alpha, employing macro SPY 200-day SMA filters to disable long exposure during structural market regimes.
+- Statistical verification of beta neutrality requires execution over the unified multi-asset event-driven simulator across rolling 60-day estimation windows.
 
-### 2.2 Jensen's Alpha ($\alpha = +2.45\%$)
-Using the Capital Asset Pricing Model (CAPM):
-$$R_p - R_f = \alpha + \beta (R_m - R_f)$$
-- Strategy Annualized Excess Return: $3.01\% - 0.00\% = 3.01\%$ (assuming 0% real risk-adjusted floor).
-- Expected CAPM Return given $\beta = 0.08$ and SPY return $14.2\%$:
-  $$\mathbb{E}[R] = 0.08 \times 14.2\% = 1.14\%$$
-- **Net Jensen's Alpha:** $3.01\% - 1.14\% = \mathbf{+1.87\% \text{ to } +2.45\%}$ annualized purely from quantitative selection skill.
-
----
-
-## 3. Transaction Cost & Slippage Sensitivity Analysis
-
-A viable quantitative strategy must remain profitable under deteriorating execution quality. We stress-tested HYDRA V2.3 across 5 friction levels:
-
-| Slippage Assumption | Commission per Share | Total Friction Paid (2y) | Net Total Return | Net Sharpe Ratio | Profit Factor | Viable? |
-|---|---|---|---|---|---|---|
-| **0 bps (Zero Cost Baseline)** | $0.00 | $0.00 | +7.17% | 1.82 | 1.48 | Idealized |
-| **3 bps (Institutional Prime)**| $0.002 | $685.50 | +6.48% | 1.65 | 1.38 | PASS |
-| **5 bps (Production Baseline)**| $0.005 | $1,142.50 | +6.03% | 1.53 | 1.31 | PASS |
-| **10 bps (Conservative Retail)**| $0.010 | $2,285.00 | +4.89% | 1.24 | 1.22 | PASS |
-| **20 bps (Stressed / Illiquid)**| $0.020 | $4,570.00 | +2.61% | 0.66 | 1.08 | MARGINAL |
-
-**Conclusion:** HYDRA V2.3 maintains positive expectancy up to 25 basis points of total friction, demonstrating robust operational margins for mega-cap and large-cap equity universes.
+### 2.2 Cost Model Specification
+To eliminate execution optimism, the overhauled evaluation engine (`backend/scripts/evaluation/backtest.py`) implements an institutional transaction friction schedule:
+1. **Two-Sided Adverse Slippage:** 5 basis points ($0.0005$) deducted on both Entry Open and Exit Open/Close.
+2. **Per-Share Brokerage Commission:** $0.005 per share with a $1.00 minimum ticket charge deducted on all executions.
+3. **Execution Delay:** Signals generated at bar $T$ Close execute strictly at bar $T+1$ Open.
+4. **Dynamic Triple Barriers:** Exits governed by $1.5 \times \text{ATR}_{14}$ Take-Profit, $2.0 \times \text{ATR}_{14}$ Stop-Loss, and a 15-trading-bar time horizon.
 
 ---
 

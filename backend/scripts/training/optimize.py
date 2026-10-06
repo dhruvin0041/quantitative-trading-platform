@@ -18,7 +18,7 @@ import optuna
 import pandas as pd
 import xgboost as xgb
 import yfinance as yf
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import f1_score
 
 from src.data_ingestion.market_data import (
     apply_dynamic_triple_barrier,
@@ -159,8 +159,8 @@ def objective(trial, df_features):
         w_dl = trial.suggest_float("weight_dl", 0.2, 0.8)
         ensemble_p = (dl_preds * w_dl) + (xgb_preds * (1 - w_dl))
 
-        accuracy = accuracy_score(Y_test_sig, np.argmax(ensemble_p, axis=1))
-        return accuracy
+        macro_f1 = f1_score(Y_test_sig, np.argmax(ensemble_p, axis=1), average="macro", zero_division=0)
+        return float(macro_f1)
     except Exception as e:
         print(f"Trial failed due to model error: {e}")
         return 0.0

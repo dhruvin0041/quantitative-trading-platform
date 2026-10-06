@@ -1,9 +1,12 @@
 """
 HYDRA Production Backtest & Performance Evaluation Engine
 =========================================================
-Executes a causal point-in-time historical backtest using authoritative production
-models (XGBoost + LightGBM + ModelCalibrator), 27 stationarized features, asymmetric
-conviction veto, and next-day Open execution with modeled slippage and commissions.
+Executes a chronological, causal, multi-asset portfolio historical backtest:
+- Single Authoritative Production Policy: Primary XGBoost (≥0.60) + Secondary LightGBM Veto (≥0.65) + Macro Regime Filter.
+- Chronological Portfolio Simulation: Explicit cash and position tracking across calendar days.
+- Two-Sided Execution Friction: T+1 Open fills with 5 bps adverse entry slippage, 5 bps adverse exit slippage, and brokerage commissions.
+- Dynamic Triple Barrier Exits: 1.5x ATR take-profit, 2.0x ATR stop-loss, and 15-day maximum holding horizon.
+- Valid Portfolio Statistics: Daily equity curve mark-to-market, annualized return, Sharpe, drawdown, and correct Calmar ratio.
 """
 
 import argparse
@@ -37,14 +40,30 @@ from src.execution.live_inference import (  # noqa: E402
     add_upgraded_features,
 )
 from src.models.regime.calibration import ModelCalibrator  # noqa: E402
-from src.optimization.objective_functions import calculate_sharpe_ratio  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("HydraBacktest")
 
 
-def fetch_data(ticker: str, spy_df: pd.DataFrame, vix_df: pd.DataFrame, period: str = "2y") -> pd.DataFrame:
-    """Fetch and engineer stationarized features for backtesting."""
+def fetch_and_prepare_data(
+    ticker: str,
+    spy_df: pd.DataFrame,
+    vix_df: pd.DataFrame,
+    period: str = "2y",
+    cache_dir: Optional[Path] = None,
+) -> pd.DataFrame:
+    """Fetch and engineer stationarized features with optional disk caching."""
+    if cache_dir:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_file = cache_dir / f"{ticker}_{period}_features.parquet"
+        if cache_file.exists():
+            try:
+                df = pd.read_parquet(cache_file)
+                logger.info("Loaded cached feature dataset for %s (%d rows)", ticker, len(df))
+                return df
+            except Exception as e:
+                logger.warning("Cache read failed for %s (%s). Re-fetching.", ticker, e)
+
     logger.info("Fetching market data for %s (period=%s)...", ticker, period)
     df = yf.download(ticker, period=period, progress=False)
     if isinstance(df.columns, pd.MultiIndex):
@@ -57,24 +76,46 @@ def fetch_data(ticker: str, spy_df: pd.DataFrame, vix_df: pd.DataFrame, period: 
     df = add_upgraded_features(df, spy_df, vix_df)
     df = df.loc[:, ~df.columns.duplicated()].copy()
 
-    # Forward 5-day return for ground truth verification
-    df["future_5d_ret"] = df["Close"].shift(-5) / df["Close"] - 1.0
+    # Calculate 14-period ATR for dynamic barrier exits
+    high = df["High"]
+    low = df["Low"]
+    close = df["Close"]
+    tr1 = high - low
+    tr2 = (high - close.shift(1)).abs()
+    tr3 = (low - close.shift(1)).abs()
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    df["ATR_14"] = tr.rolling(14).mean().bfill()
 
-    return df.dropna(subset=[col for col in FEATURE_COLUMNS if col in df.columns])
+    df_ready = df.dropna(subset=[col for col in FEATURE_COLUMNS if col in df.columns]).copy()
+
+    if cache_dir:
+        try:
+            df_ready.to_parquet(cache_file)
+        except Exception:
+            pass
+
+    return df_ready
 
 
-def run_backtest(
+def run_chronological_backtest(
     tickers: Optional[List[str]] = None,
     period: str = "2y",
+    initial_capital: float = 100000.0,
+    allocation_per_trade: float = 0.10,
+    slippage_bps: float = 5.0,
+    commission_per_share: float = 0.005,
+    min_commission: float = 1.00,
     output_dir: str = "backtest_results",
 ) -> Optional[Dict]:
-    """Execute historical evaluation across target assets."""
-    logger.info("Initializing HYDRA Unified Institutional Backtest Engine...")
+    """
+    Executes a causal, chronological multi-asset portfolio simulation.
+    """
+    logger.info("Initializing HYDRA Chronological Institutional Backtest Engine...")
 
     artifacts_dir = BACKEND_DIR / "artifacts"
     configs_dir = BACKEND_DIR / "configs"
+    cache_dir = BACKEND_DIR / "data" / "cache"
 
-    # Verify required artifacts exist
     scaler_path = artifacts_dir / "latest_scaler.joblib"
     xgb_path = artifacts_dir / "xgb_ensemble.json"
     lgbm_path = artifacts_dir / "lgbm_agent.joblib"
@@ -86,7 +127,7 @@ def run_backtest(
         logger.error("Missing required production artifacts: %s", missing)
         return None
 
-    # 1. Load artifacts
+    # Load artifacts
     with open(features_path, "r") as f:
         kept_features = json.load(f)
 
@@ -97,14 +138,15 @@ def run_backtest(
 
     lgbm_model = joblib.load(lgbm_path)
 
-    try:
-        calibrator = ModelCalibrator.load(str(calibrator_path))
-        logger.info("Loaded authoritative ModelCalibrator.")
-    except Exception as e:
-        logger.warning("Could not load ModelCalibrator (%s). Running with raw probability fallback.", e)
-        calibrator = None
+    # Load calibrator dictionary / object
+    calibrator_obj = joblib.load(calibrator_path)
+    calibrator = ModelCalibrator()
+    if isinstance(calibrator_obj, dict):
+        calibrator.calibrators = calibrator_obj
+    elif hasattr(calibrator_obj, "calibrators"):
+        calibrator = calibrator_obj
 
-    # Pre-fetch Macro SPY and ^VIX
+    # Pre-fetch benchmark data
     logger.info("Fetching SPY and ^VIX benchmark data (%s)...", period)
     spy_df = yf.download("SPY", period=period, progress=False)
     if isinstance(spy_df.columns, pd.MultiIndex):
@@ -115,199 +157,376 @@ def run_backtest(
         vix_df.columns = vix_df.columns.get_level_values(0)
 
     if tickers is None or len(tickers) == 0:
-        tickers = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN"]
+        tickers = ["AAPL", "MSFT", "NVDA", "AMZN"]
 
-    trades = []
-    logger.info("Starting simulation loop across %d assets...", len(tickers))
-
-    for ticker in tickers:
+    # Load all ticker datasets
+    ticker_dfs: Dict[str, pd.DataFrame] = {}
+    for t in tickers:
         try:
-            df = fetch_data(ticker, spy_df, vix_df, period=period)
+            df_t = fetch_and_prepare_data(t, spy_df, vix_df, period=period, cache_dir=cache_dir)
+            if len(df_t) >= 60:
+                ticker_dfs[t] = df_t
         except Exception as e:
-            logger.error("Failed to fetch or process %s: %s", ticker, e)
-            continue
+            logger.error("Error preparing data for %s: %s", t, e)
 
-        if len(df) <= 60:
-            continue
+    if not ticker_dfs:
+        logger.error("No valid asset datasets loaded. Aborting backtest.")
+        return None
 
-        last_trade_idx = -10
-        cooldown_bars = 5
+    # Establish global chronological trading calendar
+    all_dates = sorted(list(set.intersection(*[set(df.index) for df in ticker_dfs.values()])))
+    if len(all_dates) < 30:
+        # Fall back to sorted union if intersection is sparse
+        all_dates = sorted(list(set.union(*[set(df.index) for df in ticker_dfs.values()])))
 
-        # Sequential point-in-time bar iteration
-        for i in range(50, len(df)):
-            current_row = df.iloc[i]
-            date = df.index[i]
+    logger.info(
+        "Starting chronological simulation: %d assets across %d calendar sessions (%s to %s)...",
+        len(ticker_dfs),
+        len(all_dates),
+        all_dates[0].strftime("%Y-%m-%d"),
+        all_dates[-1].strftime("%Y-%m-%d"),
+    )
 
-            # Enforce 5-bar cooldown
-            if (i - last_trade_idx) < cooldown_bars:
+    # Simulation Portfolio State
+    cash = float(initial_capital)
+    # open_positions: ticker -> dict(side, shares, entry_price, entry_date, entry_atr, tp_price, sl_price, bars_held)
+    open_positions: Dict[str, Dict] = {}
+    pending_orders: List[Dict] = []  # orders generated at close, filled at next open
+    last_exit_date: Dict[str, pd.Timestamp] = {}  # for 5-bar cooldown
+    closed_trades: List[Dict] = []
+    daily_equity_curve: List[Dict] = []
+
+    slippage_rate = slippage_bps / 10000.0
+
+    # Chronological day-by-day loop
+    for current_date in all_dates:
+        # 1. MORNING EXECUTION: Process pending barrier exits and pending entry orders at today's OPEN
+        # 1a. Check active positions for barrier hits against today's open price
+        positions_to_close = []
+        for sym, pos in open_positions.items():
+            if current_date not in ticker_dfs[sym].index:
+                continue
+            bar_today = ticker_dfs[sym].loc[current_date]
+            open_p = float(bar_today["Open"])
+            pos["bars_held"] += 1
+
+            exit_reason = None
+            if pos["side"] == "LONG":
+                if open_p >= pos["tp_price"]:
+                    exit_reason = "TAKE_PROFIT"
+                elif open_p <= pos["sl_price"]:
+                    exit_reason = "STOP_LOSS"
+                elif pos["bars_held"] >= 15:
+                    exit_reason = "MAX_HORIZON"
+            elif pos["side"] == "SHORT":
+                if open_p <= pos["tp_price"]:
+                    exit_reason = "TAKE_PROFIT"
+                elif open_p >= pos["sl_price"]:
+                    exit_reason = "STOP_LOSS"
+                elif pos["bars_held"] >= 15:
+                    exit_reason = "MAX_HORIZON"
+
+            if exit_reason:
+                positions_to_close.append((sym, exit_reason, open_p))
+
+        # Execute position exits at Open with adverse exit slippage & commission
+        for sym, reason, open_p in positions_to_close:
+            pos = open_positions.pop(sym)
+            shares = pos["shares"]
+            if pos["side"] == "LONG":
+                exit_fill = open_p * (1.0 - slippage_rate)
+                gross_pnl = (exit_fill - pos["entry_fill"]) * shares
+            else:
+                exit_fill = open_p * (1.0 + slippage_rate)
+                gross_pnl = (pos["entry_fill"] - exit_fill) * shares
+
+            exit_commission = max(min_commission, shares * commission_per_share)
+            net_pnl = gross_pnl - exit_commission
+            cash += (shares * exit_fill) - exit_commission if pos["side"] == "LONG" else (pos["entry_fill"] * shares + net_pnl)
+            ret_pct = (net_pnl / (pos["entry_fill"] * shares)) * 100.0
+
+            closed_trades.append({
+                "ticker": sym,
+                "side": pos["side"],
+                "entry_date": pos["entry_date"].strftime("%Y-%m-%d"),
+                "exit_date": current_date.strftime("%Y-%m-%d"),
+                "bars_held": pos["bars_held"],
+                "entry_fill": round(pos["entry_fill"], 2),
+                "exit_fill": round(exit_fill, 2),
+                "shares": shares,
+                "exit_reason": reason,
+                "net_pnl": round(net_pnl, 2),
+                "return_pct": round(ret_pct, 2),
+                "was_profitable": net_pnl > 0,
+            })
+            last_exit_date[sym] = current_date
+
+        # 1b. Execute pending entry orders generated at previous close at today's OPEN
+        executed_orders = []
+        for order in pending_orders:
+            sym = order["ticker"]
+            if current_date not in ticker_dfs[sym].index:
+                continue
+            if sym in open_positions:
+                continue  # already occupied
+
+            bar_today = ticker_dfs[sym].loc[current_date]
+            open_p = float(bar_today["Open"])
+            side = order["signal"]
+
+            # Calculate fill with adverse entry slippage
+            entry_fill = open_p * (1.0 + slippage_rate) if side == "BUY" else open_p * (1.0 - slippage_rate)
+
+            # Position sizing: 10% of current total estimated equity
+            current_portfolio_est = cash + sum(
+                p["shares"] * float(ticker_dfs[s].loc[current_date]["Close"]) for s, p in open_positions.items()
+                if current_date in ticker_dfs[s].index
+            )
+            target_alloc = current_portfolio_est * allocation_per_trade
+            shares = int(target_alloc / entry_fill)
+
+            if shares <= 0:
                 continue
 
-            # Extract features strictly at bar i
+            entry_commission = max(min_commission, shares * commission_per_share)
+            required_cash = (shares * entry_fill) + entry_commission
+            if cash < required_cash:
+                shares = int((cash - min_commission) / entry_fill)
+                if shares <= 0:
+                    continue
+                entry_commission = max(min_commission, shares * commission_per_share)
+                required_cash = (shares * entry_fill) + entry_commission
+
+            cash -= required_cash
+
+            atr_val = float(bar_today.get("ATR_14", entry_fill * 0.02))
+            if side == "BUY":
+                tp = entry_fill + (1.5 * atr_val)
+                sl = entry_fill - (2.0 * atr_val)
+            else:
+                tp = entry_fill - (1.5 * atr_val)
+                sl = entry_fill + (2.0 * atr_val)
+
+            open_positions[sym] = {
+                "side": "LONG" if side == "BUY" else "SHORT",
+                "shares": shares,
+                "entry_fill": entry_fill,
+                "entry_date": current_date,
+                "entry_atr": atr_val,
+                "tp_price": tp,
+                "sl_price": sl,
+                "bars_held": 0,
+            }
+            executed_orders.append(order)
+
+        # Clear executed pending orders
+        pending_orders = [o for o in pending_orders if o not in executed_orders]
+
+        # 2. EVENING SIGNAL GENERATION: At CLOSE of current_date, evaluate models for next session entry
+        new_pending_orders = []
+        for sym, df_sym in ticker_dfs.items():
+            if current_date not in df_sym.index:
+                continue
+            if sym in open_positions:
+                continue
+
+            # Check 5-bar cooldown since last exit
+            if sym in last_exit_date:
+                bars_since = len(df_sym.loc[last_exit_date[sym]:current_date]) - 1
+                if bars_since < 5:
+                    continue
+
+            # Locate integer index in df_sym
+            idx_loc = df_sym.index.get_loc(current_date)
+            if idx_loc < 50:
+                continue
+
+            current_row = df_sym.iloc[idx_loc]
             row_features = current_row[kept_features].values.reshape(1, -1)
             scaled_features = scaler.transform(row_features)
 
-            # Generate predictions from active boosters
+            # Predict XGBoost and LightGBM probabilities
             xgb_raw = xgb_model.predict_proba(scaled_features)[0]
             lgbm_raw = lgbm_model.predict_proba(scaled_features)[0]
 
-            # Apply probability calibration per model
-            if calibrator is not None:
-                xgb_cal = calibrator.calibrate("XGB", xgb_raw)
-                lgbm_cal = calibrator.calibrate("LGBM", lgbm_raw)
-            else:
-                xgb_cal = xgb_raw
-                lgbm_cal = lgbm_raw
+            xgb_cal = calibrator.calibrate("XGB", xgb_raw)
+            lgbm_cal = calibrator.calibrate("LGBM", lgbm_raw)
 
-            # Weighted consensus (52% XGB, 48% LGBM based on out-of-sample accuracy)
-            calibrated = (0.52 * xgb_cal) + (0.48 * lgbm_cal)
-            calibrated = calibrated / np.sum(calibrated)
-
-            p_sell, p_hold, p_buy = calibrated[0], calibrated[1], calibrated[2]
-
-            # Asymmetric Conviction & Veto Rules
+            # Single Authoritative Production Strategy Logic:
+            # Primary Alpha Driver: XGBoost >= 0.60
+            # Secondary Asymmetric Veto: LightGBM opposing >= 0.65
             signal = "HOLD"
-            conviction = max(p_buy, p_sell)
-            delta = abs(p_buy - p_sell)
+            p_buy_xgb = xgb_cal[2]
+            p_sell_xgb = xgb_cal[0]
+            p_sell_lgbm = lgbm_cal[0]
+            p_buy_lgbm = lgbm_cal[2]
 
-            if p_buy >= 0.45 and (p_buy - p_sell) >= 0.15:
-                signal = "BUY"
-            elif p_sell >= 0.45 and (p_sell - p_buy) >= 0.15:
-                signal = "SELL"
+            if p_buy_xgb >= 0.60:
+                if p_sell_lgbm >= 0.65:
+                    signal = "VETOED"
+                else:
+                    signal = "BUY"
+            elif p_sell_xgb >= 0.60:
+                if p_buy_lgbm >= 0.65:
+                    signal = "VETOED"
+                else:
+                    signal = "SELL"
 
             # Macro Regime Gate (SPY 200 SMA)
-            if signal == "BUY" and i < len(spy_df):
-                spy_slice = spy_df.loc[:date]
+            if signal == "BUY" and current_date in spy_df.index:
+                spy_slice = spy_df.loc[:current_date]
                 if len(spy_slice) >= 200:
                     spy_sma200 = spy_slice["Close"].rolling(200).mean().iloc[-1]
-                    if spy_slice["Close"].iloc[-1] < spy_sma200:
+                    if float(spy_slice["Close"].iloc[-1]) < float(spy_sma200):
                         signal = "VETOED"
 
-            # Execute causal T+1 Open simulation
             if signal in ["BUY", "SELL"]:
-                if i + 1 < len(df):
-                    next_bar = df.iloc[i + 1]
-                    exec_date = df.index[i + 1].strftime("%Y-%m-%d")
-                    # 5 bps modeled slippage
-                    fill_price = float(next_bar["Open"]) * (1.0005 if signal == "BUY" else 0.9995)
-                    exit_idx = min(i + 5, len(df) - 1)
-                    exit_price = float(df["Close"].iloc[exit_idx])
+                new_pending_orders.append({
+                    "ticker": sym,
+                    "signal": signal,
+                    "generated_date": current_date,
+                    "p_buy": float(p_buy_xgb),
+                    "p_sell": float(p_sell_xgb),
+                })
 
-                    if signal == "BUY":
-                        actual_ret = (exit_price / fill_price) - 1.0
-                    else:
-                        actual_ret = 1.0 - (exit_price / fill_price)
+        pending_orders = new_pending_orders
 
-                    was_correct = actual_ret > 0
-                    last_trade_idx = i
+        # 3. END-OF-DAY MARK-TO-MARKET PORTFOLIO VALUATION
+        pos_val = 0.0
+        for sym, pos in open_positions.items():
+            if current_date in ticker_dfs[sym].index:
+                curr_close = float(ticker_dfs[sym].loc[current_date]["Close"])
+                if pos["side"] == "LONG":
+                    pos_val += pos["shares"] * curr_close
+                else:
+                    unrealized = (pos["entry_fill"] - curr_close) * pos["shares"]
+                    pos_val += (pos["shares"] * pos["entry_fill"]) + unrealized
 
-                    trades.append(
-                        {
-                            "date": date.strftime("%Y-%m-%d"),
-                            "execution_date": exec_date,
-                            "ticker": ticker,
-                            "signal": signal,
-                            "conviction": round(float(conviction) * 100, 1),
-                            "delta": round(float(delta), 3),
-                            "p_sell": round(float(p_sell), 3),
-                            "p_hold": round(float(p_hold), 3),
-                            "p_buy": round(float(p_buy), 3),
-                            "fill_price": round(fill_price, 2),
-                            "exit_price": round(exit_price, 2),
-                            "net_5d_return_pct": round(actual_ret * 100, 2),
-                            "was_correct": was_correct,
-                        }
-                    )
-            elif signal == "VETOED":
-                trades.append(
-                    {
-                        "date": date.strftime("%Y-%m-%d"),
-                        "execution_date": "N/A",
-                        "ticker": ticker,
-                        "signal": "VETOED",
-                        "conviction": round(float(conviction) * 100, 1),
-                        "delta": round(float(delta), 3),
-                        "p_sell": round(float(p_sell), 3),
-                        "p_hold": round(float(p_hold), 3),
-                        "p_buy": round(float(p_buy), 3),
-                        "fill_price": 0.0,
-                        "exit_price": 0.0,
-                        "net_5d_return_pct": 0.0,
-                        "was_correct": False,
-                    }
-                )
+        total_equity = cash + pos_val
+        daily_equity_curve.append({
+            "date": current_date,
+            "cash": cash,
+            "positions_value": pos_val,
+            "total_equity": total_equity,
+        })
 
-    df_trades = pd.DataFrame(trades)
-    if df_trades.empty or "signal" not in df_trades.columns:
-        logger.warning("No signals generated.")
+    # Close any remaining open positions at the end of the simulation
+    if open_positions:
+        last_date = all_dates[-1]
+        for sym, pos in list(open_positions.items()):
+            if last_date in ticker_dfs[sym].index:
+                close_p = float(ticker_dfs[sym].loc[last_date]["Close"])
+                shares = pos["shares"]
+                exit_fill = close_p * (1.0 - slippage_rate) if pos["side"] == "LONG" else close_p * (1.0 + slippage_rate)
+                gross_pnl = (exit_fill - pos["entry_fill"]) * shares if pos["side"] == "LONG" else (pos["entry_fill"] - exit_fill) * shares
+                exit_comm = max(min_commission, shares * commission_per_share)
+                net_pnl = gross_pnl - exit_comm
+                cash += (shares * exit_fill) - exit_comm if pos["side"] == "LONG" else (pos["entry_fill"] * shares + net_pnl)
+                ret_pct = (net_pnl / (pos["entry_fill"] * shares)) * 100.0
+                closed_trades.append({
+                    "ticker": sym,
+                    "side": pos["side"],
+                    "entry_date": pos["entry_date"].strftime("%Y-%m-%d"),
+                    "exit_date": last_date.strftime("%Y-%m-%d"),
+                    "bars_held": pos["bars_held"],
+                    "entry_fill": round(pos["entry_fill"], 2),
+                    "exit_fill": round(exit_fill, 2),
+                    "shares": shares,
+                    "exit_reason": "END_OF_BACKTEST",
+                    "net_pnl": round(net_pnl, 2),
+                    "return_pct": round(ret_pct, 2),
+                    "was_profitable": net_pnl > 0,
+                })
+        open_positions.clear()
+
+    # Calculate Portfolio Performance Statistics
+    df_equity = pd.DataFrame(daily_equity_curve).set_index("date")
+    df_trades = pd.DataFrame(closed_trades)
+
+    if df_equity.empty or len(df_equity) < 5:
+        logger.error("Insufficient equity history generated.")
         return None
 
-    active_trades = df_trades[df_trades["signal"].isin(["BUY", "SELL"])].copy()
-    num_active = len(active_trades)
-    num_vetoed = len(df_trades[df_trades["signal"] == "VETOED"])
-    total_signals = len(df_trades)
+    df_equity["daily_return"] = df_equity["total_equity"].pct_change().fillna(0.0)
+    final_equity = float(df_equity["total_equity"].iloc[-1])
+    total_return_pct = ((final_equity / initial_capital) - 1.0) * 100.0
 
-    if num_active > 0:
-        win_rate = (active_trades["was_correct"].sum() / num_active) * 100.0
-        returns = active_trades["net_5d_return_pct"] / 100.0
+    # Drawdown series
+    peak = df_equity["total_equity"].cummax()
+    drawdown = (df_equity["total_equity"] - peak) / peak
+    max_drawdown_pct = float(drawdown.min()) * 100.0
 
-        gains = returns[returns > 0]
-        losses = returns[returns < 0]
-        profit_factor = float(gains.sum() / abs(losses.sum())) if len(losses) > 0 and losses.sum() != 0 else 2.5
+    # Annualized calculations (252 sessions/year)
+    n_days = len(df_equity)
+    years = max(0.1, n_days / 252.0)
+    cagr_pct = (((final_equity / initial_capital) ** (1.0 / years)) - 1.0) * 100.0 if final_equity > 0 else -100.0
+    daily_vol = float(df_equity["daily_return"].std())
+    ann_vol_pct = daily_vol * np.sqrt(252.0) * 100.0
+    sharpe = float((df_equity["daily_return"].mean() * 252.0) / (daily_vol * np.sqrt(252.0) + 1e-9))
 
-        # Compound equity
-        portfolio_val = 100000.0
-        equity_curve = [portfolio_val]
-        for r in returns:
-            # 10% risk-managed position size
-            trade_pnl = portfolio_val * 0.10 * r
-            portfolio_val += trade_pnl
-            equity_curve.append(portfolio_val)
+    # Correct Calmar Ratio: CAGR / |Max Drawdown|
+    calmar = float(cagr_pct / abs(max_drawdown_pct)) if max_drawdown_pct < 0 else 0.0
 
-        eq_series = pd.Series(equity_curve)
-        peak = eq_series.cummax()
-        dd = (eq_series - peak) / peak
-        max_drawdown = float(dd.min()) * 100.0
-
-        total_return = float((portfolio_val / 100000.0 - 1.0) * 100.0)
-        sharpe = calculate_sharpe_ratio(returns.values) if len(returns) > 5 else 1.2
+    # Trade level statistics
+    num_closed = len(df_trades)
+    if num_closed > 0:
+        win_rate = float((df_trades["was_profitable"].sum() / num_closed) * 100.0)
+        pnl_gains = df_trades.loc[df_trades["net_pnl"] > 0, "net_pnl"].sum()
+        pnl_losses = abs(df_trades.loc[df_trades["net_pnl"] < 0, "net_pnl"].sum())
+        profit_factor = float(pnl_gains / pnl_losses) if pnl_losses > 0 else 5.0
+        avg_ret_pct = float(df_trades["return_pct"].mean())
     else:
-        win_rate = profit_factor = total_return = max_drawdown = sharpe = 0.0
+        win_rate = profit_factor = avg_ret_pct = 0.0
 
     report = f"""
     ===============================================================
-               HYDRA V2.3 UNIFIED PRODUCTION BACKTEST
+       HYDRA CHRONOLOGICAL MULTI-ASSET PORTFOLIO BACKTEST
     ===============================================================
-    Evaluation Window:      Trailing {period}
-    Assets Evaluated:       {', '.join(tickers)}
-    Total Observations:     {total_signals}
-    Active Executed Trades: {num_active}
-    Vetoed by Risk Engine:  {num_vetoed} ({num_vetoed / max(1, total_signals) * 100:.1f}%)
+    Evaluation Window:      Trailing {period} ({all_dates[0].strftime('%Y-%m-%d')} to {all_dates[-1].strftime('%Y-%m-%d')})
+    Universe Assets:        {', '.join(tickers)}
+    Calendar Sessions:      {n_days}
+    Initial Capital:        ${initial_capital:,.2f}
+    Final Portfolio Equity: ${final_equity:,.2f}
     ---------------------------------------------------------------
-    Win Rate (5-day):       {win_rate:.1f}%
-    Profit Factor:          {profit_factor:.2f}
+    Total Net Return:       {total_return_pct:+.2f}%
+    Annualized Return (CAGR): {cagr_pct:+.2f}%
+    Annualized Volatility:  {ann_vol_pct:.2f}%
     Sharpe Ratio:           {sharpe:.2f}
-    Total Portfolio Return: {total_return:+.2f}%
-    Max Portfolio Drawdown: {max_drawdown:.2f}%
-    Execution Assumptions:  T+1 Open Fill, 5 bps Slippage + Fee
+    Maximum Drawdown:       {max_drawdown_pct:.2f}%
+    Calmar Ratio (CAGR/DD): {calmar:.2f}
+    ---------------------------------------------------------------
+    Closed Trades Count:    {num_closed}
+    Trade Win Rate:         {win_rate:.1f}%
+    Profit Factor:          {profit_factor:.2f}
+    Average Trade Return:   {avg_ret_pct:+.2f}%
+    ---------------------------------------------------------------
+    Execution Assumptions:  T+1 Open Fill, 5 bps Adverse Slippage,
+                            5 bps Exit Slippage, $0.005/share fee
+    Exit Mechanics:         Dynamic Triple Barrier (1.5x ATR TP,
+                            2.0x ATR SL, 15-day Max Horizon)
     ===============================================================
     """
     print(report)
 
-    # Export results
     out_path = Path(output_dir)
     out_path.mkdir(parents=True, exist_ok=True)
 
     summary = {
         "period": period,
         "tickers": tickers,
-        "total_signals": total_signals,
-        "active_trades": num_active,
-        "vetoed_signals": num_vetoed,
-        "win_rate": round(win_rate, 2),
-        "profit_factor": round(profit_factor, 2),
+        "calendar_sessions": n_days,
+        "initial_capital": initial_capital,
+        "final_equity": round(final_equity, 2),
+        "total_net_return_pct": round(total_return_pct, 2),
+        "cagr_pct": round(cagr_pct, 2),
+        "annualized_vol_pct": round(ann_vol_pct, 2),
         "sharpe_ratio": round(sharpe, 2),
-        "total_return_pct": round(total_return, 2),
-        "max_drawdown_pct": round(max_drawdown, 2),
+        "max_drawdown_pct": round(max_drawdown_pct, 2),
+        "calmar_ratio": round(calmar, 2),
+        "closed_trades": num_closed,
+        "win_rate_pct": round(win_rate, 2),
+        "profit_factor": round(profit_factor, 2),
+        "avg_trade_return_pct": round(avg_ret_pct, 2),
         "timestamp_utc": datetime.utcnow().isoformat() + "Z",
     }
 
@@ -315,19 +534,20 @@ def run_backtest(
         json.dump(summary, f, indent=4)
 
     df_trades.to_csv(out_path / "backtest_trades.csv", index=False)
+    df_equity.to_csv(out_path / "daily_equity_curve.csv")
     with open(out_path / "backtest_report.txt", "w", encoding="utf-8") as f:
         f.write(report)
 
-    logger.info("Backtest artifacts saved to %s", str(out_path))
+    logger.info("Chronological backtest complete. Artifacts saved to %s", str(out_path))
     return summary
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="HYDRA Unified Backtest Engine")
+    parser = argparse.ArgumentParser(description="HYDRA Chronological Multi-Asset Backtest")
     parser.add_argument("--ticker", type=str, help="Specific ticker to backtest")
     parser.add_argument("--period", type=str, default="2y", help="Historical period (e.g. 1y, 2y, 5y)")
     parser.add_argument("--output", type=str, default="backtest_results", help="Output directory")
     args = parser.parse_args()
 
     target_tickers = [args.ticker.upper()] if args.ticker else ["AAPL", "MSFT", "NVDA", "AMZN"]
-    run_backtest(tickers=target_tickers, period=args.period, output_dir=args.output)
+    run_chronological_backtest(tickers=target_tickers, period=args.period, output_dir=args.output)

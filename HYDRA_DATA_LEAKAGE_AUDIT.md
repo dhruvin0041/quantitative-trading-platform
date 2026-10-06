@@ -1,7 +1,7 @@
 # HYDRA QUANTITATIVE DATA LEAKAGE AUDIT
-**Document Version:** 1.0.0  
-**Classification:** Temporal Boundary Verification & Information Leakage Audit  
-**Repository Branch:** `hydra-v2.3`  
+**Document Version:** 1.1.0  
+**Classification:** Temporal Boundary Verification & Information Leakage Audit (Reconciled Research Baseline)  
+**Repository Branch:** `main`  
 **Date:** October 2026
 
 ---
@@ -12,11 +12,14 @@ In quantitative finance and machine learning, predictive accuracy achieved throu
 
 This audit systematically examined every data transformation, feature window, scaling operation, label definition, cross-validation split, and execution assumption in HYDRA.
 
+> [!WARNING]
+> **RECONCILIATION NOTICE:** In accordance with the Reconciliation Verdict, all previous backtest metrics and performance claims are formally withdrawn. HYDRA V2.3 is reclassified as **Unvalidated Research-Only**.
+
 ### Overall Leakage Status
-- **Production Inference Pipeline (`src/api/live_inference.py`):** **CLEAN.** Causal ordering enforced; no future bars accessed.
-- **Execution Engine (`src/execution/paper_trading.py`):** **CLEAN.** Enforces strict T+1 execution at market Open. Signals generated at close $T$ never execute at close $T$.
+- **Production Inference Pipeline (`src/api/live_inference.py` & `src/execution/inference_service.py`):** **CLEAN.** Causal ordering enforced; pending execution states recorded without synthesizing execution prices from current bar Close.
+- **Execution Engine (`src/execution/paper_trading.py` & `scripts/evaluation/backtest.py`):** **CLEAN.** Enforces strict T+1 execution at market Open. Signals generated at close $T$ execute only at Open $T+1$ with two-sided slippage and commission friction.
 - **Temporal Firewall (`src/data/data_firewall.py`):** **CLEAN.** Rigidly segregates 2016–2024 (Dev), 2025 (Validation/Calibration), and 2026+ (Prospective OOS).
-- **Optimization Pipeline (`scripts/training/optimize.py`):** **LEAKAGE DETECTED.** Global `StandardScaler` fitting prior to train/test split.
+- **Optimization Pipeline (`scripts/training/optimize.py` & `optimize_models.py`):** **REMEDIATED.** Scalers fit strictly inside training folds; 15-bar post-training embargo enforced.
 - **Label Boundary Purging:** 15-bar purge requirement is enforced across historical validation to prevent triple-barrier horizon overlap.
 
 ---
@@ -88,10 +91,12 @@ HYDRA enforces an institutional chronological split to prevent temporal snooping
 
 ---
 
-## 4. Summary of Required Remediations in V2.3
+## 4. Summary of Remediations Implemented in V2.3
 
-| Subsystem | File | Finding | Severity | V2.3 Action |
+| Subsystem | File | Finding | Severity | V2.3 Remediated Action |
 |---|---|---|---|---|
-| Optimization | `backend/scripts/training/optimize.py` | Global scaler fitting before train/test split | HIGH | Refactor scaler fit to training split only |
-| Cross-Validation | `backend/scripts/training/optimize_models.py` | Potential out-of-fold target contamination | MEDIUM | Introduce PurgedGroupTimeSeriesSplit with 15-bar embargo |
-| Backtesting | `backend/scripts/evaluation/backtest.py` | Calibrator mismatch | HIGH | Align with authoritative `model_calibrator.joblib` |
+| Optimization | `backend/scripts/training/optimize.py` | Global scaler fitting before train/test split | HIGH | **FIXED:** Scaler fitted strictly on pre-split training partition; macro-F1 scoring |
+| Cross-Validation | `backend/scripts/training/optimize_models.py` | Potential out-of-fold target contamination & binary AUC | HIGH | **FIXED:** Replaced with `purged_walk_forward_cv`, 15-bar embargo, fold-level scaling, and multiclass macro-F1 |
+| Backtesting | `backend/scripts/evaluation/backtest.py` | Calibrator mismatch, non-chronological accumulation, single-side slippage | HIGH | **FIXED:** Complete rewrite to event-driven chronological portfolio simulation with dynamic ATR barriers and two-sided friction |
+| Production Inference | `backend/src/execution/inference_service.py` | Fill price synthesized from current Close | MEDIUM | **FIXED:** Causal pending order states; fill price recorded on next-session bar arrival |
+| Signal Ledger | `backend/scripts/ops/run_prospective_validation.py` | Cross-logging to mutable legacy table | MEDIUM | **FIXED:** Hard-disabled mutable cross-logging; `prospective_observations` established as sole authority |

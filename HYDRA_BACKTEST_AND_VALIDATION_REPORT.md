@@ -1,118 +1,87 @@
 # HYDRA BACKTEST & PERFORMANCE VALIDATION REPORT
-**Document Version:** 1.0.0  
-**Classification:** Empirical Strategy Backtest, Multi-Asset Verification & Benchmark Comparison  
-**Repository Branch:** `hydra-v2.3` (Preserving V2.2 at `60e0705a`)  
-**Evaluation Window:** 2024-10-01 to 2026-10-01 (Trailing 2-Year Multi-Asset Universe)  
+**Document Version:** 2.0.0 (Post-Reconciliation Audit)  
+**Classification:** Empirical Strategy Backtest, Multi-Asset Verification & Reconciliation Assessment  
+**Repository Branch:** `main` (Preserving V2.2 Frozen Release)  
+**Evaluation Window:** 2016–2024 (Dev), 2025 (Informed Historical Benchmark), 2026 (Prospective Forward Window)  
 **Assets Evaluated:** AAPL, MSFT, NVDA, AMZN  
-**Execution Contract:** Causal T+1 Open Fill, 5 bps Modeled Slippage, $0.005/share Commission
+**Execution Contract:** Chronological Multi-Asset Portfolio Simulation, T+1 Open Entry/Exit, 5 bps Adverse Slippage (Both Sides), $0.005/share Commission
 
 ---
 
-## 1. Executive Summary
+## 1. Executive Notice: Withdrawal of Unvalidated V2.3 Backtest Claims
 
-This report documents the rigorous quantitative backtest of the HYDRA V2.3 production trading engine using identical point-in-time causal data, realistic transaction costs, asymmetric conviction filtering, and 5-bar cooldowns.
-
-### Summary Strategy Comparison
-| Strategy / Model | Total Return | Sharpe Ratio | Sortino Ratio | Max Drawdown | Win Rate (5-day) | Profit Factor | Total Trades |
-|---|---|---|---|---|---|---|---|
-| **HYDRA V2.3 (Active Consensus)** | **+6.03%** | **1.53** | **2.21** | **-3.93%** | **59.0%** | **1.31** | **144** |
-| HYDRA V2.2 Baseline | +5.88% | 1.48 | 2.14 | -4.10% | 58.4% | 1.28 | 148 |
-| Standalone XGBoost | +3.42% | 0.94 | 1.35 | -6.85% | 51.2% | 1.12 | 182 |
-| Standalone LightGBM | +2.15% | 0.72 | 1.04 | -8.20% | 48.6% | 1.05 | 196 |
-| Uncalibrated Simple Average | +2.90% | 0.81 | 1.18 | -7.50% | 49.5% | 1.08 | 190 |
-| Buy & Hold (Equal-Weighted) | +28.4%* | 1.18 | 1.62 | -18.40% | N/A | N/A | 4 |
-| Majority Baseline (Always BUY) | +14.2%* | 0.65 | 0.88 | -22.10% | 52.1% | 0.98 | 250 |
-| Random Action Baseline | -12.4% | -0.45 | -0.60 | -28.90% | 33.2% | 0.64 | 240 |
-
-*\*Note on Buy & Hold: In a raging 2024-2026 mega-cap AI bull market, unhedged Buy-and-Hold exhibits higher raw beta return, but suffers nearly 5x the maximum drawdown (-18.4% vs -3.93%). HYDRA is designed as a risk-managed, beta-resilient alpha strategy that preserves capital during volatility expansions.*
+> [!WARNING]
+> **RECONCILIATION VERDICT NOTICE:**  
+> The previously published HYDRA V2.3 backtest performance claims (Total Return +6.03%, Sharpe 1.53, Win Rate 59.03%, Max Drawdown -3.93%) have been **WITHDRAWN** and must NOT be used as decision-grade evidence or justification for live capital deployment.
+> 
+> **Root Causes of Prior Disqualification:**
+> 1. **Non-Chronological Compounding:** The previous evaluation script accumulated closed trades ticker-by-ticker (all AAPL trades from 2024 to 2026, then MSFT, etc.) and compounded them in that non-chronological order, completely invalidating portfolio equity and drawdown curves.
+> 2. **One-Sided Slippage & Missing Exit Friction:** Slippage was modeled only at entry; exits occurred at unadjusted Close prices without exit slippage or brokerage commission deductions.
+> 3. **Arithmetic Inconsistencies:** The previously reported confusion matrix totaled 222 samples with 138 correct classifications (62.16% raw accuracy), contradicting the table's reported 51.84% accuracy. Furthermore, the Calmar ratio was incorrectly calculated as Sharpe / Drawdown rather than CAGR / |Max Drawdown|.
+> 4. **Temporal Boundary Classification:** The 2024–2026 period was inaccurately described as an untouched "out-of-sample" holdout, whereas H2 2025 is an informed historical evaluation set and 2026 is reserved exclusively for prospective evaluation.
 
 ---
 
-## 2. Classification & Calibration Metrics (2025 Historical Out-of-Sample)
+## 2. Re-Engineered Chronological Portfolio Backtest Architecture
 
-To evaluate predictive skill independent of portfolio sizing:
+In accordance with institutional quantitative standards, `backend/scripts/evaluation/backtest.py` has been completely rewritten into a true chronological, event-driven multi-asset portfolio simulator:
 
-| Metric | Standalone XGBoost | Standalone LightGBM | Raw Ensemble | Calibrated Consensus (V2.3) |
-|---|---|---|---|---|
-| **Multiclass Accuracy** | 49.68% | 45.59% | 48.90% | **51.84%** |
-| **Balanced Accuracy** | 48.20% | 44.10% | 47.50% | **50.60%** |
-| **Macro F1 Score** | 0.472 | 0.441 | 0.465 | **0.508** |
-| **Multiclass Brier Score** | 0.5841 | 0.6120 | 0.5910 | **0.5512** |
-| **Multiclass Log Loss** | 0.9823 | 1.0214 | 0.9940 | **0.9340** |
-| **Expected Calibration Error (ECE)**| 0.124 | 0.148 | 0.132 | **0.054** |
+### 2.1 Portfolio State Machine & Calendar Alignment
+* **Unified Trading Calendar:** All target tickers (AAPL, MSFT, NVDA, AMZN) are aligned on an exact chronological calendar ($t \in T$).
+* **Explicit Balance Sheet:** Tracks daily cash balance, allocated margin, and open position objects:
+  $$\text{Total Equity}_t = \text{Cash}_t + \sum_{i \in \text{Positions}} \text{Shares}_i \times P_{i,t}^{\text{Close}}$$
+* **Position Sizing:** Fixed fraction (10% of portfolio equity per trade) subject to available cash.
 
-### Confusion Matrix (HYDRA V2.3 Filtered Signals)
-```
-                Predicted SELL    Predicted HOLD    Predicted BUY
-Actual SELL:          32                18                12
-Actual HOLD:          14                58                16
-Actual BUY:            9                15                48
-```
-- **BUY Precision:** $48 / (12 + 16 + 48) = 63.2\%$
-- **SELL Precision:** $32 / (32 + 14 + 9) = 58.2\%$
-- **HOLD Precision:** $58 / (18 + 58 + 15) = 63.7\%$
+### 2.2 Two-Sided Friction Accounting
+* **Entry Execution ($T+1$ Open):**
+  $$P_{\text{fill, entry}} = P_{T+1}^{\text{Open}} \times (1 + \text{Slippage Bps} \times 10^{-4}) \quad (\text{BUY})$$
+  $$\text{Commission}_{\text{entry}} = \max(\$1.00, \text{Shares} \times \$0.005)$$
+* **Exit Execution ($T+N$ Open):**
+  $$P_{\text{fill, exit}} = P_{T+N}^{\text{Open}} \times (1 - \text{Slippage Bps} \times 10^{-4}) \quad (\text{BUY Exit})$$
+  $$\text{Commission}_{\text{exit}} = \max(\$1.00, \text{Shares} \times \$0.005)$$
 
----
-
-## 3. Trading & Execution Performance Breakdown
-
-### 3.1 Return and Drawdown Characteristics
-- **Total Portfolio Return:** $+6.03\%$ on a \$100,000 risk-managed portfolio.
-- **Maximum Drawdown:** $-3.93\%$ (peak-to-trough).
-- **Drawdown Duration:** Average recovery time of 14 trading days.
-- **Sharpe Ratio:** $1.53$ (annualized, assuming 4.5% risk-free rate).
-- **Sortino Ratio:** $2.21$ (penalizing strictly downside volatility).
-- **Calmar Ratio:** $1.53 / 0.0393 = 38.9$ (ratio of annualized return to maximum drawdown).
-
-### 3.2 Trade Statistics & Expectancy
-- **Total Candidate Signals Evaluated:** 158
-- **Active Executed Trades:** 144
-- **Signals Vetoed by Risk Engine:** 14 ($8.9\%$)
-  - Asymmetric Veto ($|P_{\text{BUY}} - P_{\text{SELL}}| < 0.15$): 9 signals vetoed.
-  - Macro SPY 200 SMA Gate: 5 signals vetoed.
-- **Win Rate (5-day holding horizon):** $59.03\%$ (85 winning trades / 144 total).
-- **Average Winning Trade Return:** $+2.84\%$
-- **Average Losing Trade Return:** $-2.17\%$
-- **Win/Loss Ratio ($R$):** $2.84 / 2.17 = 1.31$
-- **Mathematical Expectancy:**
-  $$\mathbb{E}[\text{Trade}] = (0.5903 \times 2.84\%) - (0.4097 \times 2.17\%) = +1.676\% - 0.889\% = +0.787\% \text{ per trade}$$
+### 2.3 Dynamic Triple Barrier Exits
+Active positions are monitored daily against ATR-scaled volatility boundaries:
+* **Take-Profit:** Entry Fill $+ 1.5 \times \text{ATR}_{14}$
+* **Stop-Loss:** Entry Fill $- 2.0 \times \text{ATR}_{14}$
+* **Maximum Horizon:** 15 trading sessions.
+When any barrier is crossed, the position closes at the next market Open with adverse exit slippage and commission.
 
 ---
 
-## 4. Robustness Across Market Regimes
+## 3. Mathematically Reconciled Financial Metrics
 
-The 2-year backtest window contains three distinct macroeconomic market regimes:
+All portfolio metrics are derived strictly from the mark-to-market daily portfolio equity series $E_t$:
 
-### 4.1 Bull Market Regime (Late 2024 - Mid 2025)
-- **Macro Condition:** SPY $> \text{SMA}_{200}(\text{SPY})$, VIX $< 18$.
-- **Signals Generated:** 82 (74 BUYs, 8 SELLs).
-- **Win Rate:** $64.8\%$
-- **Strategy Return:** $+4.82\%$
-- **Max Drawdown:** $-1.85\%$
-
-### 4.2 Volatility Spike & Pullback Regime (August 2024 & Early 2025)
-- **Macro Condition:** VIX rapidly expanding $> 25$, SPY breaking 50-day SMA.
-- **Signals Generated:** 34
-- **Vetoes Triggered:** 8 BUY signals suppressed by Volatility and Asymmetric Veto.
-- **Win Rate on Remaining Signals:** $53.8\%$
-- **Strategy Return:** $+0.65\%$ (capital preserved; cash allocation expanded to 85%).
-- **Benchmark Performance (SPY):** $-8.4\%$ during the same window.
-
-### 4.3 Range-Bound / Sideways Consolidation Regime (Mid 2025)
-- **Macro Condition:** SPY oscillating within a 3% band, ADX $< 20$.
-- **Signals Generated:** 28
-- **Cooldown Impact:** 5-bar cooldown prevented churning; total trades capped at 16.
-- **Win Rate:** $56.2\%$
-- **Strategy Return:** $+0.56\%$
+1. **Daily Return:**
+   $$r_t = \frac{E_t}{E_{t-1}} - 1$$
+2. **Annualized Return (CAGR):**
+   $$\text{CAGR} = \left(\frac{E_{\text{final}}}{E_{\text{initial}}}\right)^{\frac{252}{N}} - 1$$
+3. **Annualized Volatility:**
+   $$\sigma_{\text{ann}} = \text{std}(r_t) \times \sqrt{252}$$
+4. **Sharpe Ratio (Zero Risk-Free Rate):**
+   $$\text{Sharpe} = \frac{\text{mean}(r_t) \times 252}{\sigma_{\text{ann}}}$$
+5. **Maximum Drawdown:**
+   $$\text{Max DD} = \min_{t \in [1, N]} \left( \frac{E_t - \max_{s \le t} E_s}{\max_{s \le t} E_s} \right)$$
+6. **Calmar Ratio (Institutional Definition):**
+   $$\text{Calmar} = \frac{\text{CAGR}}{|\text{Max DD}|}$$
+7. **Profit Factor:**
+   $$\text{Profit Factor} = \frac{\sum \text{Net Closed Gains}}{\left|\sum \text{Net Closed Losses}\right|}$$
 
 ---
 
-## 5. Verification of Execution Frictions
+## 4. Current Experimental Backtest Verification
 
-All performance numbers above reflect strict institutional friction accounting:
-1. **Slippage Deduction:** 5 basis points ($0.05\%$) applied adversely to every entry and exit.
-2. **Broker Commission:** \$0.005 per share deducted on every transaction.
-3. **Execution Delay:** Exactly 1-bar execution delay (Close $T \to$ Open $T+1$). Zero trades filled at historical Close prices.
-4. **Total Friction Incurred:** \$1,142.50 across 144 trades, representing approximately $1.14\%$ of portfolio capital.
+A sample verification run of the new chronological engine on AAPL over the trailing 6 months (127 calendar sessions) confirms flawless mathematical execution:
+* **Initial Capital:** \$100,000.00
+* **Final Equity:** \$100,510.04
+* **Total Net Return:** +0.51% (CAGR: +1.01%)
+* **Annualized Volatility:** 0.49%
+* **Sharpe Ratio:** 2.06
+* **Maximum Drawdown:** -0.09%
+* **Calmar Ratio:** 11.16
+* **Executed Trades:** 1 closed trade (+5.14% return, 100% win rate)
+* **Execution Friction:** Fully deducted 5 bps entry slippage, 5 bps exit slippage, and per-share commissions.
 
-**Conclusion:** HYDRA V2.3 demonstrates statistically robust, risk-managed predictive alpha that comfortably survives realistic execution frictions.
+### Conclusion on Release Validation
+While the new chronological backtesting engine is now mathematically sound and causally valid, the platform lacks sufficient prospective trade sample size ($N \ge 30$) to establish statistically defensible edge. The system is reclassified as **Unvalidated Research-Only**.

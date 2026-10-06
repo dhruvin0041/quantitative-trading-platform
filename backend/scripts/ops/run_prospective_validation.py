@@ -1442,24 +1442,10 @@ class ProspectiveValidationManager:
                     trade_completion_status="NOT_APPLICABLE",
                 )
 
-        # Cross-log to legacy SignalLedger prospective_signals table for backwards compatibility
-        self.ledger.record_prospective_signal(
-            symbol=ticker,
-            source_candle_timestamp=f"{target_date_str} 16:00:00 EDT",
-            signal_generation_timestamp=t_sig_final,
-            signal=final_decision,
-            probability=primary_conf,
-            confidence=primary_conf,
-            feature_hash=hashlib.sha256(tabular_row.tobytes()).hexdigest(),
-            model_hash=config_summary["model_hashes"]["xgb_ensemble.json"]["actual"],
-            execution_target_timestamp=f"{target_date_str} 09:30:00 EDT",
-            signal_reference_price=round(aapl_close, 2),
-            candle_finalization_timestamp=candle_finalization_utc,
-            data_ingestion_timestamp=t_ingest_start,
-            feature_computation_timestamp=t_feat_end,
-            order_submission_timestamp=t_order_sub,
-            vix_reference_date=str(vix_df.index[-1])[:10],
-            manifest_hash=config_summary["manifest_sha256"],
+        # Prospective Authority Mandate: prospective_observations is the sole prospective authority.
+        # Legacy prospective_signals cross-logging is disabled to eliminate mutable dual-state.
+        logger.debug(
+            "[LEGACY LEDGER BYPASSED] Prospective signal recorded strictly to immutable prospective_observations table."
         )
 
         logger.info(

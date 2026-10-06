@@ -1,92 +1,74 @@
 # HYDRA MODEL CALIBRATION & ENSEMBLE OPTIMIZATION AUDIT
-**Document Version:** 1.0.0  
-**Classification:** Multiclass Probability Calibration & Stacking Ensemble Audit  
-**Repository Branch:** `hydra-v2.3`  
+**Document Version:** 2.0.0 (Post-Reconciliation Audit)  
+**Classification:** Multiclass Probability Calibration & Stacking Ensemble Forensic Audit  
+**Repository Branch:** `main` (Preserving V2.2 Frozen Release)  
 **Date:** October 2026
 
 ---
 
-## 1. Executive Summary
+## 1. Executive Summary & Reconciliation Notice
 
-Raw outputs from decision tree ensembles (e.g. XGBoost softprob, LightGBM predict_proba) and neural network logits are notoriously uncalibrated. Tree models tend to produce scores that cluster away from 0 and 1 or exhibit step-function overconfidence. In systematic trading, raw confidence scores cannot be directly interpreted as true probabilities of event occurrence. If a model predicts $P(\text{BUY}) = 0.70$, the market must actually trigger the upper barrier approximately 70% of the time.
-
-This audit evaluates the calibration framework in [backend/src/models/regime/calibration.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/src/models/regime/calibration.py) and the ensemble stacking architecture in [backend/src/models/ensemble/meta_ensemble.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/src/models/ensemble/meta_ensemble.py).
-
-### Key Audit Findings
-1. **Calibrator Integrity:** The production artifact [model_calibrator.joblib](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/artifacts/model_calibrator.joblib) utilizes a multinomial logistic calibration matrix fitted on out-of-fold predictions.
-2. **Mathematical Properties:** All calibrated outputs strictly satisfy:
-   $$P_c \ge 0, \quad \sum_{c=0}^2 P_c = 1.0 \pm 10^{-7}$$
-3. **Calibration Quality:** Calibration reduces multiclass Brier score from $0.6480$ (raw uncalibrated) down to $0.5512$ (calibrated), reducing Expected Calibration Error (ECE) across all 3 classes.
-4. **Ensemble Composition:** Active consensus between calibrated XGBoost and LightGBM models with asymmetric risk veto outperforms individual models and prevents the collapse induced by over-complex neural networks.
+> [!IMPORTANT]
+> **RECONCILIATION CORRECTION:**  
+> Previous versions of this document incorrectly claimed that production models used a "multinomial logistic calibration matrix." Independent forensic inspection of the frozen artifact [backend/artifacts/model_calibrator.joblib](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/artifacts/model_calibrator.joblib) and source code in [backend/src/models/regime/calibration.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/src/models/regime/calibration.py) demonstrates the actual architecture:
+> 1. **Tree Models (XGBoost & LightGBM):** Configured as **raw pass-through** (`method: "raw"`, empty models dictionary). Softmax probabilities from boosting trees are uncalibrated in the baseline release.
+> 2. **Deep Learning Fusion Network:** Utilizes **per-class sigmoid (Platt) scaling** (`method: "sigmoid"`), using three independent binary `LogisticRegression` models, followed by row re-normalization.
+> 3. **ModelCalibrator Implementation:** Implements per-class Isotonic Regression and per-class Sigmoid Platt scaling. It does NOT implement multinomial logistic regression.
 
 ---
 
-## 2. Mathematical Formulations of Calibration Methods
+## 2. Actual Calibration Architecture & Artifact Contents
 
-### 2.1 Evaluated Multiclass Calibration Approaches
+Programmatic inspection of the frozen production artifact `model_calibrator.joblib` reveals:
 
-#### Approach A: Multinomial Logistic Calibration (Authoritative Production Method)
-Given raw probability or logit vector $z = [z_0, z_1, z_2]^T$ from the base boosting models:
-$$P(y = c \mid z) = \frac{\exp(W_c^T z + b_c)}{\sum_{j=0}^2 \exp(W_j^T z + b_j)}$$
-- Fitted on out-of-fold validation predictions using L2-regularized multinomial logistic regression.
-- Captures cross-class calibration interactions without imposing diagonal independence.
+```python
+{
+    "DL_FUSION": {
+        "method": "sigmoid",
+        "models": {
+            0: LogisticRegression(C=1.0),  # Binary P(SELL) calibrator
+            1: LogisticRegression(C=1.0),  # Binary P(HOLD) calibrator
+            2: LogisticRegression(C=1.0)   # Binary P(BUY) calibrator
+        }
+    },
+    "XGB": {
+        "method": "raw",
+        "models": {}  # Pass-through uncalibrated
+    },
+    "LGBM": {
+        "method": "raw",
+        "models": {}  # Pass-through uncalibrated
+    }
+}
+```
 
-#### Approach B: Temperature Scaling
-Applies a single scalar parameter $T > 0$ to scale logits prior to softmax:
-$$P(y = c \mid z) = \frac{\exp(z_c / T)}{\sum_{j=0}^2 \exp(z_j / T)}$$
-- Preserves top-class ranking exactly ($\arg\max$ remains unchanged).
-- While simple, it cannot rectify asymmetric class overconfidence (e.g. overconfidence in BUY vs underconfidence in HOLD).
+### 2.1 Mathematical Calibration Mechanics in `ModelCalibrator`
 
-#### Approach C: Dirichlet Calibration
-Generalizes Beta calibration to the simplex:
-$$\ln P(y = c \mid p) \propto \sum_{j=0}^2 \alpha_{cj} \ln(p_j) + \beta_c$$
-- High parameter count can lead to overfitting on smaller financial validation sets.
+For a 3-class prediction vector $y_{\text{prob}} = [P_0, P_1, P_2]$:
+1. **Raw Pass-Through (`method: raw`):**
+   $$P_{\text{cal}} = y_{\text{prob}}$$
+2. **Per-Class Sigmoid Platt Scaling (`method: sigmoid`):**
+   $$P_c^* = \sigma(w_c P_c + b_c) = \frac{1}{1 + \exp(-(w_c P_c + b_c))}, \quad c \in \{0, 1, 2\}$$
+   Followed by row normalization to ensure the vector sums to 1:
+   $$P_c^{\text{cal}} = \frac{P_c^*}{\sum_{j=0}^2 P_j^*}$$
+3. **Per-Class Isotonic Regression (`method: isotonic`):**
+   $$P_c^* = f_c^{\text{iso}}(P_c), \quad c \in \{0, 1, 2\}$$
+   where $f_c^{\text{iso}}$ is a piecewise constant non-decreasing step function, followed by row normalization.
 
----
-
-## 3. Quantitative Calibration Benchmarks (2025 Out-of-Sample)
-
-The calibration techniques were evaluated on the 2025 validation set across all three classes (`0: SELL`, `1: HOLD`, `2: BUY`):
-
-| Calibration Method | Multiclass Brier Score | Multiclass Log Loss | Expected Calibration Error (ECE) | Macro F1 |
-|---|---|---|---|---|
-| **Raw Uncalibrated (XGB)** | 0.5841 | 0.9823 | 0.124 | 0.472 |
-| **Raw Uncalibrated (LGBM)**| 0.6120 | 1.0214 | 0.148 | 0.441 |
-| **Temperature Scaling ($T=1.35$)** | 0.5694 | 0.9582 | 0.082 | 0.485 |
-| **Multinomial Logistic (Production)** | **0.5512** | **0.9340** | **0.054** | **0.518** |
-| **Dirichlet Calibration** | 0.5621 | 0.9490 | 0.068 | 0.502 |
-
-### Reliability Diagram Analysis
-- For raw models, when predicted probability was in the $[0.60, 0.70]$ bin, the true empirical frequency of the positive outcome was only $0.48$ (severe overconfidence).
-- Post-multinomial calibration, the $[0.60, 0.70]$ bin aligns with an empirical frequency of $0.62 \pm 0.04$, establishing genuine probabilistic reliability.
-
----
-
-## 4. Ensemble Architecture & Out-of-Fold Stacking
-
-### 4.1 Stacking Architecture
-The ensemble in [backend/src/models/ensemble/meta_ensemble.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/src/models/ensemble/meta_ensemble.py) operates as follows:
-1. Base Level: XGBoost and LightGBM independently generate 3-class probability vectors:
-   $$z_{\text{xgb}} = [p_0, p_1, p_2]_{\text{xgb}}, \quad z_{\text{lgbm}} = [p_0, p_1, p_2]_{\text{lgbm}}$$
-2. Calibration: Vectors are passed through `model_calibrator.joblib` to produce calibrated probabilities.
-3. Consensus Layer: The Multi-Agent Orchestrator computes an accuracy-weighted average conviction:
-   $$\bar{P}_c = w_{\text{xgb}} P_{\text{xgb}}(c) + w_{\text{lgbm}} P_{\text{lgbm}}(c)$$
-   where weights $w_m$ are derived from validation balanced accuracies.
-
-### 4.2 Leakage Audit of Ensemble Training
-- **Audit:** Did the meta-learner or calibrator train on in-sample predictions?
-- **Finding:** In [backend/scripts/training/calibrate_models.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/scripts/training/calibrate_models.py), models were evaluated on the independent 2025 partition (out-of-sample from 2016-2024 training), and K-fold out-of-fold predictions were used to fit the calibrator.
-- **Result:** **CLEAN.** No in-sample base model predictions were fed to the calibrator as out-of-sample observations.
+### 2.2 Engineering Defect Resolved
+Prior to this reconciliation, `backend/src/models/regime/calibration.py` called `LogisticRegression` inside a nested conditional without an explicit module-level import. This has been resolved by importing `LogisticRegression` from `sklearn.linear_model` at the top of the file.
 
 ---
 
-## 5. Incremental Value Assessment
+## 3. Ensemble Architecture & Model Roles
 
-| Pipeline Configuration | 2025 Out-of-Sample Accuracy | Calibrated Brier Score | Max Drawdown | Win Rate |
-|---|---|---|---|---|
-| Single Best Model (XGB alone) | 49.68% | 0.5841 | -16.4% | 48.2% |
-| Single Best Model (LGBM alone) | 45.59% | 0.6120 | -18.9% | 44.5% |
-| Simple Average (Uncalibrated) | 48.90% | 0.5910 | -17.1% | 47.8% |
-| **Calibrated Active Consensus (V2.2/V2.3)** | **51.84%** | **0.5512** | **-11.8%** | **53.4%** |
+The ensemble is structured under the single authoritative production hierarchy:
+* **Primary Alpha Driver:** `XGB_AGENT` (Active, conviction hurdle $\ge 0.60$).
+* **Secondary Asymmetric Veto:** `LGBM_AGENT` (Active, counter-trend veto hurdle $\ge 0.65$).
+* **Quarantined Architectures:**
+  * `DL_FUSION`: Permanently quarantined due to class collapse (>0.99 BUY concentration).
+  * `DQN_AGENT`: Permanently quarantined due to environment disconnect and uncalibrated action-preferences.
+* **Forecast Oracle:** `TFT_AGENT` (Quantile trajectory & volatility oracle).
 
-**Conclusion:** The combination of calibrated tree probabilities, accuracy weighting, and asymmetric risk veto provides quantifiable, statistically defensible incremental value over any individual model or uncalibrated combination.
+### 4. Calibration Status & Conclusion
+Because XGBoost and LightGBM currently operate in raw pass-through mode in the baseline artifact, calibration metrics reported in prior research documents represent experimental evaluations rather than active production calibration. The release is reclassified as **Unvalidated Research-Only**.

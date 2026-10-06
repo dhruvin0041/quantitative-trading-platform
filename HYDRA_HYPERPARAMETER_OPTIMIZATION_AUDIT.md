@@ -1,7 +1,7 @@
 # HYDRA HYPERPARAMETER OPTIMIZATION AUDIT
-**Document Version:** 1.0.0  
-**Classification:** Bayesian Optimization, Search Space & Objective Function Audit  
-**Repository Branch:** `hydra-v2.3`  
+**Document Version:** 1.1.0  
+**Classification:** Bayesian Optimization, Search Space & Objective Function Audit (Reconciled Research Baseline)  
+**Repository Branch:** `main`  
 **Date:** October 2026
 
 ---
@@ -12,11 +12,14 @@ Hyperparameter optimization in quantitative trading is a double-edged sword: pro
 
 This audit evaluates the Bayesian optimization infrastructure implemented in [backend/scripts/training/optimize.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/scripts/training/optimize.py) and [backend/scripts/training/optimize_models.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/scripts/training/optimize_models.py), powered by Optuna.
 
-### Key Audit Findings
-1. **Critical Flaw 1 (Leakage):** `optimize.py` fits a `StandardScaler` globally on the entire dataset prior to splitting into train and test sets, leaking test set distributional moments into Optuna trials.
-2. **Critical Flaw 2 (Flawed Objective):** `optimize_models.py` attempts to optimize 3-class models using binary ROC-AUC computed strictly on Class 2 (BUY), completely ignoring Class 0 (SELL) and Class 1 (HOLD), and passes an invalid `scale_pos_weight` parameter to multiclass XGBoost.
-3. **Search Space Boundaries:** Search spaces in `backend/src/optimization/search_spaces.py` are generally well-regularized (bounded tree depths 3–6, conservative learning rates 0.01–0.1), preventing extreme runaway complexity.
-4. **Reproducibility:** Random seeds are set in Optuna samplers (`TPESampler(seed=42)`), ensuring deterministic study reproduction.
+> [!WARNING]
+> **RECONCILIATION NOTICE:** In accordance with the Reconciliation Verdict, all claims of "certified" optimization performance are withdrawn. Optimization tools are classified as **Research-Only Utilities**.
+
+### Key Audit Findings & Remediations
+1. **Critical Flaw 1 (Leakage):** `optimize.py` previously fit `StandardScaler` globally on the entire dataset prior to splitting into train and test sets. **Remediated:** Scaler fitting moved strictly to the pre-split training slice.
+2. **Critical Flaw 2 (Flawed Objective):** `optimize_models.py` previously used binary ROC-AUC on Class 2 only and passed `scale_pos_weight` to multiclass XGBoost. **Remediated:** Replaced with Multiclass Macro-F1 across all 3 classes, and removed `scale_pos_weight`.
+3. **Critical Flaw 3 (Unpurged CV):** Standard `TimeSeriesSplit` allowed forward label overlap near fold boundaries. **Remediated:** Implemented `purged_walk_forward_cv` with 15-bar post-training embargo and fold-level scaling.
+4. **Study Scoring Metric:** Updated `optimize.py` trial objective from raw accuracy to Multiclass Macro-F1 (`f1_score(average="macro")`).
 
 ---
 
@@ -131,10 +134,14 @@ To prevent overfitting to a single validation period, the optimization engine in
 
 ---
 
-## 5. Summary of Remediations in V2.3
+## 5. Summary of Remediations Implemented in V2.3
 
-1. **`backend/scripts/training/optimize.py`:** Refactor `StandardScaler` to fit strictly on `X_train` within each trial.
+1. **`backend/scripts/training/optimize.py`:**
+   - Refactored `StandardScaler` to fit strictly on `X_train_raw` pre-split.
+   - Replaced raw validation accuracy with Multiclass Macro-F1 (`f1_score(y_test, y_pred, average="macro")`).
+   - Anchored configuration paths with `Path(__file__).resolve()`.
 2. **`backend/scripts/training/optimize_models.py`:**
-   - Replace binary Class 2 AUC with Multiclass Macro-F1 / Multiclass Log Loss.
-   - Remove invalid `scale_pos_weight` parameter for multiclass XGBoost.
-   - Add Purged Walk-Forward CV support.
+   - Replaced binary Class 2 AUC with Multiclass Macro-F1 across all 3 classes (`f1_score(y_val, val_preds, average="macro")`).
+   - Removed invalid `scale_pos_weight` parameter for multiclass XGBoost.
+   - Implemented `purged_walk_forward_cv` enforcing a 15-bar post-training embargo and fold-level `StandardScaler` fitting (zero scaling leakage across folds).
+   - Applied across all tree model objectives: XGBoost, LightGBM, CatBoost, and RandomForest.

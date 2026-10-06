@@ -76,15 +76,10 @@ class ConfidenceCalibrationEngine:
             "is_calibrated": is_calibrated,
             "metrics": {
                 "is_calibrated": is_calibrated,
-                "brier_score": 0.18,
-                "ece": 0.05,
-                "reliability_diagram": [
-                    {"bin": "0-20", "count": 10, "accuracy": 0.15},
-                    {"bin": "20-40", "count": 25, "accuracy": 0.35},
-                    {"bin": "40-60", "count": 40, "accuracy": 0.52},
-                    {"bin": "60-80", "count": 30, "accuracy": 0.72},
-                    {"bin": "80-100", "count": 15, "accuracy": 0.88},
-                ],
+                "brier_score": None,
+                "ece": None,
+                "reliability_diagram": [],
+                "calibration_status": "UNVALIDATED_PROVISIONAL",
             },
         }
 

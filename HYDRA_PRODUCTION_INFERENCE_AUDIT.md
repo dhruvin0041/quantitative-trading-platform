@@ -1,7 +1,7 @@
 # HYDRA PRODUCTION INFERENCE & OPERATIONAL RELIABILITY AUDIT
-**Document Version:** 1.0.0  
-**Classification:** Operational Pipeline, Runtime Provenance & Ledger Protection Audit  
-**Repository Branch:** `hydra-v2.3`  
+**Document Version:** 1.1.0  
+**Classification:** Operational Pipeline, Runtime Provenance & Ledger Protection Audit (Reconciled Research Baseline)  
+**Repository Branch:** `main`  
 **Date:** October 2026
 
 ---
@@ -12,15 +12,20 @@ Production inference is the live execution bridge where research artifacts meet 
 
 This audit evaluates the end-to-end inference and operational execution pipeline implemented in:
 - [backend/src/api/live_inference.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/src/api/live_inference.py)
-- [backend/src/api/asset_intelligence.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/src/api/asset_intelligence.py)
+- [backend/src/execution/inference_service.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/src/execution/inference_service.py)
+- [backend/src/execution/asset_intelligence.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/src/execution/asset_intelligence.py)
 - [backend/src/execution/signal_ledger.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/src/execution/signal_ledger.py)
 - [backend/src/execution/paper_runner.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/src/execution/paper_runner.py)
+
+> [!WARNING]
+> **RECONCILIATION NOTICE:** In accordance with the Reconciliation Verdict, V2.3 is reclassified as **Unvalidated Research-Only**. Live capital deployment must remain disabled until walk-forward out-of-sample validation on versioned historical datasets is achieved.
 
 ### Audit Highlights
 - **Preprocessing Contract:** Strictly verified. The production pipeline loads the canonical 27-feature list from `kept_features.json` and the pre-fitted `latest_scaler.joblib`.
 - **Artifact Provenance & Hash Verification:** Model weights, scalers, and configuration files are pinned by SHA-256 hashes against `frozen_strategy_manifest_v2.2.json`.
-- **Prospective Ledger Protection:** The immutable V2.2 prospective ledger (`prospective_observations` in `signal_ledger.db`) is protected against overwrites, retroactive edits, and out-of-order writes.
-- **Legacy Table Isolation:** The legacy `prospective_signals` table is completely decoupled and marked as non-authoritative.
+- **Unified Consensus Configuration:** Production defaults to Primary `XGB_AGENT` (threshold 0.60) with Secondary `LGBM_AGENT` veto authority (`veto_threshold=0.65`). The contradictory `1.01` veto threshold was eliminated.
+- **Causal Execution Accounting:** Pending orders record `signal_state="PENDING_EXECUTION"` without synthesizing execution prices from current bar Close.
+- **Sole Prospective Authority:** Immutable `prospective_observations` in `signal_ledger.db` is the sole prospective authority; cross-logging to mutable `prospective_signals` is hard-disabled.
 
 ---
 
@@ -46,33 +51,35 @@ This audit evaluates the end-to-end inference and operational execution pipeline
               |
               v
 4. Generate Raw Model Predictions (asset_intelligence.py)
-   - XGBoost: predict_proba() -> [P0, P1, P2]
-   - LightGBM: predict_proba() -> [P0, P1, P2]
-   - DL Fusion & DQN: Quarantined (dummy fallback [0, 1, 0] or excluded)
+   - XGBoost: predict_proba() -> [P0, P1, P2] (Primary Engine)
+   - LightGBM: predict_proba() -> [P0, P1, P2] (Veto Engine)
+   - DL Fusion & DQN: Quarantined (bypassed in loaders, dummy [0, 1, 0])
               |
               v
 5. Calibrate Probabilities (model_calibrator.joblib)
-   - Multinomial Logistic Transform -> Calibrated [P(SELL), P(HOLD), P(BUY)]
+   - ModelCalibrator dict: Raw pass-through for XGB/LGBM; sigmoid for DL
    - Assert sum(P) == 1.0 within 1e-6
               |
               v
-6. Multi-Agent Governance & Risk Consensus (orchestrator.py)
-   - Alpha Agent checks primary conviction (threshold >= 0.45)
-   - Risk Agent checks Asymmetric Veto (|P(BUY) - P(SELL)| >= 0.15)
-   - Risk Agent checks SPY 200-day SMA macro regime
-   - Execution Agent checks 5-bar post-trade cooldown
+6. Multi-Agent Governance & Risk Consensus (inference_service.py)
+   - Primary Engine: XGBoost check (P(BUY) >= 0.60 or P(SELL) >= 0.60)
+   - Risk Veto: LightGBM opposition check (P(OPPOSITE) >= 0.65)
+   - Macro Regime Gate: SPY 200-day SMA trend filter
+   - Execution Cooldown: 5-bar post-trade cooldown
               |
               v
 7. Signal Finalization & Order Generation
-   - Approved Action: BUY / SELL / HOLD
+   - Action: BUY / SELL / HOLD
    - Position Sizing: Half-Kelly Fraction
    - Execution Schedule: Next Trading Day Open (T+1)
+   - Pending state marked: Execution price determined on T+1 Open arrival
               |
               v
 8. Write to Authoritative Cryptographic Ledger (signal_ledger.py)
    - Compute observation SHA-256 fingerprint chained to previous record
-   - Insert into prospective_observations table
+   - Insert exclusively into prospective_observations table
    - Record simulated execution event in execution_events table
+```
 ```
 
 ---

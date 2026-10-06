@@ -9,9 +9,15 @@ Verifies GET /api/v1/portfolio/status and /portfolio/status:
 
 import os
 import sqlite3
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+# Ensure backend directory is in sys.path for root-level test discovery
+backend_dir = Path(__file__).resolve().parent.parent
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
 
 # Ensure API_KEY is set prior to importing api/main
 os.environ["API_KEY"] = "institutional-test-key-2026"
