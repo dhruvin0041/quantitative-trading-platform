@@ -87,7 +87,7 @@ This forensic code review covers 100% of source files in `backend/src/`, `backen
   - Inference state: `[features, [0, 1, 0], xgb_preds, lgbm_preds]`
 - **Root Cause:** Decoupled training scripts where model dependencies were updated during inference quarantine but not reflected in historical DQN training replay buffers.
 - **Impact:** The DQN policy network receives out-of-distribution state inputs in production.
-- **Remediation:** Keep DQN quarantined from active consensus decisions in V2.3, and align state definitions if retrained.
+- **Remediation:** Document DQN's active secondary veto role in mesh consensus and suppression in frozen baseline inference (`veto_threshold=1.01`); recommend gym-based dynamic MDP retraining for future iterations.
 
 ---
 
@@ -161,32 +161,33 @@ This forensic code review covers 100% of source files in `backend/src/`, `backen
 ### UI Consistency & Mock Metrics Remediation
 - **Mock Reliability Metrics Removed:** Audited and resolved hardcoded mock models in `ModelReliabilityDashboard.tsx` (previously displaying fabricated 69.5% win rates and 92 reliability scores). Replaced with an authentic **Model Governance Registry** displaying real active/quarantined statuses, roles, and unvalidated research disclaimers.
 - **Backend Placeholder Metrics Cleaned:** Removed hardcoded Brier (0.18) and ECE (0.05) mock outputs from `ConfidenceCalibrationEngine` in `signal_intelligence.py`; now returns honest `None` values and `UNVALIDATED_PROVISIONAL` status.
-- **Quarantined Status Transparency:** Quarantined models (`DL_FUSION`, `DQN_AGENT`) are explicitly flagged with amber/red quarantine badges across `/agents`, `/`, and governance dashboards.
+- **Model Status Transparency:** `DL_FUSION` is explicitly flagged with quarantine badges; `DQN_AGENT` is explicitly rendered as an active secondary veto candidate matching `/api/governance/models`.
 - **Prospective Ledger Isolation:** Authoritative prospective records read exclusively from `prospective_observations` in `signal_ledger.db`.
 
 ---
 
 ## 5. Automated Testing Audit
 
-The test suite in `backend/tests/` contains 17 test files:
-- **Static Test Inventory:** 131 explicitly declared `def test_*` methods across 17 test modules.
-- **Runtime Test Execution:** 139 individual test cases are discovered and executed by Python's `unittest` runner due to test case inheritance and parameterization across suites:
+The test suite in `backend/tests/` contains 18 test files:
+- **Static Test Inventory:** 141 explicitly declared `def test_*` methods across 18 test modules.
+- **Runtime Test Execution:** 149 individual test cases are discovered and executed by Python's `unittest` runner due to test case inheritance and parameterization across suites:
   1. `test_api_portfolio_status.py`: Portfolio valuation, cash reconciliation, position metrics (8 tests).
   2. `test_asymmetric_veto.py`: Asymmetric conviction filter, veto rules (6 tests).
-  3. `test_broker_interface.py`: Paper broker order simulation, slippage, commission, T+1 execution (9 tests).
-  4. `test_causality_and_execution_timing.py`: Causal feature availability, no same-bar lookahead (7 tests).
-  5. `test_indicators.py`: Mathematical correctness of RSI, MACD, Bollinger Bands, ATR (12 tests).
-  6. `test_inference_pipeline.py`: End-to-end feature extraction, scaling, calibration, consensus (9 tests).
-  7. `test_institutional.py`: Risk management constraints, VaR calculation, stop loss (11 tests).
-  8. `test_ledger_isolation_and_recovery.py`: SQLite transaction isolation, recovery from crash (8 tests).
-  9. `test_paper_runner.py`: Execution loop, state persistence (5 tests).
-  10. `test_prospective_integrity.py`: Hash-chaining and immutability of prospective records (9 tests).
-  11. `test_prospective_operations.py`: Prospective operations lifecycle (8 tests).
-  12. `test_reporting_pipeline.py`: Report generation, metric calculations (6 tests).
-  13. `test_signal_integrity.py`: Signal validation, probability sum to 1.0 (8 tests).
-  14. `test_strategy_freeze_and_prospective.py`: V2.2 freeze compliance, manifest SHA verification (14 tests).
-  15. `test_temporal_split_and_firewall.py`: Temporal separation (2016-2024 train, 2025 val, 2026 OOS) (9 tests).
-  16. `test_v2_1_methodology_and_leakage.py`: Leakage regression tests (10 tests).
-  17. `test_v2_2_methodological_integrity.py`: V2.2 integrity tests (14 tests).
+  3. `test_backtest_accounting.py`: Intraday barriers, SL precedence, cash delta reconciliation, fail-closed snapshots, E2E backtest (10 tests).
+  4. `test_broker_interface.py`: Paper broker order simulation, slippage, commission, T+1 execution (9 tests).
+  5. `test_causality_and_execution_timing.py`: Causal feature availability, no same-bar lookahead (7 tests).
+  6. `test_indicators.py`: Mathematical correctness of RSI, MACD, Bollinger Bands, ATR (12 tests).
+  7. `test_inference_pipeline.py`: End-to-end feature extraction, scaling, calibration, consensus (9 tests).
+  8. `test_institutional.py`: Risk management constraints, VaR calculation, stop loss (11 tests).
+  9. `test_ledger_isolation_and_recovery.py`: SQLite transaction isolation, recovery from crash (8 tests).
+  10. `test_paper_runner.py`: Execution loop, state persistence (5 tests).
+  11. `test_prospective_integrity.py`: Hash-chaining and immutability of prospective records (9 tests).
+  12. `test_prospective_operations.py`: Prospective operations lifecycle (8 tests).
+  13. `test_reporting_pipeline.py`: Report generation, metric calculations (6 tests).
+  14. `test_signal_integrity.py`: Signal validation, probability sum to 1.0 (8 tests).
+  15. `test_strategy_freeze_and_prospective.py`: V2.2 freeze compliance, manifest SHA verification (14 tests).
+  16. `test_temporal_split_and_firewall.py`: Temporal separation (2016-2024 train, 2025 val, 2026 OOS) (9 tests).
+  17. `test_v2_1_methodology_and_leakage.py`: Leakage regression tests (10 tests).
+  18. `test_v2_2_methodological_integrity.py`: V2.2 integrity tests (14 tests).
 
-All 139 runtime test cases pass cleanly in ~19.8s on Python 3.11 with zero failures or errors. Test execution establishes internal unit contracts and V2.2 freeze integrity, but does not constitute empirical validation of live market profitability.
+All 149 runtime test cases pass cleanly in ~28.5s on Python 3.11 with zero failures or errors. Retained execution logs in `backend/logs/test_execution_149.log` and `backend/logs/ruff_check.log`. Test execution establishes internal unit contracts and V2.2 freeze integrity, but does not constitute empirical validation of live market profitability.

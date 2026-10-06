@@ -1,0 +1,54 @@
+{
+  "snapshot_version": "HYDRA_SNAPSHOT_V2.3",
+  "created_at_utc": "2026-10-06T11:00:00Z",
+  "files": {
+    "AAPL_features.parquet": {
+      "sha256": "7ec47b64321de6891689ad48dd2d2b933202e7ab2ae18383f362fa276025c9ea",
+      "rows": 251,
+      "columns": 58,
+      "start_date": "2025-10-06 00:00:00",
+      "end_date": "2026-10-05 00:00:00",
+      "size_bytes": 154695
+    },
+    "AMZN_features.parquet": {
+      "sha256": "d165923d4af89a66a8f8a7b89fcefe94339183a6e3636c05f42587ec8a4f9374",
+      "rows": 500,
+      "columns": 58,
+      "start_date": "2024-10-07 00:00:00",
+      "end_date": "2026-10-05 00:00:00",
+      "size_bytes": 269900
+    },
+    "MSFT_features.parquet": {
+      "sha256": "d6417ea6ff45e55ca15fb3e4d812b52c800d50eedb71cfd6461f27fe7665c245",
+      "rows": 251,
+      "columns": 58,
+      "start_date": "2025-10-06 00:00:00",
+      "end_date": "2026-10-05 00:00:00",
+      "size_bytes": 154769
+    },
+    "NVDA_features.parquet": {
+      "sha256": "b6238e631afed9bae50641d3e9d07fe1c8c4b5a86cd0f1e1457a0875baeb852d",
+      "rows": 251,
+      "columns": 58,
+      "start_date": "2025-10-06 00:00:00",
+      "end_date": "2026-10-05 00:00:00",
+      "size_bytes": 154906
+    },
+    "SPY_benchmark.parquet": {
+      "sha256": "87d711ef6ffe33cc17ea3e040b37fa6d2d40c98793972e92d25fa8e1bdbbef36",
+      "rows": 251,
+      "columns": 5,
+      "start_date": "2025-10-06 00:00:00",
+      "end_date": "2026-10-05 00:00:00",
+      "size_bytes": 16637
+    },
+    "VIX_benchmark.parquet": {
+      "sha256": "a5271eeeec3106e723291f3144a7e4b0e5b9c8291df9907143f5fd574673ffe0",
+      "rows": 254,
+      "columns": 5,
+      "start_date": "2025-10-06 00:00:00",
+      "end_date": "2026-10-06 00:00:00",
+      "size_bytes": 12641
+    }
+  }
+}

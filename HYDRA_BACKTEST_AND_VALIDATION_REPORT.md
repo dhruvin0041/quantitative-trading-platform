@@ -54,8 +54,11 @@ Active positions are monitored daily against ATR-scaled volatility boundaries:
 * **Maximum Horizon:** 15 trading sessions; liquidated at session Close with adverse exit slippage.
 * **Forced Liquidation at End-of-Backtest:** Any remaining positions at the end of the simulation are liquidated at the final bar Close with exit slippage, exit commission, and entry commission deducted.
 
-### 2.4 Immutable Offline Market Data Snapshots
-To guarantee 100% reproducible execution and eliminate reliance on mutable external Yahoo Finance downloads, the engine supports `--use-snapshots` with versioned Parquet datasets in `backend/data/snapshots/` (AAPL, MSFT, NVDA, AMZN, SPY, ^VIX). All inputs and outputs are deterministically reproducible.
+### 2.4 Immutable Offline Market Data Snapshots (Fail-Closed)
+To guarantee 100% reproducible execution and eliminate reliance on mutable external Yahoo Finance downloads, the engine enforces strict fail-closed snapshot verification via `--use-snapshots` against `backend/data/snapshots/snapshot_manifest.json`:
+* **Committed Datasets:** Tracked in Git under `backend/data/snapshots/` (`AAPL_features.parquet`, `MSFT_features.parquet`, `NVDA_features.parquet`, `AMZN_features.parquet`, `SPY_benchmark.parquet`, `VIX_benchmark.parquet`).
+* **Cryptographic Verification:** Validates the SHA-256 integrity and file existence of all required datasets against `snapshot_manifest.json` before simulation starts.
+* **Fail-Closed Contract:** If any snapshot file is missing or any SHA-256 hash mismatches, the engine immediately aborts with `FileNotFoundError` or `ValueError`. Network access and disk caching/writes are strictly prohibited in this mode.
 
 ---
 
@@ -80,18 +83,23 @@ All portfolio metrics are derived strictly from the mark-to-market daily portfol
 
 ---
 
-## 4. Current Experimental Backtest Verification
+## 4. Deterministic Multi-Asset Snapshot Backtest Verification
 
-A sample verification run of the new chronological engine on AAPL over the trailing 6 months (127 calendar sessions) confirms flawless mathematical execution:
+A complete verification run of the chronological engine on the committed immutable snapshot universe (`--use-snapshots`) across 251 calendar sessions (2025-10-06 to 2026-10-05) demonstrates deterministic execution:
+* **Target Universe:** AAPL, MSFT, NVDA, AMZN
 * **Initial Capital:** \$100,000.00
-* **Final Equity:** \$100,510.04
-* **Total Net Return:** +0.51% (CAGR: +1.01%)
-* **Annualized Volatility:** 0.49%
-* **Sharpe Ratio:** 2.06
-* **Maximum Drawdown:** -0.09%
-* **Calmar Ratio:** 11.16
-* **Executed Trades:** 1 closed trade (+5.14% return, 100% win rate)
-* **Execution Friction:** Fully deducted 5 bps entry slippage, 5 bps exit slippage, and per-share commissions.
+* **Final Equity:** \$100,911.68
+* **Total Net Return:** +0.91% (Annualized CAGR: +0.92%)
+* **Annualized Volatility:** 1.25%
+* **Sharpe Ratio:** 0.73
+* **Maximum Drawdown:** -0.90%
+* **Calmar Ratio (CAGR/DD):** 1.02
+* **Closed Trades Count:** 9 closed trades
+* **Trade Win Rate:** 66.7% (6 wins, 3 losses)
+* **Profit Factor:** 1.94
+* **Average Trade Return:** +1.04%
+* **Execution Friction:** T+1 Open entry with 5 bps adverse entry slippage, 5 bps adverse exit slippage, and $0.005/share commissions deducted on both legs.
+* **Exit Mechanics:** Dynamic Triple Barrier (1.5x ATR TP, 2.0x ATR SL with conservative SL precedence, 15-day maximum holding horizon).
 
 ### Conclusion on Release Validation
-While the new chronological backtesting engine is now mathematically sound and causally valid, the platform lacks sufficient prospective trade sample size ($N \ge 30$) to establish statistically defensible edge. The system is reclassified as **Unvalidated Research-Only**.
+While the new chronological backtesting engine is now mathematically sound, causally valid, and deterministically verified against committed offline snapshots, the resulting metrics (+0.91% return, 9 closed trades) remain **unvalidated research observations**. A closed sample of 9 trades is insufficient to establish institutional statistical edge ($N \ge 30, p < 0.05$). The platform remains strictly classified as **Unvalidated Research-Only**, and live capital deployment remains prohibited.

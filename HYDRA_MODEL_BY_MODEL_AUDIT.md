@@ -16,7 +16,7 @@ This audit evaluates every machine learning and quantitative predictive model im
 | **XGBoost** | Gradient Boosted Trees | Multi-softprob 3-class classifier | **ACTIVE** | **ACTIVE (Primary Engine)** |
 | **LightGBM** | Histogram Boosted Trees | Multiclass objective with early stopping | **ACTIVE** | **ACTIVE (Primary Engine)** |
 | **DL Fusion** | Multi-Branch Neural Net | Keras CNN + LSTM + Transformer + Tabular | **QUARANTINED** | **DEPRECATED / RETIRED** |
-| **DQN** | Deep Reinforcement Learning | PyTorch Deep Q-Network with replay buffer | **QUARANTINED** | **DEPRECATED / ISOLATED** |
+| **DQN** | Deep Reinforcement Learning | PyTorch Deep Q-Network with replay buffer | **ACTIVE (Mesh Veto)** | **SUPPRESSED IN FROZEN INFERENCE** |
 | **Meta-Ensemble** | Stacking Classifier | Ridge / Logistic Regression on base models | **OPTIONAL / FALLBACK** | **STREAMLINED / CONSERVATIVE** |
 | **TFT** | Temporal Fusion Transformer | Quantile regression price boundary forecaster | **EXPERIMENTAL** | **EXPERIMENTAL (Research Only)** |
 
@@ -98,12 +98,8 @@ This audit evaluates every machine learning and quantitative predictive model im
      `reward = 1.0 if action == target_sig else (-1.0 if action != 1 else 0.0)`.
      This is not true reinforcement learning based on sequential portfolio returns or Sharpe optimization; it is an inefficient supervised classification approximation using Q-learning.
   2. **State Vector Train-Inference Mismatch:** The training state vector included predictions from the collapsed DL model. In production, DL is quarantined (replaced with dummy `[0, 1, 0]`), meaning the DQN policy network receives out-of-distribution inputs.
-  3. **Formal Quarantine in V2.3:** While previously claimed to be retired, DQN remained marked as `ACTIVE` with `SECONDARY` role in `asset_intelligence.py`. In V2.3 reconciliation, DQN was formally quarantined:
-     - `MODEL_REGISTRY["DQN_AGENT"]["role"] = ModelRole.QUARANTINED`
-     - `MODEL_REGISTRY["DQN_AGENT"]["status"] = ModelStatus.QUARANTINED`
-     - `model_loader.py` updated to bypass DQN weights when quarantined.
-     - `consensus_engine.py` updated to exclude DQN from secondary veto authority (`veto_candidates = ["LGBM_AGENT"]`).
-- **Verdict:** **PERMANENTLY QUARANTINED.** Excluded from production inference and consensus veto authority.
+  3. **Role & Baseline Freeze Reality:** In multi-agent mesh intelligence (`asset_intelligence.py:104`, `consensus_engine.py:236`), DQN remains marked as `ACTIVE` with `SECONDARY_VETO` authority (threshold 0.65). In frozen baseline `inference_service.py:537`, secondary vetoes are effectively bypassed by default (`veto_threshold=1.01`). DQN was preserved rather than modified under the anti-overfitting baseline freeze.
+- **Verdict:** **EMPIRICALLY DEFECTIVE / OPERATIONALLY SUPPRESSED.** While retained in baseline mesh code, DQN action outputs suffer from static-label approximation and out-of-distribution inputs; live deployment remains strictly prohibited.
 
 ---
 

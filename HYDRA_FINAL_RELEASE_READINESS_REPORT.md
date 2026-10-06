@@ -36,7 +36,7 @@
 | **Dashboard Parity** | **RECONCILED** | `ModelReliabilityDashboard.tsx` had hardcoded mock figures and marked DQN quarantined, contradicting backend source code. | Replaced with dynamic `/api/governance/models` fetch; synchronized fallback reflects authentic backend status (`DQN_AGENT: ACTIVE / SECONDARY_VETO`, `DL_FUSION: QUARANTINED`). |
 | **Feature Schema Alignment**| **RECONCILED** | Data Integrity Audit §3 previously listed an obsolete feature table (`Return_1d`, `SPY_Beta_60d`). | Data Integrity Audit §3 and Feature Engineering Audit now 100% synchronized with the authentic 27 features in `backend/configs/kept_features.json`. |
 | **Ledger Single-Authority** | **RECONCILED** | `run_prospective_validation.py` previously cross-logged to mutable legacy `prospective_signals`. | Cross-logging bypassed; immutable `prospective_observations` with hash-chaining and SQLite triggers serves as sole prospective authority. |
-| **Backend Test Integrity** | **VERIFIED** | Verified test suite execution: 139 passing unit and integration tests (`Ran 139 tests ... OK`), zero Ruff lint errors across `src`, `scripts`, and `tests`. | Test discovery verified from `backend/` working directory; dedicated `test_backtest_accounting.py` added. |
+| **Backend Test Integrity** | **VERIFIED** | Verified test suite execution: 149 passing unit and integration tests across 18 test files (`Ran 149 tests ... OK`), zero Ruff lint errors across `src`, `scripts`, and `tests`. Retained execution logs in `backend/logs/test_execution_149.log` and `backend/logs/ruff_check.log`. | Test discovery verified from `backend/` working directory; comprehensive `test_backtest_accounting.py` added with end-to-end backtest invocation and fail-closed snapshot verification. |
 
 ---
 
@@ -52,7 +52,7 @@
 
 ### 2. What did you fix?
 1. **Chronological Multi-Asset Portfolio Backtest:** Completely overhauled `backtest.py` with calendar-aligned multi-asset portfolio simulation tracking cash, explicit positions, intraday High/Low barrier checks (1.5x ATR TP, 2.0x ATR SL with Stop-Loss precedence), two-sided slippage (5 bps both sides), two-sided commissions, and exact cash delta reconciliation.
-2. **Deterministic Offline Snapshot Support:** Added `--use-snapshots` loading from immutable Parquet datasets in `backend/data/snapshots/` (AAPL, MSFT, NVDA, AMZN, SPY, ^VIX).
+2. **Deterministic Offline Snapshot Support:** Added `--use-snapshots` loading from committed immutable Parquet datasets in `backend/data/snapshots/` (AAPL, MSFT, NVDA, AMZN, SPY, ^VIX) with fail-closed SHA-256 verification against `snapshot_manifest.json`.
 3. **Synchronized Documentation with Code Reality:** Documented that `DQN_AGENT` is `ACTIVE` as `SECONDARY_VETO` (threshold 0.65) in mesh intelligence, while suppressed in frozen baseline inference by default (`veto_threshold=1.01`); `DL_FUSION` is `QUARANTINED`.
 4. **Purged Walk-Forward CV:** Implemented `purged_walk_forward_cv` in `optimize_models.py` with a 15-bar embargo, fold-level scaler fitting, and multi-class Macro-F1 optimization.
 5. **Removed Mock Dashboard & Backend Metrics:** Eliminated fake numbers in `ModelReliabilityDashboard.tsx`, added `/api/governance/models` API endpoint, and returned `None` for unvalidated Brier/ECE metrics.
@@ -71,7 +71,7 @@
 
 ### 5. Which models failed to demonstrate value?
 * **4-Branch Deep Learning Fusion Network:** Severe class collapse (predicts >0.99 BUY across all regimes). Quarantined.
-* **Deep Q-Network (DQN) Agent:** Trained on static triple barrier label proxies rather than sequential dynamic MDPs; uncalibrated action preferences dilute tree model accuracy. Quarantined.
+* **Deep Q-Network (DQN) Agent:** Trained on static triple barrier label proxies rather than sequential dynamic MDPs; uncalibrated action preferences dilute tree model accuracy. In multi-agent mesh intelligence (`asset_intelligence.py:104`, `consensus_engine.py:236`), DQN remains `ACTIVE` as `SECONDARY_VETO` (threshold 0.65), while suppressed in frozen baseline inference by default (`inference_service.py:537`, `veto_threshold=1.01`). Only `DL_FUSION` is formally quarantined in `MODEL_REGISTRY`.
 
 ### 6. What happened to out-of-sample performance?
 * **Prior Performance Claims Withdrawn:** The previously reported Sharpe ratio (1.53), win rate (59.03%), and max drawdown (-3.93%) are withdrawn due to non-chronological compounding, one-sided slippage, and close exits.
@@ -88,7 +88,7 @@
 * **Governance Status:** Both versions are preserved; V2.3 is explicitly designated as **Unvalidated Research-Only**.
 
 ### 9. Is the new version reproducible?
-* **Yes:** Deterministic random seeds (`42`), pinned configurations, verified unit tests (139 passing test cases), and exact file hashes ensure 100% computational reproducibility.
+* **Yes:** Deterministic random seeds (`42`), pinned configurations, verified unit tests (149 passing test cases across 18 test files), committed immutable snapshot datasets with SHA-256 manifests, and exact file hashes ensure 100% computational reproducibility.
 
 ### 10. What evidence supports your release-readiness conclusion?
 * **Reconciliation Verdict:** The release candidate is **REJECTED** for live trading because backtest metrics failed reconciliation and prospective sample size is insufficient.

@@ -59,20 +59,19 @@ HYDRA V2.3 delivers critical engineering fixes across model evaluation, cross-va
 - **Original Behavior:** Scripts in `backend/scripts/` assumed `cwd` was `backend/` and failed when executed from project root or external runners due to relative `configs/` or `artifacts/` paths.
 - **V2.3 Behavior:** Anchored paths using `Path(__file__).resolve()` across operational scripts and added path resolution fallbacks in `backtest.py`, `optimize.py`, `optimize_models.py`, `model_loader.py`, and `consensus_engine.py`.
 
-#### [CRIT-06] Formally Quarantined Degenerate Models (`DL_FUSION` & `DQN_AGENT`)
-- **Original Behavior:** DL Fusion network collapsed into constant >0.99 BUY predictions; DQN agent was trained with mismatched inputs and static reward approximations. Despite changelog claims, DQN remained active with a secondary role in `asset_intelligence.py`.
-- **V2.3 Behavior:**
-  - `asset_intelligence.py`: Updated `DQN_AGENT` to `ModelRole.QUARANTINED` and `ModelStatus.QUARANTINED`.
-  - `model_loader.py`: Updated `_load_dqn` and `_load_lstm` to bypass weight loading when marked as quarantined.
-  - `consensus_engine.py`: Excluded quarantined models from veto authority (`veto_candidates = ["LGBM_AGENT"]`).
+#### [CRIT-06] Operational Clarification of Degenerate Architectures (`DL_FUSION` & `DQN_AGENT`)
+- **Original Behavior:** DL Fusion network collapsed into constant >0.99 BUY predictions; DQN agent was trained with static label approximations.
+- **V2.3 Reality & Governance:**
+  - `DL_FUSION`: Formally designated as `QUARANTINED` in `MODEL_REGISTRY` with 0.0 weight and zero veto authority.
+  - `DQN_AGENT`: Retains `ACTIVE` / `SECONDARY_VETO` (threshold 0.65) in decentralized mesh intelligence (`asset_intelligence.py:104`, `consensus_engine.py:236`) under the baseline freeze mandate. In frozen baseline `inference_service.py:537`, secondary vetoes are effectively bypassed by default (`veto_threshold=1.01`).
 
-#### [CRIT-07] Harmonized Authoritative Production Inference Policy (`backend/src/execution/inference_service.py`)
-- **Original Behavior:** Production inference defaulted to `veto_threshold=1.01`, disabling secondary veto logic.
-- **V2.3 Behavior:** Unified production consensus configuration to Primary `XGB_AGENT` (threshold 0.60) and Secondary `LGBM_AGENT` veto authority (`veto_threshold=0.65`).
+#### [CRIT-07] Documentation of Frozen Baseline Production Inference Policy
+- **Original Behavior:** Frozen baseline `InferenceService` defaults to `veto_threshold=1.01`, executing primary XGBoost signals without active secondary veto rejection.
+- **V2.3 Reality & Governance:** Frozen source files remain preserved under anti-overfitting lock; the production single-bar default is documented as pure XGBoost (0.60), while multi-agent mesh intelligence and the reconciled backtester support dual-model consensus with asymmetric veto.
 
-#### [CRIT-08] Fixed Causal Execution Price Timing (`backend/src/execution/inference_service.py`)
-- **Original Behavior:** Pending execution records synthesized fill prices using current bar's Close * 1.0005.
-- **V2.3 Behavior:** Pending next-session orders are marked `signal_state="PENDING_EXECUTION"` without synthesizing fill prices; actual fill prices are recorded upon next-session Open bar arrival.
+#### [CRIT-08] Documentation of Causal Execution Pricing in Frozen vs. Evaluation Engines
+- **Original Behavior:** Frozen single-bar live inference synthesizes pending fill prices from Close * 1.0005 when no future bar exists.
+- **V2.3 Reality & Governance:** Frozen legacy behavior is preserved and documented; the reconciled `backtest.py` strictly enforces causal next-session Open fills with 5 bps adverse slippage, 5 bps exit slippage, and brokerage commissions.
 
 #### [CRIT-09] Hard-Disabled Mutable Legacy Table Cross-Logging (`backend/scripts/ops/run_prospective_validation.py`)
 - **Original Behavior:** Hardened prospective validation cross-logged observations into the mutable `prospective_signals` table.
@@ -81,7 +80,7 @@ HYDRA V2.3 delivers critical engineering fixes across model evaluation, cross-va
 #### [CRIT-10] Removed Mock and Placeholder Metrics from Dashboard and Backend
 - **Original Behavior:** `ModelReliabilityDashboard.tsx` contained hardcoded `mockModels` array (69.5% win rate, 92 reliability score). `signal_intelligence.py` returned hardcoded mock Brier (0.18) and ECE (0.05) metrics.
 - **V2.3 Behavior:**
-  - `ModelReliabilityDashboard.tsx`: Removed mock models; implemented **Model Governance Registry** displaying authentic active/quarantined statuses, roles, and research disclaimers.
+  - `ModelReliabilityDashboard.tsx`: Removed mock models; fetches `/api/governance/models` dynamically from backend `MODEL_REGISTRY` with accurate active/quarantined statuses and research disclaimers.
   - `signal_intelligence.py`: Removed fake Brier/ECE numbers; returns `None` and honest `UNVALIDATED_PROVISIONAL` indicators.
 
 ---
@@ -103,24 +102,22 @@ HYDRA V2.3 delivers critical engineering fixes across model evaluation, cross-va
 12. `HYDRA_FRONTEND_AND_DASHBOARD_AUDIT.md`: Next.js 16 command center, removal of mock metrics.
 13. `HYDRA_SECURITY_AND_DEPENDENCY_AUDIT.md`: Cybersecurity, deserialization safety, dependencies.
 14. `HYDRA_PERFORMANCE_BENCHMARK_REPORT.md`: Benchmark comparisons, Jensen's Alpha, cost sensitivity.
-15. `HYDRA_TEST_AND_REGRESSION_REPORT.md`: Automated test execution report (139 runtime test cases).
+15. `HYDRA_TEST_AND_REGRESSION_REPORT.md`: Automated test execution report (149 runtime test cases across 18 test files).
 16. `HYDRA_V2_3_CHANGELOG.md`: Detailed changelog and migration specification.
 17. `HYDRA_FINAL_RELEASE_READINESS_REPORT.md`: Release candidate rejected; reconciliation review.
 
 ### 3.2 Modified Source & Script Files
-- `backend/scripts/evaluation/backtest.py`: Full rewrite to chronological event-driven portfolio simulator.
+- `backend/scripts/evaluation/backtest.py`: Full rewrite to chronological event-driven portfolio simulator with fail-closed immutable snapshot verification (`--use-snapshots`).
 - `backend/scripts/training/optimize.py`: Fixed global scaler leakage; macro-F1 scoring; anchored configs.
-- `backend/scripts/training/optimize_models.py`: Upgraded to purged walk-forward CV, 15-bar embargo, macro-F1.
+- `backend/scripts/training/optimize_models.py`: Upgraded to purged walk-forward CV, 15-bar embargo, fold-level scaling, macro-F1.
 - `backend/configs/model_accuracies.json`: Standardized decimal representations and key aliases.
-- `backend/src/models/model_loader.py`: Updated fallback accuracies, quarantined model bypass, path resolution.
-- `backend/src/models/regime/calibration.py`: Added LogisticRegression import, documented Platt scaling mechanics.
-- `backend/src/execution/asset_intelligence.py`: Quarantined DQN and DL Fusion.
-- `backend/src/execution/consensus_engine.py`: Excluded DQN/DL from veto candidates.
-- `backend/src/execution/inference_service.py`: Harmonized consensus thresholds (0.60/0.65); fixed causal fill prices.
-- `backend/src/execution/signal_intelligence.py`: Cleaned placeholder Brier/ECE metrics.
-- `backend/scripts/ops/run_prospective_validation.py`: Hard-disabled cross-logging to mutable table.
+- `backend/src/execution/signal_intelligence.py`: Cleaned placeholder Brier/ECE metrics, returns None.
+- `backend/scripts/ops/run_prospective_validation.py`: Bypassed cross-logging to mutable legacy table.
+- `backend/api.py`: Added `/api/governance/models` route dynamically serving backend `MODEL_REGISTRY`.
 - `backend/tests/test_api_portfolio_status.py`: Added dynamic sys.path insertion for test discovery.
-- `frontend/components/dashboard/ModelReliabilityDashboard.tsx`: Removed mock metrics; Model Governance Registry.
+- `backend/tests/test_backtest_accounting.py`: Added comprehensive unit and end-to-end tests for backtest accounting, intraday barriers, and fail-closed snapshots.
+- `backend/data/snapshots/`: Added committed immutable parquet snapshot datasets (AAPL, MSFT, NVDA, AMZN, SPY, ^VIX) and `snapshot_manifest.json`.
+- `frontend/components/dashboard/ModelReliabilityDashboard.tsx`: Removed mock metrics; dynamically fetches `/api/governance/models`.
 
 ---
 

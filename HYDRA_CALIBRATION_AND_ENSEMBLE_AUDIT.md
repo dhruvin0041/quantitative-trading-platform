@@ -65,9 +65,10 @@ Prior to this reconciliation, `backend/src/models/regime/calibration.py` called 
 The ensemble is structured under the single authoritative production hierarchy:
 * **Primary Alpha Driver:** `XGB_AGENT` (Active, conviction hurdle $\ge 0.60$).
 * **Secondary Asymmetric Veto:** `LGBM_AGENT` (Active, counter-trend veto hurdle $\ge 0.65$).
-* **Quarantined Architectures:**
+* **Quarantined Architecture:**
   * `DL_FUSION`: Permanently quarantined due to class collapse (>0.99 BUY concentration).
-  * `DQN_AGENT`: Permanently quarantined due to environment disconnect and uncalibrated action-preferences.
+* **Reinforcement Learning Agent:**
+  * `DQN_AGENT`: Action preferences uncalibrated and static-label dependent; retained as active secondary veto candidate in mesh consensus under baseline freeze, but bypassed in frozen baseline inference (`veto_threshold=1.01`).
 * **Forecast Oracle:** `TFT_AGENT` (Quantile trajectory & volatility oracle).
 
 ### 4. Calibration Status & Conclusion

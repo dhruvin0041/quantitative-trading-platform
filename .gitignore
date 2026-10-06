@@ -47,7 +47,9 @@ Thumbs.db
 .env
 
 # Project Specific
-backend/logs/
+backend/logs/*
+!backend/logs/test_execution_149.log
+!backend/logs/ruff_check.log
 backend/optuna_studies/
 backend/models/
 backend/scalers/
@@ -71,7 +73,8 @@ backend/artifacts/*.h5
 backend/artifacts/*.json
 backend/artifacts/*.pkl
 backend/artifacts/*.db
-backend/data/
+backend/data/*
+!backend/data/snapshots/
 backend/mlflow.db
 backend/mlruns/
 backend/artifacts/v2_0/
@@ -90,4 +93,9 @@ mlruns/
 !backend/artifacts/meta_ensemble.joblib
 !backend/artifacts/tft_quantile_weights.weights.h5
 !backend/artifacts/frozen_strategy_manifest*.json
+
+# Allow versioned immutable snapshot fixtures
+!backend/data/snapshots/
+!backend/data/snapshots/*.parquet
+!backend/data/snapshots/*.json
 

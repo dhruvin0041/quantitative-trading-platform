@@ -12,13 +12,13 @@
 > **STRATEGY POLICY RECONCILIATION:**  
 > A prior draft of this document described an experimental 0.45 consensus / 0.15 delta veto policy that was contradicted by active production code. In production, [backend/src/execution/inference_service.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/src/execution/inference_service.py) defaulted to pure XGBoost 0.60 with `veto_threshold=1.01`, effectively disabling the secondary veto.
 > 
-> **Unified Authoritative Policy Enforced Across All Modules:**
-> To eliminate cross-module contradictions, the single authoritative production policy has been formally synchronized across `asset_intelligence.py`, `consensus_engine.py`, `inference_service.py`, and `backtest.py`:
-> 1. **Primary Alpha Driver:** `XGB_AGENT` with conviction threshold $\ge 0.60$.
-> 2. **Secondary Asymmetric Veto:** `LGBM_AGENT` with counter-trend threshold $\ge 0.65$. If primary signals BUY but LightGBM assigns $P(\text{SELL}) \ge 0.65$, the trade is vetoed and downgraded to HOLD.
-> 3. **Macro Regime Gate:** SPY below its 200-day simple moving average suppresses all BUY signals.
-> 4. **Quarantined Components:** Both `DL_FUSION` and `DQN_AGENT` are permanently quarantined in `MODEL_REGISTRY` with 0.0 weight and zero veto authority.
-> 5. **Execution Timing:** Signals generated at bar Close ($T$, 16:00 ET) target next-session Open ($T+1$, 09:30 ET).
+> [!IMPORTANT]
+> **Operational Policy Reconciliation Across Subsystems:**
+> Forensic inspection reveals distinct operational layers across HYDRA:
+> 1. **Research Backtesting Engine (`backtest.py`):** Operates the target institutional consensus: Primary `XGB_AGENT` ($\ge 0.60$) + Secondary `LGBM_AGENT` asymmetric veto ($\ge 0.65$) + SPY 200 SMA Macro Regime Gate + T+1 Open execution with two-sided slippage and commissions.
+> 2. **Multi-Agent Decentralized Mesh (`asset_intelligence.py`, `consensus_engine.py`):** `XGB_AGENT` is primary engine; `LGBM_AGENT` and `DQN_AGENT` remain registered as `ACTIVE` veto candidates (threshold 0.65); `DL_FUSION` is formally `QUARANTINED` (0.0 weight).
+> 3. **Frozen Baseline Production Inference (`inference_service.py`):** Baseline code is frozen under anti-overfitting lock; defaults to pure XGBoost 0.60 with secondary vetoes bypassed (`veto_threshold=1.01`).
+> 4. **Execution Timing:** Signals generated at bar Close ($T$, 16:00 ET) target next-session Open ($T+1$, 09:30 ET).
 
 ---
 

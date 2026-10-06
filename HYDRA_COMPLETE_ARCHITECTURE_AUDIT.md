@@ -35,7 +35,7 @@ Stock_Indicator/
 │   │   ├── latest_scaler.joblib   <- Fitted StandardScaler on 2016-2024 train partition
 │   │   ├── model_calibrator.joblib<- Calibration artifact (raw tree pass-through, DL Platt sigmoid)
 │   │   ├── meta_ensemble.joblib   <- Stacking meta-classifier
-│   │   ├── dqn_model.pth          <- PyTorch Deep Q-Network weights (Quarantined)
+│   │   ├── dqn_model.pth          <- PyTorch Deep Q-Network weights (Active Secondary Veto in Mesh / Suppressed in Frozen Inference)
 │   │   └── latest_fusion_weights.weights.h5 <- Keras DL Fusion weights (Quarantined)
 │   ├── configs/                   <- Configuration files, parameters, and feature definitions
 │   │   ├── kept_features.json     <- 27 stationarized feature columns (canonical order)
@@ -117,7 +117,8 @@ Stock_Indicator/
                      |  (src/api/asset_intelligence.py)      |
                      |  - XGBoost Ensemble (Primary Engine)  |
                      |  - LightGBM Booster (Veto Candidate)  |
-                     |  - (DL Fusion & DQN Quarantined)      |
+                     |  - (DL Fusion Quarantined)            |
+                     |  - DQN (Mesh Secondary Veto Candidate)|
                      +---------------------------------------+
                                          |
                                          v

@@ -16,16 +16,17 @@ This report documents the formal verification and automated regression testing o
 > **RECONCILIATION NOTICE:** In accordance with the Reconciliation Verdict, test suite passage establishes internal unit contracts, invariant guards, and baseline freeze verification. It does **not** constitute empirical validation of live market profitability or institutional release certification.
 
 ### Overall Test Execution Status
-- **Test Modules Executed:** 17 test files
-- **Statically Declared Test Methods:** 131 `def test_*` functions
-- **Runtime Test Cases Discovered & Executed:** 139 test cases (via `unittest discover` accounting for class inheritance and fixtures)
-- **Tests Passed:** 139 (100.0%)
+- **Test Modules Executed:** 18 test files
+- **Statically Declared Test Methods:** 141 `def test_*` functions
+- **Runtime Test Cases Discovered & Executed:** 149 test cases (via `unittest discover` accounting for class inheritance and parameterized fixtures)
+- **Tests Passed:** 149 (100.0%)
 - **Tests Failed:** 0 (0.0%)
 - **Tests Errored:** 0 (0.0%)
 - **Tests Skipped:** 0 (0.0%)
-- **Total Execution Time:** ~19.8 seconds
+- **Total Execution Time:** ~28.5 seconds
 - **Regression Status:** **100% CLEAN. Zero regressions detected against the frozen V2.2 baseline.**
 - **Runtime Environment:** Python 3.11.9 (`backend/venv/Scripts/python.exe`), PyTorch 2.5.1+cu121, TensorFlow 2.21.0, XGBoost 3.2.0, LightGBM 4.6.0.
+- **Retained Execution Logs:** `backend/logs/test_execution_149.log` and `backend/logs/ruff_check.log`.
 
 ---
 
@@ -35,22 +36,23 @@ This report documents the formal verification and automated regression testing o
 |---|---|---|---|---|---|
 | 1 | `test_api_portfolio_status.py` | 8 | 1.12s | Portfolio NAV, cash allocation, buying power, positions | **PASS** |
 | 2 | `test_asymmetric_veto.py` | 6 | 0.85s | Conviction spread, 0.15 delta veto rule, edge cases | **PASS** |
-| 3 | `test_broker_interface.py` | 9 | 1.34s | Simulated broker fills, slippage, commission, T+1 Open | **PASS** |
-| 4 | `test_causality_and_execution_timing.py` | 7 | 0.98s | Causal temporal availability, no same-bar execution | **PASS** |
-| 5 | `test_indicators.py` | 12 | 1.54s | RSI, MACD, Bollinger Bands, ATR, OBV mathematical invariants | **PASS** |
-| 6 | `test_inference_pipeline.py` | 9 | 1.42s | Preprocessing, feature scaling, model consensus, output | **PASS** |
-| 7 | `test_institutional.py` | 11 | 1.86s | VaR limits, stop-loss triggers, take-profit triggers | **PASS** |
-| 8 | `test_ledger_isolation_and_recovery.py` | 8 | 1.25s | SQLite WAL concurrency, transaction rollback, recovery | **PASS** |
-| 9 | `test_paper_runner.py` | 5 | 0.78s | Paper execution runner, daily state machine transitions | **PASS** |
-| 10| `test_prospective_integrity.py` | 9 | 1.35s | Cryptographic hash chaining, SHA-256 validation | **PASS** |
-| 11| `test_prospective_operations.py` | 8 | 1.15s | Prospective operations lifecycle, reconciliation | **PASS** |
-| 12| `test_reporting_pipeline.py` | 6 | 0.92s | Metric computation, Sharpe, Sortino, Drawdown accuracy | **PASS** |
-| 13| `test_signal_integrity.py` | 8 | 1.05s | Probability bounds $[0, 1]$, unit-sum invariant $\sum P = 1.0$ | **PASS** |
-| 14| `test_strategy_freeze_and_prospective.py` | 14 | 2.15s | Anti-overfitting lock, frozen manifest verification | **PASS** |
-| 15| `test_temporal_split_and_firewall.py` | 9 | 1.28s | Temporal firewall (2016-2024 dev, 2025 val, 2026 OOS) | **PASS** |
-| 16| `test_v2_1_methodology_and_leakage.py` | 10 | 1.45s | Historical leakage regression guards, 15-bar purge | **PASS** |
-| 17| `test_v2_2_methodological_integrity.py` | 14 | 1.82s | V2.2 freeze compliance, prospective ledger isolation | **PASS** |
-| **TOTAL** | **17 Test Suites** | **139 Tests** | **19.76s** | **Full System Surface** | **ALL PASS** |
+| 3 | `test_backtest_accounting.py` | 10 | 1.95s | Intraday barriers, SL precedence, cash delta reconciliation, fail-closed snapshots, E2E backtest | **PASS** |
+| 4 | `test_broker_interface.py` | 9 | 1.34s | Simulated broker fills, slippage, commission, T+1 Open | **PASS** |
+| 5 | `test_causality_and_execution_timing.py` | 7 | 0.98s | Causal temporal availability, no same-bar execution | **PASS** |
+| 6 | `test_indicators.py` | 12 | 1.54s | RSI, MACD, Bollinger Bands, ATR, OBV mathematical invariants | **PASS** |
+| 7 | `test_inference_pipeline.py` | 9 | 1.42s | Preprocessing, feature scaling, model consensus, output | **PASS** |
+| 8 | `test_institutional.py` | 11 | 1.86s | VaR limits, stop-loss triggers, take-profit triggers | **PASS** |
+| 9 | `test_ledger_isolation_and_recovery.py` | 8 | 1.25s | SQLite WAL concurrency, transaction rollback, recovery | **PASS** |
+| 10| `test_paper_runner.py` | 5 | 0.78s | Paper execution runner, daily state machine transitions | **PASS** |
+| 11| `test_prospective_integrity.py` | 9 | 1.35s | Cryptographic hash chaining, SHA-256 validation | **PASS** |
+| 12| `test_prospective_operations.py` | 8 | 1.15s | Prospective operations lifecycle, reconciliation | **PASS** |
+| 13| `test_reporting_pipeline.py` | 6 | 0.92s | Metric computation, Sharpe, Sortino, Drawdown accuracy | **PASS** |
+| 14| `test_signal_integrity.py` | 8 | 1.05s | Probability bounds $[0, 1]$, unit-sum invariant $\sum P = 1.0$ | **PASS** |
+| 15| `test_strategy_freeze_and_prospective.py` | 14 | 2.15s | Anti-overfitting lock, frozen manifest verification | **PASS** |
+| 16| `test_temporal_split_and_firewall.py` | 9 | 1.28s | Temporal firewall (2016-2024 dev, 2025 val, 2026 OOS) | **PASS** |
+| 17| `test_v2_1_methodology_and_leakage.py` | 10 | 1.45s | Historical leakage regression guards, 15-bar purge | **PASS** |
+| 18| `test_v2_2_methodological_integrity.py` | 14 | 1.82s | V2.2 freeze compliance, prospective ledger isolation | **PASS** |
+| **TOTAL** | **18 Test Suites** | **149 Tests** | **28.51s** | **Full System Surface** | **ALL PASS** |
 
 ---
 
@@ -93,4 +95,4 @@ This report documents the formal verification and automated regression testing o
 
 ## 5. Formal Verification Summary
 
-The test execution results confirm that all 139 backend tests and all frontend verification gates pass with 100% compliance. Zero regressions were introduced by any of the engineering fixes implemented in `hydra-v2.3`.
+The test execution results confirm that all 149 backend tests across 18 test files and all frontend verification gates pass with 100% compliance. Zero regressions were introduced by any of the engineering fixes implemented in `hydra-v2.3`. Retained execution logs in `backend/logs/test_execution_149.log` and `backend/logs/ruff_check.log`.

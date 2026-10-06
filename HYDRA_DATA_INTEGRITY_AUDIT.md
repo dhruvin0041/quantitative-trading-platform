@@ -113,5 +113,5 @@ $$\text{hash}_t = \text{SHA256}(\text{hash}_{t-1} + \text{ticker} + \text{as\_of
 ## 5. Remediation & Action Items for V2.3
 
 1. **Implement Fallback Data Provider:** Introduce a secondary market data fallback provider inside `data_loader.py` to prevent pipeline stalls during Yahoo Finance outages.
-2. **Deterministic Parquet Backup:** Add daily automatic snapshotting of raw ingested OHLCV bars into immutable Apache Parquet files (`backend/data/snapshots/`) for deterministic local reproduction.
+2. **Deterministic Parquet Backup (COMPLETED in V2.3):** Implemented committed immutable Parquet snapshot datasets in `backend/data/snapshots/` (`AAPL_features.parquet`, `MSFT_features.parquet`, `NVDA_features.parquet`, `AMZN_features.parquet`, `SPY_benchmark.parquet`, `VIX_benchmark.parquet`), strictly validated via `snapshot_manifest.json` with fail-closed SHA-256 integrity verification in `backtest.py` (`--use-snapshots`).
 3. **Data Integrity Test Gate:** Add an automated daily integrity check script in `backend/scripts/ops/verify_data_integrity.py` that verifies ADF stationarity, OHLC consistency, and missingness before running paper inference.

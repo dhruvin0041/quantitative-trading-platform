@@ -34,7 +34,7 @@ The Next.js 16.2 / React 19 institutional frontend was independently verified:
 
 ### 3.1 Main Institutional Terminal (`/` - `frontend/app/page.tsx`)
 * **Components:** [PriceChart.tsx](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/frontend/components/dashboard/PriceChart.tsx), [SignalIntelligence.tsx](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/frontend/components/dashboard/SignalIntelligence.tsx), [TechnicalSnapshot.tsx](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/frontend/components/dashboard/TechnicalSnapshot.tsx), [TradeCard.tsx](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/frontend/components/dashboard/TradeCard.tsx), [ModelReliabilityDashboard.tsx](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/frontend/components/dashboard/ModelReliabilityDashboard.tsx).
-* **Parity Status:** Displays active XGBoost alpha signals and LightGBM veto status. Quarantined architectures (DL Fusion, DQN) are clearly displayed with quarantine banners and excluded from live consensus weighting.
+* **Parity Status:** Displays active XGBoost alpha signals and LightGBM veto status. DL Fusion is clearly displayed with a quarantine badge; DQN is displayed with its authentic active secondary veto role matching `/api/governance/models`.
 * **Model Reliability Widget:** Now displays authentic model deployment roles and governance notices, warning users that forward statistical reliability requires $\ge 30$ completed prospective trades.
 
 ### 3.2 Prospective Validation & Audit Terminal (`/validation` - `frontend/app/validation/page.tsx`)

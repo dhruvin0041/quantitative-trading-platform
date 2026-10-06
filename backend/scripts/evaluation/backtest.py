@@ -10,6 +10,7 @@ Executes a chronological, causal, multi-asset portfolio historical backtest:
 """
 
 import argparse
+import hashlib
 import json
 import logging
 import os
@@ -17,7 +18,7 @@ import sys
 import warnings
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import joblib
 import numpy as np
@@ -45,6 +46,60 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("HydraBacktest")
 
 
+def verify_snapshot_integrity(snapshot_dir: Path, required_files: List[str]) -> Dict[str, Any]:
+    """
+    Validates that snapshot_dir contains all required files and that their
+    SHA-256 hashes strictly match snapshot_manifest.json.
+    Raises FileNotFoundError or ValueError if validation fails (fail-closed).
+    """
+    manifest_path = snapshot_dir / "snapshot_manifest.json"
+    if not manifest_path.exists():
+        raise FileNotFoundError(
+            f"Snapshot manifest missing: {manifest_path}. Cannot verify snapshot integrity."
+        )
+
+    try:
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            manifest = json.load(f)
+    except Exception as e:
+        raise ValueError(f"Corrupt or unreadable snapshot manifest {manifest_path}: {e}") from e
+
+    manifest_files = manifest.get("files", {})
+
+    for fname in required_files:
+        fpath = snapshot_dir / fname
+        if not fpath.exists():
+            raise FileNotFoundError(
+                f"Required snapshot file '{fname}' missing from {snapshot_dir}."
+            )
+        if fname not in manifest_files:
+            raise ValueError(
+                f"Snapshot file '{fname}' is not registered in {manifest_path}."
+            )
+
+        expected_hash = manifest_files[fname].get("sha256")
+        if not expected_hash:
+            raise ValueError(
+                f"Manifest entry for '{fname}' lacks required 'sha256' field."
+            )
+
+        hasher = hashlib.sha256()
+        with open(fpath, "rb") as bf:
+            while chunk := bf.read(65536):
+                hasher.update(chunk)
+        actual_hash = hasher.hexdigest()
+
+        if actual_hash != expected_hash:
+            raise ValueError(
+                f"SHA-256 mismatch for snapshot file '{fname}'! "
+                f"Expected: {expected_hash}, Actual: {actual_hash}. "
+                "Snapshot integrity check failed (fail-closed)."
+            )
+
+    logger.info("Snapshot integrity verified against %s (%d files checked)", manifest_path.name, len(required_files))
+    return manifest
+
+
 def fetch_and_prepare_data(
     ticker: str,
     spy_df: pd.DataFrame,
@@ -52,20 +107,37 @@ def fetch_and_prepare_data(
     period: str = "2y",
     cache_dir: Optional[Path] = None,
     snapshot_dir: Optional[Path] = None,
+    strict_snapshots: bool = False,
 ) -> pd.DataFrame:
     """Fetch and engineer stationarized features with optional disk snapshot / caching."""
-    # 1. Check snapshot directory first for immutable deterministic reproduction
+    # 1. Strict Fail-Closed Snapshot Mode (prohibits cache, network, and disk writes)
+    if strict_snapshots:
+        if not snapshot_dir:
+            raise ValueError("strict_snapshots=True requires snapshot_dir to be specified.")
+        snapshot_file = snapshot_dir / f"{ticker}_features.parquet"
+        if not snapshot_file.exists():
+            raise FileNotFoundError(
+                f"Strict snapshot mode active: snapshot file '{snapshot_file}' is missing."
+            )
+        try:
+            df = pd.read_parquet(snapshot_file)
+            logger.info("Loaded immutable snapshot dataset for %s (%d rows)", ticker, len(df))
+            return df
+        except Exception as e:
+            raise ValueError(f"Strict snapshot read failed for {ticker}: {e}") from e
+
+    # 2. Non-strict snapshot check (read-only)
     if snapshot_dir:
         snapshot_file = snapshot_dir / f"{ticker}_features.parquet"
         if snapshot_file.exists():
             try:
                 df = pd.read_parquet(snapshot_file)
-                logger.info("Loaded immutable snapshot dataset for %s (%d rows)", ticker, len(df))
+                logger.info("Loaded snapshot dataset for %s (%d rows)", ticker, len(df))
                 return df
             except Exception as e:
                 logger.warning("Snapshot read failed for %s (%s). Falling back.", ticker, e)
 
-    # 2. Check cache directory
+    # 3. Cache directory
     if cache_dir:
         cache_dir.mkdir(parents=True, exist_ok=True)
         cache_file = cache_dir / f"{ticker}_{period}_features.parquet"
@@ -104,13 +176,6 @@ def fetch_and_prepare_data(
     if cache_dir:
         try:
             df_ready.to_parquet(cache_file)
-        except Exception:
-            pass
-
-    if snapshot_dir:
-        snapshot_dir.mkdir(parents=True, exist_ok=True)
-        try:
-            df_ready.to_parquet(snapshot_dir / f"{ticker}_features.parquet")
         except Exception:
             pass
 
@@ -172,51 +237,75 @@ def run_chronological_backtest(
     elif hasattr(calibrator_obj, "calibrators"):
         calibrator = calibrator_obj
 
+    if tickers is None or len(tickers) == 0:
+        tickers = ["AAPL", "MSFT", "NVDA", "AMZN"]
+
     # Pre-fetch or load benchmark data
     spy_df: Optional[pd.DataFrame] = None
     vix_df: Optional[pd.DataFrame] = None
 
-    if resolved_snapshot_dir:
+    if use_snapshots:
+        if resolved_snapshot_dir is None:
+            resolved_snapshot_dir = BACKEND_DIR / "data" / "snapshots"
+
+        # Fail-closed validation against committed snapshot manifest
+        required_files = ["SPY_benchmark.parquet", "VIX_benchmark.parquet"] + [
+            f"{t}_features.parquet" for t in tickers
+        ]
+        verify_snapshot_integrity(resolved_snapshot_dir, required_files)
+
         spy_snap = resolved_snapshot_dir / "SPY_benchmark.parquet"
         vix_snap = resolved_snapshot_dir / "VIX_benchmark.parquet"
-        if spy_snap.exists() and vix_snap.exists():
-            try:
-                spy_df = pd.read_parquet(spy_snap)
-                vix_df = pd.read_parquet(vix_snap)
-                logger.info("Loaded benchmark snapshots for SPY and ^VIX from %s", str(resolved_snapshot_dir))
-            except Exception as e:
-                logger.warning("Failed to load benchmark snapshots: %s", e)
-
-    if spy_df is None or vix_df is None:
-        logger.info("Fetching SPY and ^VIX benchmark data (%s)...", period)
-        spy_df = yf.download("SPY", period=period, progress=False)
-        if isinstance(spy_df.columns, pd.MultiIndex):
-            spy_df.columns = spy_df.columns.get_level_values(0)
-
-        vix_df = yf.download("^VIX", period=period, progress=False)
-        if isinstance(vix_df.columns, pd.MultiIndex):
-            vix_df.columns = vix_df.columns.get_level_values(0)
-
+        try:
+            spy_df = pd.read_parquet(spy_snap)
+            vix_df = pd.read_parquet(vix_snap)
+            logger.info("Loaded immutable benchmark snapshots for SPY and ^VIX from %s", str(resolved_snapshot_dir))
+        except Exception as e:
+            raise ValueError(f"Failed to read benchmark snapshot files from {resolved_snapshot_dir}: {e}") from e
+    else:
+        # Non-strict research mode
         if resolved_snapshot_dir:
-            try:
-                spy_df.to_parquet(resolved_snapshot_dir / "SPY_benchmark.parquet")
-                vix_df.to_parquet(resolved_snapshot_dir / "VIX_benchmark.parquet")
-            except Exception:
-                pass
+            spy_snap = resolved_snapshot_dir / "SPY_benchmark.parquet"
+            vix_snap = resolved_snapshot_dir / "VIX_benchmark.parquet"
+            if spy_snap.exists() and vix_snap.exists():
+                try:
+                    spy_df = pd.read_parquet(spy_snap)
+                    vix_df = pd.read_parquet(vix_snap)
+                    logger.info("Loaded benchmark snapshots for SPY and ^VIX from %s", str(resolved_snapshot_dir))
+                except Exception as e:
+                    logger.warning("Failed to load benchmark snapshots: %s", e)
 
-    if tickers is None or len(tickers) == 0:
-        tickers = ["AAPL", "MSFT", "NVDA", "AMZN"]
+        if spy_df is None or vix_df is None:
+            logger.info("Fetching SPY and ^VIX benchmark data (%s)...", period)
+            spy_df = yf.download("SPY", period=period, progress=False)
+            if isinstance(spy_df.columns, pd.MultiIndex):
+                spy_df.columns = spy_df.columns.get_level_values(0)
+
+            vix_df = yf.download("^VIX", period=period, progress=False)
+            if isinstance(vix_df.columns, pd.MultiIndex):
+                vix_df.columns = vix_df.columns.get_level_values(0)
 
     # Load all ticker datasets
     ticker_dfs: Dict[str, pd.DataFrame] = {}
     for t in tickers:
         try:
             df_t = fetch_and_prepare_data(
-                t, spy_df, vix_df, period=period, cache_dir=cache_dir, snapshot_dir=resolved_snapshot_dir
+                t,
+                spy_df,
+                vix_df,
+                period=period,
+                cache_dir=cache_dir,
+                snapshot_dir=resolved_snapshot_dir,
+                strict_snapshots=use_snapshots,
             )
             if len(df_t) >= 60:
                 ticker_dfs[t] = df_t
+            else:
+                if use_snapshots:
+                    raise ValueError(f"Snapshot dataset for {t} has insufficient bars ({len(df_t)} < 60)")
         except Exception as e:
+            if use_snapshots:
+                raise
             logger.error("Error preparing data for %s: %s", t, e)
 
     if not ticker_dfs:

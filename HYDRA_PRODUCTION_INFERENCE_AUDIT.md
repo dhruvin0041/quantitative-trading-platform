@@ -52,8 +52,9 @@ This audit evaluates the end-to-end inference and operational execution pipeline
               v
 4. Generate Raw Model Predictions (asset_intelligence.py)
    - XGBoost: predict_proba() -> [P0, P1, P2] (Primary Engine)
-   - LightGBM: predict_proba() -> [P0, P1, P2] (Veto Engine)
-   - DL Fusion & DQN: Quarantined (bypassed in loaders, dummy [0, 1, 0])
+   - LightGBM: predict_proba() -> [P0, P1, P2] (Secondary Veto)
+   - DL Fusion: Quarantined (bypassed in loaders, dummy [0, 1, 0])
+   - DQN Agent: Active secondary veto in mesh, suppressed in frozen baseline inference (veto_threshold=1.01)
               |
               v
 5. Calibrate Probabilities (model_calibrator.joblib)
