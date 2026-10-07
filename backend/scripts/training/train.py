@@ -536,7 +536,10 @@ def main():
         "--ticker", type=str, default="AAPL", help="Stock ticker symbol"
     )
     parser.add_argument(
-        "--trials", type=int, default=50, help="Number of Optuna trials"
+        "--trials",
+        type=int,
+        default=50,
+        help="Number of trials for Bayesian/Optuna optimization and DQN episodes (default: 50)",
     )
     parser.add_argument(
         "--epochs",
@@ -549,19 +552,13 @@ def main():
         action="store_true",
         help="Skip Bayesian and Optuna re-optimization and train using existing configurations",
     )
-    parser.add_argument(
-        "--dqn-episodes",
-        type=int,
-        default=None,
-        help="Number of episodes for DQN policy training (default: matches --trials)",
-    )
     args = parser.parse_args()
 
     ticker = args.ticker.upper()
     n_trials = args.trials
     epochs = args.epochs
     skip_optimization = args.skip_optimization
-    dqn_episodes = args.dqn_episodes if args.dqn_episodes is not None else n_trials
+    dqn_episodes = n_trials
 
     pipeline_start = time.time()
 
