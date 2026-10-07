@@ -1,15 +1,15 @@
 {
     "AAPL": {
-        "Total Return": 0.8831022570494491,
-        "Win Rate": 0.5174041297935104,
-        "Average Return": 0.00048048428928364396,
-        "Profit Factor": 1.0914594860061948,
-        "Sharpe Ratio": 0.3582543881033486,
-        "Sortino Ratio": 0.5637060901419385,
+        "Total Return": 1.0589444621407131,
+        "Win Rate": 0.5179517363154797,
+        "Average Return": 0.0005329043624995479,
+        "Profit Factor": 1.1016664537683156,
+        "Sharpe Ratio": 0.4150517558386595,
+        "Sortino Ratio": 0.6554614037443126,
         "Maximum Drawdown": -0.4191629047088603,
         "Portfolio Beta": 1.0,
         "Jensen's Alpha": 0.0,
-        "VaR_95": -0.02372675088401404,
+        "VaR_95": -0.02369398631231706,
         "CVaR_95": -0.030433019403311935
     }
 }
