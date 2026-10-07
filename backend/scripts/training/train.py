@@ -549,12 +549,19 @@ def main():
         action="store_true",
         help="Skip Bayesian and Optuna re-optimization and train using existing configurations",
     )
+    parser.add_argument(
+        "--dqn-episodes",
+        type=int,
+        default=None,
+        help="Number of episodes for DQN policy training (default: matches --trials)",
+    )
     args = parser.parse_args()
 
     ticker = args.ticker.upper()
     n_trials = args.trials
     epochs = args.epochs
     skip_optimization = args.skip_optimization
+    dqn_episodes = args.dqn_episodes if args.dqn_episodes is not None else n_trials
 
     pipeline_start = time.time()
 
@@ -854,7 +861,17 @@ def main():
 
     # DQN Agent trained EXCLUSIVELY on 2016-2024 development transitions
     with mlflow.start_run(run_name=f"DQN_AGENT_{ticker}"):
-        train_dqn(X_train, (y_sig_train,), model, xgb_model, scaler, FEATURE_COLUMNS, train_dates, episodes=15, save_artifacts=True)
+        train_dqn(
+            X_train,
+            (y_sig_train,),
+            model,
+            xgb_model,
+            scaler,
+            FEATURE_COLUMNS,
+            train_dates,
+            episodes=dqn_episodes,
+            save_artifacts=True,
+        )
 
     # Meta-Ensemble trained EXCLUSIVELY via walk-forward out-of-fold stacking on 2016-2024 development data
     with mlflow.start_run(run_name=f"META_ENSEMBLE_{ticker}"):
