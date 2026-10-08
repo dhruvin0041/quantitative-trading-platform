@@ -173,6 +173,57 @@ class TestReportingPipeline(unittest.TestCase):
         # Verify 3 consecutive BUYs followed by 2 consecutive SELLs are preserved
         self.assertEqual(actions, ["BUY", "BUY", "BUY", "SELL", "SELL"])
 
+    def test_package_chart_data_rolling_1year_window(self):
+        """
+        Integration test verifying that package_chart_data strictly enforces
+        a rolling 1-year window of candlesticks up to the latest date.
+        """
+        # Create a 3-year daily price series from 2023-10-08 to 2026-10-08
+        dates = pd.date_range("2023-10-08", "2026-10-08", freq="D")
+        prices = np.linspace(150, 250, len(dates))
+        df_3y = pd.DataFrame(
+            {
+                "Open": prices - 1.0,
+                "High": prices + 1.0,
+                "Low": prices - 1.0,
+                "Close": prices,
+                "Volume": 1000000,
+            },
+            index=dates,
+        )
+
+        mock_markers = [
+            {"time": "2024-01-15", "action": "BUY", "label": "BUY", "probability": 90, "price": 160.0},
+            {"time": "2025-05-01", "action": "SELL", "label": "SELL", "probability": 90, "price": 180.0},
+            {"time": "2025-11-01", "action": "BUY", "label": "BUY", "probability": 95, "price": 200.0},
+            {"time": "2026-03-15", "action": "SELL", "label": "SELL", "probability": 95, "price": 220.0},
+        ]
+
+        response = self.report_gen.package_chart_data(
+            "AAPL",
+            df_3y,
+            ai_report_dict={"Status": "OK"},
+            historical_markers=mock_markers,
+        )
+
+        candles = response["candles"]
+        self.assertGreater(len(candles), 0)
+
+        # Min candle date should be exactly on or after 2025-10-08 (1 year before latest date 2026-10-08)
+        min_candle_date = candles[0]["time"]
+        max_candle_date = candles[-1]["time"]
+
+        self.assertEqual(min_candle_date, "2025-10-08")
+        self.assertEqual(max_candle_date, "2026-10-08")
+
+        # Markers before 2025-10-08 must be filtered out; markers within the 1-year window preserved
+        marker_times = [m["time"] for m in response["markers"]]
+        self.assertNotIn("2024-01-15", marker_times)
+        self.assertNotIn("2025-05-01", marker_times)
+        self.assertIn("2025-11-01", marker_times)
+        self.assertIn("2026-03-15", marker_times)
+
 
 if __name__ == "__main__":
     unittest.main()
+

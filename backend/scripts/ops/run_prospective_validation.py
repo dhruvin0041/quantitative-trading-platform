@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-HYDRA V2.2 — Prospective Validation Operations Runner (Hardened).
-Executes the prospective validation cycle for HYDRA V2.2 on genuinely unseen market data.
+HYDRA V2.3 — Prospective Validation Operations Runner (Hardened).
+Executes the prospective validation cycle for HYDRA V2.3 on genuinely unseen market data.
 
 STRICT CONSTRAINTS (V2.2 Frozen Protocol):
 - Zero model retraining.
@@ -82,11 +82,11 @@ class ProspectiveValidationManager:
         self.reports_dir = (
             Path(reports_dir)
             if reports_dir
-            else (self.backend_dir / "reports" / "v2_2_prospective")
+            else (self.backend_dir / "reports" / "v2_3_prospective")
         )
         self.reports_dir.mkdir(parents=True, exist_ok=True)
 
-        self.manifest_path = self.artifacts_dir / "frozen_strategy_manifest_v2.2.json"
+        self.manifest_path = self.artifacts_dir / "frozen_strategy_manifest_v2.3.json"
         self.db_path = Path(db_path) if db_path else (self.artifacts_dir / "signal_ledger.db")
 
         # Ensure working directory is backend for relative config/artifact lookups

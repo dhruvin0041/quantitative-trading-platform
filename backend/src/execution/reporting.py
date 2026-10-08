@@ -336,10 +336,26 @@ class ReportGenerator:
         df_chart = df_full.reset_index()
         date_col = "Date" if "Date" in df_chart.columns else "index"
 
-        # Filter for 2026 onwards for UI clarity if 2026 data exists
-        df_2026 = df_chart[df_chart[date_col] >= pd.Timestamp("2026-01-01")]
-        if not df_2026.empty:
-            df_chart = df_2026
+        # Fixed rolling 1-year window: displays exactly 1 year of candles up to the latest date / today
+        # (e.g. today 8/10/2026 -> 8/10/2025; tomorrow 9/10/2026 -> 9/10/2025)
+        if not df_chart.empty and date_col in df_chart.columns:
+            df_chart[date_col] = pd.to_datetime(df_chart[date_col])
+            latest_date = df_chart[date_col].max()
+            if pd.notna(latest_date):
+                try:
+                    now_tz = latest_date.tz if hasattr(latest_date, "tz") and latest_date.tz else None
+                    now = pd.Timestamp.now(tz=now_tz)
+                    if abs((now.normalize() - latest_date.normalize()).days) <= 7:
+                        anchor_date = max(now.normalize(), latest_date.normalize())
+                    else:
+                        anchor_date = latest_date.normalize()
+                except Exception:
+                    anchor_date = latest_date.normalize() if hasattr(latest_date, "normalize") else latest_date
+
+                one_year_ago = anchor_date - pd.DateOffset(years=1)
+                df_1y = df_chart[df_chart[date_col] >= one_year_ago]
+                if not df_1y.empty:
+                    df_chart = df_1y
 
         df_chart["time"] = df_chart[date_col].dt.strftime("%Y-%m-%d")
         df_chart = df_chart.rename(
