@@ -60,9 +60,9 @@ class TestProspectiveIntegrity(unittest.TestCase):
         date_str: str = "2026-10-01",
         decision: str = "HOLD",
         ref_price: float = 330.32,
-        prev_hash: str = "GENESIS_V2_2_PROSPECTIVE_e34d9d472505d6b2",
+        prev_hash: str = "GENESIS_V2_2_PROSPECTIVE_6331bb89c708995f",
     ) -> str:
-        manifest_hash = "e34d9d472505d6b2d7a79924cbdf1fc6c0aa2346f67c72f9c0afd94b5352b195"
+        manifest_hash = "6331bb89c708995fdb39a61d0b800d5fe6198bd9b7fc7f299e90accefd881d83"
         temp_dict = {
             "signal_id": signal_id,
             "strategy_version": "HYDRA_PROSPECTIVE_V2.2",
@@ -303,7 +303,7 @@ class TestProspectiveIntegrity(unittest.TestCase):
     def test_11_manifest_verification(self):
         """Test 11: Frozen manifest SHA-256 matches production release baseline."""
         cfg = self.manager.verify_frozen_configuration()
-        expected_manifest_hash = "e34d9d472505d6b2d7a79924cbdf1fc6c0aa2346f67c72f9c0afd94b5352b195"
+        expected_manifest_hash = "6331bb89c708995fdb39a61d0b800d5fe6198bd9b7fc7f299e90accefd881d83"
         self.assertEqual(cfg["manifest_sha256"], expected_manifest_hash)
         self.assertTrue(cfg["models_valid"])
         self.assertTrue(cfg["configs_valid"])

@@ -834,3 +834,21 @@ class SignalLedger:
             if row and row["latest"]:
                 return str(row["latest"])
             return None
+
+    def clear_historical_replay(self, symbol: str) -> int:
+        """
+        Purges preliminary historical replay evidence for a specific symbol to allow
+        clean re-simulation with upgraded models or parameters.
+        IMMUTABILITY GUARANTEE: Never touches prospective_signals or live forward trades.
+        """
+        symbol = symbol.upper().strip()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "DELETE FROM signal_ledger WHERE symbol = ? AND dataset = 'PRELIMINARY_HISTORICAL_EVIDENCE';",
+                (symbol,),
+            )
+            conn.commit()
+            deleted = cursor.rowcount
+        logger.info(f"[LEDGER] Cleared {deleted} historical replay rows for {symbol}.")
+        return deleted

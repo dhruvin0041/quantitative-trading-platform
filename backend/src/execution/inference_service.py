@@ -92,11 +92,20 @@ class InferenceService:
         self.journal = signal_journal
 
         # Isotonic probability calibrator (fitted during training)
-        try:
-            self.model_calibrator = ModelCalibrator.load("artifacts/model_calibrator.joblib")
-            logger.info("Loaded isotonic model calibrator")
-        except Exception as e:
-            logger.warning("No isotonic calibrator found (%s). Raw probs will be used.", e)
+        cal_path = None
+        for cp in ["artifacts/model_calibrator.joblib", "backend/artifacts/model_calibrator.joblib"]:
+            if Path(cp).exists():
+                cal_path = cp
+                break
+        if cal_path:
+            try:
+                self.model_calibrator = ModelCalibrator.load(cal_path)
+                logger.info("Loaded isotonic model calibrator from %s", cal_path)
+            except Exception as e:
+                logger.warning("Error loading calibrator (%s). Raw probs will be used.", e)
+                self.model_calibrator = None
+        else:
+            logger.info("No isotonic calibrator found on disk. Raw probs will be used.")
             self.model_calibrator = None
 
         # V2.0 Engines
@@ -156,9 +165,9 @@ class InferenceService:
 
             scaled_rows = scaler.transform(df_filtered.values)
 
-            # Pre-trained XGBoost Alpha Model
-            model = getattr(self.mm, "xgb_model", None)
-            if model is None:
+            # Multi-Model Alpha Ensemble: XGBoost + LightGBM
+            xgb_model = getattr(self.mm, "xgb_model", None)
+            if xgb_model is None:
                 for m_path in [
                     "artifacts/xgb_ensemble.json",
                     "backend/artifacts/xgb_ensemble.json",
@@ -168,17 +177,42 @@ class InferenceService:
                         try:
                             import xgboost as xgb
 
-                            model = xgb.XGBClassifier()
-                            model.load_model(str(mp))
+                            xgb_model = xgb.XGBClassifier()
+                            xgb_model.load_model(str(mp))
                             break
                         except Exception:
                             pass
 
-            if model is None:
+            if xgb_model is None:
                 logger.warning("No XGBoost model available for causal ML replay.")
                 return []
 
-            all_probs = model.predict_proba(scaled_rows)
+            xgb_probs = xgb_model.predict_proba(scaled_rows)
+
+            # Secondary Alpha: LightGBM
+            lgbm_model = getattr(self.mm, "lgbm_model", None)
+            if lgbm_model is None:
+                for l_path in [
+                    "artifacts/lgbm_agent.joblib",
+                    "backend/artifacts/lgbm_agent.joblib",
+                ]:
+                    lp = Path(l_path)
+                    if lp.exists():
+                        try:
+                            lgbm_model = joblib.load(lp)
+                            break
+                        except Exception:
+                            pass
+
+            if lgbm_model is not None:
+                try:
+                    lgbm_probs = lgbm_model.predict_proba(scaled_rows)
+                    all_probs = 0.55 * xgb_probs + 0.45 * lgbm_probs
+                except Exception:
+                    all_probs = xgb_probs
+            else:
+                all_probs = xgb_probs
+
             valid_indices = df_filtered.index
             if len(all_probs) == 1 and len(valid_indices) > 1:
                 all_probs = np.tile(all_probs, (len(valid_indices), 1))
@@ -190,8 +224,10 @@ class InferenceService:
                 valid_indices = valid_indices[:-1]
                 all_probs = all_probs[:-1]
 
-            # SMA200 and SPY SMA50 for causal macro trend filter
+            # Price series and indicators
             close_s = df["Close"].reindex(valid_indices).ffill()
+            high_s = df["High"].reindex(valid_indices).ffill()
+            low_s = df["Low"].reindex(valid_indices).ffill()
             sma200_s = close_s.rolling(window=200, min_periods=20).mean()
             if spy is not None and "Close" in spy.columns:
                 spy_close_s = spy["Close"].reindex(valid_indices).ffill()
@@ -200,9 +236,21 @@ class InferenceService:
                 spy_close_s = close_s
                 spy_sma50_s = close_s
 
+            # Point-in-time swing exhaustion indicators from feature frame
+            rsi_s = (
+                df_feat["RSI"].reindex(valid_indices).ffill()
+                if "RSI" in df_feat.columns
+                else pd.Series(50.0, index=valid_indices)
+            )
+            bb_pos_s = (
+                df_feat["BB_Position"].reindex(valid_indices).ffill()
+                if "BB_Position" in df_feat.columns
+                else pd.Series(0.5, index=valid_indices)
+            )
+
             current_pos = "FLAT"
             last_trade_idx = -10
-            min_cooldown_bars = 5
+            last_trade_price = 0.0
 
             for i in range(len(valid_indices)):
                 v_idx = valid_indices[i]
@@ -215,25 +263,15 @@ class InferenceService:
                 if self.model_calibrator is not None:
                     prob_vec = self.model_calibrator.calibrate("XGB", prob_vec)
 
-                p_sell, p_hold, p_buy = (
+                p_sell, _p_hold, p_buy = (
                     float(prob_vec[0]),
                     float(prob_vec[1]),
                     float(prob_vec[2]),
                 )
 
-                # Conviction threshold >= 0.60
-                if p_buy >= 0.60:
-                    raw_signal = "BUY"
-                    conf = p_buy
-                elif p_sell >= 0.60:
-                    raw_signal = "SELL"
-                    conf = p_sell
-                else:
-                    raw_signal = "HOLD"
-                    conf = p_hold
-
-                # Macro filter at bar t
                 cur_c = float(close_s.iloc[i])
+                cur_rsi = float(rsi_s.iloc[i]) if pd.notna(rsi_s.iloc[i]) else 50.0
+                cur_bb = float(bb_pos_s.iloc[i]) if pd.notna(bb_pos_s.iloc[i]) else 0.5
                 cur_sma200 = (
                     float(sma200_s.iloc[i]) if pd.notna(sma200_s.iloc[i]) else cur_c
                 )
@@ -244,7 +282,54 @@ class InferenceService:
                     else cur_spy
                 )
 
-                long_ok = (cur_c >= cur_sma200) and (cur_spy >= cur_spy_sma50)
+                # Mean-reversion swing exhaustion overlay
+                is_dip_oversold = (cur_rsi < 38.0 or cur_bb < 0.12)
+                is_peak_overbought = (cur_rsi > 65.0 or cur_bb > 0.90)
+
+                # Local price action pivot detection (strictly causal, using t-2 and t-1)
+                is_trough = False
+                is_crest = False
+                if i >= 2:
+                    prev_l = float(low_s.iloc[i - 1])
+                    prev2_l = float(low_s.iloc[i - 2])
+                    prev_h = float(high_s.iloc[i - 1])
+                    prev2_h = float(high_s.iloc[i - 2])
+                    is_trough = (
+                        (prev_l < prev2_l)
+                        and (cur_c > prev_l)
+                        and (cur_rsi < 44.0 or cur_bb < 0.20)
+                    )
+                    is_crest = (
+                        (prev_h > prev2_h)
+                        and (cur_c < prev_h)
+                        and (cur_rsi > 60.0 or cur_bb > 0.82)
+                    )
+
+                eff_p_buy = (
+                    p_buy
+                    + (0.22 if is_dip_oversold else 0.0)
+                    + (0.16 if is_trough else 0.0)
+                )
+                eff_p_sell = (
+                    p_sell
+                    + (0.22 if is_peak_overbought else 0.0)
+                    + (0.16 if is_crest else 0.0)
+                )
+
+                # Conviction threshold >= 0.58
+                if eff_p_buy >= 0.58 and eff_p_buy > eff_p_sell:
+                    raw_signal = "BUY"
+                    conf = min(1.0, eff_p_buy)
+                elif eff_p_sell >= 0.58 and eff_p_sell > eff_p_buy:
+                    raw_signal = "SELL"
+                    conf = min(1.0, eff_p_sell)
+                else:
+                    raw_signal = "HOLD"
+                    conf = float(prob_vec[1])
+
+                # Macro filter at bar t
+                base_long_ok = (cur_c >= cur_sma200 * 0.96) and (cur_spy >= cur_spy_sma50 * 0.96)
+                long_ok = True if (is_dip_oversold or is_trough) else base_long_ok
                 short_ok = (cur_c < cur_sma200) or (cur_spy < cur_spy_sma50)
 
                 # An existing LONG position can ALWAYS exit/take profit on a SELL signal.
@@ -261,6 +346,25 @@ class InferenceService:
                 else:
                     filtered_signal = raw_signal
 
+                # Price-Aware Adaptive Cooldown
+                bars_since_trade = i - last_trade_idx
+                cooldown_ok = False
+                if bars_since_trade >= 4:
+                    cooldown_ok = True
+                elif bars_since_trade >= 2:
+                    if (
+                        current_pos != "LONG"
+                        and last_trade_price > 0
+                        and cur_c <= last_trade_price * 0.980
+                    ):
+                        cooldown_ok = True  # Bought dip >= 2.0% below prior trade price
+                    elif (
+                        current_pos == "LONG"
+                        and last_trade_price > 0
+                        and cur_c >= last_trade_price * 1.025
+                    ):
+                        cooldown_ok = True  # Exited rally >= 2.5% above prior entry price
+
                 # State machine alternation: BUY -> SELL -> BUY
                 # Target execution is Open[t+1]
                 locs = df.index.get_indexer([valid_indices[i]])
@@ -268,10 +372,11 @@ class InferenceService:
                 if (
                     filtered_signal == "BUY"
                     and current_pos != "LONG"
-                    and (i - last_trade_idx >= min_cooldown_bars)
+                    and cooldown_ok
                 ):
                     current_pos = "LONG"
                     last_trade_idx = i
+                    last_trade_price = cur_c
                     if orig_idx + 1 < len(df):
                         next_idx = df.index[orig_idx + 1]
                         exec_target = (
@@ -295,7 +400,7 @@ class InferenceService:
                         confidence=conf,
                         execution_target_bar=exec_target,
                         execution_price=round(exec_price, 2),
-                        model_version="Institutional_Mesh_V2.1",
+                        model_version="Institutional_Mesh_V2.2_Swing",
                         raw_features_hash=SignalLedger.compute_features_hash(
                             scaled_rows[i]
                         ),
@@ -313,10 +418,11 @@ class InferenceService:
                 elif (
                     filtered_signal == "SELL"
                     and current_pos == "LONG"
-                    and (i - last_trade_idx >= min_cooldown_bars)
+                    and cooldown_ok
                 ):
                     current_pos = "FLAT"
                     last_trade_idx = i
+                    last_trade_price = cur_c
                     if orig_idx + 1 < len(df):
                         next_idx = df.index[orig_idx + 1]
                         exec_target = (
@@ -340,7 +446,7 @@ class InferenceService:
                         confidence=conf,
                         execution_target_bar=exec_target,
                         execution_price=round(exec_price, 2),
-                        model_version="Institutional_Mesh_V2.1",
+                        model_version="Institutional_Mesh_V2.2_Swing",
                         raw_features_hash=SignalLedger.compute_features_hash(
                             scaled_rows[i]
                         ),
@@ -370,7 +476,7 @@ class InferenceService:
                     confidence=0.5,
                     execution_target_bar="NEXT_SESSION_OPEN",
                     execution_price=round(float(df["Close"].loc[last_v_idx]), 2),
-                    model_version="Institutional_Mesh_V2.1",
+                    model_version="Institutional_Mesh_V2.2_Swing",
                     raw_features_hash="latest_bar_marker",
                     metadata={
                         "source": "causal_replay_checkpoint",
@@ -394,6 +500,7 @@ class InferenceService:
         ticker: str,
         ticker_df: pd.DataFrame,
         spy_df: Optional[pd.DataFrame] = None,
+        force_recompute: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Retrieves verified causal markers from the immutable SignalLedger.
@@ -414,6 +521,10 @@ class InferenceService:
                 )
 
         latest_ledger_bar = self.signal_ledger.get_latest_bar_timestamp(ticker)
+
+        if force_recompute:
+            self.signal_ledger.clear_historical_replay(ticker)
+            return self._replay_causal_ml_signals(ticker, ticker_df, spy_df)
 
         if (
             latest_completed_bar_date is not None
@@ -613,7 +724,12 @@ class InferenceService:
             curr_spy_close = float(spy_close_s.iloc[-1])
             sma_200 = float(close_s.rolling(window=200, min_periods=20).mean().iloc[-1])
             spy_sma_50 = float(spy_close_s.rolling(window=50, min_periods=10).mean().iloc[-1])
-            long_allowed = bool((curr_close >= sma_200) and (curr_spy_close >= spy_sma_50))
+            base_long = bool((curr_close >= sma_200 * 0.96) and (curr_spy_close >= spy_sma_50 * 0.96))
+            is_oversold_dip = bool(
+                float(tech_snapshot.get("RSI", 50.0)) < 40.0
+                or float(tech_snapshot.get("BB_Position", 0.5)) < 0.15
+            )
+            long_allowed = True if is_oversold_dip else base_long
             short_allowed = bool((curr_close < sma_200) or (curr_spy_close < spy_sma_50))
         except Exception as e:
             logger.warning(f"Error computing macro regime filter: {e}")

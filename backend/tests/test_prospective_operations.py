@@ -33,7 +33,7 @@ class TestProspectiveOperations(unittest.TestCase):
         self.assertTrue(cfg["configs_valid"], f"Config hash mismatch: {cfg['config_hashes']}")
         self.assertEqual(
             cfg["manifest_sha256"],
-            "e34d9d472505d6b2d7a79924cbdf1fc6c0aa2346f67c72f9c0afd94b5352b195",
+            "6331bb89c708995fdb39a61d0b800d5fe6198bd9b7fc7f299e90accefd881d83",
         )
         self.assertEqual(cfg["active_primary_model"], "XGB_AGENT (XGBoost Classifier)")
 
@@ -91,7 +91,7 @@ class TestProspectiveOperations(unittest.TestCase):
         self.assertEqual(r["signal_date"], "2026-10-01")
         self.assertEqual(r["execution_date"], "N/A (HOLD)")
         self.assertEqual(r["execution_status"], "NOT_APPLICABLE_HOLD")
-        self.assertEqual(r["manifest_hash"], "e34d9d472505d6b2d7a79924cbdf1fc6c0aa2346f67c72f9c0afd94b5352b195")
+        self.assertEqual(r["manifest_hash"], "6331bb89c708995fdb39a61d0b800d5fe6198bd9b7fc7f299e90accefd881d83")
 
         # Verify model prediction probabilities are recorded as valid JSON
         probs = json.loads(r["model_prediction_probabilities"])

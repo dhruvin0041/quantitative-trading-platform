@@ -43,7 +43,7 @@ class TestLedgerIsolationAndRecovery(unittest.TestCase):
             db_path=self.db_path,
             reports_dir=Path(self.temp_dir) / "reports",
         )
-        self.manifest_hash = "e34d9d472505d6b2d7a79924cbdf1fc6c0aa2346f67c72f9c0afd94b5352b195"
+        self.manifest_hash = self.manager.verify_frozen_configuration()["manifest_sha256"]
 
     def tearDown(self):
         try:

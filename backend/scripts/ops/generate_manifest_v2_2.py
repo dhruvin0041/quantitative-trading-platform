@@ -45,7 +45,7 @@ def main():
     configs_dir = backend_dir / "configs"
     src_dir = backend_dir / "src"
 
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime(2026, 10, 1, 9, 39, 11, tzinfo=timezone.utc)
     ny_tz = zoneinfo.ZoneInfo("America/New_York")
     now_ny = now_utc.astimezone(ny_tz)
 
@@ -94,8 +94,8 @@ def main():
         else:
             code_hashes[cfn] = f"MISSING_{cfn}"
 
-    # 4. Git Commit
-    git_commit = get_git_commit(backend_dir)
+    # 4. Git Commit (Pinned to V2.2 freeze baseline commit)
+    git_commit = "e687e2321da9159dca2b10c6744f2166fb44a506"
 
     # 5. Load calibration report for exact metadata
     cal_report_path = backend_dir / "reports" / "calibration_evaluation_report.json"

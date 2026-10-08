@@ -7,9 +7,9 @@
   },
   "model_prediction_distributions": {
     "XGBoost": {
-      "BUY": 0,
+      "BUY": 1,
       "HOLD": 0,
-      "SELL": 1
+      "SELL": 0
     },
     "LightGBM": {
       "BUY": 0,
@@ -17,23 +17,23 @@
       "SELL": 1
     },
     "DL_Fusion_Raw": {
-      "BUY": 1,
+      "BUY": 0,
       "HOLD": 0,
-      "SELL": 0
+      "SELL": 1
     },
     "DL_Fusion_Calibrated": {
       "BUY": 0,
-      "HOLD": 1,
-      "SELL": 0
+      "HOLD": 0,
+      "SELL": 1
     },
     "DQN": {
-      "BUY": 1,
+      "BUY": 0,
       "HOLD": 0,
-      "SELL": 0
+      "SELL": 1
     },
     "Meta_Ensemble": {
-      "BUY": 1,
-      "HOLD": 0,
+      "BUY": 0,
+      "HOLD": 1,
       "SELL": 0
     },
     "Final_Production_Path": {
@@ -96,14 +96,20 @@
     "immutable_triggers_enforced": true
   },
   "legacy_ledger_reconciliation": {
-    "reconciled": true,
+    "reconciled": false,
     "authoritative_count": 1,
-    "legacy_count": 1,
+    "legacy_count": 0,
     "authoritative_table": "prospective_observations",
     "legacy_table": "prospective_signals (DEPRECATED / NON-AUTHORITATIVE)",
-    "discrepancies_count": 0,
-    "discrepancies": [],
-    "reconciliation_timestamp": "2026-10-07T11:51:02.441218Z"
+    "discrepancies_count": 1,
+    "discrepancies": [
+      {
+        "date": "2026-10-01",
+        "type": "MISSING_LEGACY_RECORD",
+        "detail": "Signal exists in authoritative prospective_observations (PROP-AAPL-20261001-16063661) but missing from legacy prospective_signals."
+      }
+    ],
+    "reconciliation_timestamp": "2026-10-08T10:05:29.264227Z"
   },
   "completed_trades": []
 }

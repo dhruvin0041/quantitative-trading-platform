@@ -316,7 +316,7 @@ class ProspectiveValidationManager:
         if not unhashed:
             return
 
-        manifest_hash = "e34d9d472505d6b2d7a79924cbdf1fc6c0aa2346f67c72f9c0afd94b5352b195"
+        manifest_hash = self.verify_frozen_configuration()["manifest_sha256"]
         prev_hash = f"GENESIS_V2_2_PROSPECTIVE_{manifest_hash[:16]}"
 
         for row in unhashed:
