@@ -19,23 +19,23 @@
     "first_prospective_start": "First genuinely untouched prospective date established as 2026-10-01 16:00:00 EDT (post-freeze)."
   },
   "model_hashes": {
-    "xgb_ensemble.json": "9fcf6a9135af4396c834a89027221107065d1f1e62b42901790c978821f8c8ee",
-    "latest_fusion_weights.weights.h5": "81842b31dc125de6e57487e1bb3d0303adc9da1ad3f9c05ba575183380fb816b",
-    "lgbm_agent.joblib": "fe66d2e70845b15d997d359fc788d7f0a2bff6d58cf1aa408b7d6b4e989fd4f9",
-    "dqn_model.pth": "d1e6513f022e0cedcdefbde83f12620214197cfc9a69d9ca64b0c821c4b70c7d",
-    "latest_scaler.joblib": "e510812c97bf85e07538fa87887f7a75b0efa3ad0626edfe1855db84dbe40ce9",
-    "model_calibrator.joblib": "29ce7e1c66169355d04d436f20e8611575256633478f9e22a813ef26da0cf2bc",
-    "meta_ensemble.joblib": "043f6f8dede8406fe6b76596e5543097a617ffdea8b8177babc64d39476cceda",
-    "tft_quantile_weights.weights.h5": "655559666c856d207137c1e5d26cca82c3ddf322a4c6846b95c50d4beb1210ff"
+    "xgb_ensemble.json": "MISSING_xgb_ensemble.json",
+    "latest_fusion_weights.weights.h5": "MISSING_latest_fusion_weights.weights.h5",
+    "lgbm_agent.joblib": "MISSING_lgbm_agent.joblib",
+    "dqn_model.pth": "MISSING_dqn_model.pth",
+    "latest_scaler.joblib": "MISSING_latest_scaler.joblib",
+    "model_calibrator.joblib": "MISSING_model_calibrator.joblib",
+    "meta_ensemble.joblib": "MISSING_meta_ensemble.joblib",
+    "tft_quantile_weights.weights.h5": "MISSING_tft_quantile_weights.weights.h5"
   },
   "config_hashes": {
     "model_params.yaml": "53f271e8c54269ff125f2d14245c81d0daddaaeaa6eebb5e9911970df7524647",
     "optimized_params_AAPL.json": "fed87bcff9b207b41b21045d7254c9a94f3e6520f49a4bd0a3d02f41e28edee8",
-    "kept_features.json": "debe3e4b82edf843b0b2fa3397c372f8f8826d64f75bf2d816d1a60819156b17"
+    "kept_features.json": "MISSING_kept_features.json"
   },
   "code_hashes": {
     "live_inference.py": "9d353993ef133c1bebd9098f34194dc76bcefccc2434bba8401c2840e8c8a17f",
-    "inference_service.py": "eb257c38a6a08db18a722384f9351f54b767b8d7d8f77cb8d1d1734f1fc88358",
+    "inference_service.py": "27a07e7258cd1547e32b569e927c2a6078c3056177387fa2139c672138820df5",
     "signal_ledger.py": "6bf42eacb9060fb4063bb22aa515459080c1dc025d118b0006a00899e74d7d21",
     "backtest_service.py": "faa7afcefb8799e5b90763c3b01c329a55d1ba960b2cd8ded747cbf0ce47a04b",
     "data_firewall.py": "ec46bb4e12f0d24ee4e6d9022810b07b8124e4c2c69d0ef7117e5325ea34d760",

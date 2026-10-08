@@ -228,6 +228,8 @@ class InferenceService:
             close_s = df["Close"].reindex(valid_indices).ffill()
             high_s = df["High"].reindex(valid_indices).ffill()
             low_s = df["Low"].reindex(valid_indices).ffill()
+            open_s = df["Open"].reindex(valid_indices).ffill()
+            sma50_s = close_s.rolling(window=50, min_periods=10).mean()
             sma200_s = close_s.rolling(window=200, min_periods=20).mean()
             if spy is not None and "Close" in spy.columns:
                 spy_close_s = spy["Close"].reindex(valid_indices).ffill()
@@ -270,6 +272,11 @@ class InferenceService:
                 )
 
                 cur_c = float(close_s.iloc[i])
+                cur_sma50 = (
+                    float(sma50_s.iloc[i])
+                    if pd.notna(sma50_s.iloc[i])
+                    else cur_c
+                )
                 cur_rsi = float(rsi_s.iloc[i]) if pd.notna(rsi_s.iloc[i]) else 50.0
                 cur_bb = float(bb_pos_s.iloc[i]) if pd.notna(bb_pos_s.iloc[i]) else 0.5
                 cur_sma200 = (
@@ -281,10 +288,13 @@ class InferenceService:
                     if pd.notna(spy_sma50_s.iloc[i])
                     else cur_spy
                 )
+                cur_l = float(low_s.iloc[i])
+                cur_h = float(high_s.iloc[i])
+                cur_o = float(open_s.iloc[i])
 
                 # Mean-reversion swing exhaustion overlay
-                is_dip_oversold = (cur_rsi < 38.0 or cur_bb < 0.12)
-                is_peak_overbought = (cur_rsi > 65.0 or cur_bb > 0.90)
+                is_dip_oversold = (cur_rsi < 30.0 or cur_bb < 0.05)
+                is_peak_overbought = (cur_rsi > 75.0 or cur_bb > 0.95)
 
                 # Local price action pivot detection (strictly causal, using t-2 and t-1)
                 is_trough = False
@@ -294,29 +304,47 @@ class InferenceService:
                     prev2_l = float(low_s.iloc[i - 2])
                     prev_h = float(high_s.iloc[i - 1])
                     prev2_h = float(high_s.iloc[i - 2])
+                    
+                    # More responsive trough detection: price rejection from recent lows
+                    # Require candle to be green OR close in the top half of its range
+                    is_bullish_candle = (cur_c > cur_o) or (cur_c > cur_l + (cur_h - cur_l) * 0.5)
                     is_trough = (
-                        (prev_l < prev2_l)
+                        is_bullish_candle
                         and (cur_c > prev_l)
-                        and (cur_rsi < 44.0 or cur_bb < 0.20)
+                        and (prev_l <= prev2_l or cur_l <= prev_l)
                     )
+                    # More responsive crest detection: price rejection from recent highs
+                    # Require candle to be red OR close in the bottom half of its range
+                    is_bearish_candle = (cur_c < cur_o) or (cur_c < cur_l + (cur_h - cur_l) * 0.5)
                     is_crest = (
-                        (prev_h > prev2_h)
+                        is_bearish_candle
                         and (cur_c < prev_h)
-                        and (cur_rsi > 60.0 or cur_bb > 0.82)
+                        and (prev_h >= prev2_h or cur_h >= prev_h)
                     )
 
+                strong_uptrend = (cur_c > cur_sma50) and (cur_sma50 > cur_sma200)
+                strong_downtrend = (cur_c < cur_sma50) and (cur_sma50 < cur_sma200)
+                
                 eff_p_buy = (
                     p_buy
-                    + (0.22 if is_dip_oversold else 0.0)
-                    + (0.16 if is_trough else 0.0)
+                    + (0.28 if is_dip_oversold else 0.0)
+                    + (0.35 if is_trough else 0.0)
                 )
                 eff_p_sell = (
                     p_sell
-                    + (0.22 if is_peak_overbought else 0.0)
-                    + (0.16 if is_crest else 0.0)
+                    + (0.28 if is_peak_overbought else 0.0)
+                    + (0.35 if is_crest else 0.0)
                 )
+                
+                if not is_crest:
+                    eff_p_sell = 0.0
+                if not is_trough:
+                    eff_p_buy = 0.0
 
                 # Conviction threshold >= 0.58
+                if i < 30:
+                    print(f"Bar {i} {bar_time}: is_trough={is_trough}, is_crest={is_crest}, p_buy={p_buy:.2f}, eff_p_buy={eff_p_buy:.2f}, eff_p_sell={eff_p_sell:.2f}")
+
                 if eff_p_buy >= 0.58 and eff_p_buy > eff_p_sell:
                     raw_signal = "BUY"
                     conf = min(1.0, eff_p_buy)
@@ -328,7 +356,7 @@ class InferenceService:
                     conf = float(prob_vec[1])
 
                 # Macro filter at bar t
-                base_long_ok = (cur_c >= cur_sma200 * 0.96) and (cur_spy >= cur_spy_sma50 * 0.96)
+                base_long_ok = (cur_c >= cur_sma200 * 0.85) and (cur_spy >= cur_spy_sma50 * 0.90)
                 long_ok = True if (is_dip_oversold or is_trough) else base_long_ok
                 short_ok = (cur_c < cur_sma200) or (cur_spy < cur_spy_sma50)
 
@@ -349,21 +377,21 @@ class InferenceService:
                 # Price-Aware Adaptive Cooldown
                 bars_since_trade = i - last_trade_idx
                 cooldown_ok = False
-                if bars_since_trade >= 4:
+                if bars_since_trade >= 3:
                     cooldown_ok = True
-                elif bars_since_trade >= 2:
+                elif bars_since_trade >= 1:
                     if (
                         current_pos != "LONG"
                         and last_trade_price > 0
-                        and cur_c <= last_trade_price * 0.980
+                        and cur_c <= last_trade_price * 0.985
                     ):
-                        cooldown_ok = True  # Bought dip >= 2.0% below prior trade price
+                        cooldown_ok = True  # Bought dip >= 1.5% below prior trade price
                     elif (
                         current_pos == "LONG"
                         and last_trade_price > 0
-                        and cur_c >= last_trade_price * 1.025
+                        and cur_c >= last_trade_price * 1.015
                     ):
-                        cooldown_ok = True  # Exited rally >= 2.5% above prior entry price
+                        cooldown_ok = True  # Exited rally >= 1.5% above prior entry price
 
                 # State machine alternation: BUY -> SELL -> BUY
                 # Target execution is Open[t+1]
@@ -521,8 +549,11 @@ class InferenceService:
                 )
 
         latest_ledger_bar = self.signal_ledger.get_latest_bar_timestamp(ticker)
+        all_signals = self.signal_ledger.get_signals(
+            symbol=ticker, actions_filter=["BUY", "SELL"]
+        )
 
-        if force_recompute:
+        if force_recompute or len(all_signals) < 2:
             self.signal_ledger.clear_historical_replay(ticker)
             return self._replay_causal_ml_signals(ticker, ticker_df, spy_df)
 
@@ -625,6 +656,59 @@ class InferenceService:
             dqn_p = np.full(3, (1.0 - acc) / 2.0)
             dqn_p[dqn_action] = acc
 
+        # Causal pivot detection for probability boosting
+        try:
+            if len(ticker_df_risk) >= 3:
+                cur_c = current_price
+                cur_o = float(ticker_df_risk["Open"].iloc[-1])
+                cur_l = float(ticker_df_risk["Low"].iloc[-1])
+                prev_l = float(ticker_df_risk["Low"].iloc[-2])
+                prev2_l = float(ticker_df_risk["Low"].iloc[-3])
+                cur_h = float(ticker_df_risk["High"].iloc[-1])
+                prev_h = float(ticker_df_risk["High"].iloc[-2])
+                prev2_h = float(ticker_df_risk["High"].iloc[-3])
+                
+                cur_rsi = float(tech_snapshot.get("RSI", 50.0))
+                cur_bb = float(tech_snapshot.get("BB_Position", 0.5))
+                
+                is_dip_oversold = (cur_rsi < 30.0 or cur_bb < 0.05)
+                is_peak_overbought = (cur_rsi > 75.0 or cur_bb > 0.95)
+                
+                is_bullish_candle = (cur_c > cur_o) or (cur_c > cur_l + (cur_h - cur_l) * 0.5)
+                is_trough = (
+                    is_bullish_candle
+                    and (cur_c > prev_l)
+                    and (prev_l <= prev2_l or cur_l <= prev_l)
+                )
+                is_bearish_candle = (cur_c < cur_o) or (cur_c < cur_l + (cur_h - cur_l) * 0.5)
+                is_crest = (
+                    is_bearish_candle
+                    and (cur_c < prev_h)
+                    and (prev_h >= prev2_h or cur_h >= prev_h)
+                )
+                
+                if len(ticker_df_risk) >= 200:
+                    cur_sma50 = float(ticker_df_risk["Close"].iloc[-50:].mean())
+                    cur_sma200 = float(ticker_df_risk["Close"].iloc[-200:].mean())
+                else:
+                    cur_sma50 = cur_c
+                    cur_sma200 = cur_c
+                    
+                strong_uptrend = (cur_c > cur_sma50) and (cur_sma50 > cur_sma200)
+                strong_downtrend = (cur_c < cur_sma50) and (cur_sma50 < cur_sma200)
+                
+                xgb_preds_raw[2] = min(1.0, xgb_preds_raw[2] + (0.28 if is_dip_oversold else 0.0) + (0.35 if is_trough else 0.0))
+                xgb_preds_raw[0] = min(1.0, xgb_preds_raw[0] + (0.28 if is_peak_overbought else 0.0) + (0.35 if is_crest else 0.0))
+
+                if not is_crest:
+                    xgb_preds_raw[0] = 0.0
+                if not is_trough:
+                    xgb_preds_raw[2] = 0.0
+
+                xgb_preds_raw = xgb_preds_raw / np.sum(xgb_preds_raw)
+        except Exception as e:
+            logger.warning(f"Error computing causal boosts in live inference: {e}")
+
         # Enforce conviction threshold: if max(P_sell, P_hold, P_buy) < 0.60, model outputs HOLD ([0, 1, 0])
         if np.max(dl_preds_raw) < 0.60:
             dl_preds_raw = np.array([0.0, 1.0, 0.0])
@@ -724,10 +808,10 @@ class InferenceService:
             curr_spy_close = float(spy_close_s.iloc[-1])
             sma_200 = float(close_s.rolling(window=200, min_periods=20).mean().iloc[-1])
             spy_sma_50 = float(spy_close_s.rolling(window=50, min_periods=10).mean().iloc[-1])
-            base_long = bool((curr_close >= sma_200 * 0.96) and (curr_spy_close >= spy_sma_50 * 0.96))
+            base_long = bool((curr_close >= sma_200 * 0.85) and (curr_spy_close >= spy_sma_50 * 0.90))
             is_oversold_dip = bool(
-                float(tech_snapshot.get("RSI", 50.0)) < 40.0
-                or float(tech_snapshot.get("BB_Position", 0.5)) < 0.15
+                float(tech_snapshot.get("RSI", 50.0)) < 45.0
+                or float(tech_snapshot.get("BB_Position", 0.5)) < 0.20
             )
             long_allowed = True if is_oversold_dip else base_long
             short_allowed = bool((curr_close < sma_200) or (curr_spy_close < spy_sma_50))
