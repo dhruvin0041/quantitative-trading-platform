@@ -29,10 +29,9 @@ class MockAlphaModel:
         n = len(X)
         probs = np.zeros((n, 3))
         for i in range(n):
-            val = float(X[i, 0])
-            if val > 0.3:
+            if i % 8 == 0:
                 probs[i] = [0.05, 0.15, 0.80]  # Strong BUY
-            elif val < -0.3:
+            elif i % 8 == 4:
                 probs[i] = [0.80, 0.15, 0.05]  # Strong SELL
             else:
                 probs[i] = [0.15, 0.70, 0.15]  # HOLD
