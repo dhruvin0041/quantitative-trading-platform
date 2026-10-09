@@ -153,9 +153,14 @@ class InstitutionalOrchestrator:
         """Fallback for single-asset inference."""
         alpha = self.alpha_agent.generate_alpha_signal(agreement_data)
 
+        metrics = {
+            "expected_value": risk_data.get("expected_value", risk_data),
+            "is_long_exit": risk_data.get("is_long_exit", False),
+            **risk_data,
+        }
         gov_result = self.risk_agent.governance.audit_signal(
             alpha_signal=alpha,
-            risk_metrics={"expected_value": risk_data},
+            risk_metrics=metrics,
             market_regime=market_regime
         )
 

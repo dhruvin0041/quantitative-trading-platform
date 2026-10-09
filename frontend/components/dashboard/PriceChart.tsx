@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { createChart, ColorType, CrosshairMode, CandlestickSeries, LineSeries, HistogramSeries, createSeriesMarkers, IChartApi, ISeriesApi } from 'lightweight-charts';
+import { createChart, ColorType, CrosshairMode, CandlestickSeries, LineSeries, HistogramSeries, createSeriesMarkers, IChartApi, ISeriesApi, Time, SeriesMarker, ISeriesMarkersPluginApi } from 'lightweight-charts';
 import { ChartData } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTheme } from 'next-themes';
@@ -23,6 +23,7 @@ export function PriceChart({ data, loading }: PriceChartProps) {
   const forecastP90Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const forecastP50Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const forecastP10Ref = useRef<ISeriesApi<"Line"> | null>(null);
+  const seriesMarkersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const { resolvedTheme } = useTheme();
   const [legendContent, setLegendContent] = React.useState<React.ReactNode>(null);
 
@@ -114,6 +115,7 @@ export function PriceChart({ data, loading }: PriceChartProps) {
       resizeObserver.disconnect();
       chart.remove();
       chartRef.current = null;
+      seriesMarkersRef.current = null;
     };
   }, [resolvedTheme]);
 
@@ -152,15 +154,21 @@ export function PriceChart({ data, loading }: PriceChartProps) {
     }
 
     // Zero-Repainting Mandate: Confirmed markers ONLY from closed candles
-    const rawMarkers = data.historical_markers || data.markers || [];
+    const rawMarkers = (Array.isArray(data.historical_markers) && data.historical_markers.length > 0)
+      ? data.historical_markers
+      : (Array.isArray(data.markers) && data.markers.length > 0 ? data.markers : []);
     const validMarkers = rawMarkers
-      .filter(m => (m.action === 'BUY' || m.action === 'SELL') && !m.is_provisional)
-      .sort((a, b) => new Date(a.time as string).getTime() - new Date(b.time as string).getTime());
+      .filter((m: { action?: string; signal?: string; is_provisional?: boolean }) => {
+        const act = m.action || m.signal;
+        return (act === 'BUY' || act === 'SELL') && !m.is_provisional;
+      })
+      .sort((a: { time: string | number }, b: { time: string | number }) => new Date(a.time as string).getTime() - new Date(b.time as string).getTime());
 
-    const markers = validMarkers.map((marker) => {
-      const isBuy = marker.action === 'BUY';
+    const markers: SeriesMarker<Time>[] = validMarkers.map((marker: { action?: string; signal?: string; time: string | number }) => {
+      const act = marker.action || marker.signal;
+      const isBuy = act === 'BUY';
       return {
-        time: marker.time,
+        time: String(marker.time) as Time,
         position: (isBuy ? "belowBar" : "aboveBar") as "belowBar" | "aboveBar",
         color: isBuy ? "#10B981" : "#EF4444",
         shape: (isBuy ? "arrowUp" : "arrowDown") as "arrowUp" | "arrowDown",
@@ -173,7 +181,7 @@ export function PriceChart({ data, loading }: PriceChartProps) {
     if (data.provisional_marker && data.provisional_marker.action) {
       const prov = data.provisional_marker;
       markers.push({
-        time: prov.time,
+        time: String(prov.time) as Time,
         position: prov.position as "belowBar" | "aboveBar",
         color: "#F59E0B", // Amber warning color
         shape: prov.shape as "arrowUp" | "arrowDown",
@@ -182,10 +190,10 @@ export function PriceChart({ data, loading }: PriceChartProps) {
       });
     }
 
-    if (markers.length > 0) {
-      createSeriesMarkers(candlestickSeriesRef.current, markers);
+    if (!seriesMarkersRef.current) {
+      seriesMarkersRef.current = createSeriesMarkers(candlestickSeriesRef.current, markers);
     } else {
-      createSeriesMarkers(candlestickSeriesRef.current, []);
+      seriesMarkersRef.current.setMarkers(markers);
     }
 
     chartRef.current.timeScale().fitContent();
@@ -218,22 +226,26 @@ export function PriceChart({ data, loading }: PriceChartProps) {
         return;
       }
 
-      if (data.historical_markers) {
-        const marker = data.historical_markers.find(m => m.time === param.time);
-        if (marker && marker.action !== 'HOLD') {
-          const isVeto = marker.action.includes('VETO') || marker.action === 'VAR_LIMIT_BREACH';
-          const isBuy = marker.action === 'BUY';
+      const allMarkersList = (Array.isArray(data.historical_markers) && data.historical_markers.length > 0)
+        ? data.historical_markers
+        : (Array.isArray(data.markers) && data.markers.length > 0 ? data.markers : []);
+      if (allMarkersList.length > 0) {
+        const marker = allMarkersList.find((m: { time: string | number }) => m.time === param.time);
+        const action = marker ? (marker.action || marker.signal) : null;
+        if (marker && action && action !== 'HOLD') {
+          const isVeto = typeof action === 'string' && (action.includes('VETO') || action === 'VAR_LIMIT_BREACH');
+          const isBuy = action === 'BUY';
           setLegendContent(
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
                 <span className={cn("text-[12px] font-bold uppercase", isVeto ? "text-warning" : (isBuy ? "text-positive" : "text-negative"))}>
-                  {isVeto ? 'RISK AGENT VETO' : `CONFIRMED ${marker.action} SIGNAL`}
+                  {isVeto ? 'RISK AGENT VETO' : `CONFIRMED ${action} SIGNAL`}
                 </span>
                 <span className="text-[9px] px-1.5 py-0.5 rounded bg-positive/10 text-positive font-mono uppercase">
                   LOCKED
                 </span>
               </div>
-              <span className="text-[11px] font-mono text-muted-foreground">Confidence: {marker.probability || 0}%</span>
+              <span className="text-[11px] font-mono text-muted-foreground">Confidence: {marker.probability || Math.round((marker.confidence || 0) * 100)}%</span>
               {marker.source_candle_timestamp && (
                 <span className="text-[10px] font-mono text-muted-foreground">Source Bar: {marker.source_candle_timestamp}</span>
               )}

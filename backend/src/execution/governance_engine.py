@@ -21,15 +21,36 @@ class SignalGovernanceEngine:
         veto_code = "NONE"
         severity = "STABLE"
 
-        # 1. Confidence Check
-        if alpha_signal["confidence"] < 0.65:
+        signal_type = "BUY" if alpha_signal["signal_idx"] == 2 else "SELL" if alpha_signal["signal_idx"] == 0 else "HOLD"
+        ev = risk_metrics.get("expected_value", {}).get("ev_pct", 0.0)
+        uncertainty = risk_metrics.get("uncertainty_score", 0.0)
+
+        # For non-actionable HOLD signals, approve without risk penalty (no capital deployed)
+        if signal_type == "HOLD":
+            decision_tree = [
+                {"node": "Alpha Generation", "status": "PASS", "detail": f"Conf: {alpha_signal['confidence']*100:.1f}%"},
+                {"node": "Expected Value", "status": "PASS", "detail": f"EV: {ev:.2f}%"},
+                {"node": "Regime Filter", "status": "PASS", "detail": market_regime},
+                {"node": "Consensus Auth", "status": "PASS", "detail": f"Ent: {uncertainty:.2f}"},
+                {"node": "Execution Safety", "status": "PASS", "detail": "Neutral Hold"},
+            ]
+            return {
+                "is_safe": True,
+                "veto_reason": None,
+                "veto_code": "NONE",
+                "governance_severity": "STABLE",
+                "decision_tree": decision_tree,
+                "execution_state": "APPROVED",
+            }
+
+        # 1. Confidence Check (Institutional floor 58%)
+        if alpha_signal["confidence"] < 0.58:
             is_safe = False
-            veto_reason = "Alpha confidence below institutional floor (65%)"
+            veto_reason = "Alpha confidence below institutional floor (58%)"
             veto_code = "CONFIDENCE_DEFICIT"
             severity = "DEFENSIVE"
 
         # 2. EV Check
-        ev = risk_metrics.get("expected_value", {}).get("ev_pct", 0.0)
         if is_safe and ev < 0:
             is_safe = False
             veto_reason = "Negative Expected Value (EV) detected"
@@ -38,20 +59,19 @@ class SignalGovernanceEngine:
 
         # 3. Regime Conflict
         if is_safe:
-            signal_type = "BUY" if alpha_signal["signal_idx"] == 2 else "SELL" if alpha_signal["signal_idx"] == 0 else "HOLD"
+            is_exit = risk_metrics.get("is_long_exit", False)
             if signal_type == "BUY" and "BEAR" in market_regime:
                 is_safe = False
                 veto_reason = f"Counter-trend entry blocked: {alpha_signal['confidence']*100:.0f}% BUY signal in {market_regime} regime"
                 veto_code = "REGIME_CONFLICT"
                 severity = "DEFENSIVE"
-            elif signal_type == "SELL" and "BULL" in market_regime:
+            elif signal_type == "SELL" and "BULL" in market_regime and not is_exit:
                 is_safe = False
                 veto_reason = f"Counter-trend exit blocked: {alpha_signal['confidence']*100:.0f}% SELL signal in {market_regime} regime"
                 veto_code = "REGIME_CONFLICT"
                 severity = "DEFENSIVE"
 
         # 4. Uncertainty & Entropy
-        uncertainty = risk_metrics.get("uncertainty_score", 0.0)
         if is_safe and uncertainty > 0.35:  # Tightened floor
             is_safe = False
             veto_reason = f"Low Consensus / High Prediction Uncertainty ({uncertainty:.2f})"
@@ -73,13 +93,12 @@ class SignalGovernanceEngine:
                 severity = "DEFENSIVE"
 
         decision_tree = [
-            {"node": "Alpha Generation", "status": "PASS" if alpha_signal["confidence"] >= 0.65 else "FAIL", "detail": f"Conf: {alpha_signal['confidence']*100:.1f}%"},
+            {"node": "Alpha Generation", "status": "PASS" if alpha_signal["confidence"] >= 0.58 else "FAIL", "detail": f"Conf: {alpha_signal['confidence']*100:.1f}%"},
             {"node": "Expected Value", "status": "PASS" if ev >= 0 else "FAIL", "detail": f"EV: {ev:.2f}%"},
             {"node": "Regime Filter", "status": "PASS" if veto_code != "REGIME_CONFLICT" else "FAIL", "detail": market_regime},
             {"node": "Consensus Auth", "status": "PASS" if uncertainty <= 0.35 else "FAIL", "detail": f"Ent: {uncertainty:.2f}"},
             {"node": "Execution Safety", "status": "PASS" if veto_code not in ["CROWDING_VETO", "LIQUIDITY_PENALTY"] else "FAIL", "detail": "Stable" if veto_code == "NONE" else "Restricted"},
         ]
-
 
         return {
             "is_safe": is_safe,

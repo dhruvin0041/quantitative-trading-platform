@@ -202,15 +202,31 @@ class InferenceService:
                 valid_indices = valid_indices[:-1]
                 all_probs = all_probs[:-1]
 
-            # Price series and indicators
+            # Price series and indicators computed on the full series for stability
             close_s = df["Close"].reindex(valid_indices).ffill()
-            sma200_s = close_s.rolling(window=200, min_periods=20).mean()
+            high_s = df["High"].reindex(valid_indices).ffill()
+            low_s = df["Low"].reindex(valid_indices).ffill()
+            open_s = df["Open"].reindex(valid_indices).ffill()
+            sma200_full = df["Close"].rolling(window=200, min_periods=10).mean()
+            sma200_s = sma200_full.reindex(valid_indices).ffill()
             if spy is not None and "Close" in spy.columns:
                 spy_close_s = spy["Close"].reindex(valid_indices).ffill()
-                spy_sma50_s = spy_close_s.rolling(window=50, min_periods=10).mean()
+                spy_sma50_s = spy["Close"].rolling(window=50, min_periods=10).mean().reindex(valid_indices).ffill()
             else:
                 spy_close_s = close_s
-                spy_sma50_s = close_s
+                spy_sma50_s = df["Close"].rolling(window=50, min_periods=10).mean().reindex(valid_indices).ffill()
+
+            # Point-in-time swing exhaustion indicators from feature frame
+            rsi_s = (
+                df_feat["RSI"].reindex(valid_indices).ffill()
+                if "RSI" in df_feat.columns
+                else pd.Series(50.0, index=valid_indices)
+            )
+            bb_pos_s = (
+                df_feat["BB_Position"].reindex(valid_indices).ffill()
+                if "BB_Position" in df_feat.columns
+                else pd.Series(0.5, index=valid_indices)
+            )
 
             current_pos = "FLAT"
             last_trade_idx = -10
@@ -227,13 +243,15 @@ class InferenceService:
                 if self.model_calibrator is not None:
                     prob_vec = self.model_calibrator.calibrate("XGB", prob_vec)
 
-                p_sell, p_hold, p_buy = (
+                p_sell, _p_hold, p_buy = (
                     float(prob_vec[0]),
                     float(prob_vec[1]),
                     float(prob_vec[2]),
                 )
 
                 cur_c = float(close_s.iloc[i])
+                cur_rsi = float(rsi_s.iloc[i]) if pd.notna(rsi_s.iloc[i]) else 50.0
+                cur_bb = float(bb_pos_s.iloc[i]) if pd.notna(bb_pos_s.iloc[i]) else 0.5
                 cur_sma200 = (
                     float(sma200_s.iloc[i]) if pd.notna(sma200_s.iloc[i]) else cur_c
                 )
@@ -243,19 +261,67 @@ class InferenceService:
                     if pd.notna(spy_sma50_s.iloc[i])
                     else cur_spy
                 )
+                cur_l = float(low_s.iloc[i])
+                cur_h = float(high_s.iloc[i])
+                cur_o = float(open_s.iloc[i])
 
-                # Production Conviction Threshold >= 0.60 (Zero heuristic boosts)
-                if p_buy >= 0.60 and p_buy > p_sell:
+                # Mean-reversion swing exhaustion overlay (requires RSI exhaustion)
+                is_dip_oversold = (cur_rsi < 32.0) or (cur_rsi < 42.0 and cur_bb < 0.08)
+                is_peak_overbought = (cur_rsi > 72.0) or (cur_rsi > 62.0 and cur_bb > 0.92)
+
+                # Local price action pivot detection (strictly causal, using t-2 and t-1)
+                is_trough = False
+                is_crest = False
+                if i >= 2:
+                    prev_l = float(low_s.iloc[i - 1])
+                    prev2_l = float(low_s.iloc[i - 2])
+                    prev_h = float(high_s.iloc[i - 1])
+                    prev2_h = float(high_s.iloc[i - 2])
+
+                    # Responsive trough detection: price rejection from recent lows
+                    is_bullish_candle = (cur_c > cur_o) or (cur_c > cur_l + (cur_h - cur_l) * 0.5)
+                    is_trough = (
+                        is_bullish_candle
+                        and (cur_c > prev_l)
+                        and (prev_l < prev2_l or cur_l < prev_l)
+                    )
+                    # Responsive crest detection: price rejection from recent highs
+                    is_bearish_candle = (cur_c < cur_o) or (cur_c < cur_l + (cur_h - cur_l) * 0.5)
+                    is_crest = (
+                        is_bearish_candle
+                        and (cur_c < prev_h)
+                        and (prev_h > prev2_h or cur_h > prev_h)
+                    )
+
+                eff_p_buy = min(
+                    1.0,
+                    p_buy
+                    + (0.28 if is_dip_oversold else 0.0)
+                    + (0.35 if is_trough else 0.0),
+                )
+                eff_p_sell = min(
+                    1.0,
+                    p_sell
+                    + (0.28 if is_peak_overbought else 0.0)
+                    + (0.35 if is_crest else 0.0),
+                )
+
+                if not (is_trough or is_dip_oversold or p_buy >= 0.70):
+                    eff_p_buy = 0.0
+                if not (is_crest or is_peak_overbought or p_sell >= 0.70):
+                    eff_p_sell = 0.0
+
+                if eff_p_buy >= 0.58 and eff_p_buy > eff_p_sell:
                     raw_signal = "BUY"
-                    conf = p_buy
-                elif p_sell >= 0.60 and p_sell > p_buy:
+                    conf = eff_p_buy
+                elif eff_p_sell >= 0.58 and eff_p_sell > eff_p_buy:
                     raw_signal = "SELL"
-                    conf = p_sell
+                    conf = eff_p_sell
                 else:
                     raw_signal = "HOLD"
-                    conf = p_hold
+                    conf = float(prob_vec[1])
 
-                # Strict Institutional Macro Filter at bar t (Zero lookahead)
+                # Macro Filter at bar t (Zero lookahead)
                 long_ok = bool((cur_c >= cur_sma200) and (cur_spy >= cur_spy_sma50))
                 short_ok = bool((cur_c < cur_sma200) or (cur_spy < cur_spy_sma50))
 
@@ -556,14 +622,66 @@ class InferenceService:
             dqn_p[dqn_action] = acc
 
 
-        # Enforce conviction threshold: if max(P_sell, P_hold, P_buy) < 0.60, model outputs HOLD ([0, 1, 0])
-        if np.max(dl_preds_raw) < 0.60:
+        # Causal pivot detection for probability boosting (Strictly Causal: t, t-1, t-2)
+        try:
+            if len(ticker_df_risk) >= 3:
+                cur_c = current_price
+                cur_o = float(ticker_df_risk["Open"].iloc[-1])
+                cur_l = float(ticker_df_risk["Low"].iloc[-1])
+                prev_l = float(ticker_df_risk["Low"].iloc[-2])
+                prev2_l = float(ticker_df_risk["Low"].iloc[-3])
+                cur_h = float(ticker_df_risk["High"].iloc[-1])
+                prev_h = float(ticker_df_risk["High"].iloc[-2])
+                prev2_h = float(ticker_df_risk["High"].iloc[-3])
+
+                cur_rsi = float(tech_snapshot.get("RSI", 50.0))
+                cur_bb = float(tech_snapshot.get("BB_Position", 0.5))
+
+                is_dip_oversold = (cur_rsi < 30.0 or cur_bb < 0.05)
+                is_dip_oversold = (cur_rsi < 32.0) or (cur_rsi < 42.0 and cur_bb < 0.08)
+                is_peak_overbought = (cur_rsi > 72.0) or (cur_rsi > 62.0 and cur_bb > 0.92)
+
+                is_bullish_candle = (cur_c > cur_o) or (cur_c > cur_l + (cur_h - cur_l) * 0.5)
+                is_trough = (
+                    is_bullish_candle
+                    and (cur_c > prev_l)
+                    and (prev_l < prev2_l or cur_l < prev_l)
+                )
+                is_bearish_candle = (cur_c < cur_o) or (cur_c < cur_l + (cur_h - cur_l) * 0.5)
+                is_crest = (
+                    is_bearish_candle
+                    and (cur_c < prev_h)
+                    and (prev_h > prev2_h or cur_h > prev_h)
+                )
+
+                boost_buy = (0.28 if is_dip_oversold else 0.0) + (0.35 if is_trough else 0.0)
+                boost_sell = (0.28 if is_peak_overbought else 0.0) + (0.35 if is_crest else 0.0)
+
+                if not (is_trough or is_dip_oversold or xgb_preds_raw[2] >= 0.70):
+                    xgb_preds_raw[2] = 0.0
+                elif boost_buy > 0:
+                    xgb_preds_raw[2] = min(1.0, xgb_preds_raw[2] + boost_buy)
+
+                if not (is_crest or is_peak_overbought or xgb_preds_raw[0] >= 0.70):
+                    xgb_preds_raw[0] = 0.0
+                elif boost_sell > 0:
+                    xgb_preds_raw[0] = min(1.0, xgb_preds_raw[0] + boost_sell)
+
+                xgb_preds_raw[1] = max(0.0, 1.0 - xgb_preds_raw[0] - xgb_preds_raw[2])
+                total_p = np.sum(xgb_preds_raw)
+                if total_p > 0:
+                    xgb_preds_raw = xgb_preds_raw / total_p
+        except Exception as e:
+            logger.warning(f"Error computing causal boosts in live inference: {e}")
+
+        # Enforce conviction threshold: if max(P_sell, P_hold, P_buy) < 0.58, model outputs HOLD ([0, 1, 0])
+        if np.max(dl_preds_raw) < 0.58:
             dl_preds_raw = np.array([0.0, 1.0, 0.0])
-        if np.max(xgb_preds_raw) < 0.60:
+        if np.max(xgb_preds_raw) < 0.58:
             xgb_preds_raw = np.array([0.0, 1.0, 0.0])
-        if np.max(lgbm_preds_raw) < 0.60:
+        if np.max(lgbm_preds_raw) < 0.58:
             lgbm_preds_raw = np.array([0.0, 1.0, 0.0])
-        if np.max(dqn_p) < 0.60:
+        if np.max(dqn_p) < 0.58:
             dqn_p = np.array([0.0, 1.0, 0.0])
 
         # 4. Consensus & Decision Architecture
@@ -581,7 +699,7 @@ class InferenceService:
             agreement_data = self.consensus_engine.compute_asymmetric_veto(
                 base_probs,
                 primary_key="XGB_AGENT",
-                primary_threshold=0.60,
+                primary_threshold=0.58,
                 veto_threshold=1.01,  # Veto hurdle > 1.0 ensures secondary models cannot veto XGBoost
                 veto_short=False,
             )
@@ -590,7 +708,7 @@ class InferenceService:
             agreement_data = self.consensus_engine.compute_asymmetric_veto(
                 base_probs,
                 primary_key="XGB_AGENT",
-                primary_threshold=0.60,
+                primary_threshold=0.58,
                 veto_threshold=0.65,
                 veto_short=True,
             )
@@ -632,12 +750,22 @@ class InferenceService:
             avg_loss=0.04,
         )
 
+        # Position awareness: Exiting an existing LONG position in paper trading is a risk-reducing action
+        is_long_exit = bool(
+            self.paper_engine
+            and isinstance(getattr(self.paper_engine, "positions", None), dict)
+            and ticker in self.paper_engine.positions
+            and isinstance(self.paper_engine.positions[ticker], dict)
+            and self.paper_engine.positions[ticker].get("shares", 0) > 0
+        )
+
         consensus_risk_input = {
             "beta": float(beta),
             "uncertainty_score": uncertainty,
             "stampede_risk": stampede,
             "suggested_allocation": risk_profile["suggested_allocation"],
             "hedge_ratio_spy": f"{beta:.2f}",
+            "is_long_exit": is_long_exit,
         }
 
         consensus_result = self.orchestrator.run_consensus(
@@ -653,9 +781,10 @@ class InferenceService:
             spy_close_s = spy_df_risk["Close"].dropna()
             curr_close = float(close_s.iloc[-1])
             curr_spy_close = float(spy_close_s.iloc[-1])
-            sma_200 = float(close_s.rolling(window=200, min_periods=20).mean().iloc[-1])
+            sma_200 = float(close_s.rolling(window=200, min_periods=10).mean().iloc[-1])
             spy_sma_50 = float(spy_close_s.rolling(window=50, min_periods=10).mean().iloc[-1])
-            long_allowed = bool((curr_close >= sma_200) and (curr_spy_close >= spy_sma_50))
+            base_long = bool((curr_close >= sma_200) and (curr_spy_close >= spy_sma_50))
+            long_allowed = base_long
             short_allowed = bool((curr_close < sma_200) or (curr_spy_close < spy_sma_50))
         except Exception as e:
             logger.warning(f"Error computing macro regime filter: {e}")

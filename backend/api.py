@@ -402,7 +402,18 @@ def _enforce_dashboard_provenance(ticker: str, response_data: dict) -> dict:
             "manifest_hash": record_hash,
         })
 
-    response_data["historical_markers"] = valid_markers
+    existing_markers = response_data.get("historical_markers") or response_data.get("markers", [])
+    filtered_existing = [
+        m for m in existing_markers
+        if not m.get("manifest_hash") or m.get("manifest_hash") == active_hash
+    ]
+    if valid_markers:
+        response_data["historical_markers"] = valid_markers
+        response_data["markers"] = valid_markers
+        response_data["prospective_markers"] = valid_markers
+    else:
+        response_data["historical_markers"] = filtered_existing
+        response_data["markers"] = filtered_existing
     return response_data
 
 

@@ -270,6 +270,8 @@ export interface ChartData {
     action: string;
     probability: number;
     label?: string;
+    signal?: string;
+    confidence?: number;
     signal_state?: string;
     is_provisional?: boolean;
     execution_price?: number;
@@ -282,6 +284,8 @@ export interface ChartData {
     action: string;
     probability: number;
     label?: string;
+    signal?: string;
+    confidence?: number;
     signal_state?: string;
     is_provisional?: boolean;
     execution_price?: number;
