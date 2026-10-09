@@ -340,6 +340,71 @@ async def get_active_ticker():
         return {"ticker": "AAPL", "market": "us"}
 
 
+def _enforce_dashboard_provenance(ticker: str, response_data: dict) -> dict:
+    """
+    Presentation-layer filter to replace legacy inference markers with strictly verified
+    prospective signals from the active Stage 3 candidate. Fails closed if the manifest
+    cannot be verified.
+    """
+    import hashlib
+    from pathlib import Path
+    import logging
+    from scripts.ops.run_prospective_validation import ProspectiveValidationManager, BACKEND_DIR
+
+    try:
+        manifest_path = (
+            Path(__file__).resolve().parent / "artifacts" / "frozen_strategy_manifest_v2.3.json"
+        )
+        manifest_bytes = manifest_path.read_bytes()
+        active_hash = hashlib.sha256(manifest_bytes).hexdigest()
+
+        # Perform explicit record-level and hash-chain integrity verification
+        manager = ProspectiveValidationManager(
+            backend_dir=BACKEND_DIR,
+            db_path=inference_service.signal_ledger.db_path,
+            reports_dir=Path("/tmp")
+        )
+        audit = manager.verify_hash_chain(ticker)
+        if not audit["verified"]:
+            logging.getLogger("api").error(f"Stage 3 integrity verification failed: {audit['violations']}")
+            raise ValueError("Integrity verification failed.")
+
+    except Exception as exc:
+        logging.getLogger("api").exception("Stage 3 manifest or integrity verification failed")
+        raise RuntimeError(
+            "Cannot verify Stage 3 provenance; active markers unavailable."
+        ) from exc
+
+    prospective = inference_service.signal_ledger.get_prospective_signals(ticker)
+    
+    valid_markers = []
+    for p in prospective:
+        record_hash = p.get("manifest_hash")
+        if not isinstance(record_hash, str):
+            continue
+        if record_hash != active_hash:
+            continue
+            
+        valid_markers.append({
+            "timestamp": p.get("signal_generation_timestamp"),
+            "bar_timestamp": p.get("source_candle_timestamp"),
+            "time": (
+                p["source_candle_timestamp"][:10]
+                if p.get("source_candle_timestamp")
+                else ""
+            ),
+            "action": p.get("signal"),
+            "price": p.get("signal_reference_price"),
+            "is_provisional": False,
+            "dataset": "UNTOUCHED_FORWARD_VALIDATION",
+            "provenance": "MANIFEST_MATCHED",
+            "manifest_hash": record_hash,
+        })
+
+    response_data["historical_markers"] = valid_markers
+    return response_data
+
+
 @app.get(
     "/predict", dependencies=[Depends(verify_api_key)], response_model=PredictResponse
 )
@@ -366,9 +431,11 @@ async def get_prediction(ticker: str = "AAPL"):
         cached["portfolio"] = paper_engine.get_portfolio_summary(
             {ticker: cached["current_price"]}
         )
+        cached = _enforce_dashboard_provenance(ticker, cached)
         return cached
 
     response_data = await inference_service.get_prediction(ticker, config, metadata)
+    response_data = _enforce_dashboard_provenance(ticker, response_data)
     await api_cache.set(f"predict_{ticker}", response_data)
     return response_data
 
