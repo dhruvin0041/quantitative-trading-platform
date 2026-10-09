@@ -347,9 +347,10 @@ def _enforce_dashboard_provenance(ticker: str, response_data: dict) -> dict:
     cannot be verified.
     """
     import hashlib
-    from pathlib import Path
     import logging
-    from scripts.ops.run_prospective_validation import ProspectiveValidationManager, BACKEND_DIR
+    from pathlib import Path
+
+    from scripts.ops.run_prospective_validation import BACKEND_DIR, ProspectiveValidationManager
 
     try:
         manifest_path = (
@@ -376,7 +377,7 @@ def _enforce_dashboard_provenance(ticker: str, response_data: dict) -> dict:
         ) from exc
 
     prospective = inference_service.signal_ledger.get_prospective_signals(ticker)
-    
+
     valid_markers = []
     for p in prospective:
         record_hash = p.get("manifest_hash")
@@ -384,7 +385,7 @@ def _enforce_dashboard_provenance(ticker: str, response_data: dict) -> dict:
             continue
         if record_hash != active_hash:
             continue
-            
+
         valid_markers.append({
             "timestamp": p.get("signal_generation_timestamp"),
             "bar_timestamp": p.get("source_candle_timestamp"),

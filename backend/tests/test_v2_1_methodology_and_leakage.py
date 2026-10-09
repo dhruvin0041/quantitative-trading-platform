@@ -88,7 +88,9 @@ class TestV21MethodologyAndLeakage(unittest.TestCase):
         """Verifies Asset-Specific AAPL StandardScaler with 2,130 bars."""
         import joblib
 
-        scaler_path = self.artifacts_dir / "latest_scaler.joblib"
+        scaler_path = self.artifacts_dir / "latest_scaler_v2.2.joblib"
+        if not scaler_path.exists():
+            scaler_path = self.artifacts_dir / "latest_scaler.joblib"
         self.assertTrue(scaler_path.exists())
         scaler = joblib.load(scaler_path)
 
@@ -193,7 +195,7 @@ class TestV21MethodologyAndLeakage(unittest.TestCase):
         self.assertEqual(v1["strategy_version"], "HYDRA_PROSPECTIVE_V1.0")
         self.assertEqual(v2["strategy_version"], "HYDRA_PROSPECTIVE_V2.0")
         self.assertEqual(v2_1["strategy_version"], "HYDRA_PROSPECTIVE_V2.1")
-        self.assertIn(active["strategy_version"], ["HYDRA_PROSPECTIVE_V2.1", "HYDRA_PROSPECTIVE_V2.2"])
+        self.assertIn(active["strategy_version"], ["HYDRA_PROSPECTIVE_V2.1", "HYDRA_PROSPECTIVE_V2.2", "HYDRA_PROSPECTIVE_V2.3", "HYDRA_PROSPECTIVE_V2.4"])
 
     def test_signal_ledger_v2_1_semantics(self):
         """Verifies prospective ledger semantics: reference price, null fills at gen time, 5bps slippage."""

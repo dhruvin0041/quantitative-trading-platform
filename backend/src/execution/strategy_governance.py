@@ -27,7 +27,11 @@ class StrategyGovernanceEngine:
 
     def __init__(self, manifest_path: Optional[str] = None):
         if manifest_path is None:
-            self.manifest_path = Path(__file__).resolve().parent.parent.parent / "artifacts" / "frozen_strategy_manifest.json"
+            v24_path = Path(__file__).resolve().parent.parent.parent / "artifacts" / "frozen_strategy_manifest_v2.4.json"
+            if v24_path.exists():
+                self.manifest_path = v24_path
+            else:
+                self.manifest_path = Path(__file__).resolve().parent.parent.parent / "artifacts" / "frozen_strategy_manifest.json"
         else:
             self.manifest_path = Path(manifest_path)
         self.backend_dir = Path(__file__).resolve().parent.parent.parent
@@ -50,6 +54,28 @@ class StrategyGovernanceEngine:
                 h.update(chunk)
         return h.hexdigest()
 
+    def get_artifact_policy(self, artifact_name: str) -> str:
+        # Load registry dynamically to avoid circular imports
+        from src.execution.asset_intelligence import MODEL_REGISTRY, ModelRole
+
+        if artifact_name == "latest_fusion_weights.weights.h5":
+            role = MODEL_REGISTRY.get("DL_FUSION", {}).get("role")
+            if role == ModelRole.QUARANTINED or MODEL_REGISTRY.get("DL_FUSION", {}).get("status") == "QUARANTINED":
+                return "QUARANTINED"
+        elif artifact_name == "dqn_model.pth":
+            if MODEL_REGISTRY.get("DQN_AGENT", {}).get("status") == "ACTIVE":
+                return "REQUIRED"
+        elif artifact_name == "model_calibrator.joblib":
+            # Mandatory for Brier/ECE acceptance gates
+            return "REQUIRED"
+        elif artifact_name == "tft_quantile_weights.weights.h5":
+            if MODEL_REGISTRY.get("TFT_AGENT", {}).get("status") == "ACTIVE":
+                return "REQUIRED"
+        elif artifact_name == "meta_ensemble.joblib":
+            return "REQUIRED"
+
+        return "REQUIRED"
+
     def verify_integrity(self) -> Tuple[bool, List[str]]:
         """
         Verifies that all active model weights, configurations, and core code files
@@ -64,11 +90,26 @@ class StrategyGovernanceEngine:
         # 1. Model Hashes
         for rel_path, expected_hash in manifest.get("model_hashes", {}).items():
             full_path = self.backend_dir / "artifacts" / rel_path.replace("artifacts/", "")
+            artifact_name = full_path.name
+            policy = self.get_artifact_policy(artifact_name)
+
             actual_hash = self.compute_file_hash(full_path)
-            if actual_hash != expected_hash:
-                violations.append(
-                    f"Model artifact {rel_path} mutated! Expected SHA-256 {expected_hash[:12]}..., got {actual_hash[:12]}..."
-                )
+
+            if policy == "QUARANTINED":
+                if actual_hash != "FILE_NOT_FOUND" and actual_hash != expected_hash:
+                    violations.append(f"Quarantined artifact {rel_path} is present but has unexpected hash {actual_hash[:12]}...")
+            elif policy == "OPTIONAL":
+                if actual_hash != "FILE_NOT_FOUND" and actual_hash != expected_hash:
+                    violations.append(f"Optional artifact {rel_path} has incorrect hash {actual_hash[:12]}...")
+            elif policy == "REQUIRED":
+                if actual_hash == "FILE_NOT_FOUND":
+                    violations.append(f"Required artifact {rel_path} is missing (FILE_NOT_FOUND).")
+                elif actual_hash != expected_hash:
+                    violations.append(f"Required artifact {rel_path} mutated! Expected {expected_hash[:12]}..., got {actual_hash[:12]}...")
+            elif policy == "UNRESOLVED":
+                violations.append(f"Artifact {rel_path} has UNRESOLVED policy and must fail closed. Hash was {actual_hash[:12]}...")
+            else:
+                violations.append(f"Unknown policy for {rel_path}. Failing closed.")
 
         # 2. Config Hashes
         for rel_path, expected_hash in manifest.get("config_hashes", {}).items():

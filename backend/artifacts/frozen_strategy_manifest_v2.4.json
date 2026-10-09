@@ -1,15 +1,15 @@
 {
-  "strategy_version": "HYDRA_PROSPECTIVE_V2.2",
-  "previous_version": "HYDRA_PROSPECTIVE_V2.1",
+  "strategy_version": "HYDRA_PROSPECTIVE_V2.4",
+  "previous_version": "HYDRA_PROSPECTIVE_V2.3",
   "historical_predecessor": "HYDRA_PROSPECTIVE_V2.0",
-  "freeze_timestamp_utc": "2026-10-01T09:37:15Z",
-  "freeze_timestamp_new_york": "2026-10-01T05:37:15-0400",
-  "freeze_display_new_york": "2026-10-01 05:37:15 EDT",
-  "freeze_session_tz": "2026-10-01 05:37:15 EDT",
-  "git_commit": "7c1d21f3ae5abd0a6e2ec148cff171292269f865",
+  "freeze_timestamp_utc": "2026-10-01T09:39:11Z",
+  "freeze_timestamp_new_york": "2026-10-01T05:39:11-0400",
+  "freeze_display_new_york": "2026-10-01 05:39:11 EDT",
+  "freeze_session_tz": "2026-10-01 05:39:11 EDT",
+  "git_commit": "e687e2321da9159dca2b10c6744f2166fb44a506",
   "status": "FROZEN_FOR_PROSPECTIVE_VALIDATION",
   "anti_overfitting_lock": true,
-  "methodology_corrections_v2_2": {
+  "methodology_corrections_v2_3": {
     "h1_calibration_boundary_leakage": "Purged 15 cross-boundary observations from H1 (eligible count = 48). All calibration labels end <= 2025-06-30. Zero H2 price or label influence.",
     "walk_forward_meta_ensemble_preprocessing": "StandardScaler fitted strictly per-fold on that fold's training slice. Zero future fold distribution leakage into earlier OOF folds.",
     "hyperparameter_selection_isolation": "Chronological inner cross-validation within fold training slices without consuming future fold labels.",
@@ -19,24 +19,24 @@
     "first_prospective_start": "First genuinely untouched prospective date established as 2026-10-01 16:00:00 EDT (post-freeze)."
   },
   "model_hashes": {
-    "xgb_ensemble.json": "135fa1fed173bf2fb538e5fd8063b22f029ba3cb0cb7be5166f931f832199fb4",
+    "xgb_ensemble.json": "aed8b22743e3ea479d29fb35010b822d85864a010920e18e8218058634a054ee",
     "latest_fusion_weights.weights.h5": "75204d5950e6417261677121b68d83b5ea4ebde65357f5c34f2f4a606be70a67",
-    "lgbm_agent.joblib": "59179db91cb18bc2d1aefd7fe6ca74ec836d53075be3b97d4fcd96ac44147300",
+    "lgbm_agent.joblib": "e3f501980fbdd6c577b862f0819588a504687c31bac0357bf4e1443ff9cb1fd5",
     "dqn_model.pth": "793631dca11fa1df65f6a8e0a54e19f4bcb77c5c7f6b06dc38419ececd1e03e1",
-    "latest_scaler.joblib": "bdc50c65bae965d82756c105c4c6dccb122df231f298e29da57c317ca6d670bf",
+    "latest_scaler.joblib": "43bfee5572fa53f23391c23b007422bce8632a3bfa62d9ec0b229645206c8610",
     "model_calibrator.joblib": "1946ac5491bd342720cdec55dec8d5e628184776351348d9d5ee97368bf84f2c",
     "meta_ensemble.joblib": "167950797e23cf2d40af572b403fa631d71deca761ef7becd87d1b537bc1b60f",
     "tft_quantile_weights.weights.h5": "8eff1e157a229a5eedf7cf8cc55e556fe482cf0e6008f55529fe75b03fdb3b20"
   },
   "config_hashes": {
     "model_params.yaml": "53f271e8c54269ff125f2d14245c81d0daddaaeaa6eebb5e9911970df7524647",
-    "optimized_params_AAPL.json": "c6c31b710517c60eee5d7e219988e54464c83e5d46c78fac4cd99b17c0dea3d6",
+    "optimized_params_AAPL.json": "fed87bcff9b207b41b21045d7254c9a94f3e6520f49a4bd0a3d02f41e28edee8",
     "kept_features.json": "debe3e4b82edf843b0b2fa3397c372f8f8826d64f75bf2d816d1a60819156b17"
   },
   "code_hashes": {
     "live_inference.py": "9d353993ef133c1bebd9098f34194dc76bcefccc2434bba8401c2840e8c8a17f",
-    "inference_service.py": "b88bdfb9ebc99a7876ceae94f6828941b08b684ca15f5e572eb150229f80ea2b",
-    "signal_ledger.py": "c285cc39608af0be448e6fa19d4fef4d460ab5035bd9b914602a091bd1bc45d6",
+    "inference_service.py": "38e84ace0c904742054dc34283720bef601b509b47cdf88b9c4e75e1fcaeae22",
+    "signal_ledger.py": "6bf42eacb9060fb4063bb22aa515459080c1dc025d118b0006a00899e74d7d21",
     "backtest_service.py": "faa7afcefb8799e5b90763c3b01c329a55d1ba960b2cd8ded747cbf0ce47a04b",
     "data_firewall.py": "ec46bb4e12f0d24ee4e6d9022810b07b8124e4c2c69d0ef7117e5325ea34d760",
     "calibration.py": "083cb626d88e9b8bd634208268f194a184d5a5e7f77550a99277f9c9f33b839d",
@@ -112,7 +112,7 @@
       "start_date": "2016-09-16",
       "end_date": "2024-12-09",
       "unique_transitions": 2070,
-      "episodes": 15,
+      "episodes": 100,
       "synthetic_dummy_rows": 0,
       "description": "Deep Q-Network sequential policy replay trained exclusively on 2016-2024 development transitions. Rewards derived from 2016-2024 triple-barrier labels. Replay buffer and gradient updates restricted strictly to 100% authentic development data."
     },
@@ -127,16 +127,16 @@
     },
     "prospective_validation": {
       "dataset": "TRUE_UNTOUCHED_OUT_OF_SAMPLE",
-      "freeze_timestamp_utc": "2026-10-01T09:37:15Z",
-      "freeze_timestamp_new_york": "2026-10-01T05:37:15-0400",
+      "freeze_timestamp_utc": "2026-10-01T09:39:11Z",
+      "freeze_timestamp_new_york": "2026-10-01T05:39:11-0400",
       "start_date": "2026-10-01",
       "start_timestamp": "2026-10-01 16:00:00 EDT",
       "description": "Untouched forward out-of-sample paper trading experiment strictly from 2026-10-01 16:00:00 EDT onward protected by hard firewall"
     }
   },
   "prospective_sequence": {
-    "strategy_freeze_utc": "2026-10-01T09:37:15Z",
-    "strategy_freeze_new_york": "2026-10-01T05:37:15-0400",
+    "strategy_freeze_utc": "2026-10-01T09:39:11Z",
+    "strategy_freeze_new_york": "2026-10-01T05:39:11-0400",
     "first_eligible_completed_candle_utc": "2026-10-01T20:00:00Z",
     "first_eligible_completed_candle_new_york": "2026-10-01 16:00:00 EDT",
     "first_prospective_signal_utc": "2026-10-01T20:00:02Z",

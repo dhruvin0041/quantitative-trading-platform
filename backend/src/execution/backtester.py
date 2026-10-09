@@ -100,8 +100,16 @@ def run_backtest(ticker="AAPL", start_date="2023-01-01", end_date=None):
 
     # Causal Execution Mandate:
     # Signals generated at Day t Close (16:00 EST) execute on Day t+1 Open (09:30 EST)
-    slippage = 0.001  # 0.1% (10 bps)
-    commission_per_share = 0.005
+    from src.execution.strategy_governance import StrategyGovernanceEngine
+    gov_engine = StrategyGovernanceEngine()
+    try:
+        manifest = gov_engine.load_manifest()
+        exec_assumptions = manifest.get("frozen_hyperparameters", {}).get("execution_assumptions", {})
+        slippage = exec_assumptions.get("slippage_bps", 5.0) / 10000.0
+        commission_per_share = exec_assumptions.get("commission_per_share_usd", 0.005)
+    except Exception:
+        slippage = 0.0005  # 5 bps fallback
+        commission_per_share = 0.005
     pending_order = None
     pending_position_size = 0.0
 

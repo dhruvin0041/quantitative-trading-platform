@@ -17,7 +17,38 @@ class TestProspectiveOperations(unittest.TestCase):
     def setUp(self):
         self.backend_dir = Path(__file__).resolve().parent.parent
         self.temp_dir = tempfile.mkdtemp()
-        self.mgr = ProspectiveValidationManager(backend_dir=self.backend_dir)
+        self.temp_db_path = str(Path(self.temp_dir) / "test_operations.db")
+        self.mgr = ProspectiveValidationManager(
+            backend_dir=self.backend_dir,
+            db_path=self.temp_db_path,
+            reports_dir=Path(self.temp_dir) / "reports",
+        )
+        # Seed test fixture observation for 2026-10-01 in isolated test DB
+        with self.mgr._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO prospective_observations (
+                    signal_id, strategy_version, source_asset, source_candle_date,
+                    signal_date, execution_date, candle_finalization_timestamp,
+                    data_ingestion_timestamp, feature_computation_timestamp,
+                    signal_generation_timestamp, order_submission_timestamp,
+                    model_prediction_probabilities, individual_model_predictions,
+                    primary_model_prediction, veto_result, macro_filter_result,
+                    final_trading_decision, signal_reference_price, execution_status,
+                    manifest_hash, created_at
+                ) VALUES (
+                    'PROP-AAPL-20261001-HOLD-1', 'HYDRA_PROSPECTIVE_V2.3', 'AAPL', '2026-10-01',
+                    '2026-10-01', 'N/A (HOLD)', '2026-10-01T16:00:00Z',
+                    '2026-10-01T16:00:05Z', '2026-10-01T16:00:10Z',
+                    '2026-10-01T16:00:15Z', '2026-10-01T16:00:20Z',
+                    '{"XGBoost": [0.1, 0.8, 0.1], "LightGBM": [0.1, 0.8, 0.1], "DL_Fusion_Raw": [0.0, 1.0, 0.0], "DL_Fusion_Calibrated": [0.0, 1.0, 0.0], "DQN_Q_Values": [0.0, 1.0, 0.0], "Meta_Ensemble": [0.1, 0.8, 0.1]}',
+                    '{"XGBoost": "HOLD", "LightGBM": "HOLD"}', 'HOLD', 'NO_VETO', 'ALLOWED',
+                    'HOLD', 225.0, 'NOT_APPLICABLE_HOLD',
+                    'e09c284246bc344c05b0d39916108031a95f7fd6852161f1753c141c03ce5674', '2026-10-01T16:00:25Z'
+                )
+                """
+            )
+            conn.commit()
 
     def tearDown(self):
         try:
@@ -26,14 +57,14 @@ class TestProspectiveOperations(unittest.TestCase):
             pass
 
     def test_1_frozen_configuration_verification(self):
-        """Verifies that all model and config hashes match the frozen V2.2 manifest."""
+        """Verifies that all model and config hashes match the frozen V2.3 manifest."""
         cfg = self.mgr.verify_frozen_configuration()
-        self.assertEqual(cfg["strategy_version"], "HYDRA_PROSPECTIVE_V2.2")
+        self.assertEqual(cfg["strategy_version"], "HYDRA_PROSPECTIVE_V2.3")
         self.assertTrue(cfg["models_valid"], f"Model hash mismatch: {cfg['model_hashes']}")
         self.assertTrue(cfg["configs_valid"], f"Config hash mismatch: {cfg['config_hashes']}")
         self.assertEqual(
             cfg["manifest_sha256"],
-            "6331bb89c708995fdb39a61d0b800d5fe6198bd9b7fc7f299e90accefd881d83",
+            "e09c284246bc344c05b0d39916108031a95f7fd6852161f1753c141c03ce5674",
         )
         self.assertEqual(cfg["active_primary_model"], "XGB_AGENT (XGBoost Classifier)")
 
@@ -91,7 +122,7 @@ class TestProspectiveOperations(unittest.TestCase):
         self.assertEqual(r["signal_date"], "2026-10-01")
         self.assertEqual(r["execution_date"], "N/A (HOLD)")
         self.assertEqual(r["execution_status"], "NOT_APPLICABLE_HOLD")
-        self.assertEqual(r["manifest_hash"], "6331bb89c708995fdb39a61d0b800d5fe6198bd9b7fc7f299e90accefd881d83")
+        self.assertEqual(r["manifest_hash"], "e09c284246bc344c05b0d39916108031a95f7fd6852161f1753c141c03ce5674")
 
         # Verify model prediction probabilities are recorded as valid JSON
         probs = json.loads(r["model_prediction_probabilities"])

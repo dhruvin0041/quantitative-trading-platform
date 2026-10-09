@@ -1,15 +1,17 @@
-import pytest
-import pandas as pd
-from pathlib import Path
 import hashlib
-from src.execution.signal_ledger import SignalLedger
+from pathlib import Path
+
+import pytest
+
 from api import _enforce_dashboard_provenance, inference_service
+from src.execution.signal_ledger import SignalLedger
+
 
 @pytest.fixture
 def mock_ledger(tmp_path):
     db_path = str(tmp_path / "test_signal_ledger.db")
     ledger = SignalLedger(db_path=db_path)
-    
+
     # 1. Legacy signal
     ledger.record_signal(
         symbol="AAPL",
@@ -22,7 +24,7 @@ def mock_ledger(tmp_path):
         raw_features_hash="hash_legacy",
         dataset="PRELIMINARY_HISTORICAL_EVIDENCE"
     )
-    
+
     # 2. Prospective signal with wrong manifest hash
     ledger.record_prospective_signal(
         symbol="AAPL",
@@ -54,14 +56,14 @@ def mock_ledger(tmp_path):
         strategy_version="HYDRA_PROSPECTIVE_V1",
         manifest_hash=None
     )
-    
+
     return ledger
 
 def test_provenance_filter_success(mock_ledger):
     """Test that valid markers are kept and invalid ones are excluded."""
     manifest_path = Path(__file__).resolve().parent.parent / "artifacts" / "frozen_strategy_manifest_v2.3.json"
     active_hash = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
-    
+
     # 4. Valid prospective signal
     mock_ledger.record_prospective_signal(
         symbol="AAPL",
@@ -79,10 +81,10 @@ def test_provenance_filter_success(mock_ledger):
     )
 
     inference_service.signal_ledger = mock_ledger
-    
+
     response_data = {"historical_markers": [{"action": "OLD_STUFF"}]}
     result = _enforce_dashboard_provenance("AAPL", response_data)
-    
+
     markers = result["historical_markers"]
     assert len(markers) == 1, "Should exactly include only the valid manifest hash marker"
     assert markers[0]["manifest_hash"] == active_hash
@@ -92,17 +94,17 @@ def test_provenance_filter_success(mock_ledger):
 def test_provenance_filter_fail_closed(mock_ledger, monkeypatch):
     """Test that if manifest is unreadable, it fails closed and raises RuntimeError."""
     inference_service.signal_ledger = mock_ledger
-    
+
     original_read_bytes = Path.read_bytes
     def mock_read_bytes(self):
         if "frozen_strategy_manifest" in str(self):
             raise FileNotFoundError("Manifest missing")
         return original_read_bytes(self)
-        
+
     monkeypatch.setattr(Path, "read_bytes", mock_read_bytes)
-    
+
     response_data = {"historical_markers": [{"action": "OLD_STUFF"}]}
-    
+
     with pytest.raises(RuntimeError, match="Cannot verify Stage 3 provenance"):
         _enforce_dashboard_provenance("AAPL", response_data)
 
@@ -110,14 +112,15 @@ def test_provenance_filter_fail_closed(mock_ledger, monkeypatch):
 def test_api_predict_cache_hit_and_miss(mock_ledger, monkeypatch):
     """Test that /predict applies provenance filtering on both cache hits and misses."""
     from fastapi.testclient import TestClient
-    from api import app, api_cache, inference_service
+
+    from api import app, inference_service
 
     # Use the test ledger
     inference_service.signal_ledger = mock_ledger
-    
+
     manifest_path = Path(__file__).resolve().parent.parent / "artifacts" / "frozen_strategy_manifest_v2.3.json"
     active_hash = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
-    
+
     # Insert one valid marker and one invalid marker
     mock_ledger.record_prospective_signal(
         symbol="AAPL",
@@ -133,7 +136,7 @@ def test_api_predict_cache_hit_and_miss(mock_ledger, monkeypatch):
         strategy_version="HYDRA_PROSPECTIVE_V2.3",
         manifest_hash=active_hash
     )
-    
+
     mock_ledger.record_prospective_signal(
         symbol="AAPL",
         source_candle_timestamp="2026-07-16",
@@ -173,7 +176,7 @@ def test_api_predict_cache_hit_and_miss(mock_ledger, monkeypatch):
                 }
             ]
         }
-    
+
     monkeypatch.setattr(inference_service, "get_prediction", mock_get_prediction)
 
     # 2. Mock api_cache
@@ -187,7 +190,7 @@ def test_api_predict_cache_hit_and_miss(mock_ledger, monkeypatch):
 
     mock_cache = MockCache()
     monkeypatch.setattr("api.api_cache", mock_cache)
-    
+
     # 3. Mock paper_engine
     class MockPaperEngine:
         def get_portfolio_summary(self, _):
@@ -204,11 +207,11 @@ def test_api_predict_cache_hit_and_miss(mock_ledger, monkeypatch):
     res_miss = client.get("/predict?ticker=AAPL")
     assert res_miss.status_code == 200
     data_miss = res_miss.json()
-    
+
     markers_miss = data_miss.get("historical_markers", [])
     assert len(markers_miss) == 1
     assert markers_miss[0]["manifest_hash"] == active_hash
-    
+
     # 6. Cache hit
     # Let's forcefully put an unfiltered response in the cache to verify the cache hit filters it
     mock_cache.store["predict_AAPL"] = {
@@ -227,11 +230,11 @@ def test_api_predict_cache_hit_and_miss(mock_ledger, monkeypatch):
             {"manifest_hash": "stale_hash", "action": "SELL"}
         ]
     }
-    
+
     res_hit = client.get("/predict?ticker=AAPL")
     assert res_hit.status_code == 200
     data_hit = res_hit.json()
-    
+
     markers_hit = data_hit.get("historical_markers", [])
     assert len(markers_hit) == 1
     assert markers_hit[0]["manifest_hash"] == active_hash
@@ -240,21 +243,22 @@ def test_api_predict_cache_hit_and_miss(mock_ledger, monkeypatch):
 def test_api_predict_corrupted_hash_rejection(mock_ledger, monkeypatch):
     """Test that /predict explicitly rejects corrupted observations despite valid manifest_hash."""
     from fastapi.testclient import TestClient
-    from api import app, api_cache, inference_service
+
+    from api import app, inference_service
 
     inference_service.signal_ledger = mock_ledger
-    
+
     manifest_path = Path(__file__).resolve().parent.parent / "artifacts" / "frozen_strategy_manifest_v2.3.json"
     active_hash = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
-    
+
     # Instantiate ProspectiveValidationManager to create and manage the authoritative table
-    from scripts.ops.run_prospective_validation import ProspectiveValidationManager, BACKEND_DIR
+    from scripts.ops.run_prospective_validation import BACKEND_DIR, ProspectiveValidationManager
     manager = ProspectiveValidationManager(
         backend_dir=BACKEND_DIR,
         db_path=mock_ledger.db_path,
         reports_dir=Path("/tmp")
     )
-    
+
     # Insert legacy record to satisfy reconciliation
     sig_id = mock_ledger.record_prospective_signal(
         symbol="AAPL",
@@ -318,7 +322,7 @@ def test_api_predict_corrupted_hash_rejection(mock_ledger, monkeypatch):
         async def set(self, key, value):
             pass
     monkeypatch.setattr("api.api_cache", MockCache())
-    
+
     class MockPaperEngine:
         def get_portfolio_summary(self, _):
             return {"cash": 1000.0, "equity": 1000.0, "return_pct": 0.0, "positions": {}}

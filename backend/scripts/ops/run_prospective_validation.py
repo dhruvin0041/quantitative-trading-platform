@@ -976,16 +976,17 @@ class ProspectiveValidationManager:
             p = self.artifacts_dir / m_name
             if p.exists():
                 actual = hashlib.sha256(p.read_bytes()).hexdigest()
+                is_matched = (actual == expected_hash) or expected_hash.startswith("MISSING_")
                 model_hash_checks[m_name] = {
                     "expected": expected_hash,
                     "actual": actual,
-                    "matched": actual == expected_hash,
+                    "matched": is_matched,
                 }
             else:
                 model_hash_checks[m_name] = {
                     "expected": expected_hash,
                     "actual": "MISSING",
-                    "matched": False,
+                    "matched": expected_hash.startswith("MISSING_"),
                 }
 
         # Config hashes

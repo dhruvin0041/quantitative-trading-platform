@@ -229,7 +229,6 @@ class InferenceService:
             high_s = df["High"].reindex(valid_indices).ffill()
             low_s = df["Low"].reindex(valid_indices).ffill()
             open_s = df["Open"].reindex(valid_indices).ffill()
-            sma50_s = close_s.rolling(window=50, min_periods=10).mean()
             sma200_s = close_s.rolling(window=200, min_periods=20).mean()
             if spy is not None and "Close" in spy.columns:
                 spy_close_s = spy["Close"].reindex(valid_indices).ffill()
@@ -272,11 +271,6 @@ class InferenceService:
                 )
 
                 cur_c = float(close_s.iloc[i])
-                cur_sma50 = (
-                    float(sma50_s.iloc[i])
-                    if pd.notna(sma50_s.iloc[i])
-                    else cur_c
-                )
                 cur_rsi = float(rsi_s.iloc[i]) if pd.notna(rsi_s.iloc[i]) else 50.0
                 cur_bb = float(bb_pos_s.iloc[i]) if pd.notna(bb_pos_s.iloc[i]) else 0.5
                 cur_sma200 = (
@@ -304,7 +298,7 @@ class InferenceService:
                     prev2_l = float(low_s.iloc[i - 2])
                     prev_h = float(high_s.iloc[i - 1])
                     prev2_h = float(high_s.iloc[i - 2])
-                    
+
                     # More responsive trough detection: price rejection from recent lows
                     # Require candle to be green OR close in the top half of its range
                     is_bullish_candle = (cur_c > cur_o) or (cur_c > cur_l + (cur_h - cur_l) * 0.5)
@@ -322,9 +316,7 @@ class InferenceService:
                         and (prev_h >= prev2_h or cur_h >= prev_h)
                     )
 
-                strong_uptrend = (cur_c > cur_sma50) and (cur_sma50 > cur_sma200)
-                strong_downtrend = (cur_c < cur_sma50) and (cur_sma50 < cur_sma200)
-                
+
                 eff_p_buy = (
                     p_buy
                     + (0.28 if is_dip_oversold else 0.0)
@@ -335,7 +327,7 @@ class InferenceService:
                     + (0.28 if is_peak_overbought else 0.0)
                     + (0.35 if is_crest else 0.0)
                 )
-                
+
                 if not is_crest:
                     eff_p_sell = 0.0
                 if not is_trough:
@@ -656,58 +648,6 @@ class InferenceService:
             dqn_p = np.full(3, (1.0 - acc) / 2.0)
             dqn_p[dqn_action] = acc
 
-        # Causal pivot detection for probability boosting
-        try:
-            if len(ticker_df_risk) >= 3:
-                cur_c = current_price
-                cur_o = float(ticker_df_risk["Open"].iloc[-1])
-                cur_l = float(ticker_df_risk["Low"].iloc[-1])
-                prev_l = float(ticker_df_risk["Low"].iloc[-2])
-                prev2_l = float(ticker_df_risk["Low"].iloc[-3])
-                cur_h = float(ticker_df_risk["High"].iloc[-1])
-                prev_h = float(ticker_df_risk["High"].iloc[-2])
-                prev2_h = float(ticker_df_risk["High"].iloc[-3])
-                
-                cur_rsi = float(tech_snapshot.get("RSI", 50.0))
-                cur_bb = float(tech_snapshot.get("BB_Position", 0.5))
-                
-                is_dip_oversold = (cur_rsi < 30.0 or cur_bb < 0.05)
-                is_peak_overbought = (cur_rsi > 75.0 or cur_bb > 0.95)
-                
-                is_bullish_candle = (cur_c > cur_o) or (cur_c > cur_l + (cur_h - cur_l) * 0.5)
-                is_trough = (
-                    is_bullish_candle
-                    and (cur_c > prev_l)
-                    and (prev_l <= prev2_l or cur_l <= prev_l)
-                )
-                is_bearish_candle = (cur_c < cur_o) or (cur_c < cur_l + (cur_h - cur_l) * 0.5)
-                is_crest = (
-                    is_bearish_candle
-                    and (cur_c < prev_h)
-                    and (prev_h >= prev2_h or cur_h >= prev_h)
-                )
-                
-                if len(ticker_df_risk) >= 200:
-                    cur_sma50 = float(ticker_df_risk["Close"].iloc[-50:].mean())
-                    cur_sma200 = float(ticker_df_risk["Close"].iloc[-200:].mean())
-                else:
-                    cur_sma50 = cur_c
-                    cur_sma200 = cur_c
-                    
-                strong_uptrend = (cur_c > cur_sma50) and (cur_sma50 > cur_sma200)
-                strong_downtrend = (cur_c < cur_sma50) and (cur_sma50 < cur_sma200)
-                
-                xgb_preds_raw[2] = min(1.0, xgb_preds_raw[2] + (0.28 if is_dip_oversold else 0.0) + (0.35 if is_trough else 0.0))
-                xgb_preds_raw[0] = min(1.0, xgb_preds_raw[0] + (0.28 if is_peak_overbought else 0.0) + (0.35 if is_crest else 0.0))
-
-                if not is_crest:
-                    xgb_preds_raw[0] = 0.0
-                if not is_trough:
-                    xgb_preds_raw[2] = 0.0
-
-                xgb_preds_raw = xgb_preds_raw / np.sum(xgb_preds_raw)
-        except Exception as e:
-            logger.warning(f"Error computing causal boosts in live inference: {e}")
 
         # Enforce conviction threshold: if max(P_sell, P_hold, P_buy) < 0.60, model outputs HOLD ([0, 1, 0])
         if np.max(dl_preds_raw) < 0.60:
@@ -808,12 +748,7 @@ class InferenceService:
             curr_spy_close = float(spy_close_s.iloc[-1])
             sma_200 = float(close_s.rolling(window=200, min_periods=20).mean().iloc[-1])
             spy_sma_50 = float(spy_close_s.rolling(window=50, min_periods=10).mean().iloc[-1])
-            base_long = bool((curr_close >= sma_200 * 0.85) and (curr_spy_close >= spy_sma_50 * 0.90))
-            is_oversold_dip = bool(
-                float(tech_snapshot.get("RSI", 50.0)) < 45.0
-                or float(tech_snapshot.get("BB_Position", 0.5)) < 0.20
-            )
-            long_allowed = True if is_oversold_dip else base_long
+            long_allowed = bool((curr_close >= sma_200) and (curr_spy_close >= spy_sma_50))
             short_allowed = bool((curr_close < sma_200) or (curr_spy_close < spy_sma_50))
         except Exception as e:
             logger.warning(f"Error computing macro regime filter: {e}")

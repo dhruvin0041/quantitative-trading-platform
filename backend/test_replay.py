@@ -1,9 +1,11 @@
-import pandas as pd
 import yfinance as yf
+
 from src.execution.inference_service import InferenceService
 from src.models.model_loader import ModelManager
 
-class Dummy: pass
+
+class Dummy:
+    pass
 
 mm = ModelManager()
 srv = InferenceService(mm, Dummy(), Dummy(), Dummy(), Dummy(), Dummy(), Dummy(), Dummy(), Dummy())

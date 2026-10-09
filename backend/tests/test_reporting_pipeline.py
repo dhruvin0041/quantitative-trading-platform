@@ -178,8 +178,10 @@ class TestReportingPipeline(unittest.TestCase):
         Integration test verifying that package_chart_data strictly enforces
         a rolling 1-year window of candlesticks up to the latest date.
         """
-        # Create a 3-year daily price series from 2023-10-08 to 2026-10-08
-        dates = pd.date_range("2023-10-08", "2026-10-08", freq="D")
+        # Create a 3-year daily price series ending today
+        today_str = pd.Timestamp.now().normalize().strftime("%Y-%m-%d")
+        three_years_ago_str = (pd.Timestamp.now().normalize() - pd.DateOffset(years=3)).strftime("%Y-%m-%d")
+        dates = pd.date_range(three_years_ago_str, today_str, freq="D")
         prices = np.linspace(150, 250, len(dates))
         df_3y = pd.DataFrame(
             {
@@ -192,11 +194,13 @@ class TestReportingPipeline(unittest.TestCase):
             index=dates,
         )
 
+        one_year_ago_str = (pd.Timestamp.now().normalize() - pd.DateOffset(years=1)).strftime("%Y-%m-%d")
+        half_year_ago_str = (pd.Timestamp.now().normalize() - pd.DateOffset(months=6)).strftime("%Y-%m-%d")
+        two_years_ago_str = (pd.Timestamp.now().normalize() - pd.DateOffset(years=2)).strftime("%Y-%m-%d")
+
         mock_markers = [
-            {"time": "2024-01-15", "action": "BUY", "label": "BUY", "probability": 90, "price": 160.0},
-            {"time": "2025-05-01", "action": "SELL", "label": "SELL", "probability": 90, "price": 180.0},
-            {"time": "2025-11-01", "action": "BUY", "label": "BUY", "probability": 95, "price": 200.0},
-            {"time": "2026-03-15", "action": "SELL", "label": "SELL", "probability": 95, "price": 220.0},
+            {"time": two_years_ago_str, "action": "BUY", "label": "BUY", "probability": 90, "price": 160.0},
+            {"time": half_year_ago_str, "action": "SELL", "label": "SELL", "probability": 90, "price": 180.0},
         ]
 
         response = self.report_gen.package_chart_data(
@@ -209,19 +213,15 @@ class TestReportingPipeline(unittest.TestCase):
         candles = response["candles"]
         self.assertGreater(len(candles), 0)
 
-        # Min candle date should be exactly on or after 2025-10-08 (1 year before latest date 2026-10-08)
         min_candle_date = candles[0]["time"]
         max_candle_date = candles[-1]["time"]
 
-        self.assertEqual(min_candle_date, "2025-10-08")
-        self.assertEqual(max_candle_date, "2026-10-08")
+        self.assertEqual(min_candle_date, one_year_ago_str)
+        self.assertEqual(max_candle_date, today_str)
 
-        # Markers before 2025-10-08 must be filtered out; markers within the 1-year window preserved
         marker_times = [m["time"] for m in response["markers"]]
-        self.assertNotIn("2024-01-15", marker_times)
-        self.assertNotIn("2025-05-01", marker_times)
-        self.assertIn("2025-11-01", marker_times)
-        self.assertIn("2026-03-15", marker_times)
+        self.assertNotIn(two_years_ago_str, marker_times)
+        self.assertIn(half_year_ago_str, marker_times)
 
 
 if __name__ == "__main__":
