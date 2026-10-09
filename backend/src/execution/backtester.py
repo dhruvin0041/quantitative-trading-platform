@@ -22,7 +22,7 @@ from src.models.neural.fusion_network import build_fusion_model
 from src.models.rl.dqn_agent import DQNAgent
 
 
-def run_backtest(ticker="AAPL", start_date="2023-01-01", end_date=None):
+def run_backtest(ticker="AAPL", start_date="2023-01-01", end_date=None, gov_engine=None):
     if end_date is None:
         end_date = datetime.now().strftime("%Y-%m-%d")
 
@@ -100,16 +100,34 @@ def run_backtest(ticker="AAPL", start_date="2023-01-01", end_date=None):
 
     # Causal Execution Mandate:
     # Signals generated at Day t Close (16:00 EST) execute on Day t+1 Open (09:30 EST)
-    from src.execution.strategy_governance import StrategyGovernanceEngine
-    gov_engine = StrategyGovernanceEngine()
+    from src.execution.strategy_governance import StrategyGovernanceEngine, StrategyLockError
+    if gov_engine is None:
+        gov_engine = StrategyGovernanceEngine()
     try:
+        gov_engine.enforce_anti_overfitting_lock()
         manifest = gov_engine.load_manifest()
-        exec_assumptions = manifest.get("frozen_hyperparameters", {}).get("execution_assumptions", {})
-        slippage = exec_assumptions.get("slippage_bps", 5.0) / 10000.0
-        commission_per_share = exec_assumptions.get("commission_per_share_usd", 0.005)
-    except Exception:
-        slippage = 0.0005  # 5 bps fallback
-        commission_per_share = 0.005
+        frozen_hp = manifest.get("frozen_hyperparameters")
+        if not isinstance(frozen_hp, dict):
+            raise StrategyLockError("Frozen hyperparameters section missing or invalid in manifest.")
+        exec_assumptions = frozen_hp.get("execution_assumptions")
+        if (
+            not isinstance(exec_assumptions, dict)
+            or "slippage_bps" not in exec_assumptions
+            or "commission_per_share_usd" not in exec_assumptions
+        ):
+            raise StrategyLockError(
+                "Authoritative execution assumptions missing from frozen strategy manifest. "
+                "Failing closed (anti-overfitting governance mandate)."
+            )
+        slippage = float(exec_assumptions["slippage_bps"]) / 10000.0
+        commission_per_share = float(exec_assumptions["commission_per_share_usd"])
+    except Exception as e:
+        if isinstance(e, StrategyLockError):
+            raise
+        raise StrategyLockError(
+            f"Authoritative execution assumptions verification failed: {e}. "
+            "Frozen candidate execution must fail closed."
+        ) from e
     pending_order = None
     pending_position_size = 0.0
 
