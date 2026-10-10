@@ -25,13 +25,20 @@ class StrategyGovernanceEngine:
     Immutable Strategy Versioning and Anti-Overfitting Lock Guardian.
     """
 
-    def __init__(self, manifest_path: Optional[str] = None):
+    def __init__(self, manifest_path: Optional[str] = None, version: Optional[str] = None):
         if manifest_path is None:
-            v24_path = Path(__file__).resolve().parent.parent.parent / "artifacts" / "frozen_strategy_manifest_v2.4.json"
-            if v24_path.exists():
-                self.manifest_path = v24_path
+            if version and version.upper().startswith("V3"):
+                v3_path = Path(__file__).resolve().parent.parent.parent / "artifacts" / "frozen_strategy_manifest_v3.0.json"
+                if v3_path.exists():
+                    self.manifest_path = v3_path
+                else:
+                    self.manifest_path = Path(__file__).resolve().parent.parent.parent / "artifacts" / "frozen_strategy_manifest_v2.4.json"
             else:
-                self.manifest_path = Path(__file__).resolve().parent.parent.parent / "artifacts" / "frozen_strategy_manifest.json"
+                v24_path = Path(__file__).resolve().parent.parent.parent / "artifacts" / "frozen_strategy_manifest_v2.4.json"
+                if v24_path.exists():
+                    self.manifest_path = v24_path
+                else:
+                    self.manifest_path = Path(__file__).resolve().parent.parent.parent / "artifacts" / "frozen_strategy_manifest.json"
         else:
             self.manifest_path = Path(manifest_path)
         self.backend_dir = Path(__file__).resolve().parent.parent.parent

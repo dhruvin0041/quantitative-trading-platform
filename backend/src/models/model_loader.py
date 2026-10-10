@@ -1,5 +1,6 @@
 import json
 import logging
+from pathlib import Path
 
 import joblib
 import keras
@@ -209,7 +210,16 @@ class ModelManager:
     def _load_xgb(self):
         try:
             self.xgb_model = xgb.XGBClassifier()
-            self.xgb_model.load_model("artifacts/xgb_ensemble.json")
+            v3_path = Path("artifacts/v3/xgb_ensemble.json")
+            if not v3_path.exists():
+                v3_path = Path(__file__).resolve().parent.parent.parent / "artifacts" / "v3" / "xgb_ensemble.json"
+
+            if self.num_features == 31 and v3_path.exists():
+                self.xgb_model.load_model(str(v3_path))
+                logger.info("Loaded V3.0 Universal XGBoost ensemble (31 features).")
+            else:
+                self.xgb_model.load_model("artifacts/xgb_ensemble.json")
+                logger.info("Loaded V2.4 XGBoost ensemble (27 features).")
         except Exception as e:
             logger.warning(f"Could not load XGB ensemble: {e}")
 
@@ -227,7 +237,16 @@ class ModelManager:
 
     def _load_lgbm(self):
         try:
-            self.lgbm_model = joblib.load("artifacts/lgbm_agent.joblib")
+            v3_path = Path("artifacts/v3/lgbm_agent.joblib")
+            if not v3_path.exists():
+                v3_path = Path(__file__).resolve().parent.parent.parent / "artifacts" / "v3" / "lgbm_agent.joblib"
+
+            if self.num_features == 31 and v3_path.exists():
+                self.lgbm_model = joblib.load(v3_path)
+                logger.info("Loaded V3.0 Universal LightGBM agent (31 features).")
+            else:
+                self.lgbm_model = joblib.load("artifacts/lgbm_agent.joblib")
+                logger.info("Loaded V2.4 LightGBM agent (27 features).")
         except Exception as e:
             logger.warning(f"Could not load LightGBM agent: {e}")
 

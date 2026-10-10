@@ -7,7 +7,8 @@ os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 import json
 import logging
 from datetime import datetime
-from typing import Tuple
+from pathlib import Path
+from typing import Optional, Tuple
 
 import joblib
 import numpy as np
@@ -48,7 +49,7 @@ def check_bar_forming_status(df: pd.DataFrame) -> Tuple[bool, str]:
         return False, "CONFIRMED"
 
 
-FEATURE_COLUMNS = [
+FEATURE_COLUMNS_V24 = [
     "MA20_vs_MA50",
     "EMA9_vs_EMA21",
     "Price_vs_EMA9",
@@ -79,6 +80,22 @@ FEATURE_COLUMNS = [
     # --- Step 2: ATR Regime Ratio ---
     "ATR_Regime_Ratio",
 ]
+
+FEATURE_COLUMNS_V30 = FEATURE_COLUMNS_V24 + [
+    "Keltner_Position",
+    "HMA_Slope",
+    "Connors_RSI",
+    "CMF_Divergence",
+]
+
+FEATURE_COLUMNS = FEATURE_COLUMNS_V24
+
+
+def get_feature_columns(version: str = "V3.0") -> list[str]:
+    """Returns authoritative feature column list by strategy version."""
+    if version and version.upper().startswith("V3"):
+        return FEATURE_COLUMNS_V30
+    return FEATURE_COLUMNS_V24
 
 
 def apply_optimized_model_params(config, ticker=None):
@@ -410,8 +427,11 @@ def add_upgraded_features(df, spy_df, vix_df, lag_vix: bool = True):
     return df
 
 
-def fetch_live_data(ticker, config):
-    print(f"Fetching live market data for {ticker}...")
+def fetch_live_data(ticker, config, version: Optional[str] = None):
+    if version is None:
+        num_f = config.get("data", {}).get("num_features", 27) if isinstance(config, dict) else 27
+        version = "V3.0" if num_f == 31 else "V2.4"
+    print(f"Fetching live market data for {ticker} ({version})...")
     df = fetch_historical_data(
         ticker,
         start_date="2022-01-01",
@@ -429,7 +449,8 @@ def fetch_live_data(ticker, config):
     df = add_upgraded_features(df, spy_df, vix_df)
     # Institutional Fix: Remove duplicate columns before reindexing to prevent crash
     df = df.loc[:, ~df.columns.duplicated()].copy()
-    df_filtered = df.reindex(columns=FEATURE_COLUMNS).dropna()
+    feature_cols = get_feature_columns(version)
+    df_filtered = df.reindex(columns=feature_cols).dropna()
 
     from src.execution.asset_intelligence import MODEL_REGISTRY, ModelRole
 
@@ -446,7 +467,7 @@ def fetch_live_data(ticker, config):
             end_date=(pd.Timestamp.now() + pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
         )
         peer_df = add_upgraded_features(peer_df, spy_df, vix_df)
-        peer_filtered = peer_df.reindex(columns=FEATURE_COLUMNS).dropna()
+        peer_filtered = peer_df.reindex(columns=feature_cols).dropna()
 
         common_idx = df_filtered.index.intersection(peer_filtered.index)
         if len(common_idx) < 30:
@@ -466,7 +487,20 @@ def fetch_live_data(ticker, config):
             f"Cleaned dataset for {ticker} is empty after feature engineering. Check data sources."
         )
 
-    scaler = joblib.load("artifacts/latest_scaler.joblib")
+    scaler = None
+    if version and version.upper().startswith("V3"):
+        for sp in [
+            "artifacts/v3/latest_scaler.joblib",
+            "backend/artifacts/v3/latest_scaler.joblib",
+        ]:
+            if Path(sp).exists():
+                try:
+                    scaler = joblib.load(sp)
+                    break
+                except Exception:
+                    pass
+    if scaler is None:
+        scaler = joblib.load("artifacts/latest_scaler.joblib")
     time_steps = config["data"]["time_steps"]
 
     recent_data = df_filtered.tail(time_steps).values
@@ -538,7 +572,7 @@ def fetch_live_data(ticker, config):
     )
 
 
-def compute_shap_explanation(model, X_flat, signal_idx=2):
+def compute_shap_explanation(model, X_flat, signal_idx=2, feature_columns=None):
     """
     Phase 5: Institutional Feature Attribution Engine.
     Uses model feature importances as a robust fallback for XAI to prevent SHAP parsing crashes.
@@ -551,10 +585,16 @@ def compute_shap_explanation(model, X_flat, signal_idx=2):
         # Assuming X_flat is already scaled around 0
         X_array = np.array(X_flat).flatten()
 
+        if feature_columns is None:
+            if len(X_array) == len(FEATURE_COLUMNS_V30):
+                feature_columns = FEATURE_COLUMNS_V30
+            else:
+                feature_columns = FEATURE_COLUMNS_V24
+
         drivers = []
         feature_impacts = []
 
-        for i, feat in enumerate(FEATURE_COLUMNS):
+        for i, feat in enumerate(feature_columns):
             val = X_array[i] if i < len(X_array) else 0
             importance = importances[i] if i < len(importances) else 0
 

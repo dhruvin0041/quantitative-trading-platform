@@ -22,6 +22,7 @@ from src.execution.forecast_engine import ForecastCalibrationEngine
 from src.execution.governance_engine import SignalGovernanceAnalytics
 from src.execution.live_inference import (
     FEATURE_COLUMNS,
+    FEATURE_COLUMNS_V30,
     add_upgraded_features,
     check_bar_forming_status,
     compute_shap_explanation,
@@ -122,6 +123,7 @@ class InferenceService:
         ticker: str,
         ticker_df: pd.DataFrame,
         spy_df: Optional[pd.DataFrame] = None,
+        version: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Point-in-Time Sequential Causal Replay.
@@ -138,28 +140,53 @@ class InferenceService:
             spy = clean_multiindex_columns(spy_df.copy()) if spy_df is not None else None
             df_feat = add_upgraded_features(df.copy(), spy, None)
             df_feat = df_feat.loc[:, ~df_feat.columns.duplicated()].copy()
-            df_filtered = df_feat.reindex(columns=FEATURE_COLUMNS).dropna()
 
-            if df_filtered.empty or len(df_filtered) < 15:
-                return []
-
-            # Pre-fitted production scaler
+            # Resolve Scaler & Strategy Version (V3.0 Cross-Asset vs V2.4)
             scaler = getattr(self.mm, "scaler", None)
-            if scaler is None:
-                for s_path in [
-                    "artifacts/latest_scaler.joblib",
-                    "backend/artifacts/latest_scaler.joblib",
-                ]:
-                    p = Path(s_path)
-                    if p.exists():
-                        try:
-                            scaler = joblib.load(p)
-                            break
-                        except Exception:
-                            pass
+            is_v3 = False
+
+            if scaler is not None:
+                scaler_n_feats = getattr(scaler, "n_features_in_", 27)
+                if scaler_n_feats == len(FEATURE_COLUMNS_V30):
+                    is_v3 = True
+            else:
+                if version and version.upper().startswith("V2"):
+                    is_v3 = False
+                else:
+                    for sp in [
+                        "artifacts/v3/latest_scaler.joblib",
+                        "backend/artifacts/v3/latest_scaler.joblib",
+                    ]:
+                        if Path(sp).exists():
+                            try:
+                                scaler = joblib.load(sp)
+                                is_v3 = True
+                                break
+                            except Exception:
+                                pass
+
+                if scaler is None:
+                    for s_path in [
+                        "artifacts/latest_scaler.joblib",
+                        "backend/artifacts/latest_scaler.joblib",
+                    ]:
+                        p = Path(s_path)
+                        if p.exists():
+                            try:
+                                scaler = joblib.load(p)
+                                is_v3 = False
+                                break
+                            except Exception:
+                                pass
 
             if scaler is None:
                 logger.warning("No scaler available for causal ML replay.")
+                return []
+
+            active_cols = FEATURE_COLUMNS_V30 if is_v3 else FEATURE_COLUMNS
+            df_filtered = df_feat.reindex(columns=active_cols).dropna()
+
+            if df_filtered.empty or len(df_filtered) < 15:
                 return []
 
             scaled_rows = scaler.transform(df_filtered.values)
@@ -167,10 +194,12 @@ class InferenceService:
             # Multi-Model Alpha Ensemble: XGBoost + LightGBM
             xgb_model = getattr(self.mm, "xgb_model", None)
             if xgb_model is None:
-                for m_path in [
-                    "artifacts/xgb_ensemble.json",
-                    "backend/artifacts/xgb_ensemble.json",
-                ]:
+                model_paths = (
+                    ["artifacts/v3/xgb_ensemble.json", "backend/artifacts/v3/xgb_ensemble.json"]
+                    if is_v3
+                    else ["artifacts/xgb_ensemble.json", "backend/artifacts/xgb_ensemble.json"]
+                )
+                for m_path in model_paths:
                     mp = Path(m_path)
                     if mp.exists():
                         try:
@@ -584,6 +613,7 @@ class InferenceService:
         ticker_df: pd.DataFrame,
         spy_df: Optional[pd.DataFrame] = None,
         force_recompute: bool = False,
+        version: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Retrieves verified causal markers from the immutable SignalLedger.
@@ -610,7 +640,7 @@ class InferenceService:
 
         if force_recompute or len(all_signals) < 2:
             self.signal_ledger.clear_historical_replay(ticker)
-            return self._replay_causal_ml_signals(ticker, ticker_df, spy_df)
+            return self._replay_causal_ml_signals(ticker, ticker_df, spy_df, version=version)
 
         if (
             latest_completed_bar_date is not None
@@ -623,7 +653,7 @@ class InferenceService:
             # Only return markers up to the completed bar; forming bar is NEVER included
             return [s for s in all_signals if s.get("bar_timestamp", "") <= latest_completed_bar_date]
 
-        return self._replay_causal_ml_signals(ticker, ticker_df, spy_df)
+        return self._replay_causal_ml_signals(ticker, ticker_df, spy_df, version=version)
 
     async def get_prediction(self, ticker, config, metadata):
         import uuid

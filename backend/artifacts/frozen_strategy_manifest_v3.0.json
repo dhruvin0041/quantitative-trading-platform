@@ -1,0 +1,108 @@
+{
+  "strategy_version": "HYDRA_PROSPECTIVE_V3.0",
+  "previous_version": "HYDRA_PROSPECTIVE_V2.4",
+  "freeze_timestamp_utc": "2026-10-10T08:44:34.021492+00:00",
+  "status": "CANDIDATE_CROSS_ASSET_VALIDATION",
+  "anti_overfitting_lock": true,
+  "universe": [
+    "AAPL",
+    "NVDA",
+    "MSFT",
+    "AMZN",
+    "SPY"
+  ],
+  "feature_count": 31,
+  "feature_columns": [
+    "MA20_vs_MA50",
+    "EMA9_vs_EMA21",
+    "Price_vs_EMA9",
+    "Price_vs_EMA21",
+    "VIX_Level",
+    "BB_Width",
+    "BB_Position",
+    "RSI",
+    "ADX",
+    "MACD_Hist",
+    "Relative_Strength",
+    "OBV_Change",
+    "Return",
+    "Volume_Ratio",
+    "ZScore_RSI_20",
+    "ZScore_RSI_50",
+    "ZScore_RSI_120",
+    "ZScore_BB_Position_20",
+    "ZScore_BB_Position_50",
+    "ZScore_MACD_Hist_20",
+    "ZScore_MACD_Hist_50",
+    "ZScore_Return_20",
+    "ZScore_Return_50",
+    "ZScore_Return_120",
+    "ZScore_Volume_Ratio_20",
+    "ZScore_Volume_Ratio_50",
+    "ATR_Regime_Ratio",
+    "Keltner_Position",
+    "HMA_Slope",
+    "Connors_RSI",
+    "CMF_Divergence"
+  ],
+  "new_indicators": [
+    "Keltner_Position",
+    "HMA_Slope",
+    "Connors_RSI",
+    "CMF_Divergence"
+  ],
+  "model_hashes": {
+    "v3/xgb_ensemble.json": "0291aa3e2372b8a4dcd7a18dd53b7c296d5f7a11b02463a18829d98d762f7753",
+    "v3/lgbm_agent.joblib": "68abdfaee06405dff6400a559d249fc2bcd2670925f629bde4d7c58cdb9fc16a",
+    "v3/latest_scaler.joblib": "b184c200f260946c7f650110ac14dbecb377b1b24a1f8124a636db4f6eb157ce",
+    "v3/model_calibrator.joblib": "d164e6520747bc7884169201aeba567109190d5fb8865291b649c2e457833c4e",
+    "v3/kept_features.json": "f939d3c8a524ecb9c1b08e3b9536a1f5210a7d3554d1f7e1aaf935a014e41518"
+  },
+  "config_hashes": {
+    "kept_features_v3.json": "f939d3c8a524ecb9c1b08e3b9536a1f5210a7d3554d1f7e1aaf935a014e41518"
+  },
+  "dataset_provenance": {
+    "development_universe": {
+      "tickers": [
+        "AAPL",
+        "NVDA",
+        "MSFT",
+        "AMZN",
+        "SPY"
+      ],
+      "start_date": "2016-01-01",
+      "end_date": "2024-12-31",
+      "total_samples": 10675,
+      "warmup_bars_dropped": 119,
+      "label_horizon": 10,
+      "tp_atr_multiplier": 2.5,
+      "sl_atr_multiplier": 1.5,
+      "zero_2025_leakage": true,
+      "zero_2026_leakage": true
+    },
+    "validation_universe": {
+      "tickers": [
+        "AAPL",
+        "NVDA",
+        "MSFT",
+        "AMZN",
+        "SPY"
+      ],
+      "start_date": "2025-01-01",
+      "end_date": "2025-12-31",
+      "total_samples": 1195,
+      "zero_2026_leakage": true
+    }
+  },
+  "validation_metrics": {
+    "xgb_train_accuracy": 0.7528805620608899,
+    "xgb_val_accuracy": 0.4100418410041841,
+    "lgbm_train_accuracy": 0.8787822014051522,
+    "lgbm_val_accuracy": 0.4066945606694561
+  },
+  "execution_rules": {
+    "fill_timing": "NEXT_SESSION_OPEN",
+    "slippage_bps": 5.0,
+    "commission_per_share_usd": 0.005
+  }
+}
