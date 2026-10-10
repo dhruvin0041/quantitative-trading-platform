@@ -62,6 +62,10 @@ export function PriceChart({ data, loading }: PriceChartProps) {
       },
       rightPriceScale: {
         borderColor: gridColor,
+        scaleMargins: {
+          top: 0.08,
+          bottom: 0.22,
+        },
       },
       width: chartContainerRef.current.clientWidth,
       height: chartContainerRef.current.clientHeight,
@@ -81,9 +85,11 @@ export function PriceChart({ data, loading }: PriceChartProps) {
       color: '#26a69a',
       priceFormat: { type: 'volume' },
       priceScaleId: 'volume_scale',
+      lastValueVisible: false,
+      priceLineVisible: false,
     });
     chart.priceScale('volume_scale').applyOptions({
-      scaleMargins: { top: 0.85, bottom: 0 },
+      scaleMargins: { top: 0.82, bottom: 0 },
       visible: false,
     });
 
@@ -122,29 +128,43 @@ export function PriceChart({ data, loading }: PriceChartProps) {
   useEffect(() => {
     if (!data || !data.candles || !chartRef.current || !candlestickSeriesRef.current) return;
 
-    candlestickSeriesRef.current.setData(data.candles);
+    // Deduplicate and chronologically order candles to guarantee stability
+    type CandleItem = NonNullable<ChartData['candles']>[number];
+    type CloudItem = NonNullable<ChartData['clouds']>[number];
+    type MarkerItem = NonNullable<ChartData['historical_markers']>[number];
+
+    const candleMap = new Map<string, CandleItem>();
+    for (const c of data.candles) {
+      if (c && c.time) candleMap.set(String(c.time), c);
+    }
+    const sortedCandles = Array.from(candleMap.values()).sort(
+      (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime()
+    );
+
+    candlestickSeriesRef.current.setData(sortedCandles);
 
     if (volumeSeriesRef.current) {
-      const volumeData = data.candles.map((c: { time: string; volume?: number; close: number; open: number }) => ({
+      const volumeData = sortedCandles.map((c: CandleItem) => ({
         time: c.time,
         value: c.volume || 0,
-        color: (c.close >= c.open) ? 'rgba(0, 230, 118, 0.3)' : 'rgba(255, 82, 82, 0.3)',
+        color: (c.close >= c.open) ? 'rgba(0, 230, 118, 0.35)' : 'rgba(255, 82, 82, 0.35)',
       }));
       volumeSeriesRef.current.setData(volumeData);
     }
 
     if (data.clouds && data.clouds.length > 0 && bbUpperSeriesRef.current && bbLowerSeriesRef.current && ribbonUpperSeriesRef.current && ribbonLowerSeriesRef.current) {
-      bbUpperSeriesRef.current.setData(data.clouds.filter(c => c.bb_upper !== null).map(c => ({ time: c.time, value: c.bb_upper as number })));
-      bbLowerSeriesRef.current.setData(data.clouds.filter(c => c.bb_lower !== null).map(c => ({ time: c.time, value: c.bb_lower as number })));
-      ribbonUpperSeriesRef.current.setData(data.clouds.filter(c => c.ribbon_upper !== null).map(c => ({ time: c.time, value: c.ribbon_upper as number })));
-      ribbonLowerSeriesRef.current.setData(data.clouds.filter(c => c.ribbon_lower !== null).map(c => ({ time: c.time, value: c.ribbon_lower as number })));
-      // Trailing stop line rendering commented out for minimalist UI
-      // if (trailingStopSeriesRef.current) {
-      //   const stopPoints = data.clouds
-      //     .filter(c => c.trailing_stop !== undefined && c.trailing_stop !== null && !isNaN(c.trailing_stop))
-      //     .map(c => ({ time: c.time, value: c.trailing_stop as number }));
-      //   trailingStopSeriesRef.current.setData(stopPoints);
-      // }
+      const cloudMap = new Map<string, CloudItem>();
+      for (const cl of data.clouds) {
+        if (cl && cl.time) cloudMap.set(String(cl.time), cl);
+      }
+      const sortedClouds = Array.from(cloudMap.values()).sort(
+        (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime()
+      );
+
+      bbUpperSeriesRef.current.setData(sortedClouds.filter(c => c.bb_upper !== null && c.bb_upper !== undefined).map(c => ({ time: c.time, value: c.bb_upper as number })));
+      bbLowerSeriesRef.current.setData(sortedClouds.filter(c => c.bb_lower !== null && c.bb_lower !== undefined).map(c => ({ time: c.time, value: c.bb_lower as number })));
+      ribbonUpperSeriesRef.current.setData(sortedClouds.filter(c => c.ribbon_upper !== null && c.ribbon_upper !== undefined).map(c => ({ time: c.time, value: c.ribbon_upper as number })));
+      ribbonLowerSeriesRef.current.setData(sortedClouds.filter(c => c.ribbon_lower !== null && c.ribbon_lower !== undefined).map(c => ({ time: c.time, value: c.ribbon_lower as number })));
     }
 
     if (data.forecast_fan && forecastP90Ref.current && forecastP50Ref.current && forecastP10Ref.current) {
@@ -157,12 +177,16 @@ export function PriceChart({ data, loading }: PriceChartProps) {
     const rawMarkers = (Array.isArray(data.historical_markers) && data.historical_markers.length > 0)
       ? data.historical_markers
       : (Array.isArray(data.markers) && data.markers.length > 0 ? data.markers : []);
-    const validMarkers = rawMarkers
-      .filter((m: { action?: string; signal?: string; is_provisional?: boolean }) => {
-        const act = m.action || m.signal;
-        return (act === 'BUY' || act === 'SELL') && !m.is_provisional;
-      })
-      .sort((a: { time: string | number }, b: { time: string | number }) => new Date(a.time as string).getTime() - new Date(b.time as string).getTime());
+
+    const markerMap = new Map<string, MarkerItem>();
+    for (const m of rawMarkers) {
+      const act = m?.action || m?.signal;
+      if ((act === 'BUY' || act === 'SELL') && !m?.is_provisional && m?.time) {
+        markerMap.set(String(m.time), m);
+      }
+    }
+    const validMarkers = Array.from(markerMap.values())
+      .sort((a, b) => new Date(a.time as string).getTime() - new Date(b.time as string).getTime());
 
     const markers: SeriesMarker<Time>[] = validMarkers.map((marker: { action?: string; signal?: string; time: string | number }) => {
       const act = marker.action || marker.signal;
@@ -173,7 +197,7 @@ export function PriceChart({ data, loading }: PriceChartProps) {
         color: isBuy ? "#10B981" : "#EF4444",
         shape: (isBuy ? "arrowUp" : "arrowDown") as "arrowUp" | "arrowDown",
         text: "",
-        size: 2,
+        size: 1.2,
       };
     });
 

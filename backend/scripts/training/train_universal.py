@@ -497,7 +497,7 @@ def train_universal_engine(
 
     # Active ticker configuration for frontend
     with open(configs_dir / "active_ticker.json", "w") as f:
-        json.dump({"ticker": "UNIVERSAL", "market": "us", "universe": UNIVERSE}, f, indent=4)
+        json.dump({"ticker": "AAPL", "market": "us", "mode": "UNIVERSAL", "universe": UNIVERSE}, f, indent=4)
 
     total_time = time.time() - pipeline_start
     logger.info("=================================================================")

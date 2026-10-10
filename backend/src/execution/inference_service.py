@@ -193,6 +193,11 @@ class InferenceService:
 
             # Multi-Model Alpha Ensemble: XGBoost + LightGBM
             xgb_model = getattr(self.mm, "xgb_model", None)
+            if xgb_model is not None:
+                n_feats = getattr(xgb_model, "n_features_in_", None)
+                if n_feats is not None and n_feats != len(active_cols):
+                    xgb_model = None
+
             if xgb_model is None:
                 model_paths = (
                     ["artifacts/v3/xgb_ensemble.json", "backend/artifacts/v3/xgb_ensemble.json"]

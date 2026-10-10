@@ -7,26 +7,32 @@ UNIVERSES_METADATA = {
             "currency": "USD",
             "timezone": "America/New_York",
         },
-        "MSFT": {
-            "name": "Microsoft Corp.",
-            "exchange": "NASDAQ",
-            "currency": "USD",
-            "timezone": "America/New_York",
-        },
         "NVDA": {
             "name": "NVIDIA",
             "exchange": "NASDAQ",
             "currency": "USD",
             "timezone": "America/New_York",
         },
-        "GOOGL": {
-            "name": "Alphabet Inc.",
+        "MSFT": {
+            "name": "Microsoft Corp.",
             "exchange": "NASDAQ",
             "currency": "USD",
             "timezone": "America/New_York",
         },
         "AMZN": {
             "name": "Amazon.com Inc.",
+            "exchange": "NASDAQ",
+            "currency": "USD",
+            "timezone": "America/New_York",
+        },
+        "SPY": {
+            "name": "SPDR S&P 500 ETF",
+            "exchange": "NYSE Arca",
+            "currency": "USD",
+            "timezone": "America/New_York",
+        },
+        "GOOGL": {
+            "name": "Alphabet Inc.",
             "exchange": "NASDAQ",
             "currency": "USD",
             "timezone": "America/New_York",

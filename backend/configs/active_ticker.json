@@ -1,6 +1,7 @@
 {
-    "ticker": "UNIVERSAL",
+    "ticker": "AAPL",
     "market": "us",
+    "mode": "UNIVERSAL",
     "universe": [
         "AAPL",
         "NVDA",

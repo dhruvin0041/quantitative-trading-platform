@@ -34,12 +34,16 @@ export default function HydraTerminal() {
   const [isDebugModalOpen, setDebugModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('CONSENSUS');
   const [API_URL] = useState(getBaseUrl());
+  const UNIVERSAL_TICKERS = useMemo(() => ["AAPL", "NVDA", "MSFT", "AMZN", "SPY"], []);
 
   useEffect(() => {
     fetch(`${API_URL}/active_ticker`, { headers: { "X-API-Key": API_KEY } })
       .then(res => res.json())
       .then(data => {
-        if (data.ticker) setTicker(data.ticker);
+        if (data.ticker) {
+          const resolvedTicker = data.ticker === 'UNIVERSAL' ? 'AAPL' : data.ticker;
+          setTicker(resolvedTicker);
+        }
         if (data.market) setMarket(data.market);
       })
       .catch(err => console.error("Failed to fetch active ticker", err));
@@ -50,7 +54,10 @@ export default function HydraTerminal() {
       .catch(() => {
         setUniverse([
           { ticker: "AAPL", name: "Apple Inc.", price: 0, pct_change: 0, market: 'us' },
-          { ticker: "MSFT", name: "Microsoft Corp.", price: 0, pct_change: 0, market: 'us' }
+          { ticker: "NVDA", name: "NVIDIA", price: 0, pct_change: 0, market: 'us' },
+          { ticker: "MSFT", name: "Microsoft Corp.", price: 0, pct_change: 0, market: 'us' },
+          { ticker: "AMZN", name: "Amazon.com Inc.", price: 0, pct_change: 0, market: 'us' },
+          { ticker: "SPY", name: "SPDR S&P 500 ETF", price: 0, pct_change: 0, market: 'us' }
         ]);
       });
   }, [API_URL]);
@@ -65,7 +72,8 @@ export default function HydraTerminal() {
       setLoading(true);
       setError(null);
 
-      const requestUrl = `${API_URL}/predict?ticker=${ticker}`;
+      const requestTicker = ticker === 'UNIVERSAL' ? 'AAPL' : ticker;
+      const requestUrl = `${API_URL}/predict?ticker=${requestTicker}`;
       const timeoutId = setTimeout(() => controller.abort(), 60000);
 
       try {
@@ -81,7 +89,7 @@ export default function HydraTerminal() {
 
         const data = await res.json();
 
-        if (isMounted && data.ticker === ticker) {
+        if (isMounted && (data.ticker === requestTicker || data.ticker === ticker)) {
           setChartData(data);
           setLoading(false);
         }
@@ -99,8 +107,19 @@ export default function HydraTerminal() {
   }, [ticker, API_URL]); 
 
   const filteredUniverse = useMemo(() => {
-    return universe.filter(s => s.market === market);
-  }, [universe, market]);
+    const list = universe.filter(s => s.market === market);
+    if (market === 'us') {
+      return [...list].sort((a, b) => {
+        const aIdx = UNIVERSAL_TICKERS.indexOf(a.ticker);
+        const bIdx = UNIVERSAL_TICKERS.indexOf(b.ticker);
+        if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+        if (aIdx !== -1) return -1;
+        if (bIdx !== -1) return 1;
+        return 0;
+      });
+    }
+    return list;
+  }, [universe, market, UNIVERSAL_TICKERS]);
 
   const handleStockSelect = (selectedTicker: string) => {
     setTicker(selectedTicker);
@@ -227,7 +246,16 @@ export default function HydraTerminal() {
                     >
                       <td className="py-2.5">
                         <div className="flex flex-col">
-                          <span className={cn("font-bold text-[13px]", ticker === stock.ticker ? "text-primary" : "text-foreground")}>{stock.ticker}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className={cn("font-bold text-[13px]", ticker === stock.ticker ? "text-primary" : "text-foreground")}>
+                              {stock.ticker}
+                            </span>
+                            {UNIVERSAL_TICKERS.includes(stock.ticker) && (
+                              <span className="text-[9px] px-1 py-0.2 rounded bg-primary/15 text-primary font-mono uppercase font-bold tracking-wider">
+                                UNIV
+                              </span>
+                            )}
+                          </div>
                           <span className="text-[11px] text-muted-foreground truncate max-w-[120px]">{stock.name}</span>
                         </div>
                       </td>
@@ -264,6 +292,11 @@ export default function HydraTerminal() {
               <div className="px-4 py-3 border-b border-border flex justify-between items-center bg-card shrink-0">
                  <div className="flex items-center gap-3">
                    <h2 className="text-[20px] font-bold">{ticker}</h2>
+                   {UNIVERSAL_TICKERS.includes(ticker) && (
+                     <span className="px-2 py-0.5 rounded bg-primary/15 text-primary text-[10px] font-mono font-bold tracking-wider uppercase">
+                       Universal Model
+                     </span>
+                   )}
                    <span className="text-[13px] text-muted-foreground">{chartData?.metadata?.name || ''}</span>
                    <span className="px-2 py-0.5 rounded bg-muted text-[11px] text-foreground font-mono">
                      {chartData?.current_price ? `${currencySymbol}${chartData.current_price.toFixed(2)}` : '---'}

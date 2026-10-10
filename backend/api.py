@@ -334,6 +334,8 @@ async def get_active_ticker():
     try:
         with open("configs/active_ticker.json", "r") as f:
             data = json.load(f)
+            if data.get("ticker") == "UNIVERSAL":
+                data["ticker"] = "AAPL"
             return data
     except Exception:
         # Default to Apple if no training run has set an active ticker
@@ -422,6 +424,8 @@ def _enforce_dashboard_provenance(ticker: str, response_data: dict) -> dict:
 )
 async def get_prediction(ticker: str = "AAPL"):
     ticker = sanitize_ticker(ticker)
+    if ticker.upper() == "UNIVERSAL":
+        ticker = "AAPL"
 
     # Identify Market Metadata
     metadata = None
