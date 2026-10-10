@@ -1,32 +1,47 @@
+# backend/scripts/training/train.py
+"""
+HYDRA V3.0 Asset-Specific Training Pipeline.
+
+Trains the Multi-Model Alpha Ensemble (XGBoost + LightGBM + Probability Calibration)
+for a user-specified stock ticker.
+Features: 31 institutional indicators (FEATURE_COLUMNS_V30).
+
+Chronological Walk-Forward Mandates:
+1. Historical Range: First trading session of 2015 (2015-01-01) to current date.
+2. Chronological Split: 75% of data used strictly for training, 25% for testing/validation.
+3. Warmup Removal: First 119 bars discarded to ensure rolling 120-bar indicators are fully initialized.
+4. Triple Barrier Horizon Truncation: Labels strictly contained within each partition (zero forward lookahead).
+5. Preprocessing Isolation: StandardScaler fitted exclusively on the 75% training split.
+"""
+
 import argparse
 import hashlib
 import json
-import os
+import logging
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
+from typing import Dict, Tuple
 
-# Ensure backend root is in sys.path
+import joblib
+import numpy as np
+import optuna
+import pandas as pd
+import xgboost as xgb
+import yfinance as yf
+from lightgbm import LGBMClassifier
+from sklearn.metrics import f1_score
+from sklearn.preprocessing import StandardScaler
+from sklearn.utils.class_weight import compute_class_weight
+
 BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-import joblib
-import mlflow
-import mlflow.sklearn
-import mlflow.tensorflow
-import numpy as np
-import pandas as pd
-import tensorflow as tf
-import xgboost as xgb
-import yfinance as yf
-from sklearn.preprocessing import StandardScaler
-from sklearn.utils.class_weight import compute_class_weight
-
-from scripts.ops.clean_artifacts import main as run_cleanup
-from scripts.training.optimize import run_optuna_optimization
-from scripts.training.optimize_models import (
-    run_optimization as run_bayesian_optimization,
+from scripts.ops.clean_artifacts import (
+    clean_optimization_artifacts,
+    clean_training_artifacts,
 )
 from src.data_ingestion.market_data import (
     apply_dynamic_triple_barrier,
@@ -34,1069 +49,452 @@ from src.data_ingestion.market_data import (
     get_sector_peer,
 )
 from src.execution.live_inference import (
-    FEATURE_COLUMNS,
+    FEATURE_COLUMNS_V30,
     add_upgraded_features,
-    load_config,
 )
-from src.features.sequence_builder import create_time_series_sequences
-from src.models.neural.fusion_network import build_fusion_model
 from src.models.regime.calibration import ModelCalibrator
-from src.models.rl.dqn_agent import DQNAgent
-from src.utils.gpu_utils import (
-    benchmark_context,
-    get_lightgbm_gpu_params,
-    get_xgboost_gpu_params,
-    verify_gpu_utilization,
-)
 
-os.environ["TF_USE_LEGACY_KERAS"] = "1"
-os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
-os.environ["MLFLOW_ALLOW_FILE_STORE"] = "true"
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger("TrainSpecificTicker")
 
-from src.utils.gpu_utils import get_compute_backend
-
-# GPU Configuration
-get_compute_backend()
-
-mlflow.set_experiment("hydra_terminal_signals")
+WARMUP_BARS = 119
+LABEL_HORIZON = 10
+TP_ATR_MULT = 2.5
+SL_ATR_MULT = 1.5
 
 
-def prepare_data(ticker, config):
-    print(f"--- Preparing Data for {ticker} (2016-2024 Dev, 2025 Val) ---")
-    from src.execution.data_firewall import TemporalFirewall
+def compute_sha256(file_path: Path) -> str:
+    """Computes SHA-256 hash of a file for cryptographic governance audit."""
+    if not file_path.exists():
+        return "FILE_NOT_FOUND"
+    h = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        while chunk := f.read(65536):
+            h.update(chunk)
+    return h.hexdigest()
 
-    # Fetch strictly up to 2025-12-31 (zero 2026 data fetched)
-    df = fetch_historical_data(ticker, start_date="2016-01-01", end_date="2025-12-31")
 
-    spy_df = yf.download(
-        "SPY", start="2016-01-01", end="2025-12-31", interval="1d", progress=False
-    )
-    vix_df = yf.download(
-        "^VIX", start="2016-01-01", end="2025-12-31", interval="1d", progress=False
-    )
-    if isinstance(spy_df.columns, pd.MultiIndex):
-        spy_df.columns = spy_df.columns.droplevel(1)
-    if isinstance(vix_df.columns, pd.MultiIndex):
-        vix_df.columns = vix_df.columns.droplevel(1)
+def load_ticker_params(ticker: str) -> Dict[str, float]:
+    """Loads optimal hyperparameters for ticker or returns robust defaults."""
+    param_path = BACKEND_DIR / "configs" / f"optimized_params_{ticker}.json"
+    if param_path.exists():
+        try:
+            with open(param_path, "r") as f:
+                data = json.load(f)
+                logger.info(f"Loaded optimized parameters from {param_path}")
+                return data.get("best_params", data)
+        except Exception as e:
+            logger.warning(f"Could not parse {param_path}: {e}")
+    return {
+        "tp_atr_multiplier": TP_ATR_MULT,
+        "sl_atr_multiplier": SL_ATR_MULT,
+        "horizon": LABEL_HORIZON,
+        "n_estimators": 300,
+        "max_depth": 5,
+        "learning_rate": 0.03,
+        "subsample": 0.85,
+        "colsample_bytree": 0.85,
+        "num_leaves": 31,
+    }
+
+
+def prepare_ticker_data(
+    ticker: str,
+    start_date: str = "2015-01-01",
+    end_date: str = None,
+    opt_params: Dict = None,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Fetches historical data for ticker, SPY, ^VIX, and sector peer.
+    Computes 31 features continuously, removes first 119 warmup bars,
+    partitions into 75% Train and 25% Test chronologically,
+    and applies dynamic triple barrier labeling with boundary horizon truncation.
+    """
+    if end_date is None:
+        end_date = datetime.now().strftime("%Y-%m-%d")
+
+    if opt_params is None:
+        opt_params = load_ticker_params(ticker)
+
+    tp_mult = float(opt_params.get("tp_atr_multiplier", TP_ATR_MULT))
+    sl_mult = float(opt_params.get("sl_atr_multiplier", SL_ATR_MULT))
+    horizon = int(opt_params.get("horizon", LABEL_HORIZON))
+
+    logger.info(f"Fetching macro data (SPY and ^VIX) from {start_date} to {end_date}...")
+    spy_full = yf.download("SPY", start=start_date, end=end_date, progress=False)
+    vix_full = yf.download("^VIX", start=start_date, end=end_date, progress=False)
+    if isinstance(spy_full.columns, pd.MultiIndex):
+        spy_full.columns = spy_full.columns.droplevel(1)
+    if isinstance(vix_full.columns, pd.MultiIndex):
+        vix_full.columns = vix_full.columns.droplevel(1)
+
+    logger.info(f"Ingesting asset: {ticker} ({start_date} to {end_date})...")
+    df_raw = fetch_historical_data(ticker, start_date=start_date, end_date=end_date)
+    if df_raw is None or len(df_raw) < 250:
+        raise ValueError(f"Insufficient data for {ticker}. At least 250 bars required.")
 
     peer_ticker = get_sector_peer(ticker)
-    peer_df = fetch_historical_data(
-        peer_ticker, start_date="2016-01-01", end_date="2025-12-31"
-    )
+    peer_raw = fetch_historical_data(peer_ticker, start_date=start_date, end_date=end_date)
 
-    # Hard Firewall: ensure no 2026 data exists
-    TemporalFirewall.validate_no_2026_leakage(df, f"raw_{ticker}")
-    TemporalFirewall.validate_no_2026_leakage(spy_df, "raw_SPY")
-    TemporalFirewall.validate_no_2026_leakage(vix_df, "raw_VIX")
-    TemporalFirewall.validate_no_2026_leakage(peer_df, f"raw_{peer_ticker}")
+    # Compute 31 features continuously
+    df_features = add_upgraded_features(df_raw.copy(), spy_full, vix_full)
+    if peer_raw is not None and len(peer_raw) > 250:
+        peer_features = add_upgraded_features(peer_raw.copy(), spy_full, vix_full)
+        common_idx = df_features.index.intersection(peer_features.index)
+        df_features = df_features.loc[common_idx].copy()
 
-    # Compute features continuously so 2025 indicators have proper warmup
-    df = add_upgraded_features(df, spy_df, vix_df)
-    peer_df = add_upgraded_features(peer_df, spy_df, vix_df)
-
-    kept_cols = FEATURE_COLUMNS
-    with open("configs/kept_features.json", "w") as f:
-        json.dump(kept_cols, f)
-
-    common_idx = df.index.intersection(peer_df.index)
-    df_aligned = df.loc[common_idx].copy()
-    peer_aligned = peer_df.loc[common_idx][kept_cols].ffill().fillna(0)
-
-    # Separate Partitions
-    TRAIN_END = "2024-12-31"
-    VAL_START = "2025-01-01"
-    VAL_END = "2025-12-31"
-
-    df_dev_raw = df_aligned[df_aligned.index <= TRAIN_END].copy()
-    peer_dev_raw = peer_aligned[peer_aligned.index <= TRAIN_END].copy()
-
-    df_val_raw = df_aligned[(df_aligned.index >= VAL_START) & (df_aligned.index <= VAL_END)].copy()
-    peer_val_raw = peer_aligned[(peer_aligned.index >= VAL_START) & (peer_aligned.index <= VAL_END)].copy()
-
-    # Temporal Firewall checks on partitions
-    TemporalFirewall.validate_development_data(df_dev_raw, "df_dev_raw")
-    TemporalFirewall.validate_validation_data(df_val_raw, "df_val_raw")
-
-    # Warmup Removal on Training Set (Section 6: No hidden pre-2016 data)
-    # The longest indicator window is 120 bars (rolling z-score).
-    # Drop first 119 bars from development set.
-    warmup_bars = 119
-    if len(df_dev_raw) > warmup_bars:
-        df_dev_warm = df_dev_raw.iloc[warmup_bars:].copy()
-        peer_dev_warm = peer_dev_raw.iloc[warmup_bars:].copy()
-        print(f"  [WARMUP REMOVAL] Removed {warmup_bars} uninitialized warmup bars (first valid training bar: {df_dev_warm.index[0].strftime('%Y-%m-%d')})")
+    # Discard warmup bars (first 119 bars for 120-bar rolling z-score stability)
+    if len(df_features) > WARMUP_BARS:
+        df_warm = df_features.iloc[WARMUP_BARS:].copy()
     else:
-        df_dev_warm = df_dev_raw.copy()
-        peer_dev_warm = peer_dev_raw.copy()
+        df_warm = df_features.copy()
 
-    # Target Labeling with Zero Future-Label Contamination (Section 5)
-    tp_mult, sl_mult, horizon = 3.0, 0.5, 15
-    opt_path = f"configs/optimized_params_{ticker}.json"
-    if os.path.exists(opt_path):
-        try:
-            with open(opt_path, "r") as f:
-                best_params = json.load(f)
-                tp_mult = best_params.get("tp_atr_multiplier", 3.0)
-                sl_mult = best_params.get("sl_atr_multiplier", 0.5)
-                horizon = best_params.get("horizon", 15)
-        except Exception:
-            pass
+    # 75% Train / 25% Test chronological partition
+    n_samples = len(df_warm)
+    split_idx = int(n_samples * 0.75)
+    df_train_raw = df_warm.iloc[:split_idx].copy()
+    df_test_raw = df_warm.iloc[split_idx:].copy()
 
-    # A. Labeling Development Set: run apply_dynamic_triple_barrier on df_dev_warm ONLY.
-    # Because df_dev_warm ends on 2024-12-30, future prices into 2025 are completely absent.
-    # The last horizon rows naturally have NaN future targets and are dropped.
-    dev_before_labeling = len(df_dev_warm)
-    df_train = apply_dynamic_triple_barrier(
-        df_dev_warm, tp_atr_multiplier=tp_mult, sl_atr_multiplier=sl_mult, horizon=horizon
+    # Labeling with boundary horizon truncation (zero forward lookahead into test)
+    df_train_labeled = apply_dynamic_triple_barrier(
+        df_train_raw,
+        tp_atr_multiplier=tp_mult,
+        sl_atr_multiplier=sl_mult,
+        horizon=horizon,
     )
-    incomplete_dev_labels = dev_before_labeling - len(df_train)
-    print(f"  [LABEL HORIZON] Dropped {incomplete_dev_labels} incomplete-label bars at end of 2024 (horizon={horizon}). Zero 2025 data used.")
-    print(f"  [FINAL TRAIN SAMPLES] {len(df_train)} bars ({df_train.index[0].strftime('%Y-%m-%d')} to {df_train.index[-1].strftime('%Y-%m-%d')})")
-
-    peer_train = peer_dev_warm.loc[df_train.index]
-
-    # B. Labeling Validation Set: run apply_dynamic_triple_barrier on df_val_raw ONLY.
-    # Because df_val_raw ends on 2025-12-30, future prices into 2026 are completely absent.
-    # The last horizon rows naturally have NaN future targets and are dropped.
-    val_before_labeling = len(df_val_raw)
-    df_val = apply_dynamic_triple_barrier(
-        df_val_raw, tp_atr_multiplier=tp_mult, sl_atr_multiplier=sl_mult, horizon=horizon
+    df_test_labeled = apply_dynamic_triple_barrier(
+        df_test_raw,
+        tp_atr_multiplier=tp_mult,
+        sl_atr_multiplier=sl_mult,
+        horizon=horizon,
     )
-    incomplete_val_labels = val_before_labeling - len(df_val)
-    print(f"  [LABEL HORIZON] Dropped {incomplete_val_labels} incomplete-label bars at end of 2025 (horizon={horizon}). Zero 2026 data used.")
-    print(f"  [FINAL VAL SAMPLES] {len(df_val)} bars ({df_val.index[0].strftime('%Y-%m-%d')} to {df_val.index[-1].strftime('%Y-%m-%d')})")
 
-    peer_val = peer_val_raw.loc[df_val.index]
+    logger.info(
+        f"  [{ticker}] 75% Train: {len(df_train_labeled)} bars "
+        f"({df_train_labeled.index[0].strftime('%Y-%m-%d')} to {df_train_labeled.index[-1].strftime('%Y-%m-%d')}) | "
+        f"25% Test: {len(df_test_labeled)} bars "
+        f"({df_test_labeled.index[0].strftime('%Y-%m-%d')} to {df_test_labeled.index[-1].strftime('%Y-%m-%d')})"
+    )
 
-    time_steps = config["data"]["time_steps"]
+    return df_train_labeled, df_test_labeled
 
-    # Fit scaler ONLY on train split (zero validation leakage)
+
+def run_ticker_optimization(
+    ticker: str,
+    df_train: pd.DataFrame,
+    n_trials: int = 50,
+) -> Dict:
+    """
+    Runs Bayesian Hyperparameter Optimization for ticker strictly within the 75% train partition
+    using Purged Walk-Forward Cross Validation.
+    """
+    logger.info(f"--- Running Bayesian Optimization for {ticker} ({n_trials} trials) ---")
+    kept_features = FEATURE_COLUMNS_V30
+
+    df_clean = df_train.replace([np.inf, -np.inf], np.nan).dropna(
+        subset=kept_features + ["target_signal"]
+    )
+    X_raw = df_clean[kept_features].values
+    y_raw = df_clean["target_signal"].astype(int).values
+
+    def objective(trial):
+        n_est = trial.suggest_categorical("n_estimators", [150, 300, 500])
+        max_d = trial.suggest_int("max_depth", 3, 7)
+        lr = trial.suggest_float("learning_rate", 0.01, 0.1, log=True)
+        sub = trial.suggest_float("subsample", 0.6, 0.9)
+        col = trial.suggest_float("colsample_bytree", 0.6, 0.9)
+
+        # 3-Fold Chronological Purged Expanding Window CV on Train split
+        n_samples = len(X_raw)
+        fold_size = n_samples // 4
+        scores = []
+        for i in range(1, 4):
+            train_end = i * fold_size
+            embargo_end = max(1, train_end - LABEL_HORIZON)
+            val_start = train_end
+            val_end = min(n_samples, (i + 1) * fold_size)
+            if val_end <= val_start:
+                continue
+
+            scaler = StandardScaler()
+            X_tr = scaler.fit_transform(X_raw[:embargo_end])
+            X_val = scaler.transform(X_raw[val_start:val_end])
+            y_tr = y_raw[:embargo_end]
+            y_val = y_raw[val_start:val_end]
+
+            clf = xgb.XGBClassifier(
+                n_estimators=n_est,
+                max_depth=max_d,
+                learning_rate=lr,
+                subsample=sub,
+                colsample_bytree=col,
+                objective="multi:softprob",
+                num_class=3,
+                random_state=42,
+                n_jobs=-1,
+                eval_metric="mlogloss",
+            )
+            clf.fit(X_tr, y_tr)
+            preds = clf.predict(X_val)
+            scores.append(f1_score(y_val, preds, average="macro", zero_division=0))
+
+        return float(np.mean(scores)) if scores else 0.33
+
+    study = optuna.create_study(direction="maximize", sampler=optuna.samplers.TPESampler(seed=42))
+    study.optimize(objective, n_trials=n_trials, n_jobs=1)
+
+    best_params = study.best_params
+    best_params["tp_atr_multiplier"] = TP_ATR_MULT
+    best_params["sl_atr_multiplier"] = SL_ATR_MULT
+    best_params["horizon"] = LABEL_HORIZON
+    best_params["num_leaves"] = 31
+
+    logger.info(f"Optimal Parameters for {ticker} (Macro-F1: {study.best_value:.4f}): {best_params}")
+
+    configs_dir = BACKEND_DIR / "configs"
+    configs_dir.mkdir(parents=True, exist_ok=True)
+    with open(configs_dir / f"optimized_params_{ticker}.json", "w") as f:
+        json.dump({"best_params": best_params, "macro_f1": study.best_value}, f, indent=4)
+    with open(configs_dir / "best_xgb_params.json", "w") as f:
+        json.dump(best_params, f, indent=4)
+    with open(configs_dir / "best_lgbm_params.json", "w") as f:
+        json.dump(best_params, f, indent=4)
+
+    return best_params
+
+
+def train_ticker_pipeline(
+    ticker: str = "AAPL",
+    trials: int = 50,
+    skip_optimization: bool = False,
+    start_date: str = "2015-01-01",
+    end_date: str = None,
+):
+    """
+    Unified Single-Ticker Training Pipeline.
+    Cleans artifacts, optionally optimizes, prepares 75/25 chronological partitions,
+    fits standard scalers, trains XGBoost and LightGBM models, calibrates probabilities,
+    and updates active ticker and strategy manifest.
+    """
+    ticker = ticker.upper()
+    pipeline_start = time.time()
+    logger.info("=================================================================")
+    logger.info(f"HYDRA V3.0 SINGLE-TICKER ENGINE: ZERO-STATE EXECUTION [{ticker}]")
+    logger.info(f"Date Window: {start_date} to {end_date or 'today'}")
+    logger.info("Split: 75% Train / 25% Test | Features: 31 Institutional Indicators")
+    logger.info("=================================================================")
+
+    # Step 0: GPU Hardware Verification
+    try:
+        from scripts.ops.verify_gpu import main as verify_gpu_main
+        verify_gpu_main()
+    except Exception as e:
+        logger.warning(f"GPU check warning: {e}")
+
+    # Step 1: Clean Artifacts
+    logger.info(f"\n[1/5] Cleaning system artifacts for {ticker}...")
+    if skip_optimization:
+        clean_training_artifacts()
+    else:
+        clean_optimization_artifacts(ticker=ticker)
+        clean_training_artifacts()
+
+    # Step 2: Data Ingestion & Partitioning
+    logger.info(f"\n[2/5] Building 75% Train and 25% Test datasets for {ticker}...")
+    df_train, df_test = prepare_ticker_data(
+        ticker=ticker, start_date=start_date, end_date=end_date
+    )
+
+    # Step 3: Optimization
+    if not skip_optimization:
+        logger.info(f"\n[3/5] Running Bayesian optimization for {ticker} ({trials} trials)...")
+        opt_params = run_ticker_optimization(ticker, df_train, n_trials=trials)
+    else:
+        logger.info(f"\n[3/5] Skipping optimization (--skip-optimization active). Loading configs for {ticker}.")
+        opt_params = load_ticker_params(ticker)
+
+    # Step 4: Model Training & Calibration
+    logger.info(f"\n[4/5] Training Technical Brain Ensemble & Fitting Scalers for {ticker}...")
+    kept_features = FEATURE_COLUMNS_V30
+
+    configs_dir = BACKEND_DIR / "configs"
+    configs_dir.mkdir(parents=True, exist_ok=True)
+    with open(configs_dir / "kept_features.json", "w") as f:
+        json.dump(kept_features, f, indent=4)
+
+    # Clean missing values
+    df_train_clean = df_train.replace([np.inf, -np.inf], np.nan).dropna(
+        subset=kept_features + ["target_signal"]
+    )
+    df_test_clean = df_test.replace([np.inf, -np.inf], np.nan).dropna(
+        subset=kept_features + ["target_signal"]
+    )
+
+    X_train_raw = df_train_clean[kept_features].values
+    y_train = df_train_clean["target_signal"].astype(int).values
+    X_test_raw = df_test_clean[kept_features].values
+    y_test = df_test_clean["target_signal"].astype(int).values
+
+    # Fit StandardScaler strictly on Train partition
     scaler = StandardScaler()
-    scaler.fit(df_train[kept_cols])
-    joblib.dump(scaler, "artifacts/latest_scaler.joblib")
-    joblib.dump(scaler, f"artifacts/scaler_{ticker}.joblib")
-    print(f"  [SCALER] Fitted strictly on {len(df_train)} training samples (2016-2024). Saved to artifacts/latest_scaler.joblib")
+    X_train = scaler.fit_transform(X_train_raw)
+    X_test = scaler.transform(X_test_raw)
 
-    with open("artifacts/latest_scaler.joblib", "rb") as f_sc_read:
-        scaler_sha256 = hashlib.sha256(f_sc_read.read()).hexdigest()
+    artifacts_dir = BACKEND_DIR / "artifacts"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+
+    joblib.dump(scaler, artifacts_dir / "latest_scaler.joblib")
+    joblib.dump(scaler, artifacts_dir / f"scaler_{ticker}.joblib")
+    with open(artifacts_dir / "kept_features.json", "w") as f:
+        json.dump(kept_features, f, indent=4)
 
     scaler_metadata = {
         "architecture": "asset_specific_standard_scaler",
         "asset": ticker,
-        "feature_count": len(kept_cols),
-        "feature_names": kept_cols,
-        "n_samples_seen": int(scaler.n_samples_seen_) if hasattr(scaler, "n_samples_seen_") else len(df_train),
-        "sample_count": len(df_train),
+        "feature_count": len(kept_features),
+        "feature_names": kept_features,
+        "sample_count": len(X_train),
         "training_dates": {
             "start": df_train.index[0].strftime("%Y-%m-%d"),
             "end": df_train.index[-1].strftime("%Y-%m-%d"),
         },
-        "temporal_firewall": "2016-01-01 to 2024-12-31 strictly. Excludes 119 warmup bars and 15 horizon bars.",
-        "zero_2025_leakage": True,
-        "zero_2026_leakage": True,
-        "sha256": scaler_sha256,
+        "sha256": compute_sha256(artifacts_dir / "latest_scaler.joblib"),
     }
-    with open("artifacts/scaler_metadata.json", "w") as f_meta:
-        json.dump(scaler_metadata, f_meta, indent=4)
+    with open(artifacts_dir / "scaler_metadata.json", "w") as f:
+        json.dump(scaler_metadata, f, indent=4)
 
-    def process_split(df_split, peer_split):
-        if len(df_split) <= time_steps:
-            return None, None, None, None, None, None
+    # Balanced class weights
+    classes = np.unique(y_train)
+    weights = compute_class_weight(class_weight="balanced", classes=classes, y=y_train)
+    class_weight_dict = dict(zip(classes, weights))
+    sample_weights = np.array([class_weight_dict[yi] for yi in y_train])
 
-        ts, y_dir, y_min, y_max = create_time_series_sequences(
-            df_split[
-                kept_cols
-                + ["target_direction", "target_min", "target_max", "target_signal"]
-            ],
-            time_steps,
-        )
-        peer_ts, _, _, _ = create_time_series_sequences(
-            pd.concat([peer_split, df_split[["target_direction"]]], axis=1), time_steps
-        )
-
-        # Scale
-        num_s, steps, feats = ts.shape
-        ts_scaled = scaler.transform(ts.reshape(-1, feats)).reshape(num_s, steps, feats)
-        peer_scaled = scaler.transform(peer_ts.reshape(-1, feats)).reshape(
-            num_s, steps, feats
-        )
-
-        y_sig = df_split["target_signal"].values[time_steps - 1 :]
-        y_ran = np.column_stack((y_min, y_max))
-        return ts_scaled, peer_scaled, y_sig, y_dir, y_ran, feats, ts, peer_ts
-
-    (
-        ts_train,
-        peer_train,
-        y_sig_train,
-        y_dir_train,
-        y_ran_train,
-        features,
-        ts_train_raw,
-        peer_train_raw,
-    ) = process_split(df_train, peer_train)
-    (
-        ts_val,
-        peer_val,
-        y_sig_val,
-        y_dir_val,
-        y_ran_val,
-        _,
-        ts_val_raw,
-        peer_val_raw,
-    ) = process_split(df_val, peer_val)
-
-    config["data"]["num_features"] = features
-    return (
-        ts_train,
-        peer_train,
-        y_sig_train,
-        y_dir_train,
-        y_ran_train,
-        ts_val,
-        peer_val,
-        y_sig_val,
-        y_dir_val,
-        y_ran_val,
-        scaler,
-        df_train.index[time_steps - 1:],
-        df_val.index[time_steps - 1:],
-        ts_train_raw,
-        peer_train_raw,
-    ), config
-
-
-def train_dqn(X_dl, Y_dl, dl_model, xgb_model, scaler, kept_features, dates=None, episodes=15, save_artifacts=True):
-    print(f"\n--- Training DQN ({episodes} episodes, Exclusively on 2016-2024 Development Transitions) ---")
-    X_tabular = X_dl[0][:, -1, :]
-    dl_preds = dl_model.predict(X_dl, verbose=0)[2]
-    xgb_preds = xgb_model.predict_proba(X_tabular)
-
-    state_matrix = np.hstack((X_tabular, dl_preds, xgb_preds))
-    agent = DQNAgent(state_matrix.shape[1])
-
-    n_samples = len(state_matrix)
-    transition_count = n_samples - 1
-    total_steps = 0
-
-    for e in range(episodes):
-        state = state_matrix[0]
-        for t in range(transition_count):
-            action = agent.act(state)
-            next_state = state_matrix[t + 1]
-            target_sig = Y_dl[0][t]
-            reward = 1.0 if action == target_sig else (-1.0 if action != 1 else 0.0)
-            done = (t == transition_count - 1)
-            agent.remember(state, action, reward, next_state, done)
-            state = next_state
-            total_steps += 1
-            if len(agent.memory) > 32 and t % 4 == 0:
-                agent.replay()
-        print(f"  DQN Episode {e + 1}/{episodes} complete ({total_steps} experience steps)")
-
-    if save_artifacts:
-        model_path = "artifacts/dqn_model.pth"
-        agent.save(model_path)
-        with open(model_path, "rb") as f:
-            dqn_hash = hashlib.sha256(f.read()).hexdigest()
-
-        start_d = dates[0].strftime("%Y-%m-%d") if dates is not None and len(dates) > 0 else "2016-06-23"
-        end_d = dates[-1].strftime("%Y-%m-%d") if dates is not None and len(dates) > 0 else "2024-12-09"
-
-        dqn_meta = {
-            "training_period": {
-                "start": start_d,
-                "end": end_d,
-            },
-            "unique_transitions": transition_count,
-            "episodes": episodes,
-            "total_experience_steps": total_steps,
-            "reward_generation": "triple_barrier_alignment (reward=+1.0 for match, -1.0 for directional mismatch, 0.0 for neutral)",
-            "state_dimension": int(state_matrix.shape[1]),
-            "zero_2025_data_used": True,
-            "zero_2026_data_used": True,
-            "sha256": dqn_hash,
-        }
-        with open("artifacts/dqn_metadata.json", "w") as f:
-            json.dump(dqn_meta, f, indent=4)
-        print(f"  DQN saved to {model_path} (SHA-256: {dqn_hash})")
-    return agent
-
-
-def train_walk_forward_meta_ensemble(
-    ts_train_raw,
-    peer_train_raw,
-    y_sig_train,
-    y_dir_train,
-    y_ran_train,
-    updated_config,
-    class_weight_dict,
-    dates,
-    ticker,
-):
-    """
-    Builds the meta-learner using chronological expanding walk-forward out-of-fold (OOF) predictions
-    strictly within the 2016-2024 development period.
-
-    V2.2 Mandates:
-    1. Preprocessing Isolation: StandardScaler fitted exclusively on that fold's training slice.
-    2. Hyperparameter Isolation: Chronological parameter selection within fold training slice.
-    3. Index Boundaries: Strictly non-overlapping [0:K] train and [K:M] OOF.
-    4. 2025/2026 data 100% excluded.
-    """
-    print("\n--- Training Meta-Ensemble via Walk-Forward OOF Stacking (V2.2 Per-Fold Scaled) ---")
-    from lightgbm import LGBMClassifier
-
-    from src.models.ensemble.meta_ensemble import MetaEnsemble
-
-    meta = MetaEnsemble()
-    n_total = len(ts_train_raw)
-
-    # 3 chronological expanding folds within 2016-2024:
-    # Fold 1: Train [0..50%], OOF [50%..67%]
-    # Fold 2: Train [0..67%], OOF [67%..84%]
-    # Fold 3: Train [0..84%], OOF [84%..100%]
-    folds = [
-        (int(n_total * 0.50), int(n_total * 0.67)),
-        (int(n_total * 0.67), int(n_total * 0.84)),
-        (int(n_total * 0.84), n_total),
-    ]
-
-    oof_features = []
-    oof_labels = []
-    fold_records = []
-
-    for fold_idx, (train_end_idx, oof_end_idx) in enumerate(folds, 1):
-        f_train_ts_raw = ts_train_raw[:train_end_idx]
-        f_oof_ts_raw = ts_train_raw[train_end_idx:oof_end_idx]
-
-        f_train_peer_raw = peer_train_raw[:train_end_idx] if peer_train_raw is not None else None
-        f_oof_peer_raw = peer_train_raw[train_end_idx:oof_end_idx] if peer_train_raw is not None else None
-
-        f_train_ysig = y_sig_train[:train_end_idx]
-        f_train_ydir = y_dir_train[:train_end_idx]
-        f_train_yran = y_ran_train[:train_end_idx]
-        f_oof_ysig = y_sig_train[train_end_idx:oof_end_idx]
-
-        # V2.2 Mandate: Fit Scaler strictly on fold's training slice
-        n_tr, steps, feats = f_train_ts_raw.shape
-        n_oof = len(f_oof_ts_raw)
-
-        fold_scaler = StandardScaler()
-        fold_scaler.fit(f_train_ts_raw.reshape(-1, feats))
-
-        f_train_ts = fold_scaler.transform(f_train_ts_raw.reshape(-1, feats)).reshape(n_tr, steps, feats)
-        f_oof_ts = fold_scaler.transform(f_oof_ts_raw.reshape(-1, feats)).reshape(n_oof, steps, feats)
-
-        if f_train_peer_raw is not None and len(f_train_peer_raw) > 0:
-            peer_scaler = StandardScaler()
-            peer_scaler.fit(f_train_peer_raw.reshape(-1, feats))
-            f_train_peer = peer_scaler.transform(f_train_peer_raw.reshape(-1, feats)).reshape(n_tr, steps, feats)
-            f_oof_peer = peer_scaler.transform(f_oof_peer_raw.reshape(-1, feats)).reshape(n_oof, steps, feats)
-        else:
-            f_train_peer, f_oof_peer = None, None
-
-        f_train_weights = np.array([class_weight_dict.get(int(lbl), 1.0) for lbl in f_train_ysig])
-
-        start_oof_d = dates[train_end_idx].strftime("%Y-%m-%d") if dates is not None and train_end_idx < len(dates) else f"idx_{train_end_idx}"
-        end_oof_d = dates[oof_end_idx - 1].strftime("%Y-%m-%d") if dates is not None and oof_end_idx - 1 < len(dates) else f"idx_{oof_end_idx-1}"
-        start_tr_d = dates[0].strftime("%Y-%m-%d") if dates is not None and len(dates) > 0 else "2016-06-23"
-        end_tr_d = dates[train_end_idx - 1].strftime("%Y-%m-%d") if dates is not None and train_end_idx - 1 < len(dates) else f"idx_{train_end_idx-1}"
-
-        print(f"  Fold {fold_idx}/3: Train [0:{train_end_idx}] ({len(f_train_ts)} bars, {start_tr_d} to {end_tr_d}) -> OOF [{train_end_idx}:{oof_end_idx}] ({len(f_oof_ts)} bars, {start_oof_d} to {end_oof_d})")
-
-        # Chronological Hyperparameter Selection strictly within fold slice
-        inner_split = int(len(f_train_ts) * 0.8)
-        inner_X_tr = f_train_ts[:inner_split, -1, :]
-        inner_y_tr = f_train_ysig[:inner_split]
-        inner_X_val = f_train_ts[inner_split:, -1, :]
-        inner_y_val = f_train_ysig[inner_split:]
-        inner_weights = f_train_weights[:inner_split]
-
-        best_score = -1.0
-        best_xgb_p = {"max_depth": 3, "learning_rate": 0.005, "n_estimators": 250, "random_state": 42}
-        for cand_depth in [3, 4]:
-            for cand_lr in [0.005, 0.01]:
-                cand = {"max_depth": cand_depth, "learning_rate": cand_lr, "n_estimators": 250, "random_state": 42}
-                trial_clf = xgb.XGBClassifier(**cand)
-                trial_clf.fit(inner_X_tr, inner_y_tr, sample_weight=inner_weights)
-                val_acc = np.mean(trial_clf.predict(inner_X_val) == inner_y_val)
-                if val_acc > best_score:
-                    best_score = val_acc
-                    best_xgb_p = cand
-
-        # 1. Fit Fold XGBoost
-        f_xgb = xgb.XGBClassifier(**best_xgb_p)
-        f_xgb.fit(f_train_ts[:, -1, :], f_train_ysig, sample_weight=f_train_weights)
-        oof_xgb_preds = f_xgb.predict_proba(f_oof_ts[:, -1, :])
-
-        # 2. Fit Fold LightGBM
-        f_lgbm = LGBMClassifier(n_estimators=250, learning_rate=0.01, max_depth=4, random_state=42, verbose=-1)
-        f_lgbm.fit(f_train_ts[:, -1, :], f_train_ysig, sample_weight=f_train_weights)
-        oof_lgbm_preds = f_lgbm.predict_proba(f_oof_ts[:, -1, :])
-
-        # 3. Fit Fold DL Fusion
-        f_X_train = [f_train_ts, f_train_ts, f_train_ts, f_train_ts, f_train_ts, f_train_peer]
-        f_Y_train = [f_train_ydir, f_train_yran, f_train_ysig]
-        f_X_oof = [f_oof_ts, f_oof_ts, f_oof_ts, f_oof_ts, f_oof_ts, f_oof_peer]
-
-        f_dl = build_fusion_model(updated_config)
-        f_dl.fit(
-            x=f_X_train,
-            y=f_Y_train,
-            epochs=5,
-            verbose=0,
-            sample_weight=[
-                np.ones(len(f_train_ydir)),
-                np.ones(len(f_train_yran)),
-                f_train_weights,
-            ],
-        )
-        oof_dl_preds = f_dl.predict(f_X_oof, verbose=0)[2]
-
-        # 4. Fit Fold DQN strictly on fold slice
-        f_dqn = train_dqn(
-            f_X_train,
-            (f_train_ysig,),
-            f_dl,
-            f_xgb,
-            None,
-            None,
-            dates=dates[:train_end_idx] if dates is not None else None,
-            episodes=3,
-            save_artifacts=False,
-        )
-        oof_dqn_preds = []
-        for i in range(len(f_oof_ts)):
-            st = np.hstack((f_oof_ts[i, -1, :], oof_dl_preds[i], oof_xgb_preds[i]))
-            act = f_dqn.act(st)
-            p = [0.0, 0.0, 0.0]
-            p[act] = 1.0
-            oof_dqn_preds.append(p)
-        oof_dqn_preds = np.array(oof_dqn_preds)
-
-        # 5. Extract meta features for this OOF block
-        for i in range(len(f_oof_ysig)):
-            feat = meta._prepare_meta_features(
-                {
-                    "LSTM": oof_dl_preds[i],
-                    "XGBoost": oof_xgb_preds[i],
-                    "LightGBM": oof_lgbm_preds[i],
-                    "DQN": oof_dqn_preds[i],
-                },
-                1,
-            )
-            oof_features.append(feat[0])
-            oof_labels.append(f_oof_ysig[i])
-
-        fold_records.append({
-            "fold": fold_idx,
-            "train_index_range": [0, train_end_idx],
-            "train_date_range": [start_tr_d, end_tr_d],
-            "train_count": len(f_train_ts),
-            "oof_index_range": [train_end_idx, oof_end_idx],
-            "oof_date_range": [start_oof_d, end_oof_d],
-            "oof_count": len(f_oof_ts),
-            "scaler_fit_samples": len(f_train_ts),
-            "scaler_isolated": True,
-            "hyperparameters_selected": best_xgb_p,
-        })
-
-    oof_features = np.array(oof_features)
-    oof_labels = np.array(oof_labels)
-
-    print(f"  Fitting MetaEnsemble on {len(oof_features)} out-of-fold predictions...")
-    meta.fit(oof_features, oof_labels)
-    meta_path = "artifacts/meta_ensemble.joblib"
-    meta.save(meta_path)
-
-    with open(meta_path, "rb") as f:
-        meta_hash = hashlib.sha256(f.read()).hexdigest()
-
-    meta_metadata = {
-        "strategy_version": "HYDRA_PROSPECTIVE_V2.2",
-        "methodology": "Expanding-Window Walk-Forward Out-of-Fold (OOF) Stacking",
-        "universe": "2016-2024 Development Period Exclusively",
-        "validation_2025_excluded": True,
-        "total_oof_samples": len(oof_features),
-        "preprocessing_isolation": "StandardScaler fitted strictly per-fold on training slice",
-        "hyperparameter_isolation": "Chronological inner cross-validation per fold",
-        "folds": fold_records,
-        "sha256": meta_hash,
+    # 1. XGBoost
+    logger.info(f"Training XGBoost Model for {ticker}...")
+    xgb_params = {
+        "objective": "multi:softprob",
+        "num_class": 3,
+        "n_estimators": int(opt_params.get("n_estimators", 300)),
+        "max_depth": int(opt_params.get("max_depth", 5)),
+        "learning_rate": float(opt_params.get("learning_rate", 0.03)),
+        "subsample": float(opt_params.get("subsample", 0.85)),
+        "colsample_bytree": float(opt_params.get("colsample_bytree", 0.85)),
+        "random_state": 42,
+        "n_jobs": -1,
+        "eval_metric": "mlogloss",
     }
-    with open("artifacts/meta_ensemble_metadata.json", "w") as f:
-        json.dump(meta_metadata, f, indent=4)
-    print(f"  Meta-Ensemble saved to {meta_path} (SHA-256: {meta_hash})")
-    return meta
+    xgb_model = xgb.XGBClassifier(**xgb_params)
+    xgb_model.fit(X_train, y_train, sample_weight=sample_weights)
+    xgb_train_acc = float(xgb_model.score(X_train, y_train))
+    xgb_test_acc = float(xgb_model.score(X_test, y_test))
+    logger.info(f"XGBoost Accuracy -> Train: {xgb_train_acc * 100:.2f}% | Test: {xgb_test_acc * 100:.2f}%")
+
+    xgb_model.save_model(str(artifacts_dir / "xgb_ensemble.json"))
+
+    # 2. LightGBM
+    logger.info(f"Training LightGBM Model for {ticker}...")
+    lgbm_params = {
+        "objective": "multiclass",
+        "num_class": 3,
+        "n_estimators": int(opt_params.get("n_estimators", 300)),
+        "learning_rate": float(opt_params.get("learning_rate", 0.03)),
+        "max_depth": int(opt_params.get("max_depth", 5)),
+        "num_leaves": int(opt_params.get("num_leaves", 31)),
+        "random_state": 42,
+        "n_jobs": -1,
+        "verbose": -1,
+    }
+    lgbm_model = LGBMClassifier(**lgbm_params)
+    lgbm_model.fit(X_train, y_train, sample_weight=sample_weights)
+    lgbm_train_acc = float(lgbm_model.score(X_train, y_train))
+    lgbm_test_acc = float(lgbm_model.score(X_test, y_test))
+    logger.info(f"LightGBM Accuracy -> Train: {lgbm_train_acc * 100:.2f}% | Test: {lgbm_test_acc * 100:.2f}%")
+
+    joblib.dump(lgbm_model, artifacts_dir / "lgbm_agent.joblib")
+
+    # 3. Model Calibrator
+    logger.info(f"Fitting Probability Calibrator on 25% Test Set for {ticker}...")
+    xgb_test_probs = xgb_model.predict_proba(X_test)
+    lgbm_test_probs = lgbm_model.predict_proba(X_test)
+
+    calibrator = ModelCalibrator()
+    calibrator.fit("XGB", y_test, xgb_test_probs, method="isotonic")
+    calibrator.fit("LGBM", y_test, lgbm_test_probs, method="isotonic")
+    calibrator.save(str(artifacts_dir / "model_calibrator.joblib"))
+
+    # Step 5: Save Active Ticker & Update Governance Manifest
+    logger.info("\n[5/5] Saving Active Ticker and Strategy Metadata...")
+    market = "us"
+    if ".NS" in ticker or ".BO" in ticker:
+        market = "in"
+
+    with open(configs_dir / "active_ticker.json", "w") as f:
+        json.dump({"ticker": ticker, "market": market}, f, indent=4)
+    logger.info(f"Active ticker set: {ticker} ({market})")
+
+    # Update manifest model hashes if manifest exists
+    manifest_v24_path = artifacts_dir / "frozen_strategy_manifest_v2.4.json"
+    if manifest_v24_path.exists():
+        try:
+            with open(manifest_v24_path, "r") as f:
+                manifest_v24 = json.load(f)
+            manifest_v24["model_hashes"]["xgb_ensemble.json"] = compute_sha256(artifacts_dir / "xgb_ensemble.json")
+            manifest_v24["model_hashes"]["lgbm_agent.joblib"] = compute_sha256(artifacts_dir / "lgbm_agent.joblib")
+            manifest_v24["model_hashes"]["latest_scaler.joblib"] = compute_sha256(artifacts_dir / "latest_scaler.joblib")
+            manifest_v24["model_hashes"]["model_calibrator.joblib"] = compute_sha256(artifacts_dir / "model_calibrator.joblib")
+            with open(manifest_v24_path, "w") as f:
+                json.dump(manifest_v24, f, indent=4)
+        except Exception as e:
+            logger.warning(f"Could not refresh manifest hashes: {e}")
+
+    total_time = time.time() - pipeline_start
+    logger.info("=================================================================")
+    logger.info(f"HYDRA V3.0 TRAINING PIPELINE COMPLETE FOR {ticker} ({total_time:.2f}s)")
+    logger.info("=================================================================")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Unified Training Pipeline")
+    parser = argparse.ArgumentParser(description="Unified Asset-Specific Training Pipeline")
     parser.add_argument(
-        "--ticker", type=str, default="AAPL", help="Stock ticker symbol"
+        "--ticker",
+        type=str,
+        default="AAPL",
+        help="Stock ticker symbol (default: AAPL)",
     )
     parser.add_argument(
         "--trials",
         type=int,
         default=50,
-        help="Number of trials for Bayesian/Optuna optimization and DQN episodes (default: 50)",
-    )
-    parser.add_argument(
-        "--epochs",
-        type=int,
-        default=100,
-        help="Number of epochs for deep learning models (default: 100)",
+        help="Number of Optuna optimization trials (default: 50, e.g. 250)",
     )
     parser.add_argument(
         "--skip-optimization",
+        "--skipoptimization",
+        dest="skip_optimization",
         action="store_true",
-        help="Skip Bayesian and Optuna re-optimization and train using existing configurations",
+        help="Skip Bayesian/Optuna optimization and train using existing configurations",
+    )
+    parser.add_argument(
+        "--start",
+        type=str,
+        default="2015-01-01",
+        help="Start date for training data (default: 2015-01-01)",
+    )
+    parser.add_argument(
+        "--end",
+        type=str,
+        default=None,
+        help="End date for training data (default: today's date)",
     )
     args = parser.parse_args()
 
-    ticker = args.ticker.upper()
-    n_trials = args.trials
-    epochs = args.epochs
-    skip_optimization = args.skip_optimization
-    dqn_episodes = n_trials
-
-    pipeline_start = time.time()
-
-    # ==========================================
-    # STEP 0: GPU HARDWARE VERIFICATION
-    # ==========================================
-    print("\n[0/5] Running Pre-flight GPU Verification...")
-    step_start = time.time()
-    try:
-        from scripts.ops.verify_gpu import main as verify_gpu_main
-        verify_gpu_main()
-        print(f"  >>> Step 0 Complete ({time.time() - step_start:.2f}s)")
-    except Exception as e:
-        print(f"  [WARNING] Pre-flight GPU Verification failed: {e}")
-
-    # ==========================================
-    # STEP 1: CLEAN ARTIFACTS
-    # ==========================================
-    print(f"\n[1/5] Cleaning artifacts for {ticker}...")
-    step_start = time.time()
-    try:
-        if skip_optimization:
-            from scripts.ops.clean_artifacts import clean_training_artifacts
-            clean_training_artifacts()
-        else:
-            run_cleanup(["--ticker", ticker])
-        print(f"  >>> Step 1 Complete ({time.time() - step_start:.2f}s)")
-    except Exception as e:
-        print(f"  [FATAL ERROR] Step 1 Failed: {e}")
-        return
-
-    # ==========================================
-    # STEP 2: OPTIMIZE MODELS (Bayesian)
-    # ==========================================
-    print(
-        f"\n[2/5] Optimizing branch models (XGB, LGBM, CatBoost, RF) with {n_trials} trials..."
+    train_ticker_pipeline(
+        ticker=args.ticker,
+        trials=args.trials,
+        skip_optimization=args.skip_optimization,
+        start_date=args.start,
+        end_date=args.end,
     )
-    step_start = time.time()
-    config = load_config()
-
-    data, updated_config = prepare_data(ticker, config)
-    (
-        ts_train,
-        peer_train,
-        y_sig_train,
-        y_dir_train,
-        y_ran_train,
-        ts_val,
-        peer_val,
-        y_sig_val,
-        y_dir_val,
-        y_ran_val,
-        scaler,
-        train_dates,
-        val_dates,
-        ts_train_raw,
-        peer_train_raw,
-    ) = data
-
-    # V2.2 Methodology Remediation: REMOVED dummy rows (dummy_ts, dummy_y_sig, dummy_peer, dummy_y_dir, dummy_y_ran).
-    # All classes (0=SELL, 1=HOLD, 2=BUY) are naturally and abundantly present in 2016-2024 development data.
-    # Eliminating synthetic rows ensures 100% authentic chronological market states and transitions in the DQN replay buffer.
-
-    # Save training data for optimization (required by optimize_models.py)
-    os.makedirs("artifacts", exist_ok=True)
-    joblib.dump(ts_train[:, -1, :], "artifacts/X_train_tabular.joblib")
-    joblib.dump(y_sig_train, "artifacts/y_train_sig.joblib")
-    joblib.dump(ts_val[:, -1, :], "artifacts/X_val_tabular.joblib")
-    joblib.dump(y_sig_val, "artifacts/y_val_sig.joblib")
-
-    if not skip_optimization:
-        if not run_bayesian_optimization(n_trials=n_trials):
-            print("  [FATAL ERROR] Step 2 Failed.")
-            return
-        print(f"  >>> Step 2 Complete ({time.time() - step_start:.2f}s)")
-
-        # ==========================================
-        # STEP 3: OPTUNA OPTIMIZATION
-        # ==========================================
-        print(f"\n[3/5] Running Optuna optimization for {ticker} ({n_trials} trials)...")
-        step_start = time.time()
-        if not run_optuna_optimization(ticker=ticker, n_trials=n_trials):
-            print("  [FATAL ERROR] Step 3 Failed.")
-            return
-        print(f"  >>> Step 3 Complete ({time.time() - step_start:.2f}s)")
-    else:
-        print("\n[2/5 & 3/5] Skipping hyperparameter re-optimization (--skip-optimization active). Using frozen 2016-2024 configs.")
-
-    # ==========================================
-    # STEP 4: FINAL TRAINING
-    # ==========================================
-    print(f"\n[4/5] Training final models for {ticker} ({epochs} epochs)...")
-    step_start = time.time()
-
-    print(f"Train: {ts_train.shape}, Val: {ts_val.shape}")
-
-    # 6 Inputs: LSTM, CNN, Transformer, TCN, PatchTST, Peer
-    X_train = [ts_train, ts_train, ts_train, ts_train, ts_train, peer_train]
-    Y_train = [y_dir_train, y_ran_train, y_sig_train]
-
-    X_val = [ts_val, ts_val, ts_val, ts_val, ts_val, peer_val]
-
-    print("\n--- Training Deep Learning Ensemble ---")
-    try:
-        opt_path = f"configs/optimized_params_{ticker}.json"
-        if os.path.exists(opt_path):
-            with open(opt_path, "r") as f:
-                best_dl = json.load(f)
-            # Map Optuna keys to model keys
-            mapping = {
-                "lstm_u1": "lstm_units_1", "lstm_u2": "lstm_units_2",
-                "lstm_d1": "lstm_dropout_1", "lstm_d2": "lstm_dropout_2",
-                "cnn_f1": "cnn_filters_1", "cnn_f2": "cnn_filters_2",
-                "cnn_k": "cnn_kernel", "cnn_d": "cnn_dense",
-                "tr_hs": "trans_head_size", "tr_h": "trans_heads",
-                "tr_ff": "trans_ff_dim", "tr_d": "trans_dropout",
-                "dense_1": "dense_units_1", "dense_2": "dense_units_2",
-                "dropout": "dropout_rate", "lr": "learning_rate"
-            }
-            for ok, mk in mapping.items():
-                if ok in best_dl:
-                    updated_config["model"][mk] = best_dl[ok]
-            print(f"Loaded optimized DL parameters from {opt_path}")
-    except Exception as e:
-        print(f"Could not load DL optimized params: {e}")
-
-    with mlflow.start_run(run_name=f"DL_FUSION_{ticker}"):
-        mlflow.log_params(updated_config["model"])
-        mlflow.log_param("time_steps", updated_config["data"]["time_steps"])
-        mlflow.log_param("epochs", epochs)
-        model = build_fusion_model(updated_config)
-
-        # ==========================================
-        # STEP 3: CLASS WEIGHT BALANCING
-        # ==========================================
-        # Compute balanced class weights from training label distribution
-        unique_classes = np.array([0, 1, 2])
-        class_weights_array = compute_class_weight(
-            class_weight="balanced",
-            classes=unique_classes,
-            y=y_sig_train.astype(int),
-        )
-        class_weight_dict = {
-            int(c): float(w) for c, w in zip(unique_classes, class_weights_array)
-        }
-
-        # Log class distribution and weights to MLflow
-        class_names = {0: "SELL", 1: "HOLD", 2: "BUY"}
-        print("\n  Class Distribution (Train):")
-        for cls_idx in unique_classes:
-            count = int(np.sum(y_sig_train == cls_idx))
-            pct = count / len(y_sig_train) * 100
-            print(f"    {class_names[cls_idx]}: {count} ({pct:.1f}%) -> weight={class_weight_dict[cls_idx]:.4f}")
-            mlflow.log_metric(f"class_count_{class_names[cls_idx]}", count)
-            mlflow.log_metric(f"class_pct_{class_names[cls_idx]}", round(pct, 2))
-            mlflow.log_metric(f"class_weight_{class_names[cls_idx]}", round(class_weight_dict[cls_idx], 4))
-
-        # Convert class weights to per-sample weights for the signal output
-        # For multi-output models, Keras class_weight doesn't work directly.
-        # We pass sample_weight as a dict keyed by output name.
-        signal_sample_weights = np.array(
-            [class_weight_dict[int(label)] for label in y_sig_train]
-        )
-
-        with benchmark_context("DL Fusion Training"):
-            history = model.fit(
-                x=X_train,
-                y=Y_train,
-                epochs=epochs,
-                validation_split=0.1,
-                verbose=1,
-                sample_weight=[
-                    np.ones(len(y_dir_train)),
-                    np.ones(len(y_ran_train)),
-                    signal_sample_weights,
-                ],
-            )
-
-        # Log final metrics
-        for metric, values in history.history.items():
-            mlflow.log_metric(f"final_{metric}", values[-1])
-
-        # Report predicted label distribution shift
-        train_preds = model.predict(X_train, verbose=0)[2]
-        pred_labels = np.argmax(train_preds, axis=1)
-        print("\n  Predicted Label Distribution (Train, after class weighting):")
-        for cls_idx in unique_classes:
-            pred_count = int(np.sum(pred_labels == cls_idx))
-            pred_pct = pred_count / len(pred_labels) * 100
-            print(f"    {class_names[cls_idx]}: {pred_count} ({pred_pct:.1f}%)")
-            mlflow.log_metric(f"pred_pct_{class_names[cls_idx]}", round(pred_pct, 2))
-
-        model.save_weights("artifacts/latest_fusion_weights.weights.h5")
-        mlflow.tensorflow.log_model(model, "fusion_model")
-
-    print("\n--- Training TFT Quantile Forecaster ---")
-    with mlflow.start_run(run_name=f"TFT_QUANTILE_{ticker}"):
-        from src.models.neural.tft_agent import build_tft_branch, total_quantile_loss
-
-        quantiles = [0.1, 0.25, 0.5, 0.75, 0.9]
-        tft_input, tft_output = build_tft_branch(
-            time_steps=updated_config["data"]["time_steps"],
-            num_features=updated_config["data"]["num_features"],
-        )
-        tft_model = tf.keras.Model(inputs=tft_input, outputs=tft_output)
-        tft_model.compile(optimizer="adam", loss=total_quantile_loss(quantiles))
-
-        # Train on actual price returns (Regression)
-        with benchmark_context("TFT Quantile Training"):
-            tft_model.fit(
-                X_train[0], Y_train[1][:, 1], epochs=epochs, validation_split=0.1, verbose=1
-            )
-        tft_model.save_weights("artifacts/tft_quantile_weights.weights.h5")
-        mlflow.tensorflow.log_model(tft_model, "tft_model")
-
-    print("\n--- Training XGBoost Branch ---")
-    with mlflow.start_run(run_name=f"XGB_AGENT_{ticker}"):
-        xgb_params = {
-            "objective": "multi:softprob",
-            "num_class": 3,
-            "random_state": 42,
-            "n_jobs": -1,
-            **get_xgboost_gpu_params(),
-        }
-        try:
-            opt_path = f"configs/optimized_params_{ticker}.json"
-            if os.path.exists(opt_path):
-                with open(opt_path) as f:
-                    opt_p = json.load(f)
-                    if "xgb_depth" in opt_p:
-                        xgb_params["max_depth"] = opt_p["xgb_depth"]
-                    if "xgb_lr" in opt_p:
-                        xgb_params["learning_rate"] = opt_p["xgb_lr"]
-                    if "xgb_n" in opt_p:
-                        xgb_params["n_estimators"] = opt_p["xgb_n"]
-                    if "xgb_sub" in opt_p:
-                        xgb_params["subsample"] = opt_p["xgb_sub"]
-                    if "xgb_col" in opt_p:
-                        xgb_params["colsample_bytree"] = opt_p["xgb_col"]
-                    if "xgb_gam" in opt_p:
-                        xgb_params["gamma"] = opt_p["xgb_gam"]
-                    if "xgb_alp" in opt_p:
-                        xgb_params["reg_alpha"] = opt_p["xgb_alp"]
-                    if "xgb_lam" in opt_p:
-                        xgb_params["reg_lambda"] = opt_p["xgb_lam"]
-                    print(f"Loaded optimized XGB params from {opt_path}: {xgb_params}")
-        except Exception as e_xgb:
-            print(f"Using default/fallback XGB params: {e_xgb}")
-
-        X_xgb_train = ts_train[:, -1, :]
-        # Compute per-sample weights for XGBoost (same class_weight_dict from Step 3)
-        xgb_sample_weights = np.array(
-            [class_weight_dict[int(label)] for label in y_sig_train]
-        )
-        xgb_model = xgb.XGBClassifier(**xgb_params)
-        with benchmark_context("XGBoost Training"):
-            xgb_model.fit(X_xgb_train, y_sig_train, sample_weight=xgb_sample_weights)
-        xgb_model.save_model("artifacts/xgb_ensemble.json")
-        mlflow.log_metric(
-            "train_accuracy", float(xgb_model.score(X_xgb_train, y_sig_train))
-        )
-
-    print("\n--- Training LightGBM Branch ---")
-    with mlflow.start_run(run_name=f"LGBM_AGENT_{ticker}"):
-        lgbm_params = {
-            "objective": "multiclass",
-            "num_class": 3,
-            "random_state": 42,
-            "verbose": -1,
-            **get_lightgbm_gpu_params(),
-        }
-        try:
-            opt_path = f"configs/optimized_params_{ticker}.json"
-            if os.path.exists(opt_path):
-                with open(opt_path) as f:
-                    opt_p = json.load(f)
-                    if "xgb_depth" in opt_p:
-                        lgbm_params["max_depth"] = opt_p["xgb_depth"]
-                    if "xgb_lr" in opt_p:
-                        lgbm_params["learning_rate"] = opt_p["xgb_lr"]
-                    if "xgb_n" in opt_p:
-                        lgbm_params["n_estimators"] = opt_p["xgb_n"]
-                    if "xgb_sub" in opt_p:
-                        lgbm_params["subsample"] = opt_p["xgb_sub"]
-                    if "xgb_col" in opt_p:
-                        lgbm_params["colsample_bytree"] = opt_p["xgb_col"]
-                    print(f"Loaded optimized LGBM params from {opt_path}: {lgbm_params}")
-        except Exception as e_lgbm:
-            print(f"Using default/fallback LGBM params: {e_lgbm}")
-
-        from lightgbm import LGBMClassifier
-
-        lgbm_model = LGBMClassifier(**lgbm_params)
-        with benchmark_context("LightGBM Training"):
-            lgbm_model.fit(X_xgb_train, y_sig_train, sample_weight=xgb_sample_weights)
-        joblib.dump(lgbm_model, "artifacts/lgbm_agent.joblib")
-
-    # DQN Agent trained EXCLUSIVELY on 2016-2024 development transitions
-    with mlflow.start_run(run_name=f"DQN_AGENT_{ticker}"):
-        train_dqn(
-            X_train,
-            (y_sig_train,),
-            model,
-            xgb_model,
-            scaler,
-            FEATURE_COLUMNS,
-            train_dates,
-            episodes=dqn_episodes,
-            save_artifacts=True,
-        )
-
-    # Meta-Ensemble trained EXCLUSIVELY via walk-forward out-of-fold stacking on 2016-2024 development data
-    with mlflow.start_run(run_name=f"META_ENSEMBLE_{ticker}"):
-        train_walk_forward_meta_ensemble(
-            ts_train_raw=ts_train_raw,
-            peer_train_raw=peer_train_raw if peer_train_raw is not None else None,
-            y_sig_train=y_sig_train,
-            y_dir_train=y_dir_train,
-            y_ran_train=y_ran_train,
-            updated_config=updated_config,
-            class_weight_dict=class_weight_dict,
-            dates=train_dates,
-            ticker=ticker,
-        )
-
-    # ==========================================
-    # STEP 4b: CALIBRATE MODEL PROBABILITIES
-    # ==========================================
-    print("\n--- Calibrating Model Probabilities (V2.2 Controlled Remediation) ---")
-    print("  H1 2025: Fit Calibrators on Purged Eligible Observations (Zero H2 Boundary Crossing)")
-    print("  H2 2025: Independent Calibration Evaluation (2025-07-01 to 2025-12-31, Zero Refitting)")
-
-    calibrator = ModelCalibrator()
-
-    # Determine exact 15-day forward horizon for each observation to prevent boundary crossing
-    val_date_list = list(pd.to_datetime(val_dates))
-    h1_cutoff = pd.Timestamp("2025-06-30")
-    horizon = 15
-
-    h1_eligible_mask = []
-    purged_h1_records = []
-    for d in val_dates:
-        d_ts = pd.Timestamp(d)
-        idx_in_val = val_date_list.index(d_ts)
-        end_idx = min(idx_in_val + horizon, len(val_date_list) - 1)
-        label_end_date = val_date_list[end_idx]
-
-        if d_ts <= h1_cutoff:
-            if label_end_date <= h1_cutoff:
-                h1_eligible_mask.append(True)
-            else:
-                h1_eligible_mask.append(False)
-                purged_h1_records.append({
-                    "observation_date": d_ts.strftime("%Y-%m-%d"),
-                    "label_end_date": label_end_date.strftime("%Y-%m-%d"),
-                    "reason": "15-session triple-barrier horizon crosses into H2 (post-2025-06-30)",
-                })
-        else:
-            h1_eligible_mask.append(False)
-
-    h1_eligible_mask = np.array(h1_eligible_mask)
-    h2_mask = np.array([pd.Timestamp(d) > h1_cutoff for d in val_dates])
-
-    print(f"  Total H1 Observations (<= 2025-06-30): {np.sum([pd.Timestamp(d) <= h1_cutoff for d in val_dates])}")
-    print(f"  Purged H1 Observations (Crossing into H2): {len(purged_h1_records)}")
-    print(f"  Eligible H1 Calibration Samples: {np.sum(h1_eligible_mask)}")
-    print(f"  Independent H2 Evaluation Samples: {np.sum(h2_mask)}")
-
-    # Generate full 2025 predictions from models
-    dl_val_preds = model.predict(X_val, verbose=0)[2]
-    X_xgb_val = ts_val[:, -1, :]
-    xgb_val_preds = xgb_model.predict_proba(X_xgb_val)
-    lgbm_val_preds = lgbm_model.predict_proba(X_xgb_val)
-
-    # FIT ONLY ON PURGED ELIGIBLE H1 2025 (Calibration Subset)
-    # V2.2 Model Selection:
-    # - DL_FUSION: 'sigmoid' (Platt scaling: softens overconfidence without isotonic probability step distortion)
-    # - XGB: 'raw' (Trees already produce empirical leaf frequencies; small N=48 causes severe step distortion)
-    # - LGBM: 'raw' (Trees already produce empirical leaf frequencies; small N=48 causes severe step distortion)
-    calibrator.fit("DL_FUSION", y_sig_val[h1_eligible_mask], dl_val_preds[h1_eligible_mask], method="sigmoid")
-    calibrator.fit("XGB", y_sig_val[h1_eligible_mask], xgb_val_preds[h1_eligible_mask], method="raw")
-    calibrator.fit("LGBM", y_sig_val[h1_eligible_mask], lgbm_val_preds[h1_eligible_mask], method="raw")
-
-    cal_path = "artifacts/model_calibrator.joblib"
-    calibrator.save(cal_path)
-    with open(cal_path, "rb") as f_cal:
-        cal_hash = hashlib.sha256(f_cal.read()).hexdigest()
-    print(f"  Calibrator saved to {cal_path} (SHA-256: {cal_hash})")
-
-    # EVALUATE INDEPENDENTLY ON H2 2025 (Second half of 2025, zero refitting)
-    cal_eval_report = {
-        "calibration_period": {
-            "split": "H1_2025_PURGED_ELIGIBLE",
-            "start_date": val_dates[h1_eligible_mask][0].strftime("%Y-%m-%d"),
-            "end_date": val_dates[h1_eligible_mask][-1].strftime("%Y-%m-%d"),
-            "total_h1_bars": int(np.sum([pd.Timestamp(d) <= h1_cutoff for d in val_dates])),
-            "purged_crossing_bars": len(purged_h1_records),
-            "eligible_sample_count": int(np.sum(h1_eligible_mask)),
-            "purged_records": purged_h1_records,
-            "boundary_leakage_prevented": True,
-            "zero_h2_prices_used_in_calibration": True,
-        },
-        "evaluation_period": {
-            "split": "H2_2025_INDEPENDENT",
-            "start_date": val_dates[h2_mask][0].strftime("%Y-%m-%d"),
-            "end_date": val_dates[h2_mask][-1].strftime("%Y-%m-%d"),
-            "sample_count": int(np.sum(h2_mask)),
-            "refitted": False,
-            "notes": "Calibrator was NOT refit on H2. Evaluated strictly out-of-sample.",
-            "price_sharing_with_calibration": "None. Calibration label horizon terminates <= 2025-06-30. H2 evaluation begins 2025-07-01.",
-        },
-        "sample_size_limitation": f"H2 sample count is {np.sum(h2_mask)} bars. Standard error on accuracy is ~{1/np.sqrt(np.sum(h2_mask)):.3f}. Results are reported with honest sample-size bounds.",
-        "calibration_methods": {
-            "DL_FUSION": "sigmoid (Platt scaling)",
-            "XGB": "raw (Pass-through identity)",
-            "LGBM": "raw (Pass-through identity)",
-        },
-        "models": {},
-        "sha256": cal_hash,
-    }
-
-    # One-hot encode H2 true labels
-    y_h2 = y_sig_val[h2_mask].astype(int)
-    Y_h2_onehot = np.zeros((len(y_h2), 3))
-    for i, c in enumerate(y_h2):
-        Y_h2_onehot[i, c] = 1.0
-
-    with mlflow.start_run(run_name=f"CALIBRATION_{ticker}"):
-        for m_name, raw_p in [("DL_FUSION", dl_val_preds[h2_mask]), ("XGB", xgb_val_preds[h2_mask]), ("LGBM", lgbm_val_preds[h2_mask])]:
-            cal_p = calibrator.calibrate(m_name, raw_p)
-
-            # Brier score
-            brier_raw = float(np.mean(np.sum((raw_p - Y_h2_onehot) ** 2, axis=1)))
-            brier_cal = float(np.mean(np.sum((cal_p - Y_h2_onehot) ** 2, axis=1)))
-
-            # Log loss
-            ll_raw = float(-np.mean(np.sum(Y_h2_onehot * np.log(np.clip(raw_p, 1e-15, 1 - 1e-15)), axis=1)))
-            ll_cal = float(-np.mean(np.sum(Y_h2_onehot * np.log(np.clip(cal_p, 1e-15, 1 - 1e-15)), axis=1)))
-
-            # Accuracy
-            acc_raw = float(np.mean(np.argmax(raw_p, axis=1) == y_h2))
-            acc_cal = float(np.mean(np.argmax(cal_p, axis=1) == y_h2))
-
-            # Expected Calibration Error (ECE) with 5 confidence bins
-            conf_raw = np.max(raw_p, axis=1)
-            pred_raw = np.argmax(raw_p, axis=1)
-            conf_cal = np.max(cal_p, axis=1)
-            pred_cal = np.argmax(cal_p, axis=1)
-
-            bins = np.linspace(0.33, 1.0, 6)
-            ece_raw = 0.0
-            ece_cal = 0.0
-            for b_i in range(len(bins) - 1):
-                bin_lower, bin_upper = bins[b_i], bins[b_i + 1]
-                # raw
-                in_bin_raw = (conf_raw >= bin_lower) & (conf_raw < bin_upper)
-                if np.sum(in_bin_raw) > 0:
-                    acc_b = np.mean(pred_raw[in_bin_raw] == y_h2[in_bin_raw])
-                    conf_b = np.mean(conf_raw[in_bin_raw])
-                    ece_raw += np.abs(acc_b - conf_b) * (np.sum(in_bin_raw) / len(y_h2))
-                # cal
-                in_bin_cal = (conf_cal >= bin_lower) & (conf_cal < bin_upper)
-                if np.sum(in_bin_cal) > 0:
-                    acc_b = np.mean(pred_cal[in_bin_cal] == y_h2[in_bin_cal])
-                    conf_b = np.mean(conf_cal[in_bin_cal])
-                    ece_cal += np.abs(acc_b - conf_b) * (np.sum(in_bin_cal) / len(y_h2))
-
-            # Class-wise metrics
-            class_metrics = {}
-            for c_idx, c_name in enumerate(["SELL", "HOLD", "BUY"]):
-                actual_freq = float(np.mean(y_h2 == c_idx))
-                raw_mean_prob = float(np.mean(raw_p[:, c_idx]))
-                cal_mean_prob = float(np.mean(cal_p[:, c_idx]))
-                class_metrics[c_name] = {
-                    "actual_frequency": actual_freq,
-                    "raw_mean_predicted_prob": raw_mean_prob,
-                    "calibrated_mean_predicted_prob": cal_mean_prob,
-                }
-
-            cal_eval_report["models"][m_name] = {
-                "brier_score": {"raw": brier_raw, "calibrated": brier_cal, "reduction": brier_raw - brier_cal},
-                "log_loss": {"raw": ll_raw, "calibrated": ll_cal, "reduction": ll_raw - ll_cal},
-                "accuracy": {"raw": acc_raw, "calibrated": acc_cal},
-                "ece": {"raw": float(ece_raw), "calibrated": float(ece_cal)},
-                "class_metrics": class_metrics,
-            }
-            mlflow.log_metric(f"{m_name}_brier_raw", brier_raw)
-            mlflow.log_metric(f"{m_name}_brier_cal", brier_cal)
-            mlflow.log_metric(f"{m_name}_log_loss_cal", ll_cal)
-            mlflow.log_metric(f"{m_name}_ece_cal", float(ece_cal))
-            mlflow.log_metric(f"{m_name}_cal_accuracy", acc_cal)
-            print(f"  [{m_name}] H2 Independent Eval: Brier {brier_raw:.4f}->{brier_cal:.4f} | ECE {ece_raw:.4f}->{ece_cal:.4f} | Acc {acc_raw:.4f}->{acc_cal:.4f}")
-
-    os.makedirs("reports", exist_ok=True)
-    with open("reports/calibration_evaluation_report.json", "w") as f_rep:
-        json.dump(cal_eval_report, f_rep, indent=4)
-    with open("reports/calibration_evaluation_report_v2_2.json", "w") as f_rep2:
-        json.dump(cal_eval_report, f_rep2, indent=4)
-    print("  Saved calibration evaluation report to reports/calibration_evaluation_report.json and reports/calibration_evaluation_report_v2_2.json")
-
-    # ==========================================
-    # STEP 5: SAVE ACTIVE TICKER
-    # ==========================================
-    print("\n[5/5] Saving active ticker metadata for frontend...")
-    try:
-        from src.data_ingestion.universes import UNIVERSES_METADATA
-        market = "us"
-        for m_id, m_dict in UNIVERSES_METADATA.items():
-            if ticker in m_dict:
-                market = m_id
-                break
-
-        with open("configs/active_ticker.json", "w") as f:
-            json.dump({"ticker": ticker, "market": market}, f)
-        print(f"  >>> Active ticker saved: {ticker} ({market})")
-    except Exception as e:
-        print(f"  [ERROR] Could not save active ticker metadata: {e}")
-
-    # GPU Verification
-    verify_gpu_utilization()
-
-    # ==========================================
-    # STEP 6: QUICK EVALUATION RUN
-    # ==========================================
-    print(f"\n[6/6] Triggering quick evaluation run for {ticker}...")
-    try:
-        from scripts.evaluation.run_backtest import AutomatedBacktester
-        backtester = AutomatedBacktester(tickers=[ticker])
-        backtester.run_pipeline()
-        print("  >>> Quick evaluation run complete. Live metrics populated.")
-    except Exception as e:
-        print(f"  [WARNING] Quick evaluation run failed: {e}")
-
-    print(f"\n  >>> Steps Complete ({time.time() - pipeline_start:.2f}s)")
-    print(
-        f"\n>>> UNIFIED TRAINING PIPELINE COMPLETE ({time.time() - pipeline_start:.2f}s) <<<"
-    )
-    print("MLflow UI: run 'mlflow ui' to view experiment results")
 
 
 if __name__ == "__main__":

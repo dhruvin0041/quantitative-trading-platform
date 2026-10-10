@@ -1,41 +1,86 @@
-HYDRA TERMINAL: INITIALIZATION FROM ZERO-STATE
-==============================================
+HYDRA INSTITUTIONAL QUANT PLATFORM: ZERO-STATE INITIALIZATION GUIDE
+================================================================================
 
-Follow these steps in order to initialize, optimize, and launch the system 
-for a specific ticker (Example: RELIANCE.NS).
+This guide defines the authoritative zero-state procedure for initializing,
+optimizing, retraining, and launching the HYDRA Quantitative Trading Platform.
+
+TRAINING SPECIFICATIONS & UPGRADES:
+- Feature Matrix: 31 Institutional Indicators (27 baseline + Keltner Position,
+  Hull Moving Average Slope, Connors RSI, and Chaikin Money Flow Divergence).
+- Historical Date Window: First trading session of 2015 (2015-01-01) to current date.
+- Chronological Split: 75% strictly for training, 25% for testing/validation.
+- Warmup Protocol: First 119 warmup bars discarded to initialize 120-bar rolling z-scores.
+- Dynamic Triple Barrier: Dynamic volatility take-profit, stop-loss, and holding horizons
+  with boundary horizon truncation (zero forward lookahead bias into test partitions).
 
 PREREQUISITES:
-- Python 3.10+
+- Python 3.10+ (Windows PowerShell)
 - Node.js 20+
-- Valid GOOGLE_API_KEY in backend/.env (optional for alpha research)
-- Valid API_KEY in backend/.env (must match frontend/.env.local)
+- Valid API_KEY in backend/.env (matching frontend/.env.local)
 
-STEP 0: ENVIRONMENT SETUP
--------------------------
-Ensure you are using the dedicated virtual environment with all dependencies.
+--------------------------------------------------------------------------------
+STEP 0: ENVIRONMENT ACTIVATION
+--------------------------------------------------------------------------------
+In your root terminal:
 > cd backend
-> python -m venv venv
-> .\venv\Scripts\activate  # Windows
-> pip install -r requirements.txt
+> .\venv\Scripts\activate   # Ensure virtual environment is active
+> $env:PYTHONPATH='.'
 
-STEP 1: UNIFIED TRAINING PIPELINE
----------------------------------
-Automatically executes Cleanup, Bayesian Branch Optimization, Optuna 
-Ensemble Optimization, and Final Model Training in a single sequence.
-(Ensure venv is activated)
-> $env:PYTHONPATH='.'; python scripts/training/train.py --ticker RELIANCE.NS --trials 50
+--------------------------------------------------------------------------------
+STEP 1: ZERO-STATE PURGE (RESET ALL NEURAL PATHWAYS & WEIGHTS)
+--------------------------------------------------------------------------------
+Purges stale models, scalers, caches, and test databases:
+> python scripts/ops/clean_artifacts.py --full --universal
 
-STEP 2: LAUNCH INFERENCE ENGINE (BACKEND)
------------------------------------------
-Starts the FastAPI service on http://localhost:8000.
-> $env:PYTHONPATH='.'; python api.py
+--------------------------------------------------------------------------------
+STEP 2: RUN TRAINING & OPTIMIZATION (CHOOSE MODE A OR B)
+--------------------------------------------------------------------------------
 
-STEP 3: LAUNCH COMMAND CENTER (FRONTEND)
-----------------------------------------
-Starts the Next.js dashboard on http://localhost:3000.
-(Run in a separate terminal)
-> cd ../frontend
+MODE A: UNIVERSAL MULTI-ASSET RETRAINING (RECOMMENDED)
+Pooled training across AAPL, NVDA, MSFT, AMZN, and SPY. Eliminates single-asset
+distribution shift and produces a single unified ensemble serving all assets.
+
+• With 250 Bayesian Optuna trials (Optimization + Model Training):
+> python scripts/training/train_universal.py --trials 250
+
+• Skip Optimization (Train immediately using existing/default optimal parameters):
+> python scripts/training/train_universal.py --skip-optimization
+
+--------------------------------------------------------------------------------
+
+MODE B: SINGLE-TICKER ISOLATED RETRAINING
+Tailored specifically to one individual stock (e.g., AAPL, NVDA, RELIANCE.NS).
+
+• With 250 Bayesian Optuna trials (Optimization + Model Training):
+> python scripts/training/train.py --ticker AAPL --trials 250
+
+• Skip Optimization (Train immediately using existing/default optimal parameters):
+> python scripts/training/train.py --ticker AAPL --skip-optimization
+
+*Note: You can pass custom dates if needed:
+> python scripts/training/train.py --ticker NVDA --start 2015-01-01 --trials 250
+
+--------------------------------------------------------------------------------
+STEP 3: INSTITUTIONAL QUALITY & INTEGRITY GATE
+--------------------------------------------------------------------------------
+Verify that zero formatting errors exist and all institutional tests pass green:
+> ruff check .
+> pytest tests
+
+--------------------------------------------------------------------------------
+STEP 4: LAUNCH BACKEND INFERENCE SERVICE
+--------------------------------------------------------------------------------
+Starts the institutional FastAPI mesh on http://localhost:8000:
+> python main.py
+
+--------------------------------------------------------------------------------
+STEP 5: LAUNCH INSTITUTIONAL COMMAND CENTER (FRONTEND)
+--------------------------------------------------------------------------------
+In a separate terminal:
+> cd frontend
 > npm run dev
 
-==============================================
-SYSTEM READY: Visit http://localhost:3000 and search for RELIANCE.NS.
+================================================================================
+SYSTEM READY: Visit http://localhost:3000 to monitor real-time signals,
+supply-chain risk proxies, and causal replay charts.
+================================================================================
