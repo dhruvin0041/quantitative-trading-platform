@@ -26,6 +26,66 @@ def ensure_series(data: Any) -> pd.Series:
     return data
 
 
+def compute_wma(series: pd.Series, window: int) -> pd.Series:
+    """Computes Weighted Moving Average with linear weights 1..window."""
+    weights = np.arange(1, window + 1)
+    w_sum = weights.sum()
+    return series.rolling(window).apply(lambda s: np.dot(s, weights) / w_sum, raw=True)
+
+
+def compute_hma(series: pd.Series, window: int = 9) -> pd.Series:
+    """Computes Hull Moving Average to eliminate lag without lookahead."""
+    half_length = max(1, int(window / 2))
+    sqrt_length = max(1, int(np.sqrt(window)))
+    wma_half = compute_wma(series, half_length)
+    wma_full = compute_wma(series, window)
+    raw_hma = 2 * wma_half - wma_full
+    return compute_wma(raw_hma, sqrt_length)
+
+
+def compute_connors_rsi(
+    close: pd.Series, rsi_window: int = 3, streak_window: int = 2, rank_window: int = 100
+) -> pd.Series:
+    """
+    Computes ConnorsRSI:
+    (RSI(Close, 3) + RSI(Streak, 2) + PercentRank(1-day ROC, 100)) / 3.0
+    """
+    delta = close.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.rolling(rsi_window).mean()
+    avg_loss = loss.rolling(rsi_window).mean()
+    rs = avg_gain / (avg_loss + 1e-9)
+    price_rsi = 100 - (100 / (1 + rs))
+
+    streak = pd.Series(0.0, index=close.index)
+    curr_s = 0.0
+    for idx in range(1, len(close)):
+        if close.iloc[idx] > close.iloc[idx - 1]:
+            curr_s = curr_s + 1.0 if curr_s > 0.0 else 1.0
+        elif close.iloc[idx] < close.iloc[idx - 1]:
+            curr_s = curr_s - 1.0 if curr_s < 0.0 else -1.0
+        else:
+            curr_s = 0.0
+        streak.iloc[idx] = curr_s
+
+    s_delta = streak.diff()
+    s_gain = s_delta.clip(lower=0)
+    s_loss = -s_delta.clip(upper=0)
+    s_avg_gain = s_gain.rolling(streak_window).mean()
+    s_avg_loss = s_loss.rolling(streak_window).mean()
+    s_rs = s_avg_gain / (s_avg_loss + 1e-9)
+    streak_rsi = 100 - (100 / (1 + s_rs))
+
+    roc1 = close.pct_change(1)
+    pct_rank = roc1.rolling(rank_window).apply(
+        lambda s: (s < s.iloc[-1]).mean() * 100.0 if len(s.dropna()) > 0 else 50.0,
+        raw=False,
+    )
+
+    return (price_rsi.fillna(50.0) + streak_rsi.fillna(50.0) + pct_rank.fillna(50.0)) / 3.0
+
+
 def add_advanced_features(
     df: pd.DataFrame, vix_data: pd.DataFrame = None, tnx_data: pd.DataFrame = None
 ) -> pd.DataFrame:
@@ -187,6 +247,36 @@ def add_advanced_features(
 
     # 9. Rate of Change (ROC)
     df["ROC_12"] = ta.momentum.ROCIndicator(close=df["Close"], window=12).roc()
+
+    # ==========================================
+    # VOLATILITY CHANNELS & MICRO-MOMENTUM
+    # ==========================================
+    # 10. Keltner Channels (20-period EMA +/- 2.0 * ATR)
+    df["Keltner_Mid"] = df["Close"].ewm(span=20, adjust=False).mean()
+    df["Keltner_Upper"] = df["Keltner_Mid"] + (2.0 * df["ATR"])
+    df["Keltner_Lower"] = df["Keltner_Mid"] - (2.0 * df["ATR"])
+    df["Keltner_Position"] = (
+        (df["Close"] - df["Keltner_Lower"])
+        / (df["Keltner_Upper"] - df["Keltner_Lower"] + 1e-9)
+    ).fillna(0.5)
+
+    # 11. Hull Moving Average (9-period) and Directional Slope
+    df["HMA_9"] = compute_hma(df["Close"], window=9).bfill().fillna(df["Close"])
+    df["HMA_Slope"] = (
+        (df["HMA_9"] - df["HMA_9"].shift(1)) / (df["HMA_9"].shift(1) + 1e-9)
+    ).fillna(0.0)
+
+    # 12. ConnorsRSI (Micro-Momentum Exhaustion)
+    df["Connors_RSI"] = compute_connors_rsi(df["Close"]).fillna(50.0)
+
+    # 13. CMF Divergence (Smart-Money Accumulation / Distribution footprint)
+    price_min_14 = df["Close"].rolling(14).min()
+    price_max_14 = df["Close"].rolling(14).max()
+    cmf_min_14 = df["CMF_20"].rolling(14).min()
+    cmf_max_14 = df["CMF_20"].rolling(14).max()
+    bull_div = (df["Close"] <= price_min_14 * 1.005) & (df["CMF_20"] > cmf_min_14 + 0.05)
+    bear_div = (df["Close"] >= price_max_14 * 0.995) & (df["CMF_20"] < cmf_max_14 - 0.05)
+    df["CMF_Divergence"] = np.where(bull_div, 1.0, np.where(bear_div, -1.0, 0.0))
 
     # ==========================================
     # "IDEAL BB" STYLE INDICATORS (From Screenshot)
@@ -417,6 +507,12 @@ def feature_deflation(df: pd.DataFrame, threshold=0.85) -> pd.DataFrame:
         "MFI_14",
         "Stoch_K",
         "CMF_20",
+        "Keltner_Lower",
+        "Keltner_Upper",
+        "Keltner_Position",
+        "HMA_9",
+        "Connors_RSI",
+        "CMF_Divergence",
     ]
 
     # Only drop the column if it crosses the threshold AND is not on the critical list

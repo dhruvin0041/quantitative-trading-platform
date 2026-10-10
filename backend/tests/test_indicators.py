@@ -27,7 +27,14 @@ def test_add_advanced_features():
     assert "MACD" in processed_df.columns
     assert "RSI_14" in processed_df.columns
     assert "VIX" in processed_df.columns
+    assert "Keltner_Lower" in processed_df.columns
+    assert "Keltner_Upper" in processed_df.columns
+    assert "HMA_9" in processed_df.columns
+    assert "Connors_RSI" in processed_df.columns
+    assert "CMF_Divergence" in processed_df.columns
 
     # Check for NaN values
     assert processed_df["ATR"].isna().sum() == 0
     assert processed_df["BB_Upper"].isna().sum() == 0
+    assert processed_df["Keltner_Lower"].isna().sum() == 0
+    assert processed_df["HMA_9"].isna().sum() == 0

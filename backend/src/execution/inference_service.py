@@ -237,11 +237,42 @@ class InferenceService:
                 if "ATR" in df_feat.columns
                 else pd.Series(1.0, index=valid_indices)
             )
+            keltner_pos_s = (
+                df_feat["Keltner_Position"].reindex(valid_indices).ffill()
+                if "Keltner_Position" in df_feat.columns
+                else pd.Series(0.5, index=valid_indices)
+            )
+            keltner_lower_s = (
+                df_feat["Keltner_Lower"].reindex(valid_indices).ffill()
+                if "Keltner_Lower" in df_feat.columns
+                else (close_s - 2.0 * atr_s)
+            )
+            keltner_upper_s = (
+                df_feat["Keltner_Upper"].reindex(valid_indices).ffill()
+                if "Keltner_Upper" in df_feat.columns
+                else (close_s + 2.0 * atr_s)
+            )
+            hma9_s = (
+                df_feat["HMA_9"].reindex(valid_indices).ffill()
+                if "HMA_9" in df_feat.columns
+                else close_s
+            )
+            connors_rsi_s = (
+                df_feat["Connors_RSI"].reindex(valid_indices).ffill()
+                if "Connors_RSI" in df_feat.columns
+                else pd.Series(50.0, index=valid_indices)
+            )
+            cmf_div_s = (
+                df_feat["CMF_Divergence"].reindex(valid_indices).ffill()
+                if "CMF_Divergence" in df_feat.columns
+                else pd.Series(0.0, index=valid_indices)
+            )
 
             current_pos = "FLAT"
             last_trade_idx = -10
             last_trade_price = 0.0
             peak_price = 0.0
+            recent_dip_bars = 0
 
             for i in range(len(valid_indices)):
                 v_idx = valid_indices[i]
@@ -278,8 +309,27 @@ class InferenceService:
                 cur_ema21 = float(ema21_s.iloc[i]) if pd.notna(ema21_s.iloc[i]) else cur_c
                 cur_atr = float(atr_s.iloc[i]) if pd.notna(atr_s.iloc[i]) else 1.0
 
+                cur_k_pos = float(keltner_pos_s.iloc[i]) if pd.notna(keltner_pos_s.iloc[i]) else 0.5
+                cur_k_lower = float(keltner_lower_s.iloc[i]) if pd.notna(keltner_lower_s.iloc[i]) else (cur_c - 2.0 * cur_atr)
+                cur_k_upper = float(keltner_upper_s.iloc[i]) if pd.notna(keltner_upper_s.iloc[i]) else (cur_c + 2.0 * cur_atr)
+                cur_hma = float(hma9_s.iloc[i]) if pd.notna(hma9_s.iloc[i]) else cur_c
+                prev_hma = float(hma9_s.iloc[i - 1]) if i > 0 and pd.notna(hma9_s.iloc[i - 1]) else cur_hma
+                cur_crsi = float(connors_rsi_s.iloc[i]) if pd.notna(connors_rsi_s.iloc[i]) else 50.0
+                cur_cmf_div = float(cmf_div_s.iloc[i]) if pd.notna(cmf_div_s.iloc[i]) else 0.0
+
                 # Mean-reversion swing exhaustion overlay (requires RSI exhaustion)
-                is_dip_oversold = (cur_rsi < 32.0) or (cur_rsi < 42.0 and cur_bb < 0.08)
+                is_keltner_dip = (cur_l <= cur_k_lower or cur_k_pos <= 0.05) and (
+                    cur_crsi < 30.0 or (5.0 < cur_rsi < 42.0) or cur_cmf_div > 0.5
+                )
+                if is_keltner_dip:
+                    recent_dip_bars = 3
+                else:
+                    recent_dip_bars = max(0, recent_dip_bars - 1)
+                had_recent_dip = recent_dip_bars > 0
+
+                is_dip_oversold = (5.0 < cur_rsi < 32.0) or (
+                    5.0 < cur_rsi < 42.0 and cur_bb < 0.08
+                )
                 is_peak_overbought = (cur_rsi > 72.0) or (cur_rsi > 62.0 and cur_bb > 0.92)
 
                 # Local price action pivot detection (strictly causal, using t-2 and t-1)
@@ -291,13 +341,21 @@ class InferenceService:
                     prev_h = float(high_s.iloc[i - 1])
                     prev2_h = float(high_s.iloc[i - 2])
 
-                    # Responsive trough detection: price rejection from recent lows
+                    # Responsive trough detection: price rejection from recent lows OR Keltner+HMA inflection
                     is_bullish_candle = (cur_c > cur_o) or (cur_c > cur_l + (cur_h - cur_l) * 0.5)
-                    is_trough = (
+                    causal_trough = (
                         is_bullish_candle
                         and (cur_c > prev_l)
                         and (prev_l < prev2_l or cur_l < prev_l)
                     )
+                    hma_turn_up = (
+                        (cur_hma > prev_hma and prev_hma > 0.0)
+                        and (cur_c > cur_o or cur_c > prev_l)
+                    )
+                    is_matrix_trough = had_recent_dip and hma_turn_up
+
+                    is_trough = causal_trough or is_matrix_trough
+
                     # Responsive crest detection: price rejection from recent highs
                     is_bearish_candle = (cur_c < cur_o) or (cur_c < cur_l + (cur_h - cur_l) * 0.5)
 
@@ -309,8 +367,9 @@ class InferenceService:
                         trailing_stop = peak_price - (2.5 * cur_atr) if peak_price > 0 else 0.0
                         hit_trailing = bool(cur_c < trailing_stop and current_pos == "LONG")
                         trend_break = bool(cur_c < cur_ema21 and cur_c < prev_l)
+                        keltner_target_exit = bool(cur_c >= cur_k_upper and cur_hma < prev_hma)
                         overbought_reversal = bool(cur_rsi > 75.0 and is_bearish_candle and cur_c < prev_h)
-                        is_crest = hit_trailing or trend_break or overbought_reversal
+                        is_crest = hit_trailing or trend_break or keltner_target_exit or overbought_reversal
                     else:
                         # In bear / neutral regime, exit quickly at any shallow bounce crest to defend capital
                         is_crest = (
@@ -672,16 +731,44 @@ class InferenceService:
                     if "EMA21" in ticker_df_risk.columns
                     else float(ticker_df_risk["Close"].ewm(span=21, adjust=False).mean().iloc[-1])
                 )
+                cur_atr = float(tech_snapshot.get("ATR", 1.0))
+                cur_k_pos = float(tech_snapshot.get("Keltner_Position", 0.5))
+                cur_k_lower = float(tech_snapshot.get("Keltner_Lower", cur_c - 2.0 * cur_atr))
+                cur_k_upper = float(tech_snapshot.get("Keltner_Upper", cur_c + 2.0 * cur_atr))
+                cur_hma = float(tech_snapshot.get("HMA_9", cur_c))
+                prev_hma = (
+                    float(ticker_df_risk["HMA_9"].iloc[-2])
+                    if "HMA_9" in ticker_df_risk.columns and len(ticker_df_risk) >= 2
+                    else cur_hma
+                )
+                cur_crsi = float(tech_snapshot.get("Connors_RSI", 50.0))
+                cur_cmf_div = float(tech_snapshot.get("CMF_Divergence", 0.0))
 
-                is_dip_oversold = (cur_rsi < 32.0) or (cur_rsi < 42.0 and cur_bb < 0.08)
+                is_keltner_dip = (cur_l <= cur_k_lower or cur_k_pos <= 0.05) and (
+                    cur_crsi < 30.0 or (5.0 < cur_rsi < 42.0) or cur_cmf_div > 0.5
+                )
+                had_recent_dip = is_keltner_dip
+                if not had_recent_dip and "Keltner_Position" in ticker_df_risk.columns and len(ticker_df_risk) >= 3:
+                    had_recent_dip = bool((ticker_df_risk["Keltner_Position"].iloc[-3:] < 0.10).any())
+
+                is_dip_oversold = (5.0 < cur_rsi < 32.0) or (
+                    5.0 < cur_rsi < 42.0 and cur_bb < 0.08
+                )
                 is_peak_overbought = (cur_rsi > 72.0) or (cur_rsi > 62.0 and cur_bb > 0.92)
 
                 is_bullish_candle = (cur_c > cur_o) or (cur_c > cur_l + (cur_h - cur_l) * 0.5)
-                is_trough = (
+                causal_trough = (
                     is_bullish_candle
                     and (cur_c > prev_l)
                     and (prev_l < prev2_l or cur_l < prev_l)
                 )
+                hma_turn_up = (
+                    (cur_hma > prev_hma and prev_hma > 0.0)
+                    and (cur_c > cur_o or cur_c > prev_l)
+                )
+                is_matrix_trough = had_recent_dip and hma_turn_up
+                is_trough = causal_trough or is_matrix_trough
+
                 is_bearish_candle = (cur_c < cur_o) or (cur_c < cur_l + (cur_h - cur_l) * 0.5)
 
                 sma_200_val = float(ticker_df_risk["Close"].rolling(200, min_periods=10).mean().iloc[-1])
@@ -699,8 +786,9 @@ class InferenceService:
 
                 if is_bull_live:
                     trend_break = bool(cur_c < cur_ema21 and cur_c < prev_l)
+                    keltner_target_exit = bool(cur_c >= cur_k_upper and cur_hma < prev_hma)
                     overbought_reversal = bool(cur_rsi > 75.0 and is_bearish_candle and cur_c < prev_h)
-                    is_crest = trend_break or overbought_reversal
+                    is_crest = trend_break or keltner_target_exit or overbought_reversal
                 else:
                     is_crest = (
                         is_bearish_candle

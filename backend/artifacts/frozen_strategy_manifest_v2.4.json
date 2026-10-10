@@ -34,8 +34,8 @@
     "kept_features.json": "debe3e4b82edf843b0b2fa3397c372f8f8826d64f75bf2d816d1a60819156b17"
   },
   "code_hashes": {
-    "live_inference.py": "9d353993ef133c1bebd9098f34194dc76bcefccc2434bba8401c2840e8c8a17f",
-    "inference_service.py": "f839adf309aa1f1cecebe92d94eab23feb2f6c92ee59e9735710b3b978720868",
+    "live_inference.py": "1c172fb0394fe32319a798fc8e5ff00dbe38202c15f0d2b6e9135f0f29049e95",
+    "inference_service.py": "c4af72b4c8fa4c86b0421a52fdfb41f2390f49bd2c81cc5e5f7dbef089a29117",
     "signal_ledger.py": "6bf42eacb9060fb4063bb22aa515459080c1dc025d118b0006a00899e74d7d21",
     "backtest_service.py": "faa7afcefb8799e5b90763c3b01c329a55d1ba960b2cd8ded747cbf0ce47a04b",
     "data_firewall.py": "ec46bb4e12f0d24ee4e6d9022810b07b8124e4c2c69d0ef7117e5325ea34d760",

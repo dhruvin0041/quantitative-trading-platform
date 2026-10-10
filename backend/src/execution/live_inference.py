@@ -17,6 +17,7 @@ import yaml
 import yfinance as yf
 
 from src.data_ingestion.market_data import fetch_historical_data, get_sector_peer
+from src.data_ingestion.technical_indicators import compute_connors_rsi, compute_hma
 from src.models.ensemble.meta_ensemble import MetaEnsemble
 from src.models.neural.fusion_network import build_fusion_model
 
@@ -192,7 +193,7 @@ def add_upgraded_features(df, spy_df, vix_df, lag_vix: bool = True):
     avg_gain = gain.ewm(alpha=1 / 14, min_periods=14, adjust=False).mean()
     avg_loss = loss.ewm(alpha=1 / 14, min_periods=14, adjust=False).mean()
     RS = avg_gain / (avg_loss + 1e-9)
-    df["RSI"] = 100 - (100 / (1 + RS))
+    df["RSI"] = (100 - (100 / (1 + RS))).fillna(50.0)
 
     ema12 = close_s.ewm(span=12).mean()
     ema26 = close_s.ewm(span=26).mean()
@@ -216,9 +217,9 @@ def add_upgraded_features(df, spy_df, vix_df, lag_vix: bool = True):
     df["BB_Upper"] = df["BB_Mid"] + 2 * df["BB_Std"]
     df["BB_Lower"] = df["BB_Mid"] - 2 * df["BB_Std"]
     df["BB_Width"] = (df["BB_Upper"] - df["BB_Lower"]) / (df["BB_Mid"] + 1e-9)
-    df["BB_Position"] = (close_s - df["BB_Lower"]) / (
-        df["BB_Upper"] - df["BB_Lower"] + 1e-9
-    )
+    df["BB_Position"] = (
+        (close_s - df["BB_Lower"]) / (df["BB_Upper"] - df["BB_Lower"] + 1e-9)
+    ).fillna(0.5)
 
     high_s = df["High"].squeeze()
     low_s = df["Low"].squeeze()
@@ -235,8 +236,25 @@ def add_upgraded_features(df, spy_df, vix_df, lag_vix: bool = True):
         ],
         axis=1,
     ).max(axis=1)
-    df["ATR"] = df["TR"].rolling(14).mean()
+    df["ATR"] = df["TR"].rolling(14).mean().bfill().fillna(1.0)
     df["ATR_Pct"] = df["ATR"] / (close_s + 1e-9)
+
+    # Volatility Boundaries: Keltner Channels (20-period EMA +/- 2.0 * ATR)
+    df["Keltner_Mid"] = close_s.ewm(span=20, adjust=False).mean()
+    df["Keltner_Upper"] = df["Keltner_Mid"] + (2.0 * df["ATR"])
+    df["Keltner_Lower"] = df["Keltner_Mid"] - (2.0 * df["ATR"])
+    df["Keltner_Position"] = (
+        (close_s - df["Keltner_Lower"]) / (df["Keltner_Upper"] - df["Keltner_Lower"] + 1e-9)
+    ).fillna(0.5)
+
+    # Micro-Momentum: Hull Moving Average (9) & Slope
+    df["HMA_9"] = compute_hma(close_s, window=9).bfill().fillna(close_s)
+    df["HMA_Slope"] = (
+        (df["HMA_9"] - df["HMA_9"].shift(1)) / (df["HMA_9"].shift(1) + 1e-9)
+    ).fillna(0.0)
+
+    # Momentum Exhaustion: ConnorsRSI
+    df["Connors_RSI"] = compute_connors_rsi(close_s).fillna(50.0)
 
     # Volume Indicators
     vol_s = df["Volume"].squeeze()
@@ -248,6 +266,17 @@ def add_upgraded_features(df, spy_df, vix_df, lag_vix: bool = True):
 
     df["Volume_MA20"] = vol_s.rolling(20).mean()
     df["Volume_Ratio"] = vol_s / (df["Volume_MA20"] + 1e-9)
+
+    # Chaikin Money Flow & Divergence
+    mfv = ((close_s - low_s) - (high_s - close_s)) / (high_s - low_s + 1e-9) * vol_s
+    df["CMF_20"] = mfv.rolling(20).sum() / (vol_s.rolling(20).sum() + 1e-9)
+    price_min_14 = close_s.rolling(14).min()
+    price_max_14 = close_s.rolling(14).max()
+    cmf_min_14 = df["CMF_20"].rolling(14).min()
+    cmf_max_14 = df["CMF_20"].rolling(14).max()
+    bull_div = (close_s <= price_min_14 * 1.005) & (df["CMF_20"] > cmf_min_14 + 0.05)
+    bear_div = (close_s >= price_max_14 * 0.995) & (df["CMF_20"] < cmf_max_14 - 0.05)
+    df["CMF_Divergence"] = np.where(bull_div, 1.0, np.where(bear_div, -1.0, 0.0))
 
     # Trend Indicators
     df["EMA9"] = close_s.ewm(span=9).mean()
@@ -484,6 +513,12 @@ def fetch_live_data(ticker, config):
         "ADX": round(float(df["ADX"].iloc[-1]), 2),
         "Volume_Ratio": round(float(vol_ratio), 2),
         "ATR_Regime_Ratio": round(float(df["ATR_Regime_Ratio"].iloc[-1]), 2) if "ATR_Regime_Ratio" in df.columns else 1.0,
+        "Keltner_Position": round(float(df["Keltner_Position"].iloc[-1]), 2) if "Keltner_Position" in df.columns else 0.5,
+        "Keltner_Lower": round(float(df["Keltner_Lower"].iloc[-1]), 2) if "Keltner_Lower" in df.columns else round(current_price - 2.0, 2),
+        "Keltner_Upper": round(float(df["Keltner_Upper"].iloc[-1]), 2) if "Keltner_Upper" in df.columns else round(current_price + 2.0, 2),
+        "HMA_9": round(float(df["HMA_9"].iloc[-1]), 2) if "HMA_9" in df.columns else round(current_price, 2),
+        "Connors_RSI": round(float(df["Connors_RSI"].iloc[-1]), 2) if "Connors_RSI" in df.columns else 50.0,
+        "CMF_Divergence": round(float(df["CMF_Divergence"].iloc[-1]), 2) if "CMF_Divergence" in df.columns else 0.0,
         "is_bar_forming": is_forming,
         "bar_state": bar_state,
     }

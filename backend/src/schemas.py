@@ -16,6 +16,15 @@ class TechnicalSnapshot(BaseModel):
     BB_Position: float
     ADX: float
     Volume_Ratio: float
+    ATR_Regime_Ratio: Optional[float] = 1.0
+    Keltner_Position: Optional[float] = 0.5
+    Keltner_Lower: Optional[float] = None
+    Keltner_Upper: Optional[float] = None
+    HMA_9: Optional[float] = None
+    Connors_RSI: Optional[float] = 50.0
+    CMF_Divergence: Optional[float] = 0.0
+    is_bar_forming: Optional[bool] = False
+    bar_state: Optional[str] = "CONFIRMED"
 
 
 class Position(BaseModel):
