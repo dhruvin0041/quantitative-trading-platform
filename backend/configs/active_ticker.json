@@ -1,12 +1,4 @@
 {
     "ticker": "AAPL",
-    "market": "us",
-    "mode": "UNIVERSAL",
-    "universe": [
-        "AAPL",
-        "NVDA",
-        "MSFT",
-        "AMZN",
-        "SPY"
-    ]
+    "market": "us"
 }

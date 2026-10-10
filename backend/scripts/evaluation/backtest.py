@@ -122,6 +122,10 @@ def fetch_and_prepare_data(
         try:
             df = pd.read_parquet(snapshot_file)
             logger.info("Loaded immutable snapshot dataset for %s (%d rows)", ticker, len(df))
+            from src.execution.live_inference import FEATURE_COLUMNS_V30
+            if any(col not in df.columns for col in FEATURE_COLUMNS_V30):
+                df = add_upgraded_features(df, spy_df, vix_df)
+                df = df.loc[:, ~df.columns.duplicated()].copy()
             return df
         except Exception as e:
             raise ValueError(f"Strict snapshot read failed for {ticker}: {e}") from e
@@ -133,6 +137,10 @@ def fetch_and_prepare_data(
             try:
                 df = pd.read_parquet(snapshot_file)
                 logger.info("Loaded snapshot dataset for %s (%d rows)", ticker, len(df))
+                from src.execution.live_inference import FEATURE_COLUMNS_V30
+                if any(col not in df.columns for col in FEATURE_COLUMNS_V30):
+                    df = add_upgraded_features(df, spy_df, vix_df)
+                    df = df.loc[:, ~df.columns.duplicated()].copy()
                 return df
             except Exception as e:
                 logger.warning("Snapshot read failed for %s (%s). Falling back.", ticker, e)

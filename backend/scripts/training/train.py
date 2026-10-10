@@ -646,6 +646,10 @@ def train_ticker_pipeline(
             manifest_v24["model_hashes"]["lgbm_agent.joblib"] = compute_sha256(artifacts_dir / "lgbm_agent.joblib")
             manifest_v24["model_hashes"]["latest_scaler.joblib"] = compute_sha256(artifacts_dir / "latest_scaler.joblib")
             manifest_v24["model_hashes"]["model_calibrator.joblib"] = compute_sha256(artifacts_dir / "model_calibrator.joblib")
+            if (configs_dir / f"optimized_params_{ticker}.json").exists():
+                manifest_v24["config_hashes"][f"optimized_params_{ticker}.json"] = compute_sha256(configs_dir / f"optimized_params_{ticker}.json")
+            if (configs_dir / "kept_features.json").exists():
+                manifest_v24["config_hashes"]["kept_features.json"] = compute_sha256(configs_dir / "kept_features.json")
             with open(manifest_v24_path, "w") as f:
                 json.dump(manifest_v24, f, indent=4)
         except Exception as e:

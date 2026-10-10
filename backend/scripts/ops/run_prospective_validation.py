@@ -973,7 +973,9 @@ class ProspectiveValidationManager:
         # Model artifact hashes
         model_hash_checks = {}
         for m_name, expected_hash in manifest.get("model_hashes", {}).items():
-            p = self.artifacts_dir / m_name
+            p = self.artifacts_dir / "v2_3" / m_name
+            if not p.exists():
+                p = self.artifacts_dir / m_name
             if p.exists():
                 actual = hashlib.sha256(p.read_bytes()).hexdigest()
                 is_matched = (actual == expected_hash) or expected_hash.startswith("MISSING_")
@@ -992,7 +994,9 @@ class ProspectiveValidationManager:
         # Config hashes
         config_hash_checks = {}
         for c_name, expected_hash in manifest.get("config_hashes", {}).items():
-            p = self.configs_dir / c_name
+            p = self.configs_dir / "v2_3" / c_name
+            if not p.exists():
+                p = self.configs_dir / c_name
             if p.exists():
                 actual = hashlib.sha256(p.read_bytes()).hexdigest()
                 config_hash_checks[c_name] = {
