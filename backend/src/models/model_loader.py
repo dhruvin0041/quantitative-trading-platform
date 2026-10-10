@@ -11,13 +11,17 @@ from sklearn.model_selection import TimeSeriesSplit
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 
+from src.models.classical.rf_agent import RandomForestAgent
 from src.models.ensemble.meta_ensemble import MetaEnsemble
 from src.models.neural.fusion_network import build_fusion_model
 from src.models.neural.tft_agent import build_tft_branch
+from src.models.regime.svm_regime_classifier import SVMRegimeClassifier
 from src.models.rl.dqn_agent import DQNAgent
+from src.models.rl.ppo_agent import PPOAgent
 from src.utils.gpu_utils import configure_tensorflow_gpu, get_device
 
 logger = logging.getLogger(__name__)
+
 
 
 class PurgedGroupTimeSeriesSplit:
@@ -63,7 +67,10 @@ class ModelManager:
         self.svm_model = None
         self.knn_model = None
         self.lgbm_model = None
+        self.rf_agent = None
+        self.svm_regime_model = None
         self.dqn_agent = None
+        self.ppo_agent = None
         self.meta_ensemble = None
         self.accuracies = {}
 
@@ -74,13 +81,16 @@ class ModelManager:
         self._load_lstm()
         self._load_tft()
 
-        # Load Core Classifiers
+        # Load Core Classifiers & Regime Models
         self._load_xgb()
         self._load_svm()
         self._load_knn()
+        self._load_rf()
+        self._load_svm_regime()
 
         self._load_lgbm()
         self._load_dqn()
+        self._load_ppo()
         self._load_meta_ensemble()
         logger.info("All models loaded into ModelManager.")
 
@@ -262,3 +272,38 @@ class ModelManager:
             self.meta_ensemble = MetaEnsemble.load("artifacts/meta_ensemble.joblib")
         except Exception as e:
             logger.warning(f"Could not load Meta-Ensemble: {e}")
+
+    def _load_rf(self):
+        try:
+            rf_path = Path("artifacts/rf_agent.joblib")
+            if not rf_path.exists():
+                rf_path = Path(__file__).resolve().parent.parent.parent / "artifacts" / "rf_agent.joblib"
+            if rf_path.exists():
+                self.rf_agent = RandomForestAgent.load(rf_path)
+                logger.info("Loaded RandomForestAgent artifact.")
+        except Exception as e:
+            logger.warning(f"Could not load RandomForestAgent: {e}")
+
+    def _load_svm_regime(self):
+        try:
+            regime_path = Path("artifacts/svm_regime_classifier.joblib")
+            if not regime_path.exists():
+                regime_path = Path(__file__).resolve().parent.parent.parent / "artifacts" / "svm_regime_classifier.joblib"
+            if regime_path.exists():
+                self.svm_regime_model = SVMRegimeClassifier.load(regime_path)
+                logger.info("Loaded SVMRegimeClassifier artifact.")
+        except Exception as e:
+            logger.warning(f"Could not load SVMRegimeClassifier: {e}")
+
+    def _load_ppo(self):
+        try:
+            ppo_path = Path("artifacts/ppo_agent.pth")
+            if not ppo_path.exists():
+                ppo_path = Path(__file__).resolve().parent.parent.parent / "artifacts" / "ppo_agent.pth"
+            if ppo_path.exists():
+                self.ppo_agent = PPOAgent(state_size=self.num_features + 6)
+                self.ppo_agent.load(ppo_path)
+                logger.info("Loaded PPOAgent artifact.")
+        except Exception as e:
+            logger.warning(f"Could not load PPOAgent: {e}")
+

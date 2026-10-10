@@ -134,6 +134,8 @@ def add_advanced_features(
         volume=df["Volume"],
         window=14,
     ).volume_weighted_average_price()
+    # Stationary VWAP Deviation: (Close - VWAP) / ATR (eliminates raw price non-stationarity)
+    df["VWAP_Deviation"] = (df["Close"] - df["VWAP"]) / (df["ATR"] + 1e-9)
 
     # OBV (On-Balance Volume) - Measures buying vs selling pressure
     df["OBV"] = ta.volume.OnBalanceVolumeIndicator(
