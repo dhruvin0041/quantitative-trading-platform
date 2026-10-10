@@ -250,7 +250,7 @@ class InferenceService:
                 spy_close_s = close_s
                 spy_sma50_s = df["Close"].rolling(window=50, min_periods=10).mean().reindex(valid_indices).ffill()
 
-            # Point-in-time swing exhaustion indicators from feature frame
+            # Point-in-time swing exhaustion and trend indicators from feature frame
             rsi_s = (
                 df_feat["RSI"].reindex(valid_indices).ffill()
                 if "RSI" in df_feat.columns
@@ -260,6 +260,21 @@ class InferenceService:
                 df_feat["ATR"].reindex(valid_indices).ffill()
                 if "ATR" in df_feat.columns
                 else pd.Series(1.0, index=valid_indices)
+            )
+            ema9_s = (
+                df_feat["EMA9"].reindex(valid_indices).ffill()
+                if "EMA9" in df_feat.columns
+                else close_s
+            )
+            ema21_s = (
+                df_feat["EMA21"].reindex(valid_indices).ffill()
+                if "EMA21" in df_feat.columns
+                else close_s
+            )
+            adx_s = (
+                df_feat["ADX"].reindex(valid_indices).ffill()
+                if "ADX" in df_feat.columns
+                else pd.Series(20.0, index=valid_indices)
             )
 
             current_pos = "FLAT"
@@ -299,6 +314,15 @@ class InferenceService:
                 cur_h = float(high_s.iloc[i])
                 cur_o = float(open_s.iloc[i])
                 cur_atr = float(atr_s.iloc[i]) if pd.notna(atr_s.iloc[i]) else 1.0
+                cur_ema9 = (
+                    float(ema9_s.iloc[i]) if pd.notna(ema9_s.iloc[i]) else cur_c
+                )
+                cur_ema21 = (
+                    float(ema21_s.iloc[i]) if pd.notna(ema21_s.iloc[i]) else cur_c
+                )
+                cur_adx = (
+                    float(adx_s.iloc[i]) if pd.notna(adx_s.iloc[i]) else 20.0
+                )
 
                 # Local price action pivot detection (strictly causal, using t-2 and t-1)
                 is_bearish_candle = False
@@ -316,10 +340,38 @@ class InferenceService:
                 dir_buy = p_buy / denom
                 dir_sell = p_sell / denom
 
+                # 1. Trend-Persistence (Confirmed Bull Trend: EMA9 > EMA21 > SMA200 and ADX > 25)
+                is_bull_trend = bool(
+                    (cur_ema9 > cur_ema21)
+                    and (cur_ema21 > cur_sma200)
+                    and (cur_adx > 25.0)
+                    and (cur_c >= cur_sma200)
+                )
+                # Shallow ribbon touch with bullish price action confirmation
+                is_ribbon_continuation = bool(
+                    is_bull_trend
+                    and (cur_l <= cur_ema9 * 1.01 or cur_l <= cur_ema21 * 1.01)
+                    and (cur_c >= cur_ema21 * 0.995)
+                    and (cur_c >= cur_o or cur_c > cur_l + (cur_h - cur_l) * 0.4)
+                    and dir_buy >= 0.55
+                    and p_buy >= 0.25
+                    and p_buy > p_sell
+                )
+
+                # 2. Correction Filter Conditions
+                is_below_ema21 = bool(cur_c < cur_ema21)
+                has_base_5d = False
+                if i >= 5:
+                    past_lows = [float(low_s.iloc[k]) for k in range(i - 4, i)]
+                    has_base_5d = bool(cur_l >= min(past_lows) and cur_c > prev_l)
+
                 if p_buy >= 0.58 and p_buy > p_sell:
                     raw_signal = "BUY"
                     conf = p_buy
                 elif dir_buy >= 0.60 and p_buy >= 0.28 and p_buy > p_sell:
+                    raw_signal = "BUY"
+                    conf = max(p_buy, min(1.0, dir_buy * 0.80))
+                elif is_ribbon_continuation:
                     raw_signal = "BUY"
                     conf = max(p_buy, min(1.0, dir_buy * 0.80))
                 elif p_sell >= 0.58 and p_sell > p_buy:
@@ -331,6 +383,11 @@ class InferenceService:
                 else:
                     raw_signal = "HOLD"
                     conf = float(prob_vec[1])
+
+                # Correction Filter: Require dir_buy >= 0.68 or 5-day base when below EMA21
+                if raw_signal == "BUY" and is_below_ema21 and not is_ribbon_continuation:
+                    if not (dir_buy >= 0.68 or has_base_5d):
+                        raw_signal = "HOLD"
 
                 # Position-Aware Dynamic Risk Exits for Active Longs (Trailing Stop & Overbought Climax)
                 if current_pos == "LONG":
@@ -654,6 +711,7 @@ class InferenceService:
 
 
         # Directional ML conviction calibration (Strict Parity with Causal Replay)
+        is_ribbon_continuation = False
         try:
             if len(ticker_df_risk) >= 3:
                 # Directional conviction calculation in parity with causal replay
@@ -663,9 +721,37 @@ class InferenceService:
                 dir_b = p_b / denom
                 dir_s = p_s / denom
 
+                # Extract technical indicators for trend persistence & correction filter
+                c_close = float(ticker_df_risk["Close"].iloc[-1])
+                c_low = float(ticker_df_risk["Low"].iloc[-1])
+                c_high = float(ticker_df_risk["High"].iloc[-1])
+                c_open = float(ticker_df_risk["Open"].iloc[-1])
+                c_sma200 = float(ticker_df_risk["Close"].rolling(200, min_periods=10).mean().iloc[-1])
+                c_ema9 = float(ticker_df_risk["EMA9"].iloc[-1]) if "EMA9" in ticker_df_risk.columns else c_close
+                c_ema21 = float(ticker_df_risk["EMA21"].iloc[-1]) if "EMA21" in ticker_df_risk.columns else c_close
+                c_adx = float(ticker_df_risk["ADX"].iloc[-1]) if "ADX" in ticker_df_risk.columns else 20.0
+
+                is_bull_trend = bool(
+                    (c_ema9 > c_ema21)
+                    and (c_ema21 > c_sma200)
+                    and (c_adx > 25.0)
+                    and (c_close >= c_sma200)
+                )
+                is_ribbon_continuation = bool(
+                    is_bull_trend
+                    and (c_low <= c_ema9 * 1.01 or c_low <= c_ema21 * 1.01)
+                    and (c_close >= c_ema21 * 0.995)
+                    and (c_close >= c_open or c_close > c_low + (c_high - c_low) * 0.4)
+                    and dir_b >= 0.55
+                    and p_b >= 0.25
+                    and p_b > p_s
+                )
+
                 if p_b >= 0.58 and p_b > p_s:
                     pass
                 elif dir_b >= 0.60 and p_b >= 0.28 and p_b > p_s:
+                    xgb_preds_raw = np.array([p_s, max(0.0, 1.0 - dir_b - p_s), dir_b])
+                elif is_ribbon_continuation:
                     xgb_preds_raw = np.array([p_s, max(0.0, 1.0 - dir_b - p_s), dir_b])
                 elif p_s >= 0.58 and p_s > p_b:
                     pass
@@ -850,6 +936,28 @@ class InferenceService:
                 f"Suppressed by Macro Regime Filter: Close ({curr_close:.2f} < SMA200 {sma_200:.2f}) "
                 f"or SPY ({curr_spy_close:.2f} < SMA50 {spy_sma_50:.2f})"
             )
+        elif (
+            pre_signal == "BUY"
+            and bool(curr_close < (float(ticker_df_risk["EMA21"].iloc[-1]) if "EMA21" in ticker_df_risk.columns else curr_close))
+            and not is_ribbon_continuation
+        ):
+            # Correction Filter: Require dir_buy >= 0.68 or 5-day base when below EMA21
+            c_ema21 = float(ticker_df_risk["EMA21"].iloc[-1]) if "EMA21" in ticker_df_risk.columns else curr_close
+            p_b = float(xgb_preds_raw[2])
+            p_s = float(xgb_preds_raw[0])
+            dir_b = p_b / (p_b + p_s + 1e-9)
+            has_base_5d = False
+            if len(ticker_df_risk) >= 6:
+                past_lows = [float(ticker_df_risk["Low"].iloc[k]) for k in range(-5, -1)]
+                cur_l = float(ticker_df_risk["Low"].iloc[-1])
+                prev_l = float(ticker_df_risk["Low"].iloc[-2])
+                has_base_5d = bool(cur_l >= min(past_lows) and curr_close > prev_l)
+            if not (dir_b >= 0.68 or has_base_5d):
+                final_signal = "HOLD"
+                signal_note = (
+                    f"Suppressed by Correction Filter: Close ({curr_close:.2f} < EMA21 {c_ema21:.2f}) "
+                    f"without 0.68 conviction (dir_buy={dir_b:.2f}) or 5-day base"
+                )
         elif pre_signal == "SELL" and not short_allowed and not is_long_exit:
             final_signal = "HOLD"
             signal_note = (
