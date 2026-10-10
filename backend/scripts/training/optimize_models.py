@@ -15,7 +15,7 @@ import optuna
 from catboost import CatBoostClassifier
 from lightgbm import LGBMClassifier
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import f1_score
+from sklearn.metrics import accuracy_score, f1_score
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
 
@@ -28,6 +28,25 @@ from src.utils.gpu_utils import (
 # Ensure models dir exists for saving params
 os.makedirs("models", exist_ok=True)
 os.makedirs("configs", exist_ok=True)
+
+
+def compute_trading_accuracy_score(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    """
+    Institutional composite performance metric:
+    - 40% Macro-F1: penalizes class collapse.
+    - 35% Directional Accuracy: precision on non-neutral BUY/SELL signals.
+    - 25% Overall Accuracy: general classification correctness across all bars.
+    """
+    f1 = float(f1_score(y_true, y_pred, average="macro", zero_division=0))
+    acc = float(accuracy_score(y_true, y_pred))
+
+    dir_mask = (y_true != 1) & (y_pred != 1)
+    if np.sum(dir_mask) > 0:
+        dir_acc = float(np.mean(y_true[dir_mask] == y_pred[dir_mask]))
+    else:
+        dir_acc = 0.33
+
+    return float(0.40 * f1 + 0.35 * dir_acc + 0.25 * acc)
 
 
 def purged_walk_forward_cv(X_raw, y_raw, fit_and_predict_fn, n_splits=5, embargo=15):
@@ -57,37 +76,29 @@ def purged_walk_forward_cv(X_raw, y_raw, fit_and_predict_fn, n_splits=5, embargo
         y_v = y_raw[val_idx]
 
         preds = fit_and_predict_fn(X_t, y_t, X_v)
-        scores.append(f1_score(y_v, preds, average="macro", zero_division=0))
+        scores.append(compute_trading_accuracy_score(y_v, preds))
     return float(np.mean(scores)) if scores else 0.33
 
 
 def objective_xgb(trial, X_train, y_train):
     params = {
-        "n_estimators": trial.suggest_categorical(
-            "n_estimators", [100, 300, 600, 1000]
-        ),
-        "max_depth": trial.suggest_categorical("max_depth", [3, 5, 7, 9]),
-        "learning_rate": trial.suggest_categorical("lr", [0.001, 0.01, 0.05, 0.1]),
-        "subsample": trial.suggest_categorical("subsample", [0.5, 0.7, 0.85, 1.0]),
-        "colsample_bytree": trial.suggest_categorical(
-            "colsample_bytree", [0.5, 0.7, 0.85, 1.0]
-        ),
-        "min_child_weight": trial.suggest_categorical(
-            "min_child_weight", [1, 3, 5, 10]
-        ),
-        "gamma": trial.suggest_categorical("gamma", [0, 0.1, 0.5, 1.0]),
-        "reg_alpha": trial.suggest_categorical("reg_alpha", [1e-8, 0.1, 1.0, 10.0]),
-        "reg_lambda": trial.suggest_categorical("reg_lambda", [1e-8, 0.1, 1.0, 10.0]),
-        "max_bin": trial.suggest_categorical("max_bin", [64, 128, 192, 255]),
-        "colsample_bylevel": trial.suggest_categorical(
-            "colsample_bylevel", [0.5, 0.7, 0.85, 1.0]
-        ),
+        "n_estimators": trial.suggest_int("n_estimators", 150, 600, step=50),
+        "max_depth": trial.suggest_int("max_depth", 3, 9),
+        "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.12, log=True),
+        "subsample": trial.suggest_float("subsample", 0.60, 0.95),
+        "colsample_bytree": trial.suggest_float("colsample_bytree", 0.50, 0.95),
+        "colsample_bylevel": trial.suggest_float("colsample_bylevel", 0.50, 1.00),
+        "min_child_weight": trial.suggest_float("min_child_weight", 1.0, 10.0, log=True),
+        "gamma": trial.suggest_float("gamma", 0.0, 5.0),
+        "reg_alpha": trial.suggest_float("reg_alpha", 1e-4, 10.0, log=True),
+        "reg_lambda": trial.suggest_float("reg_lambda", 1e-3, 20.0, log=True),
+        "max_bin": trial.suggest_categorical("max_bin", [128, 256, 512]),
         "objective": "multi:softprob",
         "num_class": 3,
         "eval_metric": "mlogloss",
         "random_state": 42,
         "n_jobs": -1,
-        **get_xgboost_gpu_params()
+        **get_xgboost_gpu_params(),
     }
 
     def fit_and_predict(X_t, y_t, X_v):
@@ -100,41 +111,24 @@ def objective_xgb(trial, X_train, y_train):
 
 def objective_lgbm(trial, X_train, y_train):
     params = {
-        "n_estimators": trial.suggest_categorical(
-            "n_estimators", [100, 300, 600, 1000]
-        ),
-        "max_depth": trial.suggest_categorical("max_depth", [-1, 5, 10, 15]),
-        "learning_rate": trial.suggest_categorical("lr", [0.001, 0.01, 0.1, 0.2]),
-        "num_leaves": trial.suggest_categorical("num_leaves", [15, 31, 127, 255]),
-        "subsample": trial.suggest_categorical("subsample", [0.5, 0.7, 0.85, 1.0]),
-        "subsample_freq": trial.suggest_categorical("subsample_freq", [1, 3, 5, 10]),
-        "colsample_bytree": trial.suggest_categorical(
-            "colsample_bytree", [0.5, 0.7, 0.85, 1.0]
-        ),
-        "min_child_samples": trial.suggest_categorical(
-            "min_child_samples", [5, 20, 50, 100]
-        ),
-        "min_split_gain": trial.suggest_categorical(
-            "min_split_gain", [1e-8, 0.01, 0.1, 1.0]
-        ),
-        "reg_alpha": trial.suggest_categorical("reg_alpha", [1e-8, 0.1, 1.0, 10.0]),
-        "reg_lambda": trial.suggest_categorical("reg_lambda", [1e-8, 0.1, 1.0, 10.0]),
-        "max_bin": trial.suggest_categorical("max_bin", [64, 128, 192, 255]),
-        "feature_fraction": trial.suggest_categorical(
-            "feature_fraction", [0.5, 0.7, 0.85, 1.0]
-        ),
-        "bagging_fraction": trial.suggest_categorical(
-            "bagging_fraction", [0.5, 0.7, 0.85, 1.0]
-        ),
-        "min_data_in_leaf": trial.suggest_categorical(
-            "min_data_in_leaf", [10, 20, 50, 100]
-        ),
+        "n_estimators": trial.suggest_int("n_estimators", 150, 600, step=50),
+        "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.12, log=True),
+        "max_depth": trial.suggest_int("max_depth", 3, 9),
+        "num_leaves": trial.suggest_int("num_leaves", 15, 127),
+        "min_child_samples": trial.suggest_int("min_child_samples", 10, 80),
+        "min_split_gain": trial.suggest_float("min_split_gain", 0.0, 2.0),
+        "subsample": trial.suggest_float("subsample", 0.60, 0.95),
+        "subsample_freq": trial.suggest_int("subsample_freq", 1, 7),
+        "colsample_bytree": trial.suggest_float("colsample_bytree", 0.50, 0.95),
+        "reg_alpha": trial.suggest_float("reg_alpha", 1e-4, 10.0, log=True),
+        "reg_lambda": trial.suggest_float("reg_lambda", 1e-3, 20.0, log=True),
+        "max_bin": trial.suggest_categorical("max_bin", [128, 256, 512]),
         "objective": "multiclass",
         "num_class": 3,
         "random_state": 42,
         "verbose": -1,
         "n_jobs": -1,
-        **get_lightgbm_gpu_params()
+        **get_lightgbm_gpu_params(),
     }
 
     def fit_and_predict(X_t, y_t, X_v):
@@ -234,12 +228,15 @@ def run_optimization(n_trials: int = 50) -> bool:
         ("catboost", objective_catboost),
         ("rf", objective_rf),
     ]:
-        print(f"\nOptimizing {model_name} ({n_trials} trials)...")
-        study = optuna.create_study(direction="maximize")
+        print(f"\nOptimizing {model_name} with Multivariate TPESampler ({n_trials} trials)...")
+        study = optuna.create_study(
+            direction="maximize",
+            sampler=optuna.samplers.TPESampler(multivariate=True, group=True, seed=42),
+        )
         study.optimize(
             lambda t: obj_func(t, X_train, y_train), n_trials=n_trials, n_jobs=1
         )
-        print(f"Best {model_name} Macro-F1: {study.best_value:.4f}")
+        print(f"Best {model_name} Trading Score: {study.best_value:.4f}")
         with open(configs_dir / f"best_{model_name}_params.json", "w") as f:
             json.dump(study.best_params, f, indent=2)
     return True

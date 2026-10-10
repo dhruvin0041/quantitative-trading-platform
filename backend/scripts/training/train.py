@@ -22,7 +22,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import joblib
 import numpy as np
@@ -31,7 +31,7 @@ import pandas as pd
 import xgboost as xgb
 import yfinance as yf
 from lightgbm import LGBMClassifier
-from sklearn.metrics import f1_score
+from sklearn.metrics import accuracy_score, f1_score
 from sklearn.preprocessing import StandardScaler
 from sklearn.utils.class_weight import compute_class_weight
 
@@ -75,26 +75,85 @@ def compute_sha256(file_path: Path) -> str:
     return h.hexdigest()
 
 
-def load_ticker_params(ticker: str) -> Dict[str, float]:
+def compute_trading_accuracy_score(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    """
+    Computes institutional composite performance metric:
+    - 40% Macro-F1: penalizes class collapse and imbalance neglect.
+    - 35% Directional Accuracy: precision on non-neutral BUY/SELL signals.
+    - 25% Overall Accuracy: general classification correctness across all bars.
+    """
+    f1 = float(f1_score(y_true, y_pred, average="macro", zero_division=0))
+    acc = float(accuracy_score(y_true, y_pred))
+
+    dir_mask = (y_true != 1) & (y_pred != 1)
+    if np.sum(dir_mask) > 0:
+        dir_acc = float(np.mean(y_true[dir_mask] == y_pred[dir_mask]))
+    else:
+        dir_acc = 0.33
+
+    return float(0.40 * f1 + 0.35 * dir_acc + 0.25 * acc)
+
+
+def load_ticker_params(ticker: str, model_type: Optional[str] = None) -> Dict[str, Any]:
     """Loads optimal hyperparameters for ticker or returns robust defaults."""
-    param_path = BACKEND_DIR / "configs" / f"optimized_params_{ticker}.json"
+    configs_dir = BACKEND_DIR / "configs"
+    param_path = configs_dir / f"optimized_params_{ticker}.json"
     if param_path.exists():
         try:
             with open(param_path, "r") as f:
                 data = json.load(f)
+                if model_type and model_type.lower() in data:
+                    logger.info(f"Loaded {model_type} parameters for {ticker} from {param_path}")
+                    return data[model_type.lower()]
                 logger.info(f"Loaded optimized parameters from {param_path}")
                 return data.get("best_params", data)
         except Exception as e:
             logger.warning(f"Could not parse {param_path}: {e}")
+
+    # Fallback to model-specific best configs if ticker-specific not found
+    if model_type:
+        model_file = configs_dir / f"best_{model_type.lower()}_params.json"
+        if model_file.exists():
+            try:
+                with open(model_file, "r") as f:
+                    return json.load(f)
+            except Exception as e:
+                logger.warning(f"Could not parse {model_file}: {e}")
+
+    if model_type and model_type.lower() == "lgbm":
+        return {
+            "tp_atr_multiplier": TP_ATR_MULT,
+            "sl_atr_multiplier": SL_ATR_MULT,
+            "horizon": LABEL_HORIZON,
+            "n_estimators": 350,
+            "learning_rate": 0.03,
+            "max_depth": 5,
+            "num_leaves": 31,
+            "min_child_samples": 25,
+            "min_split_gain": 0.01,
+            "subsample": 0.85,
+            "subsample_freq": 1,
+            "colsample_bytree": 0.85,
+            "reg_alpha": 0.05,
+            "reg_lambda": 1.0,
+            "max_bin": 256,
+        }
+
     return {
         "tp_atr_multiplier": TP_ATR_MULT,
         "sl_atr_multiplier": SL_ATR_MULT,
         "horizon": LABEL_HORIZON,
-        "n_estimators": 300,
-        "max_depth": 5,
+        "n_estimators": 350,
+        "max_depth": 4,
         "learning_rate": 0.03,
         "subsample": 0.85,
         "colsample_bytree": 0.85,
+        "colsample_bylevel": 0.85,
+        "min_child_weight": 3.0,
+        "gamma": 0.1,
+        "reg_alpha": 0.05,
+        "reg_lambda": 1.0,
+        "max_bin": 256,
         "num_leaves": 31,
     }
 
@@ -187,9 +246,10 @@ def run_ticker_optimization(
 ) -> Dict:
     """
     Runs Bayesian Hyperparameter Optimization for ticker strictly within the 75% train partition
-    using Purged Walk-Forward Cross Validation.
+    using Purged Walk-Forward Cross Validation and Multivariate TPE.
+    Co-optimizes both XGBoost and LightGBM across expanded capacity, regularization, and subsampling spaces.
     """
-    logger.info(f"--- Running Bayesian Optimization for {ticker} ({n_trials} trials) ---")
+    logger.info(f"--- Running Bayesian Optimization for {ticker} ({n_trials} trials each) ---")
     kept_features = FEATURE_COLUMNS_V30
 
     df_clean = df_train.replace([np.inf, -np.inf], np.nan).dropna(
@@ -198,16 +258,23 @@ def run_ticker_optimization(
     X_raw = df_clean[kept_features].values
     y_raw = df_clean["target_signal"].astype(int).values
 
-    def objective(trial):
-        n_est = trial.suggest_categorical("n_estimators", [150, 300, 500])
-        max_d = trial.suggest_int("max_depth", 3, 7)
-        lr = trial.suggest_float("learning_rate", 0.01, 0.1, log=True)
-        sub = trial.suggest_float("subsample", 0.6, 0.9)
-        col = trial.suggest_float("colsample_bytree", 0.6, 0.9)
+    n_samples = len(X_raw)
+    fold_size = n_samples // 4
 
-        # 3-Fold Chronological Purged Expanding Window CV on Train split
-        n_samples = len(X_raw)
-        fold_size = n_samples // 4
+    # 1. XGBoost Objective (Expanded Regularization & Tree Structure)
+    def objective_xgb(trial):
+        n_est = trial.suggest_int("n_estimators", 150, 600, step=50)
+        max_d = trial.suggest_int("max_depth", 3, 8)
+        lr = trial.suggest_float("learning_rate", 0.01, 0.12, log=True)
+        sub = trial.suggest_float("subsample", 0.60, 0.95)
+        col = trial.suggest_float("colsample_bytree", 0.50, 0.95)
+        col_lvl = trial.suggest_float("colsample_bylevel", 0.50, 1.00)
+        min_cw = trial.suggest_float("min_child_weight", 1.0, 10.0, log=True)
+        gamma = trial.suggest_float("gamma", 0.0, 5.0)
+        reg_a = trial.suggest_float("reg_alpha", 1e-4, 10.0, log=True)
+        reg_l = trial.suggest_float("reg_lambda", 1e-3, 20.0, log=True)
+        max_b = trial.suggest_categorical("max_bin", [128, 256, 512])
+
         scores = []
         for i in range(1, 4):
             train_end = i * fold_size
@@ -229,6 +296,12 @@ def run_ticker_optimization(
                 learning_rate=lr,
                 subsample=sub,
                 colsample_bytree=col,
+                colsample_bylevel=col_lvl,
+                min_child_weight=min_cw,
+                gamma=gamma,
+                reg_alpha=reg_a,
+                reg_lambda=reg_l,
+                max_bin=max_b,
                 objective="multi:softprob",
                 num_class=3,
                 random_state=42,
@@ -237,31 +310,116 @@ def run_ticker_optimization(
             )
             clf.fit(X_tr, y_tr)
             preds = clf.predict(X_val)
-            scores.append(f1_score(y_val, preds, average="macro", zero_division=0))
+            scores.append(compute_trading_accuracy_score(y_val, preds))
 
         return float(np.mean(scores)) if scores else 0.33
 
-    study = optuna.create_study(direction="maximize", sampler=optuna.samplers.TPESampler(seed=42))
-    study.optimize(objective, n_trials=n_trials, n_jobs=1)
+    # 2. LightGBM Objective (Expanded Leaf-Wise Regularization & Bagging)
+    def objective_lgbm(trial):
+        n_est = trial.suggest_int("n_estimators", 150, 600, step=50)
+        lr = trial.suggest_float("learning_rate", 0.01, 0.12, log=True)
+        max_d = trial.suggest_int("max_depth", 3, 9)
+        num_l = trial.suggest_int("num_leaves", 15, 127)
+        min_cs = trial.suggest_int("min_child_samples", 10, 80)
+        min_sg = trial.suggest_float("min_split_gain", 0.0, 2.0)
+        sub = trial.suggest_float("subsample", 0.60, 0.95)
+        sub_f = trial.suggest_int("subsample_freq", 1, 7)
+        col = trial.suggest_float("colsample_bytree", 0.50, 0.95)
+        reg_a = trial.suggest_float("reg_alpha", 1e-4, 10.0, log=True)
+        reg_l = trial.suggest_float("reg_lambda", 1e-3, 20.0, log=True)
+        max_b = trial.suggest_categorical("max_bin", [128, 256, 512])
 
-    best_params = study.best_params
-    best_params["tp_atr_multiplier"] = TP_ATR_MULT
-    best_params["sl_atr_multiplier"] = SL_ATR_MULT
-    best_params["horizon"] = LABEL_HORIZON
-    best_params["num_leaves"] = 31
+        scores = []
+        for i in range(1, 4):
+            train_end = i * fold_size
+            embargo_end = max(1, train_end - LABEL_HORIZON)
+            val_start = train_end
+            val_end = min(n_samples, (i + 1) * fold_size)
+            if val_end <= val_start:
+                continue
 
-    logger.info(f"Optimal Parameters for {ticker} (Macro-F1: {study.best_value:.4f}): {best_params}")
+            scaler = StandardScaler()
+            X_tr = scaler.fit_transform(X_raw[:embargo_end])
+            X_val = scaler.transform(X_raw[val_start:val_end])
+            y_tr = y_raw[:embargo_end]
+            y_val = y_raw[val_start:val_end]
+
+            clf = LGBMClassifier(
+                n_estimators=n_est,
+                learning_rate=lr,
+                max_depth=max_d,
+                num_leaves=num_l,
+                min_child_samples=min_cs,
+                min_split_gain=min_sg,
+                subsample=sub,
+                subsample_freq=sub_f,
+                colsample_bytree=col,
+                reg_alpha=reg_a,
+                reg_lambda=reg_l,
+                max_bin=max_b,
+                objective="multiclass",
+                num_class=3,
+                random_state=42,
+                n_jobs=-1,
+                verbose=-1,
+            )
+            clf.fit(X_tr, y_tr)
+            preds = clf.predict(X_val)
+            scores.append(compute_trading_accuracy_score(y_val, preds))
+
+        return float(np.mean(scores)) if scores else 0.33
+
+    xgb_trials = max(10, n_trials // 2) if n_trials > 20 else n_trials
+    lgbm_trials = max(10, n_trials // 2) if n_trials > 20 else n_trials
+
+    logger.info(f"Optimizing XGBoost for {ticker} with Multivariate TPESampler ({xgb_trials} trials)...")
+    study_xgb = optuna.create_study(
+        direction="maximize",
+        sampler=optuna.samplers.TPESampler(multivariate=True, group=True, seed=42),
+    )
+    study_xgb.optimize(objective_xgb, n_trials=xgb_trials, n_jobs=1)
+
+    logger.info(f"Optimizing LightGBM for {ticker} with Multivariate TPESampler ({lgbm_trials} trials)...")
+    study_lgbm = optuna.create_study(
+        direction="maximize",
+        sampler=optuna.samplers.TPESampler(multivariate=True, group=True, seed=42),
+    )
+    study_lgbm.optimize(objective_lgbm, n_trials=lgbm_trials, n_jobs=1)
+
+    best_xgb = study_xgb.best_params
+    best_xgb["tp_atr_multiplier"] = TP_ATR_MULT
+    best_xgb["sl_atr_multiplier"] = SL_ATR_MULT
+    best_xgb["horizon"] = LABEL_HORIZON
+    best_xgb["num_leaves"] = 31
+
+    best_lgbm = study_lgbm.best_params
+    best_lgbm["tp_atr_multiplier"] = TP_ATR_MULT
+    best_lgbm["sl_atr_multiplier"] = SL_ATR_MULT
+    best_lgbm["horizon"] = LABEL_HORIZON
+
+    logger.info(f"Optimal Parameters for {ticker} - XGBoost (Score: {study_xgb.best_value:.4f}): {best_xgb}")
+    logger.info(f"Optimal Parameters for {ticker} - LightGBM (Score: {study_lgbm.best_value:.4f}): {best_lgbm}")
 
     configs_dir = BACKEND_DIR / "configs"
     configs_dir.mkdir(parents=True, exist_ok=True)
     with open(configs_dir / f"optimized_params_{ticker}.json", "w") as f:
-        json.dump({"best_params": best_params, "macro_f1": study.best_value}, f, indent=4)
+        json.dump(
+            {
+                "xgb": best_xgb,
+                "lgbm": best_lgbm,
+                "best_params": best_xgb,
+                "macro_f1": study_xgb.best_value,
+                "lgbm_score": study_lgbm.best_value,
+            },
+            f,
+            indent=4,
+        )
     with open(configs_dir / "best_xgb_params.json", "w") as f:
-        json.dump(best_params, f, indent=4)
+        json.dump(best_xgb, f, indent=4)
     with open(configs_dir / "best_lgbm_params.json", "w") as f:
-        json.dump(best_params, f, indent=4)
+        json.dump(best_lgbm, f, indent=4)
 
-    return best_params
+    return best_xgb
 
 
 def train_ticker_pipeline(
@@ -371,15 +529,33 @@ def train_ticker_pipeline(
     sample_weights = np.array([class_weight_dict[yi] for yi in y_train])
 
     # 1. XGBoost
-    logger.info(f"Training XGBoost Model for {ticker}...")
+    xgb_opt = load_ticker_params(ticker, model_type="xgb")
+    lgbm_opt = load_ticker_params(ticker, model_type="lgbm")
+    if opt_params and isinstance(opt_params, dict):
+        if "xgb" in opt_params and isinstance(opt_params["xgb"], dict):
+            xgb_opt.update(opt_params["xgb"])
+        else:
+            xgb_opt.update(opt_params)
+        if "lgbm" in opt_params and isinstance(opt_params["lgbm"], dict):
+            lgbm_opt.update(opt_params["lgbm"])
+        else:
+            lgbm_opt.update(opt_params)
+
+    logger.info(f"Training XGBoost Model for {ticker} with Expanded Regularization...")
     xgb_params = {
         "objective": "multi:softprob",
         "num_class": 3,
-        "n_estimators": int(opt_params.get("n_estimators", 300)),
-        "max_depth": int(opt_params.get("max_depth", 5)),
-        "learning_rate": float(opt_params.get("learning_rate", 0.03)),
-        "subsample": float(opt_params.get("subsample", 0.85)),
-        "colsample_bytree": float(opt_params.get("colsample_bytree", 0.85)),
+        "n_estimators": int(xgb_opt.get("n_estimators", 350)),
+        "max_depth": int(xgb_opt.get("max_depth", 4)),
+        "learning_rate": float(xgb_opt.get("learning_rate", 0.03)),
+        "subsample": float(xgb_opt.get("subsample", 0.85)),
+        "colsample_bytree": float(xgb_opt.get("colsample_bytree", 0.85)),
+        "colsample_bylevel": float(xgb_opt.get("colsample_bylevel", 0.85)),
+        "min_child_weight": float(xgb_opt.get("min_child_weight", 3.0)),
+        "gamma": float(xgb_opt.get("gamma", 0.1)),
+        "reg_alpha": float(xgb_opt.get("reg_alpha", 0.05)),
+        "reg_lambda": float(xgb_opt.get("reg_lambda", 1.0)),
+        "max_bin": int(xgb_opt.get("max_bin", 256)),
         "random_state": 42,
         "eval_metric": "mlogloss",
         **get_xgboost_gpu_params(),
@@ -393,14 +569,22 @@ def train_ticker_pipeline(
     xgb_model.save_model(str(artifacts_dir / "xgb_ensemble.json"))
 
     # 2. LightGBM
-    logger.info(f"Training LightGBM Model for {ticker}...")
+    logger.info(f"Training LightGBM Model for {ticker} with Expanded Regularization...")
     lgbm_params = {
         "objective": "multiclass",
         "num_class": 3,
-        "n_estimators": int(opt_params.get("n_estimators", 300)),
-        "learning_rate": float(opt_params.get("learning_rate", 0.03)),
-        "max_depth": int(opt_params.get("max_depth", 5)),
-        "num_leaves": int(opt_params.get("num_leaves", 31)),
+        "n_estimators": int(lgbm_opt.get("n_estimators", 350)),
+        "learning_rate": float(lgbm_opt.get("learning_rate", 0.03)),
+        "max_depth": int(lgbm_opt.get("max_depth", 5)),
+        "num_leaves": int(lgbm_opt.get("num_leaves", 31)),
+        "min_child_samples": int(lgbm_opt.get("min_child_samples", 25)),
+        "min_split_gain": float(lgbm_opt.get("min_split_gain", 0.01)),
+        "subsample": float(lgbm_opt.get("subsample", 0.85)),
+        "subsample_freq": int(lgbm_opt.get("subsample_freq", 1)),
+        "colsample_bytree": float(lgbm_opt.get("colsample_bytree", 0.85)),
+        "reg_alpha": float(lgbm_opt.get("reg_alpha", 0.05)),
+        "reg_lambda": float(lgbm_opt.get("reg_lambda", 1.0)),
+        "max_bin": int(lgbm_opt.get("max_bin", 256)),
         "random_state": 42,
         "n_jobs": -1,
         "verbose": -1,
@@ -432,6 +616,25 @@ def train_ticker_pipeline(
     with open(configs_dir / "active_ticker.json", "w") as f:
         json.dump({"ticker": ticker, "market": market}, f, indent=4)
     logger.info(f"Active ticker set: {ticker} ({market})")
+
+    # Update empirical model accuracies for consensus weighting
+    accuracies_path = configs_dir / "model_accuracies.json"
+    acc_data = {}
+    if accuracies_path.exists():
+        try:
+            with open(accuracies_path, "r") as f:
+                acc_data = json.load(f)
+        except Exception:
+            acc_data = {}
+
+    acc_data["xgb_accuracy"] = round(xgb_test_acc, 4)
+    acc_data["lgbm_accuracy"] = round(lgbm_test_acc, 4)
+    acc_data["xgb"] = round(xgb_test_acc, 4)
+    acc_data["lgbm"] = round(lgbm_test_acc, 4)
+
+    with open(accuracies_path, "w") as f:
+        json.dump(acc_data, f, indent=4)
+    logger.info(f"Updated empirical test accuracies in {accuracies_path}: XGB={xgb_test_acc:.4f}, LGBM={lgbm_test_acc:.4f}")
 
     # Update manifest model hashes if manifest exists
     manifest_v24_path = artifacts_dir / "frozen_strategy_manifest_v2.4.json"
