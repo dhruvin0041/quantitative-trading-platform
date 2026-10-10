@@ -72,7 +72,7 @@ backend/artifacts/*.pth
 backend/artifacts/*.h5
 backend/artifacts/*.json
 backend/artifacts/*.pkl
-backend/artifacts/*.db
+backend/artifacts/*.db*
 backend/data/*
 !backend/data/snapshots/
 backend/mlflow.db

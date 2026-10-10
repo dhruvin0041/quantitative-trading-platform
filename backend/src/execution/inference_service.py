@@ -227,10 +227,21 @@ class InferenceService:
                 if "BB_Position" in df_feat.columns
                 else pd.Series(0.5, index=valid_indices)
             )
+            ema21_s = (
+                df_feat["EMA21"].reindex(valid_indices).ffill()
+                if "EMA21" in df_feat.columns
+                else df["Close"].ewm(span=21, adjust=False).mean().reindex(valid_indices).ffill()
+            )
+            atr_s = (
+                df_feat["ATR"].reindex(valid_indices).ffill()
+                if "ATR" in df_feat.columns
+                else pd.Series(1.0, index=valid_indices)
+            )
 
             current_pos = "FLAT"
             last_trade_idx = -10
             last_trade_price = 0.0
+            peak_price = 0.0
 
             for i in range(len(valid_indices)):
                 v_idx = valid_indices[i]
@@ -264,6 +275,8 @@ class InferenceService:
                 cur_l = float(low_s.iloc[i])
                 cur_h = float(high_s.iloc[i])
                 cur_o = float(open_s.iloc[i])
+                cur_ema21 = float(ema21_s.iloc[i]) if pd.notna(ema21_s.iloc[i]) else cur_c
+                cur_atr = float(atr_s.iloc[i]) if pd.notna(atr_s.iloc[i]) else 1.0
 
                 # Mean-reversion swing exhaustion overlay (requires RSI exhaustion)
                 is_dip_oversold = (cur_rsi < 32.0) or (cur_rsi < 42.0 and cur_bb < 0.08)
@@ -287,11 +300,24 @@ class InferenceService:
                     )
                     # Responsive crest detection: price rejection from recent highs
                     is_bearish_candle = (cur_c < cur_o) or (cur_c < cur_l + (cur_h - cur_l) * 0.5)
-                    is_crest = (
-                        is_bearish_candle
-                        and (cur_c < prev_h)
-                        and (prev_h > prev2_h or cur_h > prev_h)
-                    )
+
+                    # Macro trend condition at bar t (Zero lookahead)
+                    is_bull_regime = bool((cur_c >= cur_sma200) and (cur_spy >= cur_spy_sma50))
+                    if is_bull_regime:
+                        # In confirmed bull regime, do not exit on 1-day pause noise!
+                        # Allow winners to run: exit only on dynamic trailing stop break, EMA21 breakdown, or extreme overbought climax.
+                        trailing_stop = peak_price - (2.5 * cur_atr) if peak_price > 0 else 0.0
+                        hit_trailing = bool(cur_c < trailing_stop and current_pos == "LONG")
+                        trend_break = bool(cur_c < cur_ema21 and cur_c < prev_l)
+                        overbought_reversal = bool(cur_rsi > 75.0 and is_bearish_candle and cur_c < prev_h)
+                        is_crest = hit_trailing or trend_break or overbought_reversal
+                    else:
+                        # In bear / neutral regime, exit quickly at any shallow bounce crest to defend capital
+                        is_crest = (
+                            is_bearish_candle
+                            and (cur_c < prev_h)
+                            and (prev_h > prev2_h or cur_h > prev_h)
+                        )
 
                 eff_p_buy = min(
                     1.0,
@@ -370,6 +396,7 @@ class InferenceService:
                     current_pos = "LONG"
                     last_trade_idx = i
                     last_trade_price = cur_c
+                    peak_price = cur_h
                     if orig_idx + 1 < len(df):
                         next_idx = df.index[orig_idx + 1]
                         exec_target = (
@@ -416,6 +443,7 @@ class InferenceService:
                     current_pos = "FLAT"
                     last_trade_idx = i
                     last_trade_price = cur_c
+                    peak_price = 0.0
                     if orig_idx + 1 < len(df):
                         next_idx = df.index[orig_idx + 1]
                         exec_target = (
@@ -453,6 +481,9 @@ class InferenceService:
                             "signal_state": "CONFIRMED",
                         },
                     )
+
+                elif current_pos == "LONG":
+                    peak_price = max(peak_price, cur_h)
 
             # Record checkpoint for the latest evaluated bar if no BUY/SELL occurred on it
             if len(valid_indices) > 0:
@@ -636,8 +667,12 @@ class InferenceService:
 
                 cur_rsi = float(tech_snapshot.get("RSI", 50.0))
                 cur_bb = float(tech_snapshot.get("BB_Position", 0.5))
+                cur_ema21 = (
+                    float(ticker_df_risk["EMA21"].iloc[-1])
+                    if "EMA21" in ticker_df_risk.columns
+                    else float(ticker_df_risk["Close"].ewm(span=21, adjust=False).mean().iloc[-1])
+                )
 
-                is_dip_oversold = (cur_rsi < 30.0 or cur_bb < 0.05)
                 is_dip_oversold = (cur_rsi < 32.0) or (cur_rsi < 42.0 and cur_bb < 0.08)
                 is_peak_overbought = (cur_rsi > 72.0) or (cur_rsi > 62.0 and cur_bb > 0.92)
 
@@ -648,11 +683,30 @@ class InferenceService:
                     and (prev_l < prev2_l or cur_l < prev_l)
                 )
                 is_bearish_candle = (cur_c < cur_o) or (cur_c < cur_l + (cur_h - cur_l) * 0.5)
-                is_crest = (
-                    is_bearish_candle
-                    and (cur_c < prev_h)
-                    and (prev_h > prev2_h or cur_h > prev_h)
+
+                sma_200_val = float(ticker_df_risk["Close"].rolling(200, min_periods=10).mean().iloc[-1])
+                spy_sma_50_val = (
+                    float(spy_df_risk["Close"].rolling(50, min_periods=10).mean().iloc[-1])
+                    if spy_df_risk is not None and "Close" in spy_df_risk.columns
+                    else 1.0
                 )
+                curr_spy_val = (
+                    float(spy_df_risk["Close"].iloc[-1])
+                    if spy_df_risk is not None and "Close" in spy_df_risk.columns
+                    else 1.0
+                )
+                is_bull_live = bool((cur_c >= sma_200_val) and (curr_spy_val >= spy_sma_50_val))
+
+                if is_bull_live:
+                    trend_break = bool(cur_c < cur_ema21 and cur_c < prev_l)
+                    overbought_reversal = bool(cur_rsi > 75.0 and is_bearish_candle and cur_c < prev_h)
+                    is_crest = trend_break or overbought_reversal
+                else:
+                    is_crest = (
+                        is_bearish_candle
+                        and (cur_c < prev_h)
+                        and (prev_h > prev2_h or cur_h > prev_h)
+                    )
 
                 boost_buy = (0.28 if is_dip_oversold else 0.0) + (0.35 if is_trough else 0.0)
                 boost_sell = (0.28 if is_peak_overbought else 0.0) + (0.35 if is_crest else 0.0)
