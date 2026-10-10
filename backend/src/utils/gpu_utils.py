@@ -13,18 +13,28 @@ logger = logging.getLogger(__name__)
 def get_device() -> torch.device:
     """Detect and return the best available compute device with logging."""
     if torch.cuda.is_available():
-        device = torch.device("cpu") # FORCE CPU due to RTX 5070 Kernel incompatibility in current Torch build
         gpu_name = torch.cuda.get_device_name(0)
         vram_total = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-        (torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated(0)) / (1024**3)
-        logger.info(
-            "GPU Detected: %s | VRAM: %.2f GB total. FORCING PyTorch to CPU to bypass RTX 5070 kernel error. Ensembles will still use GPU.",
-            gpu_name, vram_total
-        )
-        return device
+        try:
+            # Dynamically verify if active CUDA architecture (e.g., sm_120 on RTX 5070)
+            # has compiled kernel binaries in this PyTorch installation
+            test_t = torch.zeros(1, device="cuda")
+            del test_t
+            logger.info("PyTorch GPU active: %s | VRAM: %.2f GB", gpu_name, vram_total)
+            return torch.device("cuda")
+        except Exception as e:
+            logger.warning(
+                "GPU detected (%s, %.2f GB VRAM), but PyTorch CUDA kernel execution failed (%s). "
+                "Routing PyTorch to multi-threaded CPU. Tree ensembles (XGBoost/CatBoost) will continue using GPU.",
+                gpu_name,
+                vram_total,
+                e,
+            )
+            return torch.device("cpu")
     else:
         logger.warning("No CUDA GPU detected. Falling back to CPU.")
         return torch.device("cpu")
+
 
 
 def configure_gpu_optimizations():
@@ -139,17 +149,37 @@ def get_catboost_gpu_params() -> dict:
     return {"thread_count": os.cpu_count() or -1}
 
 
+_LGBM_GPU_SUPPORTED = None
+
+
 def get_lightgbm_gpu_params() -> dict:
     """Return GPU-optimized params for LightGBM if GPU build is available, else max CPU."""
-    try:
-        import lightgbm as lgb  # noqa: F401
-        # LightGBM GPU requires specific build; test gracefully
-        if torch.cuda.is_available():
-            logger.info("LightGBM: Attempting GPU acceleration (device=gpu)")
-            return {"device": "gpu", "gpu_use_dp": False}
-    except Exception as e:
-        logger.warning("LightGBM GPU not available: %s", e)
+    global _LGBM_GPU_SUPPORTED
+    if _LGBM_GPU_SUPPORTED is None:
+        try:
+            import lightgbm as lgb
+            # Test if this build has CUDA capability compiled in
+            test_clf = lgb.LGBMClassifier(device="cuda", n_estimators=1, verbose=-1)
+            test_clf.fit([[0]], [0])
+            _LGBM_GPU_SUPPORTED = "cuda"
+        except Exception:
+            try:
+                import lightgbm as lgb
+                test_clf = lgb.LGBMClassifier(device="gpu", n_estimators=1, verbose=-1)
+                test_clf.fit([[0]], [0])
+                _LGBM_GPU_SUPPORTED = "gpu"
+            except Exception:
+                _LGBM_GPU_SUPPORTED = False
+
+    if _LGBM_GPU_SUPPORTED == "cuda":
+        logger.info("LightGBM: Using CUDA acceleration")
+        return {"device": "cuda"}
+    elif _LGBM_GPU_SUPPORTED == "gpu":
+        logger.info("LightGBM: Using OpenCL GPU acceleration")
+        return {"device": "gpu", "gpu_use_dp": False}
+
     return {"n_jobs": os.cpu_count() or -1}
+
 
 
 @contextmanager

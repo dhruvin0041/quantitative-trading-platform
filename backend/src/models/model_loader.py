@@ -18,7 +18,11 @@ from src.models.neural.tft_agent import build_tft_branch
 from src.models.regime.svm_regime_classifier import SVMRegimeClassifier
 from src.models.rl.dqn_agent import DQNAgent
 from src.models.rl.ppo_agent import PPOAgent
-from src.utils.gpu_utils import configure_tensorflow_gpu, get_device
+from src.utils.gpu_utils import (
+    configure_tensorflow_gpu,
+    get_device,
+    get_xgboost_gpu_params,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +117,11 @@ class ModelManager:
 
         # 2. Train XGBoost
         self.xgb_model = xgb.XGBClassifier(
-            objective="multi:softprob", num_class=3, eval_metric="mlogloss", n_estimators=100
+            objective="multi:softprob",
+            num_class=3,
+            eval_metric="mlogloss",
+            n_estimators=100,
+            **get_xgboost_gpu_params(),
         )
         self.xgb_model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
 

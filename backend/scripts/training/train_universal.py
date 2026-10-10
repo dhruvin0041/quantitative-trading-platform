@@ -52,7 +52,7 @@ from src.execution.live_inference import (
     add_upgraded_features,
 )
 from src.models.regime.calibration import ModelCalibrator
-from src.utils.gpu_utils import get_xgboost_gpu_params
+from src.utils.gpu_utils import get_lightgbm_gpu_params, get_xgboost_gpu_params
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("TrainUniversal")
@@ -589,8 +589,8 @@ def train_universal_engine(
         "reg_lambda": float(lgbm_opt.get("reg_lambda", 1.0)),
         "max_bin": int(lgbm_opt.get("max_bin", 256)),
         "random_state": 42,
-        "n_jobs": -1,
         "verbose": -1,
+        **get_lightgbm_gpu_params(),
     }
     lgbm_model = LGBMClassifier(**lgbm_params)
     lgbm_model.fit(X_train, y_train, sample_weight=sample_weights)
