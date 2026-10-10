@@ -369,8 +369,8 @@ def run_ticker_optimization(
 
         return float(np.mean(scores)) if scores else 0.33
 
-    xgb_trials = max(10, n_trials // 2) if n_trials > 20 else n_trials
-    lgbm_trials = max(10, n_trials // 2) if n_trials > 20 else n_trials
+    xgb_trials = n_trials
+    lgbm_trials = n_trials
 
     logger.info(f"Optimizing XGBoost for {ticker} with Multivariate TPESampler ({xgb_trials} trials)...")
     study_xgb = optuna.create_study(
