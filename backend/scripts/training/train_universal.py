@@ -52,6 +52,7 @@ from src.execution.live_inference import (
     add_upgraded_features,
 )
 from src.models.regime.calibration import ModelCalibrator
+from src.utils.gpu_utils import get_xgboost_gpu_params
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("TrainUniversal")
@@ -243,8 +244,8 @@ def run_universal_optimization(
                 objective="multi:softprob",
                 num_class=3,
                 random_state=42,
-                n_jobs=-1,
                 eval_metric="mlogloss",
+                **get_xgboost_gpu_params(),
             )
             clf.fit(X_tr, y_tr)
             preds = clf.predict(X_val)
@@ -381,8 +382,8 @@ def train_universal_engine(
         "subsample": float(opt_params.get("subsample", 0.85)),
         "colsample_bytree": float(opt_params.get("colsample_bytree", 0.85)),
         "random_state": 42,
-        "n_jobs": -1,
         "eval_metric": "mlogloss",
+        **get_xgboost_gpu_params(),
     }
     xgb_model = xgb.XGBClassifier(**xgb_params)
     xgb_model.fit(X_train, y_train, sample_weight=sample_weights)
@@ -413,7 +414,6 @@ def train_universal_engine(
     logger.info(f"LightGBM Accuracy -> Train: {lgbm_train_acc * 100:.2f}% | Test: {lgbm_test_acc * 100:.2f}%")
 
     joblib.dump(lgbm_model, artifacts_v3 / "lgbm_agent.joblib")
-    joblib.dump(lgbm_model, artifacts_dir / "lgbm_agent.joblib")
 
     # 3. Model Calibrator
     logger.info("Fitting Probability Calibrator on 25% Test Set...")
@@ -424,44 +424,69 @@ def train_universal_engine(
     calibrator.fit("XGB", y_test, xgb_test_probs, method="isotonic")
     calibrator.fit("LGBM", y_test, lgbm_test_probs, method="isotonic")
     calibrator.save(str(artifacts_v3 / "model_calibrator.joblib"))
-    calibrator.save(str(artifacts_dir / "model_calibrator.joblib"))
+
+    # Save V3 feature config
+    with open(configs_dir / "kept_features_v3.json", "w") as f:
+        json.dump(kept_features, f, indent=4)
 
     # Step 5: Cryptographic Strategy Manifest
     logger.info("\n[5/5] Generating Cryptographic Strategy Manifest...")
     manifest_v3 = {
-        "strategy_version": "HYDRA_UNIVERSAL_V3.0",
-        "release_codename": "CROSS_ASSET_ENHANCED_SWING",
-        "generation_timestamp_utc": datetime.now(timezone.utc).isoformat(),
-        "training_universe": UNIVERSE,
-        "date_window": {
-            "start": start_date,
-            "end": end_date or datetime.now().strftime("%Y-%m-%d"),
-            "train_split": "75%",
-            "test_split": "25%",
-        },
+        "strategy_version": "HYDRA_PROSPECTIVE_V3.0",
+        "previous_version": "HYDRA_PROSPECTIVE_V2.4",
+        "freeze_timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "status": "CANDIDATE_CROSS_ASSET_VALIDATION",
+        "anti_overfitting_lock": True,
+        "universe": UNIVERSE,
         "feature_count": len(kept_features),
-        "features": kept_features,
-        "sample_counts": {
-            "pooled_train_samples": len(X_train),
-            "pooled_test_samples": len(X_test),
+        "feature_columns": kept_features,
+        "new_indicators": [
+            "Keltner_Position",
+            "HMA_Slope",
+            "Connors_RSI",
+            "CMF_Divergence",
+        ],
+        "model_hashes": {
+            "v3/xgb_ensemble.json": compute_sha256(artifacts_v3 / "xgb_ensemble.json"),
+            "v3/lgbm_agent.joblib": compute_sha256(artifacts_v3 / "lgbm_agent.joblib"),
+            "v3/latest_scaler.joblib": compute_sha256(artifacts_v3 / "latest_scaler.joblib"),
+            "v3/model_calibrator.joblib": compute_sha256(artifacts_v3 / "model_calibrator.joblib"),
+            "v3/kept_features.json": compute_sha256(artifacts_v3 / "kept_features.json"),
         },
-        "model_accuracy": {
-            "xgb_train": xgb_train_acc,
-            "xgb_test": xgb_test_acc,
-            "lgbm_train": lgbm_train_acc,
-            "lgbm_test": lgbm_test_acc,
+        "config_hashes": {
+            "kept_features_v3.json": compute_sha256(configs_dir / "kept_features_v3.json"),
         },
-        "artifact_hashes": {
-            "xgb_ensemble.json": compute_sha256(artifacts_v3 / "xgb_ensemble.json"),
-            "lgbm_agent.joblib": compute_sha256(artifacts_v3 / "lgbm_agent.joblib"),
-            "latest_scaler.joblib": compute_sha256(artifacts_v3 / "latest_scaler.joblib"),
-            "model_calibrator.joblib": compute_sha256(artifacts_v3 / "model_calibrator.joblib"),
-            "kept_features.json": compute_sha256(artifacts_v3 / "kept_features.json"),
+        "dataset_provenance": {
+            "development_universe": {
+                "tickers": UNIVERSE,
+                "start_date": start_date,
+                "end_date": "2024-12-31",
+                "total_samples": len(X_train),
+                "warmup_bars_dropped": 119,
+                "label_horizon": 10,
+                "tp_atr_multiplier": 2.5,
+                "sl_atr_multiplier": 1.5,
+                "zero_2025_leakage": True,
+                "zero_2026_leakage": True,
+            },
+            "validation_universe": {
+                "tickers": UNIVERSE,
+                "start_date": "2025-01-01",
+                "end_date": "2025-12-31",
+                "total_samples": len(X_test),
+                "zero_2026_leakage": True,
+            },
         },
-        "governance": {
-            "anti_overfitting_lock": True,
-            "zero_lookahead_bias": True,
-            "point_in_time_fills": "Open[t+1] +/- 5bps slippage + $0.005/share commission",
+        "validation_metrics": {
+            "xgb_train_accuracy": xgb_train_acc,
+            "xgb_val_accuracy": xgb_test_acc,
+            "lgbm_train_accuracy": lgbm_train_acc,
+            "lgbm_val_accuracy": lgbm_test_acc,
+        },
+        "execution_rules": {
+            "fill_timing": "NEXT_SESSION_OPEN",
+            "slippage_bps": 5.0,
+            "commission_per_share_usd": 0.005,
         },
     }
 

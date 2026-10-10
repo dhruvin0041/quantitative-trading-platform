@@ -23,3 +23,8 @@ ignore = [
     "E501",  # line too long
     "E402",  # module level import not at top of file (GPU/TF setup)
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+

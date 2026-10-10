@@ -1,1 +1,11 @@
-{"ticker": "AAPL", "market": "us"}
+{
+    "ticker": "UNIVERSAL",
+    "market": "us",
+    "universe": [
+        "AAPL",
+        "NVDA",
+        "MSFT",
+        "AMZN",
+        "SPY"
+    ]
+}

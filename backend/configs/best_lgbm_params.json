@@ -1,0 +1,11 @@
+{
+    "n_estimators": 500,
+    "max_depth": 3,
+    "learning_rate": 0.035260581002036225,
+    "subsample": 0.8634321523358081,
+    "colsample_bytree": 0.8220276381553404,
+    "tp_atr_multiplier": 2.5,
+    "sl_atr_multiplier": 1.5,
+    "horizon": 10,
+    "num_leaves": 31
+}

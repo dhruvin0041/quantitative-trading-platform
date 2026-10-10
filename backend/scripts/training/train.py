@@ -53,6 +53,7 @@ from src.execution.live_inference import (
     add_upgraded_features,
 )
 from src.models.regime.calibration import ModelCalibrator
+from src.utils.gpu_utils import get_xgboost_gpu_params
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("TrainSpecificTicker")
@@ -231,8 +232,8 @@ def run_ticker_optimization(
                 objective="multi:softprob",
                 num_class=3,
                 random_state=42,
-                n_jobs=-1,
                 eval_metric="mlogloss",
+                **get_xgboost_gpu_params(),
             )
             clf.fit(X_tr, y_tr)
             preds = clf.predict(X_val)
@@ -380,8 +381,8 @@ def train_ticker_pipeline(
         "subsample": float(opt_params.get("subsample", 0.85)),
         "colsample_bytree": float(opt_params.get("colsample_bytree", 0.85)),
         "random_state": 42,
-        "n_jobs": -1,
         "eval_metric": "mlogloss",
+        **get_xgboost_gpu_params(),
     }
     xgb_model = xgb.XGBClassifier(**xgb_params)
     xgb_model.fit(X_train, y_train, sample_weight=sample_weights)

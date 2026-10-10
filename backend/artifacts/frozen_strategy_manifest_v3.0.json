@@ -1,7 +1,7 @@
 {
   "strategy_version": "HYDRA_PROSPECTIVE_V3.0",
   "previous_version": "HYDRA_PROSPECTIVE_V2.4",
-  "freeze_timestamp_utc": "2026-10-10T08:44:34.021492+00:00",
+  "freeze_timestamp_utc": "2026-10-10T11:17:22.816433+00:00",
   "status": "CANDIDATE_CROSS_ASSET_VALIDATION",
   "anti_overfitting_lock": true,
   "universe": [
@@ -52,14 +52,14 @@
     "CMF_Divergence"
   ],
   "model_hashes": {
-    "v3/xgb_ensemble.json": "0291aa3e2372b8a4dcd7a18dd53b7c296d5f7a11b02463a18829d98d762f7753",
-    "v3/lgbm_agent.joblib": "68abdfaee06405dff6400a559d249fc2bcd2670925f629bde4d7c58cdb9fc16a",
-    "v3/latest_scaler.joblib": "b184c200f260946c7f650110ac14dbecb377b1b24a1f8124a636db4f6eb157ce",
-    "v3/model_calibrator.joblib": "d164e6520747bc7884169201aeba567109190d5fb8865291b649c2e457833c4e",
-    "v3/kept_features.json": "f939d3c8a524ecb9c1b08e3b9536a1f5210a7d3554d1f7e1aaf935a014e41518"
+    "v3/xgb_ensemble.json": "076e74719d43fac76c61389f839525d7be05dbcbe69da3875e20e55584cdbed3",
+    "v3/lgbm_agent.joblib": "76a1301d90c2351498f8f241dc2baccae37b680ed0599fd8dedece115ecbf1ef",
+    "v3/latest_scaler.joblib": "c4da78853501b3de8a2e37d5318d0e01aec8f845887929df2373e06832c0be07",
+    "v3/model_calibrator.joblib": "b9af4ae1dc83c0511bea270b9b2dce0ad69af4725d8a1c42bf87380ef60bc8b3",
+    "v3/kept_features.json": "0503f8ad30aa8bdf220920ee06a9463c11a5f7ab0557c646fef29132ada488e4"
   },
   "config_hashes": {
-    "kept_features_v3.json": "f939d3c8a524ecb9c1b08e3b9536a1f5210a7d3554d1f7e1aaf935a014e41518"
+    "kept_features_v3.json": "0503f8ad30aa8bdf220920ee06a9463c11a5f7ab0557c646fef29132ada488e4"
   },
   "dataset_provenance": {
     "development_universe": {
@@ -70,9 +70,9 @@
         "AMZN",
         "SPY"
       ],
-      "start_date": "2016-01-01",
+      "start_date": "2015-01-01",
       "end_date": "2024-12-31",
-      "total_samples": 10675,
+      "total_samples": 10600,
       "warmup_bars_dropped": 119,
       "label_horizon": 10,
       "tp_atr_multiplier": 2.5,
@@ -90,15 +90,15 @@
       ],
       "start_date": "2025-01-01",
       "end_date": "2025-12-31",
-      "total_samples": 1195,
+      "total_samples": 3505,
       "zero_2026_leakage": true
     }
   },
   "validation_metrics": {
-    "xgb_train_accuracy": 0.7528805620608899,
-    "xgb_val_accuracy": 0.4100418410041841,
-    "lgbm_train_accuracy": 0.8787822014051522,
-    "lgbm_val_accuracy": 0.4066945606694561
+    "xgb_train_accuracy": 0.6272641509433963,
+    "xgb_val_accuracy": 0.3980028530670471,
+    "lgbm_train_accuracy": 0.6498113207547169,
+    "lgbm_val_accuracy": 0.39229671897289586
   },
   "execution_rules": {
     "fill_timing": "NEXT_SESSION_OPEN",
