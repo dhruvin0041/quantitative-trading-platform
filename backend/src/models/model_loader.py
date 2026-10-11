@@ -76,11 +76,13 @@ class ModelManager:
         self.dqn_agent = None
         self.ppo_agent = None
         self.meta_ensemble = None
+        self.scaler = None
         self.accuracies = {}
 
     def load_all_models(self):
         configure_tensorflow_gpu()
         logger.info("GPU device for PyTorch: %s", get_device())
+        self._load_scaler()
         self._load_accuracies()
         self._load_lstm()
         self._load_tft()
@@ -225,19 +227,39 @@ class ModelManager:
         except Exception as e:
             logger.warning(f"Could not load TFT weights: {e}")
 
+    def _load_scaler(self):
+        for sp in [
+            "artifacts/latest_scaler.joblib",
+            "backend/artifacts/latest_scaler.joblib",
+        ]:
+            p = Path(sp)
+            if not p.exists():
+                p = Path(__file__).resolve().parent.parent.parent / "artifacts" / "latest_scaler.joblib"
+            if p.exists():
+                try:
+                    self.scaler = joblib.load(p)
+                    logger.info("Loaded scaler with %d features.", getattr(self.scaler, "n_features_in_", 0))
+                    break
+                except Exception as e:
+                    logger.warning(f"Could not load scaler: {e}")
+
     def _load_xgb(self):
         try:
             self.xgb_model = xgb.XGBClassifier()
+            is_universal = self.config.get("strategy_version") == "V3.0"
             v3_path = Path("artifacts/v3/xgb_ensemble.json")
             if not v3_path.exists():
                 v3_path = Path(__file__).resolve().parent.parent.parent / "artifacts" / "v3" / "xgb_ensemble.json"
 
-            if self.num_features == 31 and v3_path.exists():
+            if is_universal and v3_path.exists():
                 self.xgb_model.load_model(str(v3_path))
                 logger.info("Loaded V3.0 Universal XGBoost ensemble (31 features).")
             else:
-                self.xgb_model.load_model("artifacts/xgb_ensemble.json")
-                logger.info("Loaded V2.4 XGBoost ensemble (27 features).")
+                xgb_path = Path("artifacts/xgb_ensemble.json")
+                if not xgb_path.exists():
+                    xgb_path = Path(__file__).resolve().parent.parent.parent / "artifacts" / "xgb_ensemble.json"
+                self.xgb_model.load_model(str(xgb_path))
+                logger.info("Loaded Authorized Primary XGBoost ensemble (%d features).", self.num_features)
         except Exception as e:
             logger.warning(f"Could not load XGB ensemble: {e}")
 
@@ -255,16 +277,20 @@ class ModelManager:
 
     def _load_lgbm(self):
         try:
+            is_universal = self.config.get("strategy_version") == "V3.0"
             v3_path = Path("artifacts/v3/lgbm_agent.joblib")
             if not v3_path.exists():
                 v3_path = Path(__file__).resolve().parent.parent.parent / "artifacts" / "v3" / "lgbm_agent.joblib"
 
-            if self.num_features == 31 and v3_path.exists():
+            if is_universal and v3_path.exists():
                 self.lgbm_model = joblib.load(v3_path)
                 logger.info("Loaded V3.0 Universal LightGBM agent (31 features).")
             else:
-                self.lgbm_model = joblib.load("artifacts/lgbm_agent.joblib")
-                logger.info("Loaded V2.4 LightGBM agent (27 features).")
+                lgbm_path = Path("artifacts/lgbm_agent.joblib")
+                if not lgbm_path.exists():
+                    lgbm_path = Path(__file__).resolve().parent.parent.parent / "artifacts" / "lgbm_agent.joblib"
+                self.lgbm_model = joblib.load(lgbm_path)
+                logger.info("Loaded Authorized Primary LightGBM agent (%d features).", self.num_features)
         except Exception as e:
             logger.warning(f"Could not load LightGBM agent: {e}")
 

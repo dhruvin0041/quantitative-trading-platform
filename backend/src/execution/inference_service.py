@@ -141,49 +141,36 @@ class InferenceService:
             df_feat = add_upgraded_features(df.copy(), spy, None)
             df_feat = df_feat.loc[:, ~df_feat.columns.duplicated()].copy()
 
-            # Resolve Scaler & Strategy Version (V3.0 Cross-Asset vs V2.4)
+            # Resolve Scaler & Feature Columns based on fitted dimensions
             scaler = getattr(self.mm, "scaler", None)
-            is_v3 = False
-
-            if scaler is not None:
-                scaler_n_feats = getattr(scaler, "n_features_in_", 27)
-                if scaler_n_feats == len(FEATURE_COLUMNS_V30):
-                    is_v3 = True
-            else:
-                if version and version.upper().startswith("V2"):
-                    is_v3 = False
-                else:
-                    for sp in [
-                        "artifacts/v3/latest_scaler.joblib",
-                        "backend/artifacts/v3/latest_scaler.joblib",
-                    ]:
-                        if Path(sp).exists():
-                            try:
-                                scaler = joblib.load(sp)
-                                is_v3 = True
-                                break
-                            except Exception:
-                                pass
-
-                if scaler is None:
-                    for s_path in [
-                        "artifacts/latest_scaler.joblib",
-                        "backend/artifacts/latest_scaler.joblib",
-                    ]:
-                        p = Path(s_path)
-                        if p.exists():
-                            try:
-                                scaler = joblib.load(p)
-                                is_v3 = False
-                                break
-                            except Exception:
-                                pass
+            if scaler is None:
+                scaler_paths = (
+                    ["artifacts/v3/latest_scaler.joblib", "backend/artifacts/v3/latest_scaler.joblib"]
+                    if (version and version.upper().startswith("V3"))
+                    else ["artifacts/latest_scaler.joblib", "backend/artifacts/latest_scaler.joblib"]
+                )
+                for sp in scaler_paths:
+                    p = Path(sp)
+                    if p.exists():
+                        try:
+                            scaler = joblib.load(p)
+                            break
+                        except Exception:
+                            pass
 
             if scaler is None:
                 logger.warning("No scaler available for causal ML replay.")
                 return []
 
-            active_cols = FEATURE_COLUMNS_V30 if is_v3 else FEATURE_COLUMNS
+            # Dynamically align active feature columns to scaler's exact fitted dimensions
+            scaler_n_feats = getattr(scaler, "n_features_in_", len(FEATURE_COLUMNS))
+            if scaler_n_feats == len(FEATURE_COLUMNS_V30):
+                active_cols = FEATURE_COLUMNS_V30
+            elif scaler_n_feats == len(FEATURE_COLUMNS):
+                active_cols = FEATURE_COLUMNS
+            else:
+                active_cols = FEATURE_COLUMNS_V30 if len(FEATURE_COLUMNS_V30) == scaler_n_feats else FEATURE_COLUMNS
+
             df_filtered = df_feat.reindex(columns=active_cols).dropna()
 
             if df_filtered.empty or len(df_filtered) < 15:
@@ -195,13 +182,13 @@ class InferenceService:
             xgb_model = getattr(self.mm, "xgb_model", None)
             if xgb_model is not None:
                 n_feats = getattr(xgb_model, "n_features_in_", None)
-                if n_feats is not None and n_feats != len(active_cols):
+                if isinstance(n_feats, int) and n_feats != len(active_cols):
                     xgb_model = None
 
             if xgb_model is None:
                 model_paths = (
                     ["artifacts/v3/xgb_ensemble.json", "backend/artifacts/v3/xgb_ensemble.json"]
-                    if is_v3
+                    if (version and version.upper().startswith("V3"))
                     else ["artifacts/xgb_ensemble.json", "backend/artifacts/xgb_ensemble.json"]
                 )
                 for m_path in model_paths:

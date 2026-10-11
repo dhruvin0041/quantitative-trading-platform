@@ -107,7 +107,9 @@ class ModelCalibrator:
             entry = {"method": "isotonic", "models": entry}
 
         method = entry.get("method", "isotonic")
-        if method == "raw":
+        # Under frozen V2.4 governance (and V2.2/V2.3 methodology), XGBoost and LightGBM
+        # use raw pass-through identity to prevent small-sample step distortion.
+        if method == "raw" or model_name in ["XGB", "LGBM"]:
             return y_prob
 
         single = y_prob.ndim == 1
