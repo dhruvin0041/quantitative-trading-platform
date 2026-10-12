@@ -1,6 +1,6 @@
 model_or_calibrator,pooled_brier,canonical_ece,log_loss,brier_skill_score,macro_roc_auc,macro_roc_auc_95_ci,buy_roc_auc,buy_roc_auc_95_ci,buy_pr_auc,buy_pr_auc_95_ci,buy_pr_lift,gate_brier_le_0_20,gate_ece_le_0_08,gate_bss_gt_0
-Control_Raw_XGBoost,0.5939,0.0769,0.9886,-41.47%,0.4851,"[0.4425, 0.5339]",0.5284,"[0.4657, 0.5834]",0.2251,"[0.1724, 0.2765]",1.116x,FAIL,PASS,FAIL
-Training_Prior_Baseline,0.4198,0.0443,0.7338,0.00%,0.4892,"[0.4391, 0.534]",0.4512,"[0.3819, 0.514]",0.1838,"[0.1443, 0.2253]",0.9112x,FAIL,PASS,FAIL
-Candidate_A_Temperature_Scaling,0.585,0.0439,0.9689,-39.35%,0.4882,"[0.4444, 0.5363]",0.5303,"[0.4674, 0.5865]",0.2283,"[0.1758, 0.2817]",1.1319x,FAIL,PASS,FAIL
-Candidate_B_Dirichlet_Calibration,0.4749,0.1358,0.8215,-13.13%,0.493,"[0.451, 0.5389]",0.5251,"[0.4615, 0.5822]",0.2246,"[0.1727, 0.277]",1.1135x,FAIL,FAIL,FAIL
-Candidate_C_Bayesian_Shrinkage,0.4203,0.0446,0.7348,-0.12%,0.4807,"[0.4323, 0.5283]",0.4577,"[0.3854, 0.5236]",0.1941,"[0.1496, 0.2499]",0.9625x,FAIL,PASS,FAIL
+Control_Raw_XGBoost,0.5964,0.0833,0.9933,-41.19%,0.4847,"[0.4412, 0.5332]",0.5216,"[0.4593, 0.5761]",0.2223,"[0.1706, 0.2727]",1.0925x,FAIL,FAIL,FAIL
+Training_Prior_Baseline,0.4224,0.0413,0.7372,0.00%,0.4838,"[0.4348, 0.5279]",0.4558,"[0.3887, 0.5185]",0.187,"[0.1479, 0.2263]",0.919x,FAIL,PASS,FAIL
+Candidate_A_Temperature_Scaling,0.5872,0.0506,0.9726,-39.02%,0.4876,"[0.4433, 0.5348]",0.5238,"[0.462, 0.5785]",0.2252,"[0.172, 0.2775]",1.1065x,FAIL,PASS,FAIL
+Candidate_B_Dirichlet_Calibration,0.4776,0.1336,0.8253,-13.07%,0.4927,"[0.4508, 0.5386]",0.5189,"[0.4552, 0.5749]",0.2226,"[0.1705, 0.2744]",1.094x,FAIL,FAIL,FAIL
+Candidate_C_Bayesian_Shrinkage,0.4227,0.0416,0.7381,-0.07%,0.4826,"[0.4335, 0.5289]",0.4611,"[0.3895, 0.5267]",0.1962,"[0.1525, 0.2512]",0.9641x,FAIL,PASS,FAIL
