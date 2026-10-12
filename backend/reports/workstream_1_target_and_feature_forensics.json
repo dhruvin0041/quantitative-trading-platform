@@ -1,6 +1,6 @@
 {
     "document_id": "HYDRA-AUDIT-20261012-WORKSTREAM-1-TARGET-FEATURE-FORENSICS",
-    "generated_at_utc": "2026-10-12T15:14:07Z",
+    "generated_at_utc": "2026-10-12T17:02:22Z",
     "governance_status": {
         "frozen_strategy_manifest_v2_4_sha256": "d580b50a441c2f5a3881bb72eb0c8b23d90077dea61ddc506193affcfe993da5",
         "calibration_py_sha256": "badff3d49e1ee755231b0e2f159dc539a199ac6263831d66910c9863884958f5",

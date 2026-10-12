@@ -1,0 +1,7 @@
+strategy,initial_capital,final_cash,final_equity,net_profit_dollars,net_return_pct,cagr_pct,total_trades,winning_trades,losing_trades,win_rate_pct,profit_factor,avg_trade_pnl,median_trade_pnl,gross_profit,gross_loss,max_drawdown_dollars,max_drawdown_pct,sharpe_ratio,sortino_ratio,exposure_pct,total_bars,slippage_bps,commission_model
+Buy_and_Hold,1000.0,32.52,4426.72,3426.72,342.67,25.41,0,0,0,0.0,0.0,0.0,0.0,0.0,0.0,-1428.93,-37.66,0.9,1.247,99.94,1656,5.0,$0.005/share (min $1.0)
+200_Day_SMA_Trend,1000.0,2366.82,2366.82,1366.82,136.68,14.01,24,8,16,33.33,3.55,56.95,-18.42,1970.21,555.39,-832.82,-30.49,0.646,0.787,80.37,1656,5.0,$0.005/share (min $1.0)
+20_Day_Donchian_Breakout,1000.0,2342.52,2342.52,1342.52,134.25,13.83,22,12,10,54.55,2.1,61.02,9.6,2644.57,1258.05,-883.49,-31.84,0.759,0.884,62.2,1656,5.0,$0.005/share (min $1.0)
+Dip_Entry_In_Uptrend,1000.0,815.85,815.85,-184.15,-18.41,-3.05,31,13,18,41.94,0.82,-5.94,-10.16,569.42,691.58,-374.86,-37.37,-0.119,-0.074,21.14,1656,5.0,$0.005/share (min $1.0)
+HYDRA_Frozen_V2.4_ML,1000.0,890.13,890.13,-109.87,-10.99,-1.76,48,23,25,47.92,0.98,-2.29,-1.11,642.91,656.78,-284.35,-25.22,-0.108,-0.066,14.67,1656,5.0,$0.005/share (min $1.0)
+HYDRA_Remediated_ML_Candidate,1000.0,1154.36,1154.36,154.36,15.44,2.21,100,50,50,50.0,1.23,1.54,-0.17,1870.68,1516.32,-381.03,-25.21,0.22,0.203,36.17,1656,5.0,$0.005/share (min $1.0)
