@@ -86,10 +86,10 @@ def generate_provenance_reconciliation_artifacts() -> Dict[str, Any]:
                 "data_source": "Pre-execution placeholder text",
             },
             "Report_2_Intermediate_Summary": {
-                "description": "Ephemeral execution from git commit f2e34c3",
+                "description": "Historically Explained and Superseded (ephemeral execution from git commit f2e34c3)",
                 "git_commit": "f2e34c3d4849a38c7ee1c3c1d5ff860c5f8f12af",
                 "prediction_array_sha256": "Ephemeral re-trained run (not preserved in persistent storage)",
-                "data_source": "Re-fetched historical prices via generate_candidate_labels() with live dividend adjustments",
+                "data_source": "Re-fetched historical prices via generate_candidate_labels() with live dividend adjustments; not independently reproducible at original array level",
             },
             "Report_3_Authoritative_Canonical": {
                 "description": "Direct evaluation of frozen prediction archive (commit b7fece8)",
@@ -207,26 +207,29 @@ This artifact establishes the exact empirical reality:
 | Reporting Version | Git Commit / Origin | Prediction Array SHA-256 Digest | Data Source & Provenance |
 |---|---|---|---|
 | **Report 1 (Draft Template)** | Pre-execution | `N/A (Draft Text Placeholders)` | Pre-execution template placeholders (`0.5280`, `0.5186`). |
-| **Report 2 (Intermediate Summary)** | [`f2e34c3`](https://github.com/dhruvin0041/quantitative-trading-platform/commit/f2e34c3) | `Ephemeral Re-fit` (Not archived) | Re-fetched Yahoo Finance prices with corporate-action label drift in Folds 3 & 4. Freshly re-trained base models. |
-| **Report 3 (Authoritative Canonical)** | [`b7fece8`](https://github.com/dhruvin0041/quantitative-trading-platform/commit/b7fece8) | Input: `d85d5243743027c2e6849016acd79e89a4a70813ed3ff731c7e2ada97cee4c2b`<br/>Output: `1e257def5ce0d89657b241d9a58c56efd8ec92ec985fd3c273a0b208d76b7d32` | Direct evaluation of frozen Phase 3d prediction archive and immutable canonical labels. |
+| **Report 2 (Intermediate Summary)** | [`f2e34c3`](https://github.com/dhruvin0041/quantitative-trading-platform/commit/f2e34c3) | `Ephemeral Re-fit` (Not archived) | **Historically Explained and Superseded:** Re-fetched Yahoo Finance prices with corporate-action label drift in Folds 3 & 4. Freshly re-trained base models. Not independently reproducible at the original array level due to ephemeral unarchived prediction state. Surviving run logs, parameters, and fold metrics preserved for audit trail. |
+| **Report 3 (Authoritative Canonical)** | [`b7fece8`](https://github.com/dhruvin0041/quantitative-trading-platform/commit/b7fece8) | Input: `d85d5243743027c2e6849016acd79e89a4a70813ed3ff731c7e2ada97cee4c2b`<br/>Output: `1e257def5ce0d89657b241d9a58c56efd8ec92ec985fd3c273a0b208d76b7d32` | **Independently Reproducible at Machine Precision:** Direct evaluation of frozen Phase 3d prediction archive and immutable canonical labels. Unrounded 64-bit float arrays preserved. |
 
 ---
 
-## 3. Four-Fold Unrounded Brier Score Breakdown: Report 2 vs. Report 3
+## 3. Four-Fold Brier Score Breakdown: Report 2 vs. Report 3
 
 Every outer fold contains exactly $N=414$ observations ($N=1,656$ total).
 
+> [!NOTE]
+> **Precision Qualification:** For Report 2, fold metrics were recorded to 4 decimal places; their arithmetic mean matches the reported pooled figures within display rounding conventions (e.g. prior fold mean $0.41985 \to 0.4198$). For Canonical Report 3, the pooled identity matches the arithmetic mean to **machine precision ($< 10^{{-12}}$)** computed directly from the archived unrounded 64-bit float tensors.
+
 | Model / Candidate Configuration | Reporting Version | Fold 1 ($N=414$) | Fold 2 ($N=414$) | Fold 3 ($N=414$) | Fold 4 ($N=414$) | **Mean of Folds** | **Pooled Global** | Arithmetic Identity Check |
 |---|---|---:|---:|---:|---:|---:|---:|---|
-| **Training-Prior Baseline** | **Report 2 (`f2e34c3`)** | 0.4937 | 0.4593 | **0.3240** | **0.4024** | **0.41985** | **0.4198** | Exact match |
+| **Training-Prior Baseline** | **Report 2 (`f2e34c3`)** | 0.4937 | 0.4593 | **0.3240** | **0.4024** | **0.41985** | **0.4198** | Consistent within display rounding |
 | | **Report 3 (Canonical)** | 0.493680 | 0.459284 | **0.333938** | **0.402510** | **0.422353** | **0.4224** | Exact match ($0.00 \\times 10^{{-12}}$) |
-| **Control Raw XGBoost** | **Report 2 (`f2e34c3`)** | 0.5621 | 0.6464 | **0.6198** | **0.5471** | **0.59385** | **0.5939** | Exact match |
+| **Control Raw XGBoost** | **Report 2 (`f2e34c3`)** | 0.5621 | 0.6464 | **0.6198** | **0.5471** | **0.59385** | **0.5939** | Consistent within display rounding |
 | | **Report 3 (Canonical)** | 0.562135 | 0.646382 | **0.622878** | **0.554166** | **0.596390** | **0.5964** | Exact match ($0.00 \\times 10^{{-12}}$) |
-| **Candidate A: Temperature Scaling** | **Report 2 (`f2e34c3`)** | 0.5471 | 0.6253 | **0.6105** | **0.5572** | **0.585025** | **0.5850** | Exact match |
+| **Candidate A: Temperature Scaling** | **Report 2 (`f2e34c3`)** | 0.5471 | 0.6253 | **0.6105** | **0.5572** | **0.585025** | **0.5850** | Consistent within display rounding |
 | | **Report 3 (Canonical)** | 0.547134 | 0.625323 | **0.612960** | **0.563582** | **0.587250** | **0.5872** | Exact match ($0.00 \\times 10^{{-12}}$) |
-| **Candidate B: Dirichlet Calibration** | **Report 2 (`f2e34c3`)** | 0.5165 | 0.5268 | **0.4266** | **0.4298** | **0.474925** | **0.4749** | Exact match |
+| **Candidate B: Dirichlet Calibration** | **Report 2 (`f2e34c3`)** | 0.5165 | 0.5268 | **0.4266** | **0.4298** | **0.474925** | **0.4749** | Consistent within display rounding |
 | | **Report 3 (Canonical)** | 0.516487 | 0.526819 | **0.433243** | **0.433740** | **0.477572** | **0.4776** | Exact match ($0.00 \\times 10^{{-12}}$) |
-| **Candidate C: Bayesian Shrinkage** | **Report 2 (`f2e34c3`)** | 0.4933 | 0.4593 | **0.3261** | **0.4024** | **0.420275** | **0.4203** | Exact match |
+| **Candidate C: Bayesian Shrinkage** | **Report 2 (`f2e34c3`)** | 0.4933 | 0.4593 | **0.3261** | **0.4024** | **0.420275** | **0.4203** | Consistent within display rounding |
 | | **Report 3 (Canonical)** | 0.493308 | 0.459284 | **0.335890** | **0.402510** | **0.422748** | **0.4227** | Exact match ($0.00 \\times 10^{{-12}}$) |
 
 > [!NOTE]

@@ -1,6 +1,6 @@
 {
     "document_id": "HYDRA-AUDIT-20261012-PHASE-3E-HISTORICAL-PROVENANCE",
-    "generated_at_utc": "2026-10-12 09:56:17 UTC",
+    "generated_at_utc": "2026-10-12 10:07:10 UTC",
     "archive_hashes": {
         "Report_1_Initial_Draft": {
             "description": "Pre-execution draft template (static placeholders)",
@@ -8,10 +8,10 @@
             "data_source": "Pre-execution placeholder text"
         },
         "Report_2_Intermediate_Summary": {
-            "description": "Ephemeral execution from git commit f2e34c3",
+            "description": "Historically Explained and Superseded (ephemeral execution from git commit f2e34c3)",
             "git_commit": "f2e34c3d4849a38c7ee1c3c1d5ff860c5f8f12af",
             "prediction_array_sha256": "Ephemeral re-trained run (not preserved in persistent storage)",
-            "data_source": "Re-fetched historical prices via generate_candidate_labels() with live dividend adjustments"
+            "data_source": "Re-fetched historical prices via generate_candidate_labels() with live dividend adjustments; not independently reproducible at original array level"
         },
         "Report_3_Authoritative_Canonical": {
             "description": "Direct evaluation of frozen prediction archive (commit b7fece8)",

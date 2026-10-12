@@ -1,0 +1,961 @@
+{
+    "document_id": "HYDRA-AUDIT-20261012-WORKSTREAM-1-TARGET-FEATURE-FORENSICS",
+    "generated_at_utc": "2026-10-12T10:13:15Z",
+    "governance_status": {
+        "frozen_strategy_manifest_v2_4_sha256": "d580b50a441c2f5a3881bb72eb0c8b23d90077dea61ddc506193affcfe993da5",
+        "calibration_py_sha256": "badff3d49e1ee755231b0e2f159dc539a199ac6263831d66910c9863884958f5",
+        "evaluation_contract_py_sha256": "94399aefe5015e318eeeafa3e23b7103c8ae4809146948e06b1c3f13e1300720",
+        "calibration_branch_status": "PERMANENTLY_TERMINATED",
+        "production_integration": "STRICTLY_BLOCKED",
+        "live_capital_allocation": "STRICT_NO_GO"
+    },
+    "pinned_dataset": {
+        "file_path": "D:\\DataScience\\Projects\\Data_Science_Projects\\Stock_Indicator\\backend\\artifacts\\research\\workstream_1_pinned_development_dataset.joblib",
+        "sha256_digest": "e764c60cb390d11756ec59745629985a20e1ab5afde2ac6d87c01fbd0fc1dc05",
+        "size_bytes": 1361235,
+        "n_raw_bars": 2515,
+        "n_clean_bars": 2396,
+        "start_date": "2015-01-02",
+        "end_date": "2024-12-30"
+    },
+    "target_construction_and_ambiguity_audit": [
+        {
+            "configuration": "Control_3.0_0.5",
+            "tp_multiplier": 3.0,
+            "sl_multiplier": 0.5,
+            "horizon_bars": 5,
+            "n_samples": 2376,
+            "pessimistic_rule": {
+                "sell_count": 1541,
+                "sell_pct": 64.86,
+                "hold_count": 690,
+                "hold_pct": 29.04,
+                "buy_count": 145,
+                "buy_pct": 6.1
+            },
+            "optimistic_rule": {
+                "sell_count": 1541,
+                "hold_count": 690,
+                "buy_count": 145,
+                "buy_pct": 6.1
+            },
+            "neutral_rule": {
+                "hold_count": 690,
+                "hold_pct": 29.04
+            },
+            "same_bar_collision_first_hit": 0,
+            "same_bar_collision_first_hit_pct": 0.0,
+            "same_bar_collision_any_step": 4,
+            "label_flip_pessimistic_vs_optimistic_pct": 0.0,
+            "mean_upper_touch_step": 3.59,
+            "mean_lower_touch_step": 1.82,
+            "theoretical_brownian_survival_pct": 18.97,
+            "monte_carlo_simulated_hold_pct": 28.9,
+            "hold_under_10_pct_flag": false
+        },
+        {
+            "configuration": "Control_3.0_0.5",
+            "tp_multiplier": 3.0,
+            "sl_multiplier": 0.5,
+            "horizon_bars": 10,
+            "n_samples": 2376,
+            "pessimistic_rule": {
+                "sell_count": 1698,
+                "sell_pct": 71.46,
+                "hold_count": 312,
+                "hold_pct": 13.13,
+                "buy_count": 366,
+                "buy_pct": 15.4
+            },
+            "optimistic_rule": {
+                "sell_count": 1698,
+                "hold_count": 312,
+                "buy_count": 366,
+                "buy_pct": 15.4
+            },
+            "neutral_rule": {
+                "hold_count": 312,
+                "hold_pct": 13.13
+            },
+            "same_bar_collision_first_hit": 0,
+            "same_bar_collision_first_hit_pct": 0.0,
+            "same_bar_collision_any_step": 6,
+            "label_flip_pessimistic_vs_optimistic_pct": 0.0,
+            "mean_upper_touch_step": 6.38,
+            "mean_lower_touch_step": 2.4,
+            "theoretical_brownian_survival_pct": 2.83,
+            "monte_carlo_simulated_hold_pct": 9.87,
+            "hold_under_10_pct_flag": false
+        },
+        {
+            "configuration": "Control_3.0_0.5",
+            "tp_multiplier": 3.0,
+            "sl_multiplier": 0.5,
+            "horizon_bars": 15,
+            "n_samples": 2376,
+            "pessimistic_rule": {
+                "sell_count": 1754,
+                "sell_pct": 73.82,
+                "hold_count": 165,
+                "hold_pct": 6.94,
+                "buy_count": 457,
+                "buy_pct": 19.23
+            },
+            "optimistic_rule": {
+                "sell_count": 1754,
+                "hold_count": 165,
+                "buy_count": 457,
+                "buy_pct": 19.23
+            },
+            "neutral_rule": {
+                "hold_count": 165,
+                "hold_pct": 6.94
+            },
+            "same_bar_collision_first_hit": 0,
+            "same_bar_collision_first_hit_pct": 0.0,
+            "same_bar_collision_any_step": 6,
+            "label_flip_pessimistic_vs_optimistic_pct": 0.0,
+            "mean_upper_touch_step": 8.51,
+            "mean_lower_touch_step": 2.88,
+            "theoretical_brownian_survival_pct": 0.42,
+            "monte_carlo_simulated_hold_pct": 3.29,
+            "hold_under_10_pct_flag": true
+        },
+        {
+            "configuration": "Control_3.0_0.5",
+            "tp_multiplier": 3.0,
+            "sl_multiplier": 0.5,
+            "horizon_bars": 20,
+            "n_samples": 2376,
+            "pessimistic_rule": {
+                "sell_count": 1778,
+                "sell_pct": 74.83,
+                "hold_count": 83,
+                "hold_pct": 3.49,
+                "buy_count": 515,
+                "buy_pct": 21.68
+            },
+            "optimistic_rule": {
+                "sell_count": 1778,
+                "hold_count": 83,
+                "buy_count": 515,
+                "buy_pct": 21.68
+            },
+            "neutral_rule": {
+                "hold_count": 83,
+                "hold_pct": 3.49
+            },
+            "same_bar_collision_first_hit": 0,
+            "same_bar_collision_first_hit_pct": 0.0,
+            "same_bar_collision_any_step": 10,
+            "label_flip_pessimistic_vs_optimistic_pct": 0.0,
+            "mean_upper_touch_step": 10.27,
+            "mean_lower_touch_step": 3.3,
+            "theoretical_brownian_survival_pct": 0.06,
+            "monte_carlo_simulated_hold_pct": 1.1,
+            "hold_under_10_pct_flag": true
+        },
+        {
+            "configuration": "Candidate_1.5_1.5",
+            "tp_multiplier": 1.5,
+            "sl_multiplier": 1.5,
+            "horizon_bars": 5,
+            "n_samples": 2376,
+            "pessimistic_rule": {
+                "sell_count": 694,
+                "sell_pct": 29.21,
+                "hold_count": 827,
+                "hold_pct": 34.81,
+                "buy_count": 855,
+                "buy_pct": 35.98
+            },
+            "optimistic_rule": {
+                "sell_count": 692,
+                "hold_count": 827,
+                "buy_count": 857,
+                "buy_pct": 36.07
+            },
+            "neutral_rule": {
+                "hold_count": 829,
+                "hold_pct": 34.89
+            },
+            "same_bar_collision_first_hit": 2,
+            "same_bar_collision_first_hit_pct": 0.084,
+            "same_bar_collision_any_step": 5,
+            "label_flip_pessimistic_vs_optimistic_pct": 0.084,
+            "mean_upper_touch_step": 3.05,
+            "mean_lower_touch_step": 2.82,
+            "theoretical_brownian_survival_pct": 9.54,
+            "monte_carlo_simulated_hold_pct": 30.25,
+            "hold_under_10_pct_flag": false
+        },
+        {
+            "configuration": "Candidate_1.5_1.5",
+            "tp_multiplier": 1.5,
+            "sl_multiplier": 1.5,
+            "horizon_bars": 10,
+            "n_samples": 2376,
+            "pessimistic_rule": {
+                "sell_count": 889,
+                "sell_pct": 37.42,
+                "hold_count": 297,
+                "hold_pct": 12.5,
+                "buy_count": 1190,
+                "buy_pct": 50.08
+            },
+            "optimistic_rule": {
+                "sell_count": 887,
+                "hold_count": 297,
+                "buy_count": 1192,
+                "buy_pct": 50.17
+            },
+            "neutral_rule": {
+                "hold_count": 299,
+                "hold_pct": 12.58
+            },
+            "same_bar_collision_first_hit": 2,
+            "same_bar_collision_first_hit_pct": 0.084,
+            "same_bar_collision_any_step": 7,
+            "label_flip_pessimistic_vs_optimistic_pct": 0.084,
+            "mean_upper_touch_step": 4.51,
+            "mean_lower_touch_step": 4.12,
+            "theoretical_brownian_survival_pct": 0.71,
+            "monte_carlo_simulated_hold_pct": 7.83,
+            "hold_under_10_pct_flag": false
+        },
+        {
+            "configuration": "Candidate_1.5_1.5",
+            "tp_multiplier": 1.5,
+            "sl_multiplier": 1.5,
+            "horizon_bars": 15,
+            "n_samples": 2376,
+            "pessimistic_rule": {
+                "sell_count": 953,
+                "sell_pct": 40.11,
+                "hold_count": 98,
+                "hold_pct": 4.12,
+                "buy_count": 1325,
+                "buy_pct": 55.77
+            },
+            "optimistic_rule": {
+                "sell_count": 951,
+                "hold_count": 98,
+                "buy_count": 1327,
+                "buy_pct": 55.85
+            },
+            "neutral_rule": {
+                "hold_count": 100,
+                "hold_pct": 4.21
+            },
+            "same_bar_collision_first_hit": 2,
+            "same_bar_collision_first_hit_pct": 0.084,
+            "same_bar_collision_any_step": 10,
+            "label_flip_pessimistic_vs_optimistic_pct": 0.084,
+            "mean_upper_touch_step": 5.78,
+            "mean_lower_touch_step": 5.16,
+            "theoretical_brownian_survival_pct": 0.05,
+            "monte_carlo_simulated_hold_pct": 1.98,
+            "hold_under_10_pct_flag": true
+        },
+        {
+            "configuration": "Candidate_1.5_1.5",
+            "tp_multiplier": 1.5,
+            "sl_multiplier": 1.5,
+            "horizon_bars": 20,
+            "n_samples": 2376,
+            "pessimistic_rule": {
+                "sell_count": 969,
+                "sell_pct": 40.78,
+                "hold_count": 36,
+                "hold_pct": 1.52,
+                "buy_count": 1371,
+                "buy_pct": 57.7
+            },
+            "optimistic_rule": {
+                "sell_count": 967,
+                "hold_count": 36,
+                "buy_count": 1373,
+                "buy_pct": 57.79
+            },
+            "neutral_rule": {
+                "hold_count": 38,
+                "hold_pct": 1.6
+            },
+            "same_bar_collision_first_hit": 2,
+            "same_bar_collision_first_hit_pct": 0.084,
+            "same_bar_collision_any_step": 13,
+            "label_flip_pessimistic_vs_optimistic_pct": 0.084,
+            "mean_upper_touch_step": 6.71,
+            "mean_lower_touch_step": 6.12,
+            "theoretical_brownian_survival_pct": 0.0,
+            "monte_carlo_simulated_hold_pct": 0.5,
+            "hold_under_10_pct_flag": true
+        },
+        {
+            "configuration": "Candidate_2.0_1.0",
+            "tp_multiplier": 2.0,
+            "sl_multiplier": 1.0,
+            "horizon_bars": 5,
+            "n_samples": 2376,
+            "pessimistic_rule": {
+                "sell_count": 1020,
+                "sell_pct": 42.93,
+                "hold_count": 840,
+                "hold_pct": 35.35,
+                "buy_count": 516,
+                "buy_pct": 21.72
+            },
+            "optimistic_rule": {
+                "sell_count": 1020,
+                "hold_count": 840,
+                "buy_count": 516,
+                "buy_pct": 21.72
+            },
+            "neutral_rule": {
+                "hold_count": 840,
+                "hold_pct": 35.35
+            },
+            "same_bar_collision_first_hit": 0,
+            "same_bar_collision_first_hit_pct": 0.0,
+            "same_bar_collision_any_step": 2,
+            "label_flip_pessimistic_vs_optimistic_pct": 0.0,
+            "mean_upper_touch_step": 3.36,
+            "mean_lower_touch_step": 2.4,
+            "theoretical_brownian_survival_pct": 9.54,
+            "monte_carlo_simulated_hold_pct": 28.56,
+            "hold_under_10_pct_flag": false
+        },
+        {
+            "configuration": "Candidate_2.0_1.0",
+            "tp_multiplier": 2.0,
+            "sl_multiplier": 1.0,
+            "horizon_bars": 10,
+            "n_samples": 2376,
+            "pessimistic_rule": {
+                "sell_count": 1247,
+                "sell_pct": 52.48,
+                "hold_count": 280,
+                "hold_pct": 11.78,
+                "buy_count": 849,
+                "buy_pct": 35.73
+            },
+            "optimistic_rule": {
+                "sell_count": 1247,
+                "hold_count": 280,
+                "buy_count": 849,
+                "buy_pct": 35.73
+            },
+            "neutral_rule": {
+                "hold_count": 280,
+                "hold_pct": 11.78
+            },
+            "same_bar_collision_first_hit": 0,
+            "same_bar_collision_first_hit_pct": 0.0,
+            "same_bar_collision_any_step": 2,
+            "label_flip_pessimistic_vs_optimistic_pct": 0.0,
+            "mean_upper_touch_step": 5.36,
+            "mean_lower_touch_step": 3.5,
+            "theoretical_brownian_survival_pct": 0.71,
+            "monte_carlo_simulated_hold_pct": 7.37,
+            "hold_under_10_pct_flag": false
+        },
+        {
+            "configuration": "Candidate_2.0_1.0",
+            "tp_multiplier": 2.0,
+            "sl_multiplier": 1.0,
+            "horizon_bars": 15,
+            "n_samples": 2376,
+            "pessimistic_rule": {
+                "sell_count": 1307,
+                "sell_pct": 55.01,
+                "hold_count": 114,
+                "hold_pct": 4.8,
+                "buy_count": 955,
+                "buy_pct": 40.19
+            },
+            "optimistic_rule": {
+                "sell_count": 1307,
+                "hold_count": 114,
+                "buy_count": 955,
+                "buy_pct": 40.19
+            },
+            "neutral_rule": {
+                "hold_count": 114,
+                "hold_pct": 4.8
+            },
+            "same_bar_collision_first_hit": 0,
+            "same_bar_collision_first_hit_pct": 0.0,
+            "same_bar_collision_any_step": 7,
+            "label_flip_pessimistic_vs_optimistic_pct": 0.0,
+            "mean_upper_touch_step": 6.76,
+            "mean_lower_touch_step": 4.24,
+            "theoretical_brownian_survival_pct": 0.05,
+            "monte_carlo_simulated_hold_pct": 1.9,
+            "hold_under_10_pct_flag": true
+        },
+        {
+            "configuration": "Candidate_2.0_1.0",
+            "tp_multiplier": 2.0,
+            "sl_multiplier": 1.0,
+            "horizon_bars": 20,
+            "n_samples": 2376,
+            "pessimistic_rule": {
+                "sell_count": 1321,
+                "sell_pct": 55.6,
+                "hold_count": 38,
+                "hold_pct": 1.6,
+                "buy_count": 1017,
+                "buy_pct": 42.8
+            },
+            "optimistic_rule": {
+                "sell_count": 1321,
+                "hold_count": 38,
+                "buy_count": 1017,
+                "buy_pct": 42.8
+            },
+            "neutral_rule": {
+                "hold_count": 38,
+                "hold_pct": 1.6
+            },
+            "same_bar_collision_first_hit": 0,
+            "same_bar_collision_first_hit_pct": 0.0,
+            "same_bar_collision_any_step": 12,
+            "label_flip_pessimistic_vs_optimistic_pct": 0.0,
+            "mean_upper_touch_step": 8.05,
+            "mean_lower_touch_step": 5.01,
+            "theoretical_brownian_survival_pct": 0.0,
+            "monte_carlo_simulated_hold_pct": 0.48,
+            "hold_under_10_pct_flag": true
+        },
+        {
+            "configuration": "Candidate_2.0_1.5",
+            "tp_multiplier": 2.0,
+            "sl_multiplier": 1.5,
+            "horizon_bars": 5,
+            "n_samples": 2376,
+            "pessimistic_rule": {
+                "sell_count": 713,
+                "sell_pct": 30.01,
+                "hold_count": 1115,
+                "hold_pct": 46.93,
+                "buy_count": 548,
+                "buy_pct": 23.06
+            },
+            "optimistic_rule": {
+                "sell_count": 713,
+                "hold_count": 1115,
+                "buy_count": 548,
+                "buy_pct": 23.06
+            },
+            "neutral_rule": {
+                "hold_count": 1115,
+                "hold_pct": 46.93
+            },
+            "same_bar_collision_first_hit": 0,
+            "same_bar_collision_first_hit_pct": 0.0,
+            "same_bar_collision_any_step": 0,
+            "label_flip_pessimistic_vs_optimistic_pct": 0.0,
+            "mean_upper_touch_step": 3.36,
+            "mean_lower_touch_step": 2.82,
+            "theoretical_brownian_survival_pct": 18.97,
+            "monte_carlo_simulated_hold_pct": 40.22,
+            "hold_under_10_pct_flag": false
+        },
+        {
+            "configuration": "Candidate_2.0_1.5",
+            "tp_multiplier": 2.0,
+            "sl_multiplier": 1.5,
+            "horizon_bars": 10,
+            "n_samples": 2376,
+            "pessimistic_rule": {
+                "sell_count": 949,
+                "sell_pct": 39.94,
+                "hold_count": 476,
+                "hold_pct": 20.03,
+                "buy_count": 951,
+                "buy_pct": 40.03
+            },
+            "optimistic_rule": {
+                "sell_count": 949,
+                "hold_count": 476,
+                "buy_count": 951,
+                "buy_pct": 40.03
+            },
+            "neutral_rule": {
+                "hold_count": 476,
+                "hold_pct": 20.03
+            },
+            "same_bar_collision_first_hit": 0,
+            "same_bar_collision_first_hit_pct": 0.0,
+            "same_bar_collision_any_step": 0,
+            "label_flip_pessimistic_vs_optimistic_pct": 0.0,
+            "mean_upper_touch_step": 5.36,
+            "mean_lower_touch_step": 4.12,
+            "theoretical_brownian_survival_pct": 2.83,
+            "monte_carlo_simulated_hold_pct": 13.7,
+            "hold_under_10_pct_flag": false
+        },
+        {
+            "configuration": "Candidate_2.0_1.5",
+            "tp_multiplier": 2.0,
+            "sl_multiplier": 1.5,
+            "horizon_bars": 15,
+            "n_samples": 2376,
+            "pessimistic_rule": {
+                "sell_count": 1037,
+                "sell_pct": 43.64,
+                "hold_count": 222,
+                "hold_pct": 9.34,
+                "buy_count": 1117,
+                "buy_pct": 47.01
+            },
+            "optimistic_rule": {
+                "sell_count": 1037,
+                "hold_count": 222,
+                "buy_count": 1117,
+                "buy_pct": 47.01
+            },
+            "neutral_rule": {
+                "hold_count": 222,
+                "hold_pct": 9.34
+            },
+            "same_bar_collision_first_hit": 0,
+            "same_bar_collision_first_hit_pct": 0.0,
+            "same_bar_collision_any_step": 1,
+            "label_flip_pessimistic_vs_optimistic_pct": 0.0,
+            "mean_upper_touch_step": 6.76,
+            "mean_lower_touch_step": 5.16,
+            "theoretical_brownian_survival_pct": 0.42,
+            "monte_carlo_simulated_hold_pct": 4.62,
+            "hold_under_10_pct_flag": true
+        },
+        {
+            "configuration": "Candidate_2.0_1.5",
+            "tp_multiplier": 2.0,
+            "sl_multiplier": 1.5,
+            "horizon_bars": 20,
+            "n_samples": 2376,
+            "pessimistic_rule": {
+                "sell_count": 1070,
+                "sell_pct": 45.03,
+                "hold_count": 90,
+                "hold_pct": 3.79,
+                "buy_count": 1216,
+                "buy_pct": 51.18
+            },
+            "optimistic_rule": {
+                "sell_count": 1070,
+                "hold_count": 90,
+                "buy_count": 1216,
+                "buy_pct": 51.18
+            },
+            "neutral_rule": {
+                "hold_count": 90,
+                "hold_pct": 3.79
+            },
+            "same_bar_collision_first_hit": 0,
+            "same_bar_collision_first_hit_pct": 0.0,
+            "same_bar_collision_any_step": 4,
+            "label_flip_pessimistic_vs_optimistic_pct": 0.0,
+            "mean_upper_touch_step": 8.05,
+            "mean_lower_touch_step": 6.12,
+            "theoretical_brownian_survival_pct": 0.06,
+            "monte_carlo_simulated_hold_pct": 1.52,
+            "hold_under_10_pct_flag": true
+        },
+        {
+            "configuration": "Candidate_1.0_1.0",
+            "tp_multiplier": 1.0,
+            "sl_multiplier": 1.0,
+            "horizon_bars": 5,
+            "n_samples": 2376,
+            "pessimistic_rule": {
+                "sell_count": 917,
+                "sell_pct": 38.59,
+                "hold_count": 307,
+                "hold_pct": 12.92,
+                "buy_count": 1152,
+                "buy_pct": 48.48
+            },
+            "optimistic_rule": {
+                "sell_count": 904,
+                "hold_count": 307,
+                "buy_count": 1165,
+                "buy_pct": 49.03
+            },
+            "neutral_rule": {
+                "hold_count": 320,
+                "hold_pct": 13.47
+            },
+            "same_bar_collision_first_hit": 13,
+            "same_bar_collision_first_hit_pct": 0.547,
+            "same_bar_collision_any_step": 31,
+            "label_flip_pessimistic_vs_optimistic_pct": 0.547,
+            "mean_upper_touch_step": 2.53,
+            "mean_lower_touch_step": 2.4,
+            "theoretical_brownian_survival_pct": 0.37,
+            "monte_carlo_simulated_hold_pct": 10.7,
+            "hold_under_10_pct_flag": false
+        },
+        {
+            "configuration": "Candidate_1.0_1.0",
+            "tp_multiplier": 1.0,
+            "sl_multiplier": 1.0,
+            "horizon_bars": 10,
+            "n_samples": 2376,
+            "pessimistic_rule": {
+                "sell_count": 1009,
+                "sell_pct": 42.47,
+                "hold_count": 50,
+                "hold_pct": 2.1,
+                "buy_count": 1317,
+                "buy_pct": 55.43
+            },
+            "optimistic_rule": {
+                "sell_count": 996,
+                "hold_count": 50,
+                "buy_count": 1330,
+                "buy_pct": 55.98
+            },
+            "neutral_rule": {
+                "hold_count": 63,
+                "hold_pct": 2.65
+            },
+            "same_bar_collision_first_hit": 13,
+            "same_bar_collision_first_hit_pct": 0.547,
+            "same_bar_collision_any_step": 59,
+            "label_flip_pessimistic_vs_optimistic_pct": 0.547,
+            "mean_upper_touch_step": 3.61,
+            "mean_lower_touch_step": 3.5,
+            "theoretical_brownian_survival_pct": 0.0,
+            "monte_carlo_simulated_hold_pct": 1.07,
+            "hold_under_10_pct_flag": true
+        },
+        {
+            "configuration": "Candidate_1.0_1.0",
+            "tp_multiplier": 1.0,
+            "sl_multiplier": 1.0,
+            "horizon_bars": 15,
+            "n_samples": 2376,
+            "pessimistic_rule": {
+                "sell_count": 1022,
+                "sell_pct": 43.01,
+                "hold_count": 6,
+                "hold_pct": 0.25,
+                "buy_count": 1348,
+                "buy_pct": 56.73
+            },
+            "optimistic_rule": {
+                "sell_count": 1009,
+                "hold_count": 6,
+                "buy_count": 1361,
+                "buy_pct": 57.28
+            },
+            "neutral_rule": {
+                "hold_count": 19,
+                "hold_pct": 0.8
+            },
+            "same_bar_collision_first_hit": 13,
+            "same_bar_collision_first_hit_pct": 0.547,
+            "same_bar_collision_any_step": 75,
+            "label_flip_pessimistic_vs_optimistic_pct": 0.547,
+            "mean_upper_touch_step": 4.46,
+            "mean_lower_touch_step": 4.24,
+            "theoretical_brownian_survival_pct": 0.0,
+            "monte_carlo_simulated_hold_pct": 0.1,
+            "hold_under_10_pct_flag": true
+        },
+        {
+            "configuration": "Candidate_1.0_1.0",
+            "tp_multiplier": 1.0,
+            "sl_multiplier": 1.0,
+            "horizon_bars": 20,
+            "n_samples": 2376,
+            "pessimistic_rule": {
+                "sell_count": 1024,
+                "sell_pct": 43.1,
+                "hold_count": 0,
+                "hold_pct": 0.0,
+                "buy_count": 1352,
+                "buy_pct": 56.9
+            },
+            "optimistic_rule": {
+                "sell_count": 1011,
+                "hold_count": 0,
+                "buy_count": 1365,
+                "buy_pct": 57.45
+            },
+            "neutral_rule": {
+                "hold_count": 13,
+                "hold_pct": 0.55
+            },
+            "same_bar_collision_first_hit": 13,
+            "same_bar_collision_first_hit_pct": 0.547,
+            "same_bar_collision_any_step": 82,
+            "label_flip_pessimistic_vs_optimistic_pct": 0.547,
+            "mean_upper_touch_step": 5.06,
+            "mean_lower_touch_step": 5.01,
+            "theoretical_brownian_survival_pct": 0.0,
+            "monte_carlo_simulated_hold_pct": 0.01,
+            "hold_under_10_pct_flag": true
+        }
+    ],
+    "point_in_time_causality_audit": {
+        "vix_settlement_audit": {
+            "cboe_vix_settlement_time_et": "16:15:00 ET",
+            "us_equity_market_close_time_et": "16:00:00 ET",
+            "settlement_gap_minutes": 15,
+            "lookahead_bias_risk": "HIGH if unlagged VIX used at 16:00:00 ET close",
+            "remediation_enforced": "Strict 1-day lag: VIX[t-1] via lag_vix=True",
+            "max_vix_discrepancy_unlagged_vs_lagged": 24.86,
+            "mean_vix_discrepancy_unlagged_vs_lagged": 1.1121,
+            "correlation_lagged_vs_unlagged": 0.9653
+        },
+        "spy_alignment_audit": {
+            "spy_equity_session_alignment": "16:00:00 ET (Synchronous with AAPL)",
+            "execution_assumption_causality": "Causal for Next-Day Open (09:30 ET) or MOC before 15:50 ET",
+            "spy_return_nans": 0,
+            "latest_detected_regime": "NEUTRAL",
+            "regime_conviction_threshold": 0.58
+        },
+        "feature_window_causality_audit": {
+            "v24_feature_count": 27,
+            "longest_backward_window_bars": 120,
+            "warmup_bars_purged": 119,
+            "forward_shift_in_features": false,
+            "center_true_in_rolling": false,
+            "zero_leakage_status": "VERIFIED_CAUSALLY_PURE"
+        },
+        "feature_integrity_metrics": {
+            "MA20_vs_MA50": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": -0.15128141886511048,
+                "max": 0.12056170373174759,
+                "mean": 0.010407627363759064
+            },
+            "EMA9_vs_EMA21": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": -0.08757373443863853,
+                "max": 0.053170602401885515,
+                "mean": 0.0045160030742658185
+            },
+            "Price_vs_EMA9": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": -0.11972377137758308,
+                "max": 0.0854640162057197,
+                "mean": 0.0031464244627224126
+            },
+            "Price_vs_EMA21": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": -0.1910849308049016,
+                "max": 0.12073667877186894,
+                "mean": 0.007662427536988232
+            },
+            "VIX_Level": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": 9.140000343322754,
+                "max": 82.69000244140625,
+                "mean": 18.270135193932838
+            },
+            "BB_Width": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": 0.0,
+                "max": 0.3625677827185631,
+                "mean": 0.11510792371202234
+            },
+            "BB_Position": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": -0.28629973192722086,
+                "max": 1.3701453169268456,
+                "mean": 0.5890801592921522
+            },
+            "RSI": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": 21.030054092186603,
+                "max": 90.69551826982615,
+                "mean": 55.17842765030179
+            },
+            "ADX": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": 0.0,
+                "max": 89.31249016829972,
+                "mean": 35.95393565923566
+            },
+            "MACD_Hist": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": -2.4624391251588067,
+                "max": 2.3222685094762037,
+                "mean": 0.008969130422284864
+            },
+            "Relative_Strength": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": -0.07574451718482089,
+                "max": 0.0967868514719219,
+                "mean": 0.0005411586103485529
+            },
+            "OBV_Change": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": -122.00032819166393,
+                "max": 26.53208520772691,
+                "mean": -0.08725652360767303
+            },
+            "Return": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": -0.12864705668820087,
+                "max": 0.11980822009452008,
+                "mean": 0.001090662666941637
+            },
+            "Volume_Ratio": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": 0.0,
+                "max": 5.245562368559471,
+                "mean": 0.9939144211077052
+            },
+            "ZScore_RSI_20": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": -3.460196903957635,
+                "max": 2.972132874447998,
+                "mean": 0.05950440025681708
+            },
+            "ZScore_RSI_50": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": -4.415038449056709,
+                "max": 3.1106755956431793,
+                "mean": 0.046700368639799816
+            },
+            "ZScore_RSI_120": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": -4.387382661964552,
+                "max": 2.7591525036760474,
+                "mean": 0.010307616536645402
+            },
+            "ZScore_BB_Position_20": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": -3.58698771523112,
+                "max": 4.24852911535784,
+                "mean": -0.012456747159651019
+            },
+            "ZScore_BB_Position_50": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": -4.827107969870842,
+                "max": 3.462424315254293,
+                "mean": -0.010841929571042607
+            },
+            "ZScore_MACD_Hist_20": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": -3.840601048796141,
+                "max": 3.216601991512092,
+                "mean": -0.03430683883459596
+            },
+            "ZScore_MACD_Hist_50": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": -4.235154455753993,
+                "max": 3.3526508765570333,
+                "mean": -0.04371159088223221
+            },
+            "ZScore_Return_20": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": -3.3601789927441956,
+                "max": 3.9451905851296667,
+                "mean": -0.02150227847017
+            },
+            "ZScore_Return_50": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": -4.350382515394256,
+                "max": 5.495169885896646,
+                "mean": -0.012823151409745843
+            },
+            "ZScore_Return_120": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": -4.622139669505488,
+                "max": 5.093941910589297,
+                "mean": -0.008506205473642019
+            },
+            "ZScore_Volume_Ratio_20": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": -2.3284386502350682,
+                "max": 4.100852586972008,
+                "mean": 0.06861193676594657
+            },
+            "ZScore_Volume_Ratio_50": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": -2.308142946695514,
+                "max": 6.177408617596834,
+                "mean": 0.027928322255358896
+            },
+            "ATR_Regime_Ratio": {
+                "present": true,
+                "has_nan": false,
+                "has_inf": false,
+                "min": 0.0,
+                "max": 2.370257618523582,
+                "mean": 1.010627645192121
+            }
+        }
+    },
+    "mathematical_imbalance_derivation": {
+        "model": "Two-Sided Absorbing Barrier Brownian Motion First-Passage Time",
+        "formula": "P(tau > T) = (4 / pi) * sum_{n=0}^inf [(-1)^n / (2n+1)] * exp(- (2n+1)^2 pi^2 sigma^2 T / (8 b^2))",
+        "finding": "For multi-week horizons (H >= 15 bars), diffusion spread sigma * sqrt(T) dominates barrier width b, forcing survival probability P(HOLD) < 7%.",
+        "ml_implication": "Creates severe gradient starvation and split distortion in tree-based models, collapsing HOLD recall to ~0% and dragging balanced accuracy below 33.3%."
+    },
+    "predeclared_workstream_sequencing": {
+        "workstream_1": "Target Construction & Feature Forensics (COMPLETE)",
+        "workstream_2": "Simple Directional Baselines (200-day SMA, 20-day Donchian Breakout)",
+        "workstream_3": "Feature Representation Quality & Causality (OOS Ranking Discrimination & Rank Correlation)",
+        "workstream_4": "Prospective Holdout Screening Gates (ROC-AUC > 0.55 & BSS > 0.00%)",
+        "workstream_5": "Cost-Adjusted Trading Simulations (Only after statistical skill is verified)"
+    }
+}
