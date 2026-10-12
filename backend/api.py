@@ -5,6 +5,7 @@ import os
 import re
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 import pandas as pd
@@ -178,21 +179,29 @@ async def api_middleware(request: Request, call_next):
 logger.info("Initializing Hydra Ecosystem Components...")
 config = load_config()
 
+BACKEND_DIR = Path(__file__).resolve().parent
+CONFIGS_DIR = BACKEND_DIR / "configs"
+if not (CONFIGS_DIR / "kept_features.json").exists() and Path("configs/kept_features.json").exists():
+    CONFIGS_DIR = Path("configs")
+
+active_ticker_path = CONFIGS_DIR / "active_ticker.json"
 try:
-    with open("configs/active_ticker.json", "r") as f:
+    with open(active_ticker_path, "r") as f:
         active_ticker_data = json.load(f)
         active_ticker = active_ticker_data.get("ticker", "AAPL")
 except Exception:
     active_ticker = "AAPL"
 
+opt_params_path = CONFIGS_DIR / f"optimized_params_{active_ticker}.json"
 try:
-    with open(f"configs/optimized_params_{active_ticker}.json", "r") as f:
+    with open(opt_params_path, "r") as f:
         optuna_params = json.load(f)
         config["model"].update(optuna_params)
 except Exception as e:
     logger.warning(f"Could not load optimized parameters for {active_ticker}: {e}")
 
-with open("configs/kept_features.json", "r") as f:
+kf_path = CONFIGS_DIR / "kept_features.json"
+with open(kf_path, "r") as f:
     kept_features_list = json.load(f)
 
 config["data"]["num_features"] = len(kept_features_list)

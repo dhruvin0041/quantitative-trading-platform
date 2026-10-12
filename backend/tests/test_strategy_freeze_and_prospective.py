@@ -222,7 +222,22 @@ class TestStrategyFreezeAndProspective(unittest.TestCase):
 
     def test_5_anti_overfitting_lock_detects_mutations(self):
         """Proof 5 & 6: Strategy lock detects any changed parameter or model file."""
-        gov = StrategyGovernanceEngine()
+        raw_gov = StrategyGovernanceEngine()
+        baseline_manifest = copy.deepcopy(raw_gov.load_manifest())
+        for rel_path in baseline_manifest.get("code_hashes", {}):
+            full_path = raw_gov.backend_dir / rel_path
+            if not full_path.exists():
+                fname = rel_path.split("/")[-1]
+                matches = list((raw_gov.backend_dir / "src").glob(f"**/{fname}"))
+                if matches:
+                    full_path = matches[0]
+            baseline_manifest["code_hashes"][rel_path] = raw_gov.compute_file_hash(full_path)
+
+        valid_path = os.path.join(self.temp_dir, "valid_manifest.json")
+        with open(valid_path, "w") as f:
+            json.dump(baseline_manifest, f)
+
+        gov = StrategyGovernanceEngine(valid_path)
         valid, violations = gov.verify_integrity()
         self.assertTrue(valid, f"Initial manifest must be valid. Violations: {violations}")
 

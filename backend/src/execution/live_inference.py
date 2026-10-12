@@ -122,20 +122,28 @@ def apply_optimized_model_params(config, ticker=None):
         "lr": "learning_rate",
     }
     candidates = []
+    configs_dir = Path(__file__).resolve().parent.parent.parent / "configs"
+    if not (configs_dir / "model_params.yaml").exists():
+        if Path("backend/configs/model_params.yaml").exists():
+            configs_dir = Path("backend/configs")
+        elif Path("configs/model_params.yaml").exists():
+            configs_dir = Path("configs")
+
     if ticker:
-        candidates.append(f"configs/optimized_params_{ticker}.json")
-    if os.path.exists("configs/active_ticker.json"):
+        candidates.append(configs_dir / f"optimized_params_{ticker}.json")
+    active_path = configs_dir / "active_ticker.json"
+    if active_path.exists():
         try:
-            with open("configs/active_ticker.json") as f:
+            with open(active_path) as f:
                 act = json.load(f).get("ticker")
                 if act:
-                    candidates.append(f"configs/optimized_params_{act}.json")
+                    candidates.append(configs_dir / f"optimized_params_{act}.json")
         except Exception:
             pass
-    if os.path.exists("configs"):
-        for fn in os.listdir("configs"):
+    if configs_dir.exists():
+        for fn in os.listdir(configs_dir):
             if fn.startswith("optimized_params_") and fn.endswith(".json"):
-                candidates.append(os.path.join("configs", fn))
+                candidates.append(configs_dir / fn)
 
     for path in candidates:
         if os.path.exists(path):
@@ -152,11 +160,19 @@ def apply_optimized_model_params(config, ticker=None):
 
 
 def load_config(ticker=None):
-    with open("configs/model_params.yaml", "r") as file:
+    configs_dir = Path(__file__).resolve().parent.parent.parent / "configs"
+    if not (configs_dir / "model_params.yaml").exists():
+        if Path("backend/configs/model_params.yaml").exists():
+            configs_dir = Path("backend/configs")
+        elif Path("configs/model_params.yaml").exists():
+            configs_dir = Path("configs")
+    model_params_path = configs_dir / "model_params.yaml"
+    with open(model_params_path, "r") as file:
         config = yaml.safe_load(file)
-    if os.path.exists("configs/kept_features.json"):
+    kf_path = configs_dir / "kept_features.json"
+    if kf_path.exists():
         try:
-            with open("configs/kept_features.json", "r") as f:
+            with open(kf_path, "r") as f:
                 kf = json.load(f)
                 config["data"]["num_features"] = len(kf)
         except Exception:

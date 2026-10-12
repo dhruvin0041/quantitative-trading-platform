@@ -35,6 +35,8 @@ class MockParityModel:
     """Mock model that returns predetermined probability vectors for parity testing."""
     def __init__(self, prob_vec=None):
         self.prob_vec = prob_vec if prob_vec is not None else np.array([0.15, 0.70, 0.15])
+        self.n_features_in_ = len(FEATURE_COLUMNS)
+        self._artifact_hash = "a7291fd14368bb2035779a34dd6494a31b8532820c7bcce96155fbef9dcd2d80"
 
     def set_probs(self, prob_vec):
         self.prob_vec = np.array(prob_vec, dtype=float)
@@ -131,9 +133,11 @@ class TestReplayLiveParity(unittest.TestCase):
 
         # 2. Causal replay evaluation on bullish dataset (Close > SMA200)
         df_bull = self._generate_synthetic_ohlcv(num_bars=50, start_price=100.0, trend=0.01)
-        self.mock_mm.scaler = StandardScaler().fit(df_bull[FEATURE_COLUMNS].values)
+        scaler = StandardScaler().fit(df_bull[FEATURE_COLUMNS].values)
+        scaler._artifact_hash = "15ba081e304a6abcd2fb181733c1841205f5be9d8bd2ba53a6a03ee0abd6bd49"
+        self.mock_mm.scaler = scaler
 
-        replay_signals = self.service._replay_causal_ml_signals("AAPL", df_bull)
+        replay_signals = self.service._replay_causal_ml_signals("AAPL", df_bull, version="Institutional_Mesh_V2.4")
         self.assertGreater(len(replay_signals), 0)
         self.assertEqual(replay_signals[0]["signal"], "BUY")
         self.assertEqual(replay_signals[0]["signal"], live_signal)
@@ -161,9 +165,11 @@ class TestReplayLiveParity(unittest.TestCase):
 
         # 2. Causal replay evaluation
         df_bull = self._generate_synthetic_ohlcv(num_bars=50, start_price=100.0, trend=0.01)
-        self.mock_mm.scaler = StandardScaler().fit(df_bull[FEATURE_COLUMNS].values)
+        scaler = StandardScaler().fit(df_bull[FEATURE_COLUMNS].values)
+        scaler._artifact_hash = "15ba081e304a6abcd2fb181733c1841205f5be9d8bd2ba53a6a03ee0abd6bd49"
+        self.mock_mm.scaler = scaler
 
-        replay_signals = self.service._replay_causal_ml_signals("AAPL", df_bull)
+        replay_signals = self.service._replay_causal_ml_signals("AAPL", df_bull, version="Institutional_Mesh_V2.4")
         # All bars should be suppressed to HOLD, so zero confirmed BUY/SELL signals
         self.assertEqual(len(replay_signals), 0)
 
@@ -184,6 +190,10 @@ class TestReplayLiveParity(unittest.TestCase):
         df_bear.iloc[30:, df_bear.columns.get_loc("Open")] = 60.0
 
         class MockCrashingBuy:
+            def __init__(self):
+                self.n_features_in_ = len(FEATURE_COLUMNS)
+                self._artifact_hash = "a7291fd14368bb2035779a34dd6494a31b8532820c7bcce96155fbef9dcd2d80"
+
             def predict_proba(self, X):
                 probs = np.full((len(X), 3), [0.10, 0.75, 0.15])
                 for i in range(len(X)):
@@ -192,9 +202,11 @@ class TestReplayLiveParity(unittest.TestCase):
                 return probs
 
         self.mock_mm.xgb_model = MockCrashingBuy()
-        self.mock_mm.scaler = StandardScaler().fit(df_bear[FEATURE_COLUMNS].values)
+        scaler = StandardScaler().fit(df_bear[FEATURE_COLUMNS].values)
+        scaler._artifact_hash = "15ba081e304a6abcd2fb181733c1841205f5be9d8bd2ba53a6a03ee0abd6bd49"
+        self.mock_mm.scaler = scaler
 
-        replay_signals = self.service._replay_causal_ml_signals("AAPL", df_bear)
+        replay_signals = self.service._replay_causal_ml_signals("AAPL", df_bear, version="Institutional_Mesh_V2.4")
         # Should generate zero BUY signals because Close (60) < SMA200 * 0.70 suppresses them
         buy_signals = [s for s in replay_signals if s["signal"] == "BUY"]
         self.assertEqual(len(buy_signals), 0)
@@ -230,17 +242,23 @@ class TestReplayLiveParity(unittest.TestCase):
     def test_6_execution_pricing_convention_parity(self):
         """Proof: Both paths enforce Open[t+1] +/- 5bps slippage execution pricing."""
         df = self._generate_synthetic_ohlcv(num_bars=35, start_price=100.0, trend=0.005)
-        self.mock_mm.scaler = StandardScaler().fit(df[FEATURE_COLUMNS].values)
+        scaler = StandardScaler().fit(df[FEATURE_COLUMNS].values)
+        scaler._artifact_hash = "15ba081e304a6abcd2fb181733c1841205f5be9d8bd2ba53a6a03ee0abd6bd49"
+        self.mock_mm.scaler = scaler
 
         # Force bar 0 BUY
         class MockSingleBuy:
+            def __init__(self):
+                self.n_features_in_ = len(FEATURE_COLUMNS)
+                self._artifact_hash = "a7291fd14368bb2035779a34dd6494a31b8532820c7bcce96155fbef9dcd2d80"
+
             def predict_proba(self, X):
                 probs = np.full((len(X), 3), [0.15, 0.70, 0.15])
                 probs[0] = [0.05, 0.15, 0.80]  # BUY on bar 0
                 return probs
 
         self.mock_mm.xgb_model = MockSingleBuy()
-        signals = self.service._replay_causal_ml_signals("AAPL", df)
+        signals = self.service._replay_causal_ml_signals("AAPL", df, version="Institutional_Mesh_V2.4")
         self.assertEqual(len(signals), 1)
 
         sig = signals[0]
