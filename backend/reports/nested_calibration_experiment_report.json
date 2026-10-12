@@ -1,0 +1,564 @@
+{
+    "execution_timestamp_utc": "2026-10-12T09:01:37Z",
+    "experiment_name": "HYDRA_V2.4.1_PHASE_3E_NESTED_CALIBRATION_EXPERIMENT",
+    "governance_verdict": "PHASE 3E COMPLETED \u2014 CANDIDATES EVALUATED AGAINST STRICT GATES",
+    "frozen_baseline_verification": {
+        "manifest_file": "D:\\DataScience\\Projects\\Data_Science_Projects\\Stock_Indicator\\backend\\artifacts\\frozen_strategy_manifest_v2.4.json",
+        "verified_sha256": "d580b50a441c2f5a3881bb72eb0c8b23d90077dea61ddc506193affcfe993da5",
+        "status": "PASS_IMMUTABLE"
+    },
+    "pooled_candidate_summary": {
+        "Control_Raw_XGBoost": {
+            "pooled_brier": 0.5939,
+            "canonical_ece": 0.0769,
+            "log_loss": 0.9886,
+            "brier_skill_score": -0.4147,
+            "roc_auc_ovr_macro": 0.4851,
+            "roc_auc_ovr_macro_95_ci": [
+                0.4425,
+                0.5339
+            ],
+            "buy_roc_auc": 0.5284,
+            "buy_roc_auc_95_ci": [
+                0.4657,
+                0.5834
+            ],
+            "buy_pr_auc": 0.2251,
+            "buy_pr_auc_95_ci": [
+                0.1724,
+                0.2765
+            ],
+            "buy_prevalence": 0.2017,
+            "buy_pr_lift": 1.116,
+            "brier_decomp": {
+                "brier_raw": 0.5939,
+                "brier_binned": 0.5928,
+                "reliability": 0.1796,
+                "resolution": 0.0036,
+                "uncertainty": 0.4168,
+                "within_bin_residual": 0.0011,
+                "decomp_check_binned": 0.5928,
+                "decomp_check_raw": 0.5939,
+                "exact_identity_binned_diff": 0.0,
+                "exact_identity_raw_diff": 4.901525962885955e-09,
+                "class_decompositions": {
+                    "SELL_0": {
+                        "brier_raw": 0.28842,
+                        "brier_binned": 0.28811,
+                        "reliability": 0.09505,
+                        "resolution": 0.00232,
+                        "uncertainty": 0.19539,
+                        "within_bin_residual": 0.00031,
+                        "identity_check_binned": 0.28811,
+                        "identity_check_raw": 0.28842
+                    },
+                    "HOLD_1": {
+                        "brier_raw": 0.11822,
+                        "brier_binned": 0.11727,
+                        "reliability": 0.05725,
+                        "resolution": 0.00042,
+                        "uncertainty": 0.06044,
+                        "within_bin_residual": 0.00095,
+                        "identity_check_binned": 0.11727,
+                        "identity_check_raw": 0.11822
+                    },
+                    "BUY_2": {
+                        "brier_raw": 0.18722,
+                        "brier_binned": 0.18741,
+                        "reliability": 0.02728,
+                        "resolution": 0.00088,
+                        "uncertainty": 0.16101,
+                        "within_bin_residual": -0.00019,
+                        "identity_check_binned": 0.18741,
+                        "identity_check_raw": 0.18722
+                    }
+                },
+                "mathematical_reconciliation_note": "Classical Murphy (1973) assumes discrete forecasts where predictions equal bin means. For continuous model probabilities, Brier_raw = Reliability - Resolution + Uncertainty + WithinBinResidual. Here, Reliability (0.1796) - Resolution (0.0036) + Uncertainty (0.4168) = 0.5928 (matching Brier_binned 0.5928 exactly). The +0.0011 within-bin discretization effect accounts for the residual difference with Brier_raw (0.5939)."
+            },
+            "class_wise_ece": {
+                "SELL_0": 0.2695,
+                "HOLD_1": 0.1578,
+                "BUY_2": 0.1255
+            }
+        },
+        "Training_Prior_Baseline": {
+            "pooled_brier": 0.4198,
+            "canonical_ece": 0.0443,
+            "log_loss": 0.7338,
+            "brier_skill_score": 0.0,
+            "roc_auc_ovr_macro": 0.4892,
+            "roc_auc_ovr_macro_95_ci": [
+                0.4391,
+                0.534
+            ],
+            "buy_roc_auc": 0.4512,
+            "buy_roc_auc_95_ci": [
+                0.3819,
+                0.514
+            ],
+            "buy_pr_auc": 0.1838,
+            "buy_pr_auc_95_ci": [
+                0.1443,
+                0.2253
+            ],
+            "buy_prevalence": 0.2017,
+            "buy_pr_lift": 0.9112,
+            "brier_decomp": {
+                "brier_raw": 0.4198,
+                "brier_binned": 0.4197,
+                "reliability": 0.0062,
+                "resolution": 0.0033,
+                "uncertainty": 0.4168,
+                "within_bin_residual": 0.0001,
+                "decomp_check_binned": 0.4197,
+                "decomp_check_raw": 0.4198,
+                "exact_identity_binned_diff": 0.0,
+                "exact_identity_raw_diff": 5.551115123125783e-17,
+                "class_decompositions": {
+                    "SELL_0": {
+                        "brier_raw": 0.19687,
+                        "brier_binned": 0.19689,
+                        "reliability": 0.00406,
+                        "resolution": 0.00256,
+                        "uncertainty": 0.19539,
+                        "within_bin_residual": -2e-05,
+                        "identity_check_binned": 0.19689,
+                        "identity_check_raw": 0.19687
+                    },
+                    "HOLD_1": {
+                        "brier_raw": 0.06094,
+                        "brier_binned": 0.06104,
+                        "reliability": 0.00061,
+                        "resolution": 1e-05,
+                        "uncertainty": 0.06044,
+                        "within_bin_residual": -0.0001,
+                        "identity_check_binned": 0.06104,
+                        "identity_check_raw": 0.06094
+                    },
+                    "BUY_2": {
+                        "brier_raw": 0.16202,
+                        "brier_binned": 0.1618,
+                        "reliability": 0.00153,
+                        "resolution": 0.00074,
+                        "uncertainty": 0.16101,
+                        "within_bin_residual": 0.00022,
+                        "identity_check_binned": 0.1618,
+                        "identity_check_raw": 0.16202
+                    }
+                },
+                "mathematical_reconciliation_note": "Classical Murphy (1973) assumes discrete forecasts where predictions equal bin means. For continuous model probabilities, Brier_raw = Reliability - Resolution + Uncertainty + WithinBinResidual. Here, Reliability (0.0062) - Resolution (0.0033) + Uncertainty (0.4168) = 0.4197 (matching Brier_binned 0.4197 exactly). The +0.0001 within-bin discretization effect accounts for the residual difference with Brier_raw (0.4198)."
+            },
+            "class_wise_ece": {
+                "SELL_0": 0.0443,
+                "HOLD_1": 0.0244,
+                "BUY_2": 0.0368
+            }
+        },
+        "Candidate_A_Temperature_Scaling": {
+            "pooled_brier": 0.585,
+            "canonical_ece": 0.0439,
+            "log_loss": 0.9689,
+            "brier_skill_score": -0.3935,
+            "roc_auc_ovr_macro": 0.4882,
+            "roc_auc_ovr_macro_95_ci": [
+                0.4444,
+                0.5363
+            ],
+            "buy_roc_auc": 0.5303,
+            "buy_roc_auc_95_ci": [
+                0.4674,
+                0.5865
+            ],
+            "buy_pr_auc": 0.2283,
+            "buy_pr_auc_95_ci": [
+                0.1758,
+                0.2817
+            ],
+            "buy_prevalence": 0.2017,
+            "buy_pr_lift": 1.1319,
+            "brier_decomp": {
+                "brier_raw": 0.585,
+                "brier_binned": 0.5857,
+                "reliability": 0.1714,
+                "resolution": 0.0025,
+                "uncertainty": 0.4168,
+                "within_bin_residual": -0.0007,
+                "decomp_check_binned": 0.5857,
+                "decomp_check_raw": 0.585,
+                "exact_identity_binned_diff": 1.1102230246251565e-16,
+                "exact_identity_raw_diff": 1.5171985445761038e-08,
+                "class_decompositions": {
+                    "SELL_0": {
+                        "brier_raw": 0.29162,
+                        "brier_binned": 0.2924,
+                        "reliability": 0.09863,
+                        "resolution": 0.00162,
+                        "uncertainty": 0.19539,
+                        "within_bin_residual": -0.00078,
+                        "identity_check_binned": 0.2924,
+                        "identity_check_raw": 0.29162
+                    },
+                    "HOLD_1": {
+                        "brier_raw": 0.11308,
+                        "brier_binned": 0.11296,
+                        "reliability": 0.05287,
+                        "resolution": 0.00035,
+                        "uncertainty": 0.06044,
+                        "within_bin_residual": 0.00011,
+                        "identity_check_binned": 0.11296,
+                        "identity_check_raw": 0.11308
+                    },
+                    "BUY_2": {
+                        "brier_raw": 0.18034,
+                        "brier_binned": 0.18037,
+                        "reliability": 0.01986,
+                        "resolution": 0.00051,
+                        "uncertainty": 0.16101,
+                        "within_bin_residual": -3e-05,
+                        "identity_check_binned": 0.18037,
+                        "identity_check_raw": 0.18034
+                    }
+                },
+                "mathematical_reconciliation_note": "Classical Murphy (1973) assumes discrete forecasts where predictions equal bin means. For continuous model probabilities, Brier_raw = Reliability - Resolution + Uncertainty + WithinBinResidual. Here, Reliability (0.1714) - Resolution (0.0025) + Uncertainty (0.4168) = 0.5857 (matching Brier_binned 0.5857 exactly). The +-0.0007 within-bin discretization effect accounts for the residual difference with Brier_raw (0.5850)."
+            },
+            "class_wise_ece": {
+                "SELL_0": 0.2748,
+                "HOLD_1": 0.1781,
+                "BUY_2": 0.1148
+            }
+        },
+        "Candidate_B_Dirichlet_Calibration": {
+            "pooled_brier": 0.4749,
+            "canonical_ece": 0.1358,
+            "log_loss": 0.8215,
+            "brier_skill_score": -0.1313,
+            "roc_auc_ovr_macro": 0.493,
+            "roc_auc_ovr_macro_95_ci": [
+                0.451,
+                0.5389
+            ],
+            "buy_roc_auc": 0.5251,
+            "buy_roc_auc_95_ci": [
+                0.4615,
+                0.5822
+            ],
+            "buy_pr_auc": 0.2246,
+            "buy_pr_auc_95_ci": [
+                0.1727,
+                0.277
+            ],
+            "buy_prevalence": 0.2017,
+            "buy_pr_lift": 1.1135,
+            "brier_decomp": {
+                "brier_raw": 0.4749,
+                "brier_binned": 0.4726,
+                "reliability": 0.0588,
+                "resolution": 0.003,
+                "uncertainty": 0.4168,
+                "within_bin_residual": 0.0023,
+                "decomp_check_binned": 0.4726,
+                "decomp_check_raw": 0.4749,
+                "exact_identity_binned_diff": 0.0,
+                "exact_identity_raw_diff": 0.0,
+                "class_decompositions": {
+                    "SELL_0": {
+                        "brier_raw": 0.22554,
+                        "brier_binned": 0.22555,
+                        "reliability": 0.03229,
+                        "resolution": 0.00213,
+                        "uncertainty": 0.19539,
+                        "within_bin_residual": -0.0,
+                        "identity_check_binned": 0.22555,
+                        "identity_check_raw": 0.22554
+                    },
+                    "HOLD_1": {
+                        "brier_raw": 0.08013,
+                        "brier_binned": 0.07897,
+                        "reliability": 0.01889,
+                        "resolution": 0.00036,
+                        "uncertainty": 0.06044,
+                        "within_bin_residual": 0.00116,
+                        "identity_check_binned": 0.07897,
+                        "identity_check_raw": 0.08013
+                    },
+                    "BUY_2": {
+                        "brier_raw": 0.16925,
+                        "brier_binned": 0.16811,
+                        "reliability": 0.00764,
+                        "resolution": 0.00054,
+                        "uncertainty": 0.16101,
+                        "within_bin_residual": 0.00113,
+                        "identity_check_binned": 0.16811,
+                        "identity_check_raw": 0.16925
+                    }
+                },
+                "mathematical_reconciliation_note": "Classical Murphy (1973) assumes discrete forecasts where predictions equal bin means. For continuous model probabilities, Brier_raw = Reliability - Resolution + Uncertainty + WithinBinResidual. Here, Reliability (0.0588) - Resolution (0.0030) + Uncertainty (0.4168) = 0.4726 (matching Brier_binned 0.4726 exactly). The +0.0023 within-bin discretization effect accounts for the residual difference with Brier_raw (0.4749)."
+            },
+            "class_wise_ece": {
+                "SELL_0": 0.1602,
+                "HOLD_1": 0.084,
+                "BUY_2": 0.0761
+            }
+        },
+        "Candidate_C_Bayesian_Shrinkage": {
+            "pooled_brier": 0.4203,
+            "canonical_ece": 0.0446,
+            "log_loss": 0.7348,
+            "brier_skill_score": -0.0012,
+            "roc_auc_ovr_macro": 0.4807,
+            "roc_auc_ovr_macro_95_ci": [
+                0.4323,
+                0.5283
+            ],
+            "buy_roc_auc": 0.4577,
+            "buy_roc_auc_95_ci": [
+                0.3854,
+                0.5236
+            ],
+            "buy_pr_auc": 0.1941,
+            "buy_pr_auc_95_ci": [
+                0.1496,
+                0.2499
+            ],
+            "buy_prevalence": 0.2017,
+            "buy_pr_lift": 0.9625,
+            "brier_decomp": {
+                "brier_raw": 0.4203,
+                "brier_binned": 0.4202,
+                "reliability": 0.0066,
+                "resolution": 0.0032,
+                "uncertainty": 0.4168,
+                "within_bin_residual": 0.0001,
+                "decomp_check_binned": 0.4202,
+                "decomp_check_raw": 0.4203,
+                "exact_identity_binned_diff": 0.0,
+                "exact_identity_raw_diff": 5.551115123125783e-17,
+                "class_decompositions": {
+                    "SELL_0": {
+                        "brier_raw": 0.19719,
+                        "brier_binned": 0.19724,
+                        "reliability": 0.00435,
+                        "resolution": 0.0025,
+                        "uncertainty": 0.19539,
+                        "within_bin_residual": -5e-05,
+                        "identity_check_binned": 0.19724,
+                        "identity_check_raw": 0.19719
+                    },
+                    "HOLD_1": {
+                        "brier_raw": 0.06111,
+                        "brier_binned": 0.06112,
+                        "reliability": 0.00068,
+                        "resolution": 0.0,
+                        "uncertainty": 0.06044,
+                        "within_bin_residual": -1e-05,
+                        "identity_check_binned": 0.06112,
+                        "identity_check_raw": 0.06111
+                    },
+                    "BUY_2": {
+                        "brier_raw": 0.16196,
+                        "brier_binned": 0.16184,
+                        "reliability": 0.00156,
+                        "resolution": 0.00074,
+                        "uncertainty": 0.16101,
+                        "within_bin_residual": 0.00013,
+                        "identity_check_binned": 0.16184,
+                        "identity_check_raw": 0.16196
+                    }
+                },
+                "mathematical_reconciliation_note": "Classical Murphy (1973) assumes discrete forecasts where predictions equal bin means. For continuous model probabilities, Brier_raw = Reliability - Resolution + Uncertainty + WithinBinResidual. Here, Reliability (0.0066) - Resolution (0.0032) + Uncertainty (0.4168) = 0.4202 (matching Brier_binned 0.4202 exactly). The +0.0001 within-bin discretization effect accounts for the residual difference with Brier_raw (0.4203)."
+            },
+            "class_wise_ece": {
+                "SELL_0": 0.0446,
+                "HOLD_1": 0.0257,
+                "BUY_2": 0.037
+            }
+        }
+    },
+    "outer_fold_records": [
+        {
+            "fold": 1,
+            "n_val": 414,
+            "brier_prior": 0.4937,
+            "brier_raw_control": 0.5621,
+            "brier_temp_scaling": 0.5471,
+            "brier_dirichlet": 0.5165,
+            "brier_bayesian_shrinkage": 0.4933,
+            "bss_temp_scaling": -0.1082,
+            "bss_dirichlet": -0.0462,
+            "bss_bayesian_shrinkage": 0.0008,
+            "ece_raw": 0.1137,
+            "ece_temp": 0.04,
+            "ece_diri": 0.0991,
+            "ece_shrunk": 0.0566
+        },
+        {
+            "fold": 2,
+            "n_val": 414,
+            "brier_prior": 0.4593,
+            "brier_raw_control": 0.6464,
+            "brier_temp_scaling": 0.6253,
+            "brier_dirichlet": 0.5268,
+            "brier_bayesian_shrinkage": 0.4593,
+            "bss_temp_scaling": -0.3614,
+            "bss_dirichlet": -0.147,
+            "bss_bayesian_shrinkage": 0.0,
+            "ece_raw": 0.1006,
+            "ece_temp": 0.0589,
+            "ece_diri": 0.0742,
+            "ece_shrunk": 0.0128
+        },
+        {
+            "fold": 3,
+            "n_val": 414,
+            "brier_prior": 0.324,
+            "brier_raw_control": 0.6198,
+            "brier_temp_scaling": 0.6105,
+            "brier_dirichlet": 0.4266,
+            "brier_bayesian_shrinkage": 0.3261,
+            "bss_temp_scaling": -0.8843,
+            "bss_dirichlet": -0.3167,
+            "bss_bayesian_shrinkage": -0.0065,
+            "ece_raw": 0.1242,
+            "ece_temp": 0.0924,
+            "ece_diri": 0.2549,
+            "ece_shrunk": 0.1297
+        },
+        {
+            "fold": 4,
+            "n_val": 414,
+            "brier_prior": 0.4024,
+            "brier_raw_control": 0.5471,
+            "brier_temp_scaling": 0.5572,
+            "brier_dirichlet": 0.4298,
+            "brier_bayesian_shrinkage": 0.4024,
+            "bss_temp_scaling": -0.3847,
+            "bss_dirichlet": -0.0681,
+            "bss_bayesian_shrinkage": 0.0,
+            "ece_raw": 0.0546,
+            "ece_temp": 0.0782,
+            "ece_diri": 0.1338,
+            "ece_shrunk": 0.0169
+        }
+    ],
+    "calibrator_params_per_fold": [
+        {
+            "fold": 1,
+            "train_samples": 399,
+            "inner_oof_samples": 297,
+            "temperature": 1.4936,
+            "dirichlet_weights": [
+                0.4681,
+                0.734,
+                0.6664
+            ],
+            "dirichlet_biases": [
+                0.248,
+                -0.1663,
+                -0.0817
+            ],
+            "shrinkage_alpha": 0.0163,
+            "train_prior": [
+                0.7293,
+                0.0952,
+                0.1754
+            ]
+        },
+        {
+            "fold": 2,
+            "train_samples": 813,
+            "inner_oof_samples": 609,
+            "temperature": 1.4798,
+            "dirichlet_weights": [
+                0.4683,
+                0.7427,
+                0.7012
+            ],
+            "dirichlet_biases": [
+                0.2642,
+                -0.1375,
+                -0.1267
+            ],
+            "shrinkage_alpha": 0.0,
+            "train_prior": [
+                0.7085,
+                0.1009,
+                0.1907
+            ]
+        },
+        {
+            "fold": 3,
+            "train_samples": 1227,
+            "inner_oof_samples": 918,
+            "temperature": 1.4731,
+            "dirichlet_weights": [
+                0.439,
+                0.88,
+                0.6381
+            ],
+            "dirichlet_biases": [
+                0.2455,
+                -0.1591,
+                -0.0864
+            ],
+            "shrinkage_alpha": 0.0217,
+            "train_prior": [
+                0.6976,
+                0.088,
+                0.2143
+            ]
+        },
+        {
+            "fold": 4,
+            "train_samples": 1641,
+            "inner_oof_samples": 1230,
+            "temperature": 1.3835,
+            "dirichlet_weights": [
+                0.4235,
+                0.9754,
+                0.7103
+            ],
+            "dirichlet_biases": [
+                0.3234,
+                -0.2593,
+                -0.0641
+            ],
+            "shrinkage_alpha": 0.0,
+            "train_prior": [
+                0.7294,
+                0.0719,
+                0.1987
+            ]
+        }
+    ],
+    "governance_gate_disposition": {
+        "brier_le_0_20": {
+            "threshold": "<= 0.20",
+            "training_prior": 0.4198,
+            "raw_control": 0.5939,
+            "temperature_scaling": 0.585,
+            "dirichlet_calibration": 0.4749,
+            "bayesian_shrinkage": 0.4203,
+            "status": "FAIL (No candidate reaches <= 0.20; Bayesian Shrinkage achieves lowest Brier = 0.4224)"
+        },
+        "canonical_ece_le_0_08": {
+            "threshold": "<= 0.08",
+            "raw_control": 0.0769,
+            "temperature_scaling": 0.0439,
+            "dirichlet_calibration": 0.1358,
+            "bayesian_shrinkage": 0.0446,
+            "status": "PASS (Temperature Scaling: 0.0465, Bayesian Shrinkage: 0.0413)"
+        },
+        "brier_skill_gt_0": {
+            "threshold": "> 0.00%",
+            "temperature_scaling": -0.3935,
+            "dirichlet_calibration": -0.1313,
+            "bayesian_shrinkage": -0.0012,
+            "status": "FAIL (Calibrators achieve 0.00% or negative skill; cannot outperform training prior)"
+        },
+        "production_authorization": {
+            "threshold": "Authorized",
+            "measured": "BLOCKED \u2014 RESEARCH_ONLY",
+            "status": "BLOCKED"
+        }
+    }
+}

@@ -1,0 +1,6 @@
+model_or_baseline,pooled_brier,canonical_ece,log_loss,brier_skill_score
+Uniform_Forecast_Baseline,0.6667,0.3979,1.0986121892929077,-0.5783617424242424
+Training_Prior_Baseline,0.4224,0.0413,0.7372210425524692,0.0
+Control_V24_27Feat,0.5964,0.0833,0.9932637214660645,-0.4119
+Candidate_MomentumCore_5Feat,0.6236,0.073,1.0209494829177856,-0.4763
+Candidate_CompactHybrid_8Feat,0.6343,0.1438,1.0475798845291138,-0.5017

@@ -1,0 +1,6 @@
+model_or_calibrator,pooled_brier,canonical_ece,log_loss,brier_skill_score,macro_roc_auc,macro_roc_auc_95_ci,buy_roc_auc,buy_roc_auc_95_ci,buy_pr_auc,buy_pr_auc_95_ci,buy_pr_lift,gate_brier_le_0_20,gate_ece_le_0_08,gate_bss_gt_0
+Control_Raw_XGBoost,0.5939,0.0769,0.9886,-41.47%,0.4851,"[0.4425, 0.5339]",0.5284,"[0.4657, 0.5834]",0.2251,"[0.1724, 0.2765]",1.116x,FAIL,PASS,FAIL
+Training_Prior_Baseline,0.4198,0.0443,0.7338,0.00%,0.4892,"[0.4391, 0.534]",0.4512,"[0.3819, 0.514]",0.1838,"[0.1443, 0.2253]",0.9112x,FAIL,PASS,FAIL
+Candidate_A_Temperature_Scaling,0.585,0.0439,0.9689,-39.35%,0.4882,"[0.4444, 0.5363]",0.5303,"[0.4674, 0.5865]",0.2283,"[0.1758, 0.2817]",1.1319x,FAIL,PASS,FAIL
+Candidate_B_Dirichlet_Calibration,0.4749,0.1358,0.8215,-13.13%,0.493,"[0.451, 0.5389]",0.5251,"[0.4615, 0.5822]",0.2246,"[0.1727, 0.277]",1.1135x,FAIL,FAIL,FAIL
+Candidate_C_Bayesian_Shrinkage,0.4203,0.0446,0.7348,-0.12%,0.4807,"[0.4323, 0.5283]",0.4577,"[0.3854, 0.5236]",0.1941,"[0.1496, 0.2499]",0.9625x,FAIL,PASS,FAIL
