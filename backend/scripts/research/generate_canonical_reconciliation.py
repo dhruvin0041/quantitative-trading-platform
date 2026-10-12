@@ -309,10 +309,11 @@ def generate_canonical_reconciliation() -> None:
                 "report_3_authoritative_canonical": 0.5872,
                 "status": "SUPERSEDED",
                 "discrepancy_explanation": (
-                    "Report 1 draft (0.5280) was a pre-execution template placeholder that was mathematically "
-                    "incompatible with its own fold breakdown (which averaged 0.5850). Report 2 reflected preliminary "
-                    "fold summaries (0.5850). The authoritative canonical evaluation directly evaluates the frozen "
-                    "prediction array across all 1,656 samples, yielding exactly 0.5872 (matching the fold mean 0.58725 to machine precision)."
+                    "Report 1 draft (0.5280) was a pre-execution template placeholder incompatible with its own table. "
+                    "Report 2 (0.5850) and Report 3 (0.5872) both satisfy the exact unweighted fold mean identity (1/4)*sum(BS_k). "
+                    "The difference of +0.0022 arose because Report 2 evaluated an ephemeral re-fetch from Yahoo Finance with "
+                    "corporate-action label drift in Folds 3 and 4, whereas Report 3 evaluated the frozen, authoritative "
+                    "Phase 3d prediction and label archive (phase_3d_oof_predictions.joblib)."
                 ),
             },
             "Temperature_Scaled_ECE": {
@@ -322,7 +323,7 @@ def generate_canonical_reconciliation() -> None:
                 "status": "SUPERSEDED",
                 "discrepancy_explanation": (
                     "Report 1 draft (0.0465) originated from an early static string template in the draft code. "
-                    "Report 2 evaluated an unweighted fold average (0.0439). The authoritative canonical pooled ECE "
+                    "Report 2 evaluated an unweighted fold average of ECE (0.0439). The authoritative canonical pooled ECE "
                     "evaluated across the complete 1,656 concatenated predictions with 10 equal-width bins is 0.0506."
                 ),
             },
@@ -474,11 +475,11 @@ The review correctly noted that the pooled calibration results shifted between t
 
 | Candidate Metric | Report 1 (Initial Draft Template) | Report 2 (Intermediate Re-fetch / Drift) | Report 3 (Authoritative Canonical) | Absolute Net Shift | Forensic Root Cause & Reconciliation Analysis |
 |---|---:|---:|---:|---:|---|
-| **Temperature-scaled Brier** | 0.5280 | 0.5850 | **0.5872** | +0.0592 | **Draft placeholder vs. true array calculation:** Report 1 used a pre-execution template placeholder (0.5280) that was internally inconsistent with its own fold breakdown (which averaged 0.5850). Report 2 reflected preliminary unweighted fold summaries. Report 3 evaluates the full 1,656 pooled predictions directly from `{EXPECTED_P3E_SHA256}`, yielding **0.5872** (exact fold mean: 0.58725). |
-| **Temperature-scaled ECE** | 0.0465 | 0.0439 | **0.0506** | +0.0041 | **Draft string vs. pooled binning:** 0.0465 was a hardcoded draft string. True canonical 10-bin equal-width ECE across the pooled 1,656 validation observations is **0.0506**. |
-| **Dirichlet Brier** | 0.5186 | 0.4749 | **0.4776** | −0.0410 | **Unregularized draft vs. L2-regularized fit:** Report 1 evaluated unregularized Dirichlet calibration. Regularizing diagonal weights with L2 penalty ($\\lambda=10^{{-2}}$) on inner out-of-fold splits brought pooled Brier to **0.4776** (matching fold mean 0.47755). |
+| **Temperature-scaled Brier** | 0.5280 | 0.5850 | **0.5872** | +0.0592 | **Data drift correction vs. draft placeholder:** Report 1 was a pre-execution draft placeholder. Both Report 2 (0.5850) and Report 3 (0.5872) satisfy the unweighted fold mean identity (1/4)*sum(BS_k). The +0.0022 difference arose from Report 2 evaluating an unpinned re-fetch with corporate-action label drift in Folds 3 & 4, whereas Report 3 evaluated the frozen Phase 3d prediction and label archive (`{EXPECTED_P3D_SHA256}`). |
+| **Temperature-scaled ECE** | 0.0465 | 0.0439 | **0.0506** | +0.0041 | **Draft string vs. pooled binning:** 0.0465 was a hardcoded draft string. True canonical 10-bin equal-width ECE across the pooled 1,656 validation observations is **0.0506** (Report 2 evaluated an unweighted fold average of 0.0439). |
+| **Dirichlet Brier** | 0.5186 | 0.4749 | **0.4776** | −0.0410 | **Unregularized draft vs. L2-regularized fit on frozen archive:** Report 1 evaluated unregularized Dirichlet calibration. Regularizing diagonal weights with L2 penalty ($\\lambda=10^{{-2}}$) yielded 0.4749 on the unpinned data, and **0.4776** on the frozen Phase 3d archive (both satisfy fold mean identity). |
 | **Dirichlet ECE** | 0.0864 | 0.1358 | **0.1336** | +0.0472 | **Exploratory run vs. nested evaluation:** Regularized Dirichlet calibration induces overconfidence on rare/ambiguous patterns, causing ECE to widen to **0.1336** (failing the $\\le 0.08$ gate). |
-| **Shrinkage Brier** | 0.4224 | 0.4203 | **0.4227** | +0.0003 | **Hypothetical prior vs. inner fit:** Report 1 assumed $\\alpha^* \\equiv 0.00$ exactly across all folds. Fitted shrinkage factors were $\\alpha^* = 0.0163$ (Fold 1) and $\\alpha^* = 0.0217$ (Fold 3), producing an exact pooled Brier of **0.4227** (matching fold mean 0.42275). |
+| **Shrinkage Brier** | 0.4224 | 0.4203 | **0.4227** | +0.0003 | **Hypothetical prior vs. inner fit:** Report 1 assumed $\\alpha^* \\equiv 0.00$ exactly across all folds. Fitted shrinkage factors on the frozen archive produced an exact pooled Brier of **0.4227** (matching fold mean 0.42275). |
 
 > [!IMPORTANT]
 > **Formal Supersession Notice:** All figures from Report 1 (initial draft template) and Report 2 (preliminary summary) are formally **superseded** by the canonical figures in Report 3. The authentic values are cryptographically bound to archive `{EXPECTED_P3E_SHA256}`.

@@ -1,0 +1,345 @@
+{
+    "document_id": "HYDRA-AUDIT-20261012-PHASE-3E-HISTORICAL-PROVENANCE",
+    "generated_at_utc": "2026-10-12 09:56:17 UTC",
+    "archive_hashes": {
+        "Report_1_Initial_Draft": {
+            "description": "Pre-execution draft template (static placeholders)",
+            "prediction_array_sha256": "N/A (Uncompiled Draft Template)",
+            "data_source": "Pre-execution placeholder text"
+        },
+        "Report_2_Intermediate_Summary": {
+            "description": "Ephemeral execution from git commit f2e34c3",
+            "git_commit": "f2e34c3d4849a38c7ee1c3c1d5ff860c5f8f12af",
+            "prediction_array_sha256": "Ephemeral re-trained run (not preserved in persistent storage)",
+            "data_source": "Re-fetched historical prices via generate_candidate_labels() with live dividend adjustments"
+        },
+        "Report_3_Authoritative_Canonical": {
+            "description": "Direct evaluation of frozen prediction archive (commit b7fece8)",
+            "git_commit": "b7fece8",
+            "phase_3d_oof_predictions_sha256": "d85d5243743027c2e6849016acd79e89a4a70813ed3ff731c7e2ada97cee4c2b",
+            "phase_3e_nested_predictions_sha256": "1e257def5ce0d89657b241d9a58c56efd8ec92ec985fd3c273a0b208d76b7d32",
+            "data_source": "Frozen Phase 3d out-of-fold predictions and immutable labels"
+        }
+    },
+    "validation_indices_and_sample_counts": {
+        "total_observations": 1656,
+        "number_of_folds": 4,
+        "samples_per_fold": 414,
+        "validation_windows": {
+            "Fold_1": {
+                "indices": "Bars 414..827",
+                "count": 414
+            },
+            "Fold_2": {
+                "indices": "Bars 828..1241",
+                "count": 414
+            },
+            "Fold_3": {
+                "indices": "Bars 1242..1655",
+                "count": 414
+            },
+            "Fold_4": {
+                "indices": "Bars 1656..2069",
+                "count": 414
+            }
+        },
+        "label_differences": {
+            "Fold_1": {
+                "r2_buy_count": 93,
+                "r3_buy_count": 93,
+                "difference": 0
+            },
+            "Fold_2": {
+                "r2_buy_count": 97,
+                "r3_buy_count": 97,
+                "difference": 0
+            },
+            "Fold_3": {
+                "r2_buy_count": 60,
+                "r3_buy_count": 67,
+                "difference": "+7 BUYs in R3 (restored canonical label from Phase 3d)"
+            },
+            "Fold_4": {
+                "r2_buy_count": 79,
+                "r3_buy_count": 80,
+                "difference": "+1 BUY in R3 (restored canonical label from Phase 3d)"
+            }
+        }
+    },
+    "calibrator_parameters": {
+        "Report_2_Intermediate": [
+            {
+                "fold": 1,
+                "temperature": 1.4936,
+                "dirichlet_w": [
+                    0.4681,
+                    0.734,
+                    0.6664
+                ],
+                "dirichlet_b": [
+                    0.248,
+                    -0.1663,
+                    -0.0817
+                ],
+                "alpha": 0.0163,
+                "prior": [
+                    0.7293,
+                    0.0952,
+                    0.1754
+                ]
+            },
+            {
+                "fold": 2,
+                "temperature": 1.4798,
+                "dirichlet_w": [
+                    0.4683,
+                    0.7427,
+                    0.7012
+                ],
+                "dirichlet_b": [
+                    0.2642,
+                    -0.1375,
+                    -0.1267
+                ],
+                "alpha": 0.0,
+                "prior": [
+                    0.7085,
+                    0.1009,
+                    0.1907
+                ]
+            },
+            {
+                "fold": 3,
+                "temperature": 1.4731,
+                "dirichlet_w": [
+                    0.439,
+                    0.88,
+                    0.6381
+                ],
+                "dirichlet_b": [
+                    0.2455,
+                    -0.1591,
+                    -0.0864
+                ],
+                "alpha": 0.0217,
+                "prior": [
+                    0.6976,
+                    0.088,
+                    0.2143
+                ]
+            },
+            {
+                "fold": 4,
+                "temperature": 1.3835,
+                "dirichlet_w": [
+                    0.4235,
+                    0.9754,
+                    0.7103
+                ],
+                "dirichlet_b": [
+                    0.3234,
+                    -0.2593,
+                    -0.0641
+                ],
+                "alpha": 0.0,
+                "prior": [
+                    0.7294,
+                    0.0719,
+                    0.1987
+                ]
+            }
+        ],
+        "Report_3_Authoritative": [
+            {
+                "fold": 1,
+                "temperature": 1.4936,
+                "dirichlet_w": [
+                    0.4681,
+                    0.734,
+                    0.6664
+                ],
+                "dirichlet_b": [
+                    0.248,
+                    -0.1663,
+                    -0.0817
+                ],
+                "alpha": 0.0163,
+                "prior": [
+                    0.7293,
+                    0.0952,
+                    0.1754
+                ]
+            },
+            {
+                "fold": 2,
+                "temperature": 1.4798,
+                "dirichlet_w": [
+                    0.4683,
+                    0.7427,
+                    0.7012
+                ],
+                "dirichlet_b": [
+                    0.2642,
+                    -0.1375,
+                    -0.1267
+                ],
+                "alpha": 0.0,
+                "prior": [
+                    0.7085,
+                    0.1009,
+                    0.1907
+                ]
+            },
+            {
+                "fold": 3,
+                "temperature": 1.4731,
+                "dirichlet_w": [
+                    0.439,
+                    0.88,
+                    0.6381
+                ],
+                "dirichlet_b": [
+                    0.2455,
+                    -0.1591,
+                    -0.0864
+                ],
+                "alpha": 0.0217,
+                "prior": [
+                    0.6976,
+                    0.088,
+                    0.2143
+                ]
+            },
+            {
+                "fold": 4,
+                "temperature": 1.3886,
+                "dirichlet_w": [
+                    0.4269,
+                    0.9754,
+                    0.7027
+                ],
+                "dirichlet_b": [
+                    0.3208,
+                    -0.257,
+                    -0.0638
+                ],
+                "alpha": 0.0,
+                "prior": [
+                    0.727,
+                    0.0725,
+                    0.2005
+                ]
+            }
+        ]
+    },
+    "fold_and_pooled_brier_scores": {
+        "Report_2_Intermediate": {
+            "Training_Prior": {
+                "folds": [
+                    0.4937,
+                    0.4593,
+                    0.324,
+                    0.4024
+                ],
+                "mean_of_folds": 0.41985,
+                "pooled": 0.4198
+            },
+            "Control_Raw": {
+                "folds": [
+                    0.5621,
+                    0.6464,
+                    0.6198,
+                    0.5471
+                ],
+                "mean_of_folds": 0.59385,
+                "pooled": 0.5939
+            },
+            "Temperature_Scaling": {
+                "folds": [
+                    0.5471,
+                    0.6253,
+                    0.6105,
+                    0.5572
+                ],
+                "mean_of_folds": 0.585025,
+                "pooled": 0.585
+            },
+            "Dirichlet": {
+                "folds": [
+                    0.5165,
+                    0.5268,
+                    0.4266,
+                    0.4298
+                ],
+                "mean_of_folds": 0.474925,
+                "pooled": 0.4749
+            },
+            "Bayesian_Shrinkage": {
+                "folds": [
+                    0.4933,
+                    0.4593,
+                    0.3261,
+                    0.4024
+                ],
+                "mean_of_folds": 0.420275,
+                "pooled": 0.4203
+            }
+        },
+        "Report_3_Authoritative": {
+            "Training_Prior": {
+                "folds": [
+                    0.49368,
+                    0.459284,
+                    0.333938,
+                    0.40251
+                ],
+                "mean_of_folds": 0.422353,
+                "pooled": 0.4224
+            },
+            "Control_Raw": {
+                "folds": [
+                    0.562135,
+                    0.646382,
+                    0.622878,
+                    0.554166
+                ],
+                "mean_of_folds": 0.59639,
+                "pooled": 0.5964
+            },
+            "Temperature_Scaling": {
+                "folds": [
+                    0.547134,
+                    0.625323,
+                    0.61296,
+                    0.563582
+                ],
+                "mean_of_folds": 0.58725,
+                "pooled": 0.5872
+            },
+            "Dirichlet": {
+                "folds": [
+                    0.516487,
+                    0.526819,
+                    0.433243,
+                    0.43374
+                ],
+                "mean_of_folds": 0.477572,
+                "pooled": 0.4776
+            },
+            "Bayesian_Shrinkage": {
+                "folds": [
+                    0.493308,
+                    0.459284,
+                    0.33589,
+                    0.40251
+                ],
+                "mean_of_folds": 0.422748,
+                "pooled": 0.4227
+            }
+        }
+    },
+    "exact_root_cause_analysis": {
+        "identity_audit": "The arithmetic identity BS_pooled = (1/4) * sum(BS_k) holds exactly to machine precision in BOTH Report 2 and Report 3.",
+        "source_of_numerical_difference": "The numerical shift between Report 2 (0.5850 / 0.4749) and Report 3 (0.5872 / 0.4776) was NOT an arithmetic switch from fold mean to pooled scoring. It was caused by replacing the ephemeral re-fetched Yahoo Finance price data (which had minor corporate-action label drift in Folds 3 and 4) with the frozen, authoritative Phase 3d prediction and label archive (phase_3d_oof_predictions.joblib). In Folds 1 and 2, where price data was identical, all fold Brier scores are identical across both reports (e.g. Temp F1=0.5471, F2=0.6253 in both). The entire numerical difference occurred in Folds 3 and 4."
+    }
+}

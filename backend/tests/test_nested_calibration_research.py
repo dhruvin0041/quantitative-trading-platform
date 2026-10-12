@@ -328,3 +328,47 @@ def test_canonical_reconciliation_artifacts_integrity():
     assert prior["ranking"]["pooled"]["buy_auc"] == 0.4558
     assert prior["ranking"]["pooled"]["buy_pr"] == 0.1870
 
+
+def test_historical_provenance_reconciliation_artifact():
+    """Verify that the historical provenance artifact records exact fold shifts and verifies the fold mean identity."""
+    json_path = BACKEND_DIR / "reports" / "phase_3e_historical_provenance_reconciliation.json"
+    md_path = BACKEND_DIR / "reports" / "phase_3e_historical_provenance_reconciliation.md"
+
+    assert json_path.exists(), "Provenance JSON must exist"
+    assert md_path.exists(), "Provenance Markdown must exist"
+
+    with open(json_path, "r") as f:
+        data = json.load(f)
+
+    # 1. Verify Report 2 fold mean identity
+    r2_scores = data["fold_and_pooled_brier_scores"]["Report_2_Intermediate"]
+    r2_temp_folds = r2_scores["Temperature_Scaling"]["folds"]
+    assert np.isclose(np.mean(r2_temp_folds), r2_scores["Temperature_Scaling"]["mean_of_folds"], atol=1e-5)
+    assert round(np.mean(r2_temp_folds), 4) == 0.5850
+
+    r2_diri_folds = r2_scores["Dirichlet"]["folds"]
+    assert np.isclose(np.mean(r2_diri_folds), r2_scores["Dirichlet"]["mean_of_folds"], atol=1e-5)
+    assert round(np.mean(r2_diri_folds), 4) == 0.4749
+
+    # 2. Verify Report 3 fold mean identity
+    r3_scores = data["fold_and_pooled_brier_scores"]["Report_3_Authoritative"]
+    r3_temp_folds = r3_scores["Temperature_Scaling"]["folds"]
+    assert np.isclose(np.mean(r3_temp_folds), r3_scores["Temperature_Scaling"]["mean_of_folds"], atol=1e-5)
+    assert round(np.mean(r3_temp_folds), 4) == 0.5872
+
+    r3_diri_folds = r3_scores["Dirichlet"]["folds"]
+    assert np.isclose(np.mean(r3_diri_folds), r3_scores["Dirichlet"]["mean_of_folds"], atol=1e-5)
+    assert round(np.mean(r3_diri_folds), 4) == 0.4776
+
+    # 3. Verify that Fold 1 and Fold 2 scores are identical across Report 2 and Report 3
+    assert np.isclose(r2_temp_folds[0], r3_temp_folds[0], atol=1e-4)  # Fold 1: 0.5471
+    assert np.isclose(r2_temp_folds[1], r3_temp_folds[1], atol=1e-4)  # Fold 2: 0.6253
+
+    # 4. Verify that Fold 3 and Fold 4 explain the full +0.0022 shift
+    fold_diffs = np.array(r3_temp_folds) - np.array(r2_temp_folds)
+    assert np.isclose(fold_diffs[0], 0.0, atol=1e-4)
+    assert np.isclose(fold_diffs[1], 0.0, atol=1e-4)
+    assert fold_diffs[2] > 0.0  # Fold 3 shifted +0.0025
+    assert fold_diffs[3] > 0.0  # Fold 4 shifted +0.0064
+    assert np.isclose(np.mean(fold_diffs), 0.587250 - 0.585025, atol=1e-4)
+

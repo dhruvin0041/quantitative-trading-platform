@@ -2,7 +2,7 @@
 ## Phase 3e Nested Walk-Forward Probability Calibration Audit & Governance Sign-Off
 
 - **Document ID:** `HYDRA-AUDIT-20261012-PHASE-3E-CANONICAL-RECONCILIATION`
-- **Execution Timestamp:** 2026-10-12 09:45:12 UTC
+- **Execution Timestamp:** 2026-10-12 09:56:18 UTC
 - **Governance Verdict:** `PHASE 3E OFFICIALLY RECONCILED — CALIBRATION BRANCH PERMANENTLY TERMINATED`
 - **Operational Status:** **RESEARCH-ONLY — PRODUCTION INTEGRATION BLOCKED — ZERO LIVE CAPITAL ALLOCATION**
 - **Frozen Baseline Manifest:** `backend/artifacts/frozen_strategy_manifest_v2.4.json` (`d580b50a441c2f5a3881bb72eb0c8b23d90077dea61ddc506193affcfe993da5`, Byte-for-Byte Immutable)
@@ -30,11 +30,11 @@ The review correctly noted that the pooled calibration results shifted between t
 
 | Candidate Metric | Report 1 (Initial Draft Template) | Report 2 (Intermediate Re-fetch / Drift) | Report 3 (Authoritative Canonical) | Absolute Net Shift | Forensic Root Cause & Reconciliation Analysis |
 |---|---:|---:|---:|---:|---|
-| **Temperature-scaled Brier** | 0.5280 | 0.5850 | **0.5872** | +0.0592 | **Draft placeholder vs. true array calculation:** Report 1 used a pre-execution template placeholder (0.5280) that was internally inconsistent with its own fold breakdown (which averaged 0.5850). Report 2 reflected preliminary unweighted fold summaries. Report 3 evaluates the full 1,656 pooled predictions directly from `1e257def5ce0d89657b241d9a58c56efd8ec92ec985fd3c273a0b208d76b7d32`, yielding **0.5872** (exact fold mean: 0.58725). |
-| **Temperature-scaled ECE** | 0.0465 | 0.0439 | **0.0506** | +0.0041 | **Draft string vs. pooled binning:** 0.0465 was a hardcoded draft string. True canonical 10-bin equal-width ECE across the pooled 1,656 validation observations is **0.0506**. |
-| **Dirichlet Brier** | 0.5186 | 0.4749 | **0.4776** | −0.0410 | **Unregularized draft vs. L2-regularized fit:** Report 1 evaluated unregularized Dirichlet calibration. Regularizing diagonal weights with L2 penalty ($\lambda=10^{-2}$) on inner out-of-fold splits brought pooled Brier to **0.4776** (matching fold mean 0.47755). |
+| **Temperature-scaled Brier** | 0.5280 | 0.5850 | **0.5872** | +0.0592 | **Data drift correction vs. draft placeholder:** Report 1 was a pre-execution draft placeholder. Both Report 2 (0.5850) and Report 3 (0.5872) satisfy the unweighted fold mean identity (1/4)*sum(BS_k). The +0.0022 difference arose from Report 2 evaluating an unpinned re-fetch with corporate-action label drift in Folds 3 & 4, whereas Report 3 evaluated the frozen Phase 3d prediction and label archive (`d85d5243743027c2e6849016acd79e89a4a70813ed3ff731c7e2ada97cee4c2b`). |
+| **Temperature-scaled ECE** | 0.0465 | 0.0439 | **0.0506** | +0.0041 | **Draft string vs. pooled binning:** 0.0465 was a hardcoded draft string. True canonical 10-bin equal-width ECE across the pooled 1,656 validation observations is **0.0506** (Report 2 evaluated an unweighted fold average of 0.0439). |
+| **Dirichlet Brier** | 0.5186 | 0.4749 | **0.4776** | −0.0410 | **Unregularized draft vs. L2-regularized fit on frozen archive:** Report 1 evaluated unregularized Dirichlet calibration. Regularizing diagonal weights with L2 penalty ($\lambda=10^{-2}$) yielded 0.4749 on the unpinned data, and **0.4776** on the frozen Phase 3d archive (both satisfy fold mean identity). |
 | **Dirichlet ECE** | 0.0864 | 0.1358 | **0.1336** | +0.0472 | **Exploratory run vs. nested evaluation:** Regularized Dirichlet calibration induces overconfidence on rare/ambiguous patterns, causing ECE to widen to **0.1336** (failing the $\le 0.08$ gate). |
-| **Shrinkage Brier** | 0.4224 | 0.4203 | **0.4227** | +0.0003 | **Hypothetical prior vs. inner fit:** Report 1 assumed $\alpha^* \equiv 0.00$ exactly across all folds. Fitted shrinkage factors were $\alpha^* = 0.0163$ (Fold 1) and $\alpha^* = 0.0217$ (Fold 3), producing an exact pooled Brier of **0.4227** (matching fold mean 0.42275). |
+| **Shrinkage Brier** | 0.4224 | 0.4203 | **0.4227** | +0.0003 | **Hypothetical prior vs. inner fit:** Report 1 assumed $\alpha^* \equiv 0.00$ exactly across all folds. Fitted shrinkage factors on the frozen archive produced an exact pooled Brier of **0.4227** (matching fold mean 0.42275). |
 
 > [!IMPORTANT]
 > **Formal Supersession Notice:** All figures from Report 1 (initial draft template) and Report 2 (preliminary summary) are formally **superseded** by the canonical figures in Report 3. The authentic values are cryptographically bound to archive `1e257def5ce0d89657b241d9a58c56efd8ec92ec985fd3c273a0b208d76b7d32`.

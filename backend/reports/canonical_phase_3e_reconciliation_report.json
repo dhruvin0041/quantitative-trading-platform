@@ -1,6 +1,6 @@
 {
     "report_id": "HYDRA_V2.4.1_CANONICAL_PHASE_3E_RECONCILIATION",
-    "generated_at_utc": "2026-10-12 09:45:12 UTC",
+    "generated_at_utc": "2026-10-12 09:56:18 UTC",
     "authoritative_archive_hashes": {
         "phase_3d_oof_predictions": {
             "path": "D:\\DataScience\\Projects\\Data_Science_Projects\\Stock_Indicator\\backend\\artifacts\\research\\phase_3d_oof_predictions.joblib",
@@ -24,14 +24,14 @@
             "report_2_intermediate": 0.585,
             "report_3_authoritative_canonical": 0.5872,
             "status": "SUPERSEDED",
-            "discrepancy_explanation": "Report 1 draft (0.5280) was a pre-execution template placeholder that was mathematically incompatible with its own fold breakdown (which averaged 0.5850). Report 2 reflected preliminary fold summaries (0.5850). The authoritative canonical evaluation directly evaluates the frozen prediction array across all 1,656 samples, yielding exactly 0.5872 (matching the fold mean 0.58725 to machine precision)."
+            "discrepancy_explanation": "Report 1 draft (0.5280) was a pre-execution template placeholder incompatible with its own table. Report 2 (0.5850) and Report 3 (0.5872) both satisfy the exact unweighted fold mean identity (1/4)*sum(BS_k). The difference of +0.0022 arose because Report 2 evaluated an ephemeral re-fetch from Yahoo Finance with corporate-action label drift in Folds 3 and 4, whereas Report 3 evaluated the frozen, authoritative Phase 3d prediction and label archive (phase_3d_oof_predictions.joblib)."
         },
         "Temperature_Scaled_ECE": {
             "report_1_draft": 0.0465,
             "report_2_intermediate": 0.0439,
             "report_3_authoritative_canonical": 0.0506,
             "status": "SUPERSEDED",
-            "discrepancy_explanation": "Report 1 draft (0.0465) originated from an early static string template in the draft code. Report 2 evaluated an unweighted fold average (0.0439). The authoritative canonical pooled ECE evaluated across the complete 1,656 concatenated predictions with 10 equal-width bins is 0.0506."
+            "discrepancy_explanation": "Report 1 draft (0.0465) originated from an early static string template in the draft code. Report 2 evaluated an unweighted fold average of ECE (0.0439). The authoritative canonical pooled ECE evaluated across the complete 1,656 concatenated predictions with 10 equal-width bins is 0.0506."
         },
         "Dirichlet_Brier": {
             "report_1_draft": 0.5186,
