@@ -1,0 +1,6 @@
+candidate,n_features,total_buy_predictions,buy_support,buy_true_positives,pooled_buy_precision,pooled_buy_recall,mean_fold_accuracy,mean_fold_balanced_accuracy,mean_fold_unnormalized_brier,mean_fold_ece_max_conf,completed_trades,volume_weighted_win_rate,arithmetic_sum_net_return,continuous_compounded_net_return,mean_profit_factor,worst_fold_max_drawdown,continuous_worst_drawdown,mean_annualized_sharpe
+Control_V24_27Feat,27,286,334,66,0.2308,0.1976,0.5272,0.3413,0.5938,0.0983,126,0.5476,0.2923,0.2428,1.4116,-0.2654,-0.2654,0.6707
+Candidate_VolRegimeCore_5Feat,5,544,334,114,0.2096,0.3413,0.4336,0.3293,0.6442,0.1609,101,0.5149,0.0149,-0.0774,0.9845,-0.26,-0.26,-0.1108
+Candidate_MomentumCore_5Feat,5,516,334,104,0.2016,0.3114,0.4637,0.3374,0.6212,0.0775,208,0.5336,0.3399,0.269,1.2243,-0.2568,-0.3042,0.4385
+Candidate_CompactHybrid_8Feat,8,405,334,91,0.2247,0.2725,0.471,0.3417,0.6291,0.1623,90,0.5333,0.0591,-0.0132,1.2531,-0.3294,-0.3294,0.1169
+Candidate_NestedInnerSelection_8Feat,8,354,334,84,0.2373,0.2515,0.4843,0.3644,0.622,0.1169,103,0.5146,0.0397,-0.0224,1.3343,-0.2656,-0.3293,0.5896

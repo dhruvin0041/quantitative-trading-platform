@@ -98,7 +98,11 @@ class TestSignalRecoveryRegression(unittest.TestCase):
 
             mock_xgb = MagicMock()
             mock_xgb.n_features_in_ = len(FEATURE_COLUMNS_V30)
+            mock_xgb._artifact_hash = "a7291fd14368bb2035779a34dd6494a31b8532820c7bcce96155fbef9dcd2d80"
             mock_xgb.predict_proba.return_value = np.tile([0.05, 0.15, 0.80], (len(df), 1))
+
+            scaler_31._artifact_hash = "15ba081e304a6abcd2fb181733c1841205f5be9d8bd2ba53a6a03ee0abd6bd49"
+            scaler_27._artifact_hash = "15ba081e304a6abcd2fb181733c1841205f5be9d8bd2ba53a6a03ee0abd6bd49"
 
             mock_mm = MagicMock()
             mock_mm.xgb_model = mock_xgb
@@ -120,7 +124,7 @@ class TestSignalRecoveryRegression(unittest.TestCase):
             service.model_calibrator = None
 
             # Replay with 31-feature scaler
-            signals_31 = service._replay_causal_ml_signals("AAPL", df, version="V2.4")
+            signals_31 = service._replay_causal_ml_signals("AAPL", df, version="Institutional_Mesh_V2.4")
             self.assertIsInstance(signals_31, list)
             self.assertGreater(len(signals_31), 0)
 
@@ -128,7 +132,7 @@ class TestSignalRecoveryRegression(unittest.TestCase):
             real_ledger.clear_historical_replay("AAPL")
             mock_mm.scaler = scaler_27
             mock_xgb.n_features_in_ = len(FEATURE_COLUMNS)
-            signals_27 = service._replay_causal_ml_signals("AAPL", df, version="V2.4")
+            signals_27 = service._replay_causal_ml_signals("AAPL", df, version="Institutional_Mesh_V2.4")
             self.assertIsInstance(signals_27, list)
             self.assertGreater(len(signals_27), 0)
         finally:

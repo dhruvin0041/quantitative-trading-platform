@@ -1,0 +1,5 @@
+candidate,tp_multiplier,sl_multiplier,total_buy_predictions,buy_support,buy_true_positives,pooled_buy_precision,pooled_buy_precision_95_ci,pooled_buy_recall,mean_fold_accuracy,mean_fold_balanced_accuracy,mean_fold_unnormalized_brier,mean_fold_ece_max_conf,completed_trades,volume_weighted_win_rate,cumulative_net_return,mean_profit_factor,worst_fold_max_drawdown,mean_annualized_sharpe
+Control_3.0_0.5,3.0,0.5,278,337,65,0.2338,"[0.1879, 0.287]",0.1929,0.5254,0.3431,0.5964,0.0964,121,0.5537,0.3392,1.4858,-0.2654,1.0401
+Candidate_1.5_1.5,1.5,1.5,764,944,451,0.5903,"[0.5551, 0.6246]",0.4778,0.4275,0.3277,0.6844,0.1841,166,0.5,0.2085,1.346,-0.7603,0.5462
+Candidate_2.0_1.0,2.0,1.0,531,690,223,0.42,"[0.3787, 0.4624]",0.3232,0.4317,0.3171,0.6588,0.1353,167,0.4851,-0.1843,1.222,-0.7732,0.2232
+Candidate_2.0_1.5,2.0,1.5,617,814,300,0.4862,"[0.447, 0.5256]",0.3686,0.3726,0.3356,0.7238,0.2006,147,0.517,-0.237,1.0337,-0.7212,0.0469

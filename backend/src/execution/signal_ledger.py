@@ -23,10 +23,12 @@ SEMANTIC FIELD DEFINITIONS (Prospective Table):
 import hashlib
 import json
 import logging
+import math
+import re
 import sqlite3
 import uuid
 import zoneinfo
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -852,3 +854,363 @@ class SignalLedger:
             deleted = cursor.rowcount
         logger.info(f"[LEDGER] Cleared {deleted} historical replay rows for {symbol}.")
         return deleted
+
+    @staticmethod
+    def _parse_normalized_timestamp(ts_val: Any) -> Optional[datetime]:
+        """
+        Strictly parses and validates a timestamp string as an ISO 8601 or YYYY-MM-DD calendar date.
+
+        Enforces:
+        1. Non-empty string conforming to ISO 8601 or YYYY-MM-DD.
+        2. Exact calendar validity (rejects invalid days like 2025-02-31, 2025-04-31).
+        3. Valid time components (00:00:00 to 23:59:59).
+        4. Valid Earth timezone offset range: [-12:00, +14:00]. Rejects out-of-range offsets like +99:99.
+        5. Returns normalized UTC timezone-aware datetime.
+        """
+        if not isinstance(ts_val, str) or not ts_val.strip():
+            return None
+        s = ts_val.strip()
+
+        # Regex matching YYYY-MM-DD or YYYY-MM-DD[T ]HH:MM:SS[.ffffff][Z|(+|-)HH:MM]
+        iso_pattern = re.compile(
+            r"^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])"
+            r"(?:[T ]([01]\d|2[0-3]):([0-5]\d):([0-5]\d)(?:\.(\d+))?"
+            r"(?:(Z)|([+-])([01]\d|2[0-3]):?([0-5]\d)?)?)?$"
+        )
+        m = iso_pattern.match(s)
+        if not m:
+            return None
+
+        year = int(m.group(1))
+        month = int(m.group(2))
+        day = int(m.group(3))
+        has_time = m.group(4) is not None
+        hour = int(m.group(4)) if has_time else 16
+        minute = int(m.group(5)) if has_time else 0
+        second = int(m.group(6)) if has_time else 0
+        microsecond = int(m.group(7)[:6].ljust(6, "0")) if m.group(7) is not None else 0
+
+        # Validate calendar date by attempting construction
+        try:
+            naive_dt = datetime(year, month, day, hour, minute, second, microsecond)
+        except (ValueError, OverflowError):
+            return None
+
+        is_z = m.group(8)
+        tz_sign = m.group(9)
+        tz_hours = int(m.group(10)) if m.group(10) is not None else 0
+        tz_minutes = int(m.group(11)) if m.group(11) is not None else 0
+
+        if is_z:
+            tz = timezone.utc
+        elif tz_sign:
+            total_minutes = tz_hours * 60 + tz_minutes
+            # Earth valid range: -12:00 (-720 min) to +14:00 (+840 min)
+            if tz_sign == "+" and total_minutes > 840:
+                return None
+            if tz_sign == "-" and total_minutes > 720:
+                return None
+            offset_delta = timedelta(minutes=total_minutes if tz_sign == "+" else -total_minutes)
+            tz = timezone(offset_delta)
+        else:
+            # Naive: treat as America/New_York market time
+            tz = zoneinfo.ZoneInfo("America/New_York")
+
+        aware_dt = naive_dt.replace(tzinfo=tz)
+        return aware_dt.astimezone(timezone.utc)
+
+    @classmethod
+    def _is_valid_timestamp_format(cls, ts_val: Any) -> bool:
+        """Validates timestamp string as a valid ISO 8601 or YYYY-MM-DD calendar date."""
+        return cls._parse_normalized_timestamp(ts_val) is not None
+
+    @classmethod
+    def _validate_temporal_causality(cls, bar_timestamp: str, execution_target_bar: str) -> bool:
+        """
+        Enforces strict temporal causality and next-session execution ordering:
+        1. 'NEXT_SESSION_OPEN' (or 'NEXT_SESSION_OPEN ...'): always valid next-session convention.
+        2. Timestamp targets:
+           - Must parse to a valid timestamp.
+           - If date-only, execution target market open (09:30:00 ET) is compared.
+           - Normalized target UTC must be strictly after bar close UTC (rejects target <= bar close).
+           - Target session in America/New_York must be strictly after the bar date in America/New_York
+             (rejects same-day execution targets).
+        """
+        if not isinstance(execution_target_bar, str) or not execution_target_bar.strip():
+            return False
+        tgt = execution_target_bar.strip()
+        if tgt == "NEXT_SESSION_OPEN" or tgt.startswith("NEXT_SESSION_OPEN"):
+            return True
+
+        bar_utc = cls._parse_normalized_timestamp(bar_timestamp)
+        if bar_utc is None:
+            return False
+
+        # Parse target: if date-only YYYY-MM-DD, market open is 09:30:00 America/New_York
+        if len(tgt) == 10 and tgt.count("-") == 2:
+            try:
+                tgt_naive = datetime.strptime(tgt, "%Y-%m-%d").replace(hour=9, minute=30, second=0)
+                tgt_utc = tgt_naive.replace(tzinfo=zoneinfo.ZoneInfo("America/New_York")).astimezone(timezone.utc)
+            except (ValueError, OverflowError):
+                return False
+        else:
+            tgt_utc = cls._parse_normalized_timestamp(tgt)
+
+        if tgt_utc is None:
+            return False
+
+        # 1. Strict execution ordering: target must be strictly after bar close
+        if tgt_utc <= bar_utc:
+            return False
+
+        # 2. Daily session convention: target NY date must be strictly greater than bar NY date
+        bar_ny = bar_utc.astimezone(zoneinfo.ZoneInfo("America/New_York"))
+        tgt_ny = tgt_utc.astimezone(zoneinfo.ZoneInfo("America/New_York"))
+        if tgt_ny.date() <= bar_ny.date():
+            return False
+
+        return True
+
+    def replace_historical_replay_atomically(
+        self,
+        symbol: str,
+        validated_signals: List[Dict[str, Any]],
+        replay_status: str = "COMPLETED",
+        allow_empty: bool = False,
+        expected_bars: Optional[int] = None,
+        processed_bars: Optional[int] = None,
+    ) -> bool:
+        """
+        Atomically replaces preliminary historical replay evidence for a specific symbol
+        within a single database transaction.
+
+        Guarantees:
+        1. Pre-validation: Validates all signals in-memory BEFORE opening the transaction.
+        2. Finite Number Checks: Rejects NaN, +inf, -inf via math.isfinite() for confidence and execution_price.
+        3. Strict Metadata & Timestamp Formats: Enforces dict metadata, ISO/YYYY-MM-DD format,
+           valid Earth timezone offsets ([-12:00, +14:00]), and strict temporal causality.
+        4. Explicit Model Provenance: Requires non-empty, authorized candidate model_version.
+        5. Atomicity & Rollback: Purge and batch insert happen in ONE transaction. On any failure,
+           rolls back and preserves previous valid records.
+        6. Distinguishable Empty State & Completeness Proof:
+           - replay_status == 'COMPLETED' and allow_empty == True requires processed_bars == expected_bars >= 15.
+           - Incomplete replay windows, partial runs, or missing proofs fail closed.
+        7. Prospective Isolation: Never touches prospective_signals or live forward trades.
+        """
+        symbol = symbol.upper().strip()
+        if not symbol:
+            logger.error("[LEDGER REPLACEMENT REJECTED] Symbol is empty.")
+            return False
+
+        if replay_status != "COMPLETED":
+            logger.warning(
+                f"[LEDGER REPLACEMENT REJECTED] {symbol}: Replay status is '{replay_status}' (expected 'COMPLETED'). Existing records preserved."
+            )
+            return False
+
+        if len(validated_signals) == 0:
+            if not allow_empty:
+                logger.warning(
+                    f"[LEDGER REPLACEMENT REJECTED] {symbol}: Empty signals list without explicit allow_empty=True. Existing records preserved."
+                )
+                return False
+            if expected_bars is None or processed_bars is None:
+                logger.error(
+                    f"[LEDGER REPLACEMENT REJECTED] {symbol}: Empty replay cannot clear history without explicit completeness proof "
+                    f"(expected_bars and processed_bars must be provided)."
+                )
+                return False
+            if processed_bars != expected_bars or processed_bars < 15:
+                logger.error(
+                    f"[LEDGER REPLACEMENT REJECTED] {symbol}: Incomplete replay window (processed_bars={processed_bars}, "
+                    f"expected_bars={expected_bars}, minimum 15 required). Existing records preserved."
+                )
+                return False
+
+        now_utc = datetime.now(timezone.utc).isoformat()
+        records_to_insert = []
+
+        # Strict in-memory validation phase: validate EVERY signal before touching the database
+        for idx, sig in enumerate(validated_signals):
+            if not isinstance(sig, dict):
+                logger.error(f"[LEDGER VALIDATION ERROR] {symbol} index {idx}: Signal must be a dictionary.")
+                return False
+
+            # Required fields check
+            required_keys = {
+                "symbol",
+                "bar_timestamp",
+                "signal",
+                "confidence",
+                "execution_target_bar",
+                "execution_price",
+                "model_version",
+                "raw_features_hash",
+            }
+            missing_keys = required_keys - set(sig.keys())
+            if missing_keys:
+                logger.error(
+                    f"[LEDGER VALIDATION ERROR] {symbol} index {idx}: Missing required fields: {missing_keys}."
+                )
+                return False
+
+            sig_sym = str(sig.get("symbol", "")).upper().strip()
+            if sig_sym != symbol:
+                logger.error(
+                    f"[LEDGER VALIDATION ERROR] {symbol} index {idx}: Symbol mismatch ('{sig_sym}' != '{symbol}')."
+                )
+                return False
+
+            bar_ts = sig.get("bar_timestamp")
+            if not self._is_valid_timestamp_format(bar_ts):
+                logger.error(f"[LEDGER VALIDATION ERROR] {symbol} index {idx}: Invalid bar_timestamp format '{bar_ts}'.")
+                return False
+
+            act = sig.get("signal")
+            if act not in ("BUY", "SELL", "HOLD", "HOLD_LONG"):
+                logger.error(f"[LEDGER VALIDATION ERROR] {symbol} index {idx}: Invalid signal action '{act}'.")
+                return False
+
+            # Strict finite numerical validation for confidence
+            conf_val = sig.get("confidence")
+            if isinstance(conf_val, bool) or not isinstance(conf_val, (int, float)) or not math.isfinite(conf_val):
+                logger.error(
+                    f"[LEDGER VALIDATION ERROR] {symbol} index {idx}: Confidence must be a finite number (got {conf_val!r})."
+                )
+                return False
+            conf = float(conf_val)
+            if conf < 0.0 or conf > 1.0:
+                logger.error(
+                    f"[LEDGER VALIDATION ERROR] {symbol} index {idx}: Confidence out of range [0, 1] (got {conf})."
+                )
+                return False
+
+            exec_target = sig.get("execution_target_bar")
+            if not isinstance(exec_target, str) or not (
+                exec_target == "NEXT_SESSION_OPEN"
+                or exec_target.startswith("NEXT_SESSION_OPEN")
+                or self._is_valid_timestamp_format(exec_target)
+            ):
+                logger.error(
+                    f"[LEDGER VALIDATION ERROR] {symbol} index {idx}: Invalid execution_target_bar format '{exec_target}'."
+                )
+                return False
+
+            # Temporal causality and execution ordering check
+            if not self._validate_temporal_causality(bar_ts, exec_target):
+                logger.error(
+                    f"[LEDGER VALIDATION ERROR] {symbol} index {idx}: Temporal causality violation: "
+                    f"execution target '{exec_target}' violates causality relative to bar timestamp '{bar_ts}'."
+                )
+                return False
+
+            # Strict finite numerical validation for execution price
+            exec_price_val = sig.get("execution_price")
+            if isinstance(exec_price_val, bool) or not isinstance(exec_price_val, (int, float)) or not math.isfinite(exec_price_val):
+                logger.error(
+                    f"[LEDGER VALIDATION ERROR] {symbol} index {idx}: Execution price must be a finite number (got {exec_price_val!r})."
+                )
+                return False
+            exec_price = float(exec_price_val)
+            if exec_price <= 0.0:
+                logger.error(
+                    f"[LEDGER VALIDATION ERROR] {symbol} index {idx}: Non-positive execution price (got {exec_price})."
+                )
+                return False
+
+            # Model-version provenance check (must be non-empty and explicit authorized candidate)
+            model_ver = sig.get("model_version")
+            if not isinstance(model_ver, str) or not model_ver.strip():
+                logger.error(
+                    f"[LEDGER VALIDATION ERROR] {symbol} index {idx}: Missing or invalid model_version provenance."
+                )
+                return False
+            if model_ver not in ("Institutional_Mesh_V2.4.1", "Institutional_Mesh_V2.4", "Institutional_Mesh_V3"):
+                logger.error(
+                    f"[LEDGER VALIDATION ERROR] {symbol} index {idx}: Unauthorized model_version provenance '{model_ver}'. "
+                    f"Must be one of: Institutional_Mesh_V2.4.1, Institutional_Mesh_V2.4, Institutional_Mesh_V3."
+                )
+                return False
+
+            raw_hash = sig.get("raw_features_hash")
+            if not isinstance(raw_hash, str) or not raw_hash.strip():
+                logger.error(
+                    f"[LEDGER VALIDATION ERROR] {symbol} index {idx}: Missing raw_features_hash."
+                )
+                return False
+
+            # Metadata validation (must be dict or None, safe json serialization, no provisional signals)
+            meta = sig.get("metadata")
+            if meta is not None and not isinstance(meta, dict):
+                logger.error(
+                    f"[LEDGER VALIDATION ERROR] {symbol} index {idx}: Metadata must be a dictionary (got {type(meta).__name__})."
+                )
+                return False
+            meta = meta or {}
+            if meta.get("is_provisional") is True or meta.get("signal_state") == "PROVISIONAL":
+                logger.error(
+                    f"[LEDGER VALIDATION ERROR] {symbol} index {idx}: Cannot commit PROVISIONAL signal to immutable confirmed ledger."
+                )
+                return False
+            try:
+                metadata_json = json.dumps(meta, sort_keys=True)
+            except (TypeError, ValueError, OverflowError) as e:
+                logger.error(
+                    f"[LEDGER VALIDATION ERROR] {symbol} index {idx}: Metadata JSON serialization failed: {e}."
+                )
+                return False
+
+            # Validate record creation timestamp if explicitly supplied
+            rec_ts = sig.get("timestamp")
+            if rec_ts is not None and not self._is_valid_timestamp_format(rec_ts):
+                logger.error(
+                    f"[LEDGER VALIDATION ERROR] {symbol} index {idx}: Invalid creation timestamp format '{rec_ts}'."
+                )
+                return False
+
+            records_to_insert.append((
+                rec_ts or now_utc,
+                bar_ts,
+                symbol,
+                act,
+                conf,
+                exec_target,
+                exec_price,
+                model_ver,
+                raw_hash,
+                metadata_json,
+                "PRELIMINARY_HISTORICAL_EVIDENCE",
+            ))
+
+        # Atomic replacement in a single database transaction
+        conn = self._get_connection()
+        try:
+            with conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "DELETE FROM signal_ledger WHERE symbol = ? AND dataset = 'PRELIMINARY_HISTORICAL_EVIDENCE';",
+                    (symbol,),
+                )
+                deleted_count = cursor.rowcount
+
+                if records_to_insert:
+                    cursor.executemany(
+                        """
+                        INSERT INTO signal_ledger (
+                            timestamp, bar_timestamp, symbol, signal, confidence,
+                            execution_target_bar, execution_price, model_version,
+                            raw_features_hash, metadata, dataset
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                        """,
+                        records_to_insert,
+                    )
+            logger.info(
+                f"[LEDGER ATOMIC REPLACEMENT] {symbol}: Replaced {deleted_count} rows with {len(records_to_insert)} validated replay records."
+            )
+            return True
+        except Exception as e:
+            logger.error(f"[LEDGER ATOMIC REPLACEMENT FAILED] {symbol}: Rolled back transaction due to error: {e}")
+            return False
+        finally:
+            conn.close()
+

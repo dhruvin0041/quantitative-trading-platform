@@ -1,0 +1,370 @@
+{
+    "timestamp_utc": "2026-10-11T19:27:25Z",
+    "audit_objective": "Development-only discrimination audit and BUY/HOLD failure mode investigation",
+    "governance_status": "STRICT_NO_GO_MAINTAINED",
+    "h2_diagnostics_validation": {
+        "n_samples": 112,
+        "confusion_matrix": [
+            [
+                59,
+                1,
+                25
+            ],
+            [
+                5,
+                2,
+                1
+            ],
+            [
+                17,
+                0,
+                2
+            ]
+        ],
+        "unnormalized_multiclass_brier": 0.5394,
+        "normalized_brier_over_k": 0.1798,
+        "canonical_max_confidence_ece": 0.0342,
+        "binary_buy_ece_10bin": 0.2097,
+        "log_loss": 0.8715,
+        "overall_accuracy": 0.5625,
+        "classwise_diagnostics": {
+            "SELL": {
+                "support": 85,
+                "predicted_count": 81,
+                "true_positives": 59,
+                "precision": 0.7284,
+                "recall": 0.6941,
+                "f1": 0.7108,
+                "mean_predicted_prob": 0.4968,
+                "actual_frequency": 0.7589
+            },
+            "HOLD": {
+                "support": 8,
+                "predicted_count": 3,
+                "true_positives": 2,
+                "precision": 0.6667,
+                "recall": 0.25,
+                "f1": 0.3636,
+                "mean_predicted_prob": 0.1239,
+                "actual_frequency": 0.0714
+            },
+            "BUY": {
+                "support": 19,
+                "predicted_count": 28,
+                "true_positives": 2,
+                "precision": 0.0714,
+                "recall": 0.1053,
+                "f1": 0.0851,
+                "mean_predicted_prob": 0.3793,
+                "actual_frequency": 0.1696
+            }
+        }
+    },
+    "development_walk_forward_audit": {
+        "n_splits": 4,
+        "embargo_bars": 15,
+        "total_oof_samples": 1656,
+        "per_fold_reports": [
+            {
+                "fold_index": 1,
+                "train_samples": 399,
+                "val_samples": 414,
+                "val_index_range": [
+                    414,
+                    828
+                ],
+                "confusion_matrix": [
+                    [
+                        223,
+                        15,
+                        38
+                    ],
+                    [
+                        35,
+                        1,
+                        9
+                    ],
+                    [
+                        70,
+                        1,
+                        22
+                    ]
+                ],
+                "multiclass_brier": 0.5748,
+                "normalized_brier": 0.1916,
+                "ece_max_conf": 0.1159,
+                "log_loss": 1.0059,
+                "accuracy": 0.5942,
+                "classwise_metrics": {
+                    "SELL": {
+                        "support": 276,
+                        "predicted": 328,
+                        "precision": 0.6799,
+                        "recall": 0.808,
+                        "f1": 0.7384
+                    },
+                    "HOLD": {
+                        "support": 45,
+                        "predicted": 17,
+                        "precision": 0.0588,
+                        "recall": 0.0222,
+                        "f1": 0.0323
+                    },
+                    "BUY": {
+                        "support": 93,
+                        "predicted": 69,
+                        "precision": 0.3188,
+                        "recall": 0.2366,
+                        "f1": 0.2716
+                    }
+                }
+            },
+            {
+                "fold_index": 2,
+                "train_samples": 813,
+                "val_samples": 414,
+                "val_index_range": [
+                    828,
+                    1242
+                ],
+                "confusion_matrix": [
+                    [
+                        178,
+                        65,
+                        45
+                    ],
+                    [
+                        22,
+                        3,
+                        4
+                    ],
+                    [
+                        55,
+                        20,
+                        22
+                    ]
+                ],
+                "multiclass_brier": 0.6271,
+                "normalized_brier": 0.209,
+                "ece_max_conf": 0.0905,
+                "log_loss": 1.0449,
+                "accuracy": 0.4903,
+                "classwise_metrics": {
+                    "SELL": {
+                        "support": 288,
+                        "predicted": 255,
+                        "precision": 0.698,
+                        "recall": 0.6181,
+                        "f1": 0.6556
+                    },
+                    "HOLD": {
+                        "support": 29,
+                        "predicted": 88,
+                        "precision": 0.0341,
+                        "recall": 0.1034,
+                        "f1": 0.0513
+                    },
+                    "BUY": {
+                        "support": 97,
+                        "predicted": 71,
+                        "precision": 0.3099,
+                        "recall": 0.2268,
+                        "f1": 0.2619
+                    }
+                }
+            },
+            {
+                "fold_index": 3,
+                "train_samples": 1227,
+                "val_samples": 414,
+                "val_index_range": [
+                    1242,
+                    1656
+                ],
+                "confusion_matrix": [
+                    [
+                        186,
+                        111,
+                        43
+                    ],
+                    [
+                        6,
+                        3,
+                        1
+                    ],
+                    [
+                        29,
+                        19,
+                        16
+                    ]
+                ],
+                "multiclass_brier": 0.5991,
+                "normalized_brier": 0.1997,
+                "ece_max_conf": 0.0838,
+                "log_loss": 0.9625,
+                "accuracy": 0.4952,
+                "classwise_metrics": {
+                    "SELL": {
+                        "support": 340,
+                        "predicted": 221,
+                        "precision": 0.8416,
+                        "recall": 0.5471,
+                        "f1": 0.6631
+                    },
+                    "HOLD": {
+                        "support": 10,
+                        "predicted": 133,
+                        "precision": 0.0226,
+                        "recall": 0.3,
+                        "f1": 0.042
+                    },
+                    "BUY": {
+                        "support": 64,
+                        "predicted": 60,
+                        "precision": 0.2667,
+                        "recall": 0.25,
+                        "f1": 0.2581
+                    }
+                }
+            },
+            {
+                "fold_index": 4,
+                "train_samples": 1641,
+                "val_samples": 414,
+                "val_index_range": [
+                    1656,
+                    2070
+                ],
+                "confusion_matrix": [
+                    [
+                        219,
+                        28,
+                        62
+                    ],
+                    [
+                        20,
+                        2,
+                        3
+                    ],
+                    [
+                        57,
+                        7,
+                        16
+                    ]
+                ],
+                "multiclass_brier": 0.5495,
+                "normalized_brier": 0.1832,
+                "ece_max_conf": 0.0792,
+                "log_loss": 0.8985,
+                "accuracy": 0.5725,
+                "classwise_metrics": {
+                    "SELL": {
+                        "support": 309,
+                        "predicted": 296,
+                        "precision": 0.7399,
+                        "recall": 0.7087,
+                        "f1": 0.724
+                    },
+                    "HOLD": {
+                        "support": 25,
+                        "predicted": 37,
+                        "precision": 0.0541,
+                        "recall": 0.08,
+                        "f1": 0.0645
+                    },
+                    "BUY": {
+                        "support": 80,
+                        "predicted": 81,
+                        "precision": 0.1975,
+                        "recall": 0.2,
+                        "f1": 0.1988
+                    }
+                }
+            }
+        ],
+        "pooled_summary": {
+            "confusion_matrix": [
+                [
+                    806,
+                    219,
+                    188
+                ],
+                [
+                    83,
+                    9,
+                    17
+                ],
+                [
+                    211,
+                    47,
+                    76
+                ]
+            ],
+            "unnormalized_multiclass_brier": 0.5876,
+            "normalized_brier": 0.1959,
+            "canonical_ece": 0.0705,
+            "log_loss": 0.9779,
+            "accuracy": 0.538,
+            "classwise_metrics": {
+                "SELL": {
+                    "support": 1213,
+                    "predicted": 1100,
+                    "precision": 0.7327,
+                    "recall": 0.6645,
+                    "f1": 0.6969
+                },
+                "HOLD": {
+                    "support": 109,
+                    "predicted": 275,
+                    "precision": 0.0327,
+                    "recall": 0.0826,
+                    "f1": 0.0469
+                },
+                "BUY": {
+                    "support": 334,
+                    "predicted": 281,
+                    "precision": 0.2705,
+                    "recall": 0.2275,
+                    "f1": 0.2472
+                }
+            }
+        }
+    },
+    "failure_modes_investigation": {
+        "buy_signal_diagnostics": {
+            "h2_evaluation": {
+                "total_buy_signals_emitted": 28,
+                "true_positives": 2,
+                "false_positives_on_sell_bars": 25,
+                "false_positive_sell_percentage": 89.29,
+                "precision": 0.0714,
+                "recall": 0.1053,
+                "finding": "Severe counter-trend false positives: 89.3% (25/28) of emitted BUY signals occurred during realized downward (SELL) regimes."
+            },
+            "oof_development": {
+                "total_buy_signals_emitted": 281,
+                "true_positives": 76,
+                "false_positives_on_sell_bars": 188,
+                "false_positive_sell_percentage": 66.9,
+                "precision": 0.2705,
+                "recall": 0.2275,
+                "finding": "Consistent historical weakness: 66.9% (188/281) of emitted BUY signals were false alarms on realized downward moves."
+            }
+        },
+        "hold_signal_diagnostics": {
+            "h2_support": 8,
+            "h2_support_percentage": 7.14,
+            "h2_hold_absorbed_by_sell_percentage": 62.5,
+            "oof_support": 109,
+            "oof_support_percentage": 6.58,
+            "oof_hold_absorbed_by_sell_percentage": 76.15,
+            "finding": "Extreme label scarcity: Triple-barrier horizon (10-15 bars) rarely terminates without touching either TP or SL barrier, creating only ~6-7% HOLD support. The classifier treats HOLD as near-zero prior and collapses HOLD predictions into SELL."
+        },
+        "root_cause_conclusion": "The predictive failure is primarily MODEL DISCRIMINATION and REGIME CONDITIONING, not merely probability miscalibration. In downward market regimes (SELL > 70%), oscillator features (RSI, Bollinger Width) trigger premature dip-buying signals that systematically fail forward barriers. Post-hoc calibrators cannot repair this inverted discrimination without either destroying sensitivity (collapsing to 100% SELL) or preserving false BUY signals."
+    },
+    "protocol_mandates": {
+        "h2_status": "Formally classified as Historical Research Evaluation set. Not an untouched holdout.",
+        "selection_rule": "Future candidate selection must be established strictly via development walk-forward CV.",
+        "prospective_status": "Paper trading remains isolated. Zero live capital allocation."
+    }
+}

@@ -1,0 +1,980 @@
+{
+    "execution_timestamp_utc": "2026-10-11T20:00:24Z",
+    "experiment_name": "HYDRA_V2.4.1_FEATURE_DIAGNOSTICS_AUDIT",
+    "governance_verdict": "FEATURE EXTENSIONS REJECTED FOR DIRECT INTEGRATION \u2014 DIAGNOSTIC EVIDENCE ESTABLISHED",
+    "governance_verdict_rationale": "Audited feature families establish distinct informational properties but do not satisfy the strict multi-gate criteria for production integration. Further representation engineering must remain in research-only isolation.",
+    "frozen_baseline_verification": {
+        "manifest_file": "D:\\DataScience\\Projects\\Data_Science_Projects\\Stock_Indicator\\backend\\artifacts\\frozen_strategy_manifest_v2.4.json",
+        "verified_sha256": "d580b50a441c2f5a3881bb72eb0c8b23d90077dea61ddc506193affcfe993da5",
+        "status": "PASS_IMMUTABLE"
+    },
+    "feature_information_content_top10": [
+        {
+            "feature": "ZScore_MACD_Hist_50",
+            "mean_buy": 0.0117,
+            "std_buy": 1.0888,
+            "mean_non_buy": -0.055,
+            "std_non_buy": 1.232,
+            "ks_statistic": 0.0598,
+            "ks_p_value": 0.179276,
+            "is_ks_significant_01": false,
+            "mean_bacc_drop": 0.01686,
+            "std_bacc_drop": 0.02896
+        },
+        {
+            "feature": "ZScore_RSI_120",
+            "mean_buy": 0.156,
+            "std_buy": 1.0876,
+            "mean_non_buy": -0.038,
+            "std_non_buy": 1.137,
+            "ks_statistic": 0.077,
+            "ks_p_value": 0.036297,
+            "is_ks_significant_01": false,
+            "mean_bacc_drop": 0.01519,
+            "std_bacc_drop": 0.01858
+        },
+        {
+            "feature": "ZScore_Return_20",
+            "mean_buy": -0.0244,
+            "std_buy": 0.951,
+            "mean_non_buy": -0.0187,
+            "std_non_buy": 0.9824,
+            "ks_statistic": 0.0326,
+            "ks_p_value": 0.858628,
+            "is_ks_significant_01": false,
+            "mean_bacc_drop": 0.01442,
+            "std_bacc_drop": 0.02665
+        },
+        {
+            "feature": "ATR_Regime_Ratio",
+            "mean_buy": 0.9644,
+            "std_buy": 0.2374,
+            "mean_non_buy": 1.0615,
+            "std_non_buy": 0.2743,
+            "ks_statistic": 0.1668,
+            "ks_p_value": 0.0,
+            "is_ks_significant_01": true,
+            "mean_bacc_drop": 0.01377,
+            "std_bacc_drop": 0.0124
+        },
+        {
+            "feature": "Relative_Strength",
+            "mean_buy": 0.0009,
+            "std_buy": 0.0121,
+            "mean_non_buy": 0.0005,
+            "std_non_buy": 0.012,
+            "ks_statistic": 0.032,
+            "ks_p_value": 0.873758,
+            "is_ks_significant_01": false,
+            "mean_bacc_drop": 0.01304,
+            "std_bacc_drop": 0.02052
+        },
+        {
+            "feature": "ZScore_Volume_Ratio_50",
+            "mean_buy": 0.0701,
+            "std_buy": 1.0164,
+            "mean_non_buy": 0.0025,
+            "std_non_buy": 1.0073,
+            "ks_statistic": 0.0622,
+            "ks_p_value": 0.147125,
+            "is_ks_significant_01": false,
+            "mean_bacc_drop": 0.00973,
+            "std_bacc_drop": 0.01166
+        },
+        {
+            "feature": "Price_vs_EMA9",
+            "mean_buy": 0.0052,
+            "std_buy": 0.0199,
+            "mean_non_buy": 0.0034,
+            "std_non_buy": 0.0237,
+            "ks_statistic": 0.0797,
+            "ks_p_value": 0.028063,
+            "is_ks_significant_01": false,
+            "mean_bacc_drop": 0.00654,
+            "std_bacc_drop": 0.00805
+        },
+        {
+            "feature": "ZScore_RSI_50",
+            "mean_buy": 0.1901,
+            "std_buy": 1.1609,
+            "mean_non_buy": -0.002,
+            "std_non_buy": 1.2523,
+            "ks_statistic": 0.0955,
+            "ks_p_value": 0.004297,
+            "is_ks_significant_01": true,
+            "mean_bacc_drop": 0.00527,
+            "std_bacc_drop": 0.01323
+        },
+        {
+            "feature": "ZScore_Volume_Ratio_20",
+            "mean_buy": 0.0879,
+            "std_buy": 1.0795,
+            "mean_non_buy": 0.0535,
+            "std_non_buy": 1.0855,
+            "ks_statistic": 0.0454,
+            "ks_p_value": 0.485479,
+            "is_ks_significant_01": false,
+            "mean_bacc_drop": 0.00503,
+            "std_bacc_drop": 0.00649
+        },
+        {
+            "feature": "EMA9_vs_EMA21",
+            "mean_buy": 0.0078,
+            "std_buy": 0.0186,
+            "mean_non_buy": 0.005,
+            "std_non_buy": 0.0192,
+            "ks_statistic": 0.0878,
+            "ks_p_value": 0.01092,
+            "is_ks_significant_01": false,
+            "mean_bacc_drop": 0.0038,
+            "std_bacc_drop": 0.01762
+        }
+    ],
+    "feature_family_pooled_summary": {
+        "Baseline_V24_27Feat": {
+            "n_features": 27,
+            "total_buy_predictions": 278,
+            "buy_support": 337,
+            "buy_true_positives": 65,
+            "pooled_buy_precision": 0.2338,
+            "effective_n": 185.3,
+            "autocorrelation_adjusted_95_ci": [
+                0.1787,
+                0.2998
+            ],
+            "pooled_buy_recall": 0.1929,
+            "mean_fold_accuracy": 0.5254,
+            "mean_fold_balanced_accuracy": 0.3431,
+            "mean_fold_unnormalized_brier": 0.5964,
+            "mean_fold_ece_max_conf": 0.0964,
+            "completed_trades": 121,
+            "volume_weighted_win_rate": 0.5537,
+            "cumulative_net_return": 0.3392,
+            "mean_profit_factor": 1.4858,
+            "worst_fold_max_drawdown": -0.2654,
+            "mean_annualized_sharpe": 1.0401
+        },
+        "Baseline_plus_LeadLag_33Feat": {
+            "n_features": 33,
+            "total_buy_predictions": 274,
+            "buy_support": 337,
+            "buy_true_positives": 49,
+            "pooled_buy_precision": 0.1788,
+            "effective_n": 182.7,
+            "autocorrelation_adjusted_95_ci": [
+                0.1301,
+                0.2408
+            ],
+            "pooled_buy_recall": 0.1454,
+            "mean_fold_accuracy": 0.5338,
+            "mean_fold_balanced_accuracy": 0.3199,
+            "mean_fold_unnormalized_brier": 0.5889,
+            "mean_fold_ece_max_conf": 0.0867,
+            "completed_trades": 136,
+            "volume_weighted_win_rate": 0.4853,
+            "cumulative_net_return": 0.0997,
+            "mean_profit_factor": 1.321,
+            "worst_fold_max_drawdown": -0.2331,
+            "mean_annualized_sharpe": 0.5143
+        },
+        "Baseline_plus_VolRegime_30Feat": {
+            "n_features": 30,
+            "total_buy_predictions": 343,
+            "buy_support": 337,
+            "buy_true_positives": 75,
+            "pooled_buy_precision": 0.2187,
+            "effective_n": 228.7,
+            "autocorrelation_adjusted_95_ci": [
+                0.17,
+                0.2766
+            ],
+            "pooled_buy_recall": 0.2226,
+            "mean_fold_accuracy": 0.5344,
+            "mean_fold_balanced_accuracy": 0.3436,
+            "mean_fold_unnormalized_brier": 0.597,
+            "mean_fold_ece_max_conf": 0.1012,
+            "completed_trades": 107,
+            "volume_weighted_win_rate": 0.514,
+            "cumulative_net_return": 2.0868,
+            "mean_profit_factor": 2.2222,
+            "worst_fold_max_drawdown": -0.2205,
+            "mean_annualized_sharpe": 1.9859
+        },
+        "Baseline_plus_Both_36Feat": {
+            "n_features": 36,
+            "total_buy_predictions": 388,
+            "buy_support": 337,
+            "buy_true_positives": 67,
+            "pooled_buy_precision": 0.1727,
+            "effective_n": 258.7,
+            "autocorrelation_adjusted_95_ci": [
+                0.1315,
+                0.2234
+            ],
+            "pooled_buy_recall": 0.1988,
+            "mean_fold_accuracy": 0.506,
+            "mean_fold_balanced_accuracy": 0.3245,
+            "mean_fold_unnormalized_brier": 0.6032,
+            "mean_fold_ece_max_conf": 0.0944,
+            "completed_trades": 126,
+            "volume_weighted_win_rate": 0.508,
+            "cumulative_net_return": 1.8972,
+            "mean_profit_factor": 1.7109,
+            "worst_fold_max_drawdown": -0.3188,
+            "mean_annualized_sharpe": 0.9912
+        }
+    },
+    "per_fold_metrics": [
+        {
+            "family": "Baseline_V24_27Feat",
+            "fold": 1,
+            "n_val_samples": 414,
+            "accuracy": 0.5942,
+            "balanced_accuracy": 0.3284,
+            "macro_f1": 0.3101,
+            "unnormalized_brier": 0.5621,
+            "ece_max_conf": 0.1137,
+            "log_loss": 1.0051,
+            "buy_predictions": 58,
+            "buy_support": 93,
+            "buy_true_positives": 14,
+            "buy_precision": 0.2414,
+            "buy_recall": 0.1505,
+            "buy_fpr": 0.1371,
+            "completed_trades": 29,
+            "win_rate": 0.5862,
+            "exposure_bars": 57,
+            "exposure_pct": 0.1377,
+            "total_net_return": 0.3014,
+            "avg_trade_return": 0.0104,
+            "profit_factor": 2.5819,
+            "max_drawdown": -0.1019,
+            "annualized_sharpe": 3.2722,
+            "bull_market_net_return": 0.0784,
+            "bear_market_net_return": 0.223,
+            "confusion_matrix": [
+                [
+                    232,
+                    9,
+                    37
+                ],
+                [
+                    36,
+                    0,
+                    7
+                ],
+                [
+                    77,
+                    2,
+                    14
+                ]
+            ]
+        },
+        {
+            "family": "Baseline_V24_27Feat",
+            "fold": 2,
+            "n_val_samples": 414,
+            "accuracy": 0.4831,
+            "balanced_accuracy": 0.3139,
+            "macro_f1": 0.3112,
+            "unnormalized_brier": 0.6464,
+            "ece_max_conf": 0.1006,
+            "log_loss": 1.0697,
+            "buy_predictions": 77,
+            "buy_support": 97,
+            "buy_true_positives": 18,
+            "buy_precision": 0.2338,
+            "buy_recall": 0.1856,
+            "buy_fpr": 0.1861,
+            "completed_trades": 31,
+            "win_rate": 0.5484,
+            "exposure_bars": 85,
+            "exposure_pct": 0.2053,
+            "total_net_return": -0.0834,
+            "avg_trade_return": -0.0027,
+            "profit_factor": 0.8181,
+            "max_drawdown": -0.1795,
+            "annualized_sharpe": -0.776,
+            "bull_market_net_return": -0.0616,
+            "bear_market_net_return": -0.0217,
+            "confusion_matrix": [
+                [
+                    178,
+                    56,
+                    54
+                ],
+                [
+                    20,
+                    4,
+                    5
+                ],
+                [
+                    59,
+                    20,
+                    18
+                ]
+            ]
+        },
+        {
+            "family": "Baseline_V24_27Feat",
+            "fold": 3,
+            "n_val_samples": 414,
+            "accuracy": 0.4662,
+            "balanced_accuracy": 0.4191,
+            "macro_f1": 0.3061,
+            "unnormalized_brier": 0.6229,
+            "ece_max_conf": 0.1194,
+            "log_loss": 0.9968,
+            "buy_predictions": 61,
+            "buy_support": 67,
+            "buy_true_positives": 13,
+            "buy_precision": 0.2131,
+            "buy_recall": 0.194,
+            "buy_fpr": 0.1383,
+            "completed_trades": 26,
+            "win_rate": 0.4615,
+            "exposure_bars": 82,
+            "exposure_pct": 0.1981,
+            "total_net_return": 0.0048,
+            "avg_trade_return": 0.0002,
+            "profit_factor": 1.0099,
+            "max_drawdown": -0.2654,
+            "annualized_sharpe": 0.0355,
+            "bull_market_net_return": 0.1432,
+            "bear_market_net_return": -0.1384,
+            "confusion_matrix": [
+                [
+                    174,
+                    114,
+                    48
+                ],
+                [
+                    5,
+                    6,
+                    0
+                ],
+                [
+                    31,
+                    23,
+                    13
+                ]
+            ]
+        },
+        {
+            "family": "Baseline_V24_27Feat",
+            "fold": 4,
+            "n_val_samples": 414,
+            "accuracy": 0.558,
+            "balanced_accuracy": 0.3109,
+            "macro_f1": 0.3175,
+            "unnormalized_brier": 0.5542,
+            "ece_max_conf": 0.0518,
+            "log_loss": 0.9015,
+            "buy_predictions": 82,
+            "buy_support": 80,
+            "buy_true_positives": 20,
+            "buy_precision": 0.2439,
+            "buy_recall": 0.25,
+            "buy_fpr": 0.1856,
+            "completed_trades": 35,
+            "win_rate": 0.6,
+            "exposure_bars": 84,
+            "exposure_pct": 0.2029,
+            "total_net_return": 0.1164,
+            "avg_trade_return": 0.0033,
+            "profit_factor": 1.5332,
+            "max_drawdown": -0.1126,
+            "annualized_sharpe": 1.6289,
+            "bull_market_net_return": 0.1164,
+            "bear_market_net_return": 0.0,
+            "confusion_matrix": [
+                [
+                    211,
+                    37,
+                    61
+                ],
+                [
+                    24,
+                    0,
+                    1
+                ],
+                [
+                    54,
+                    6,
+                    20
+                ]
+            ]
+        },
+        {
+            "family": "Baseline_plus_LeadLag_33Feat",
+            "fold": 1,
+            "n_val_samples": 414,
+            "accuracy": 0.5918,
+            "balanced_accuracy": 0.3307,
+            "macro_f1": 0.3172,
+            "unnormalized_brier": 0.5634,
+            "ece_max_conf": 0.1239,
+            "log_loss": 0.9795,
+            "buy_predictions": 41,
+            "buy_support": 93,
+            "buy_true_positives": 10,
+            "buy_precision": 0.2439,
+            "buy_recall": 0.1075,
+            "buy_fpr": 0.0966,
+            "completed_trades": 23,
+            "win_rate": 0.4783,
+            "exposure_bars": 41,
+            "exposure_pct": 0.099,
+            "total_net_return": 0.2184,
+            "avg_trade_return": 0.0095,
+            "profit_factor": 2.3964,
+            "max_drawdown": -0.0886,
+            "annualized_sharpe": 2.554,
+            "bull_market_net_return": 0.0585,
+            "bear_market_net_return": 0.1599,
+            "confusion_matrix": [
+                [
+                    233,
+                    15,
+                    30
+                ],
+                [
+                    40,
+                    2,
+                    1
+                ],
+                [
+                    78,
+                    5,
+                    10
+                ]
+            ]
+        },
+        {
+            "family": "Baseline_plus_LeadLag_33Feat",
+            "fold": 2,
+            "n_val_samples": 414,
+            "accuracy": 0.4758,
+            "balanced_accuracy": 0.3116,
+            "macro_f1": 0.3011,
+            "unnormalized_brier": 0.6487,
+            "ece_max_conf": 0.1137,
+            "log_loss": 1.0614,
+            "buy_predictions": 74,
+            "buy_support": 97,
+            "buy_true_positives": 14,
+            "buy_precision": 0.1892,
+            "buy_recall": 0.1443,
+            "buy_fpr": 0.1893,
+            "completed_trades": 31,
+            "win_rate": 0.4839,
+            "exposure_bars": 81,
+            "exposure_pct": 0.1957,
+            "total_net_return": -0.0709,
+            "avg_trade_return": -0.0023,
+            "profit_factor": 0.8442,
+            "max_drawdown": -0.1719,
+            "annualized_sharpe": -0.6066,
+            "bull_market_net_return": -0.0538,
+            "bear_market_net_return": -0.0171,
+            "confusion_matrix": [
+                [
+                    178,
+                    53,
+                    57
+                ],
+                [
+                    21,
+                    5,
+                    3
+                ],
+                [
+                    68,
+                    15,
+                    14
+                ]
+            ]
+        },
+        {
+            "family": "Baseline_plus_LeadLag_33Feat",
+            "fold": 3,
+            "n_val_samples": 414,
+            "accuracy": 0.5024,
+            "balanced_accuracy": 0.354,
+            "macro_f1": 0.3093,
+            "unnormalized_brier": 0.5928,
+            "ece_max_conf": 0.0399,
+            "log_loss": 0.9606,
+            "buy_predictions": 84,
+            "buy_support": 67,
+            "buy_true_positives": 15,
+            "buy_precision": 0.1786,
+            "buy_recall": 0.2239,
+            "buy_fpr": 0.1988,
+            "completed_trades": 48,
+            "win_rate": 0.4583,
+            "exposure_bars": 113,
+            "exposure_pct": 0.2729,
+            "total_net_return": -0.0766,
+            "avg_trade_return": -0.0016,
+            "profit_factor": 0.882,
+            "max_drawdown": -0.2331,
+            "annualized_sharpe": -0.4707,
+            "bull_market_net_return": 0.0589,
+            "bear_market_net_return": -0.1356,
+            "confusion_matrix": [
+                [
+                    190,
+                    80,
+                    66
+                ],
+                [
+                    5,
+                    3,
+                    3
+                ],
+                [
+                    30,
+                    22,
+                    15
+                ]
+            ]
+        },
+        {
+            "family": "Baseline_plus_LeadLag_33Feat",
+            "fold": 4,
+            "n_val_samples": 414,
+            "accuracy": 0.5652,
+            "balanced_accuracy": 0.2833,
+            "macro_f1": 0.285,
+            "unnormalized_brier": 0.5507,
+            "ece_max_conf": 0.0692,
+            "log_loss": 0.8998,
+            "buy_predictions": 75,
+            "buy_support": 80,
+            "buy_true_positives": 10,
+            "buy_precision": 0.1333,
+            "buy_recall": 0.125,
+            "buy_fpr": 0.1946,
+            "completed_trades": 34,
+            "win_rate": 0.5294,
+            "exposure_bars": 83,
+            "exposure_pct": 0.2005,
+            "total_net_return": 0.0288,
+            "avg_trade_return": 0.0008,
+            "profit_factor": 1.1616,
+            "max_drawdown": -0.0563,
+            "annualized_sharpe": 0.5805,
+            "bull_market_net_return": 0.0288,
+            "bear_market_net_return": 0.0,
+            "confusion_matrix": [
+                [
+                    224,
+                    20,
+                    65
+                ],
+                [
+                    25,
+                    0,
+                    0
+                ],
+                [
+                    59,
+                    11,
+                    10
+                ]
+            ]
+        },
+        {
+            "family": "Baseline_plus_VolRegime_30Feat",
+            "fold": 1,
+            "n_val_samples": 414,
+            "accuracy": 0.6087,
+            "balanced_accuracy": 0.3159,
+            "macro_f1": 0.281,
+            "unnormalized_brier": 0.5968,
+            "ece_max_conf": 0.158,
+            "log_loss": 1.0902,
+            "buy_predictions": 18,
+            "buy_support": 93,
+            "buy_true_positives": 3,
+            "buy_precision": 0.1667,
+            "buy_recall": 0.0323,
+            "buy_fpr": 0.0467,
+            "completed_trades": 11,
+            "win_rate": 0.5455,
+            "exposure_bars": 18,
+            "exposure_pct": 0.0435,
+            "total_net_return": 0.0997,
+            "avg_trade_return": 0.0091,
+            "profit_factor": 2.3785,
+            "max_drawdown": -0.0349,
+            "annualized_sharpe": 4.1147,
+            "bull_market_net_return": 0.019,
+            "bear_market_net_return": 0.0807,
+            "confusion_matrix": [
+                [
+                    248,
+                    15,
+                    15
+                ],
+                [
+                    42,
+                    1,
+                    0
+                ],
+                [
+                    88,
+                    2,
+                    3
+                ]
+            ]
+        },
+        {
+            "family": "Baseline_plus_VolRegime_30Feat",
+            "fold": 2,
+            "n_val_samples": 414,
+            "accuracy": 0.5362,
+            "balanced_accuracy": 0.3335,
+            "macro_f1": 0.3323,
+            "unnormalized_brier": 0.6037,
+            "ece_max_conf": 0.0942,
+            "log_loss": 1.0095,
+            "buy_predictions": 78,
+            "buy_support": 97,
+            "buy_true_positives": 20,
+            "buy_precision": 0.2564,
+            "buy_recall": 0.2062,
+            "buy_fpr": 0.183,
+            "completed_trades": 23,
+            "win_rate": 0.5217,
+            "exposure_bars": 85,
+            "exposure_pct": 0.2053,
+            "total_net_return": 0.0987,
+            "avg_trade_return": 0.0043,
+            "profit_factor": 1.2558,
+            "max_drawdown": -0.1306,
+            "annualized_sharpe": 0.771,
+            "bull_market_net_return": 0.1399,
+            "bear_market_net_return": -0.0411,
+            "confusion_matrix": [
+                [
+                    199,
+                    34,
+                    55
+                ],
+                [
+                    23,
+                    3,
+                    3
+                ],
+                [
+                    70,
+                    7,
+                    20
+                ]
+            ]
+        },
+        {
+            "family": "Baseline_plus_VolRegime_30Feat",
+            "fold": 3,
+            "n_val_samples": 414,
+            "accuracy": 0.4614,
+            "balanced_accuracy": 0.3983,
+            "macro_f1": 0.3104,
+            "unnormalized_brier": 0.6076,
+            "ece_max_conf": 0.0606,
+            "log_loss": 0.9888,
+            "buy_predictions": 125,
+            "buy_support": 67,
+            "buy_true_positives": 23,
+            "buy_precision": 0.184,
+            "buy_recall": 0.3433,
+            "buy_fpr": 0.2939,
+            "completed_trades": 34,
+            "win_rate": 0.4412,
+            "exposure_bars": 152,
+            "exposure_pct": 0.3671,
+            "total_net_return": 1.7005,
+            "avg_trade_return": 0.05,
+            "profit_factor": 3.4657,
+            "max_drawdown": -0.2205,
+            "annualized_sharpe": 1.1608,
+            "bull_market_net_return": -0.0078,
+            "bear_market_net_return": 1.7083,
+            "confusion_matrix": [
+                [
+                    164,
+                    72,
+                    100
+                ],
+                [
+                    5,
+                    4,
+                    2
+                ],
+                [
+                    32,
+                    12,
+                    23
+                ]
+            ]
+        },
+        {
+            "family": "Baseline_plus_VolRegime_30Feat",
+            "fold": 4,
+            "n_val_samples": 414,
+            "accuracy": 0.5314,
+            "balanced_accuracy": 0.3269,
+            "macro_f1": 0.3199,
+            "unnormalized_brier": 0.5801,
+            "ece_max_conf": 0.0919,
+            "log_loss": 0.9349,
+            "buy_predictions": 122,
+            "buy_support": 80,
+            "buy_true_positives": 29,
+            "buy_precision": 0.2377,
+            "buy_recall": 0.3625,
+            "buy_fpr": 0.2784,
+            "completed_trades": 39,
+            "win_rate": 0.5641,
+            "exposure_bars": 129,
+            "exposure_pct": 0.3116,
+            "total_net_return": 0.1879,
+            "avg_trade_return": 0.0048,
+            "profit_factor": 1.7886,
+            "max_drawdown": -0.1202,
+            "annualized_sharpe": 1.8972,
+            "bull_market_net_return": 0.1879,
+            "bear_market_net_return": 0.0,
+            "confusion_matrix": [
+                [
+                    191,
+                    29,
+                    89
+                ],
+                [
+                    21,
+                    0,
+                    4
+                ],
+                [
+                    47,
+                    4,
+                    29
+                ]
+            ]
+        },
+        {
+            "family": "Baseline_plus_Both_36Feat",
+            "fold": 1,
+            "n_val_samples": 414,
+            "accuracy": 0.5797,
+            "balanced_accuracy": 0.3206,
+            "macro_f1": 0.3064,
+            "unnormalized_brier": 0.6091,
+            "ece_max_conf": 0.1512,
+            "log_loss": 1.0823,
+            "buy_predictions": 44,
+            "buy_support": 93,
+            "buy_true_positives": 11,
+            "buy_precision": 0.25,
+            "buy_recall": 0.1183,
+            "buy_fpr": 0.1028,
+            "completed_trades": 23,
+            "win_rate": 0.6957,
+            "exposure_bars": 43,
+            "exposure_pct": 0.1039,
+            "total_net_return": 0.1135,
+            "avg_trade_return": 0.0049,
+            "profit_factor": 1.5691,
+            "max_drawdown": -0.1036,
+            "annualized_sharpe": 1.787,
+            "bull_market_net_return": 0.0327,
+            "bear_market_net_return": 0.0808,
+            "confusion_matrix": [
+                [
+                    228,
+                    18,
+                    32
+                ],
+                [
+                    41,
+                    1,
+                    1
+                ],
+                [
+                    80,
+                    2,
+                    11
+                ]
+            ]
+        },
+        {
+            "family": "Baseline_plus_Both_36Feat",
+            "fold": 2,
+            "n_val_samples": 414,
+            "accuracy": 0.5386,
+            "balanced_accuracy": 0.3359,
+            "macro_f1": 0.3302,
+            "unnormalized_brier": 0.5967,
+            "ece_max_conf": 0.071,
+            "log_loss": 0.9897,
+            "buy_predictions": 66,
+            "buy_support": 97,
+            "buy_true_positives": 16,
+            "buy_precision": 0.2424,
+            "buy_recall": 0.1649,
+            "buy_fpr": 0.1577,
+            "completed_trades": 20,
+            "win_rate": 0.6,
+            "exposure_bars": 82,
+            "exposure_pct": 0.1981,
+            "total_net_return": 0.0909,
+            "avg_trade_return": 0.0045,
+            "profit_factor": 1.3597,
+            "max_drawdown": -0.0908,
+            "annualized_sharpe": 0.9521,
+            "bull_market_net_return": 0.0808,
+            "bear_market_net_return": 0.0101,
+            "confusion_matrix": [
+                [
+                    203,
+                    37,
+                    48
+                ],
+                [
+                    23,
+                    4,
+                    2
+                ],
+                [
+                    74,
+                    7,
+                    16
+                ]
+            ]
+        },
+        {
+            "family": "Baseline_plus_Both_36Feat",
+            "fold": 3,
+            "n_val_samples": 414,
+            "accuracy": 0.4396,
+            "balanced_accuracy": 0.3348,
+            "macro_f1": 0.2865,
+            "unnormalized_brier": 0.6225,
+            "ece_max_conf": 0.0894,
+            "log_loss": 1.0084,
+            "buy_predictions": 152,
+            "buy_support": 67,
+            "buy_true_positives": 24,
+            "buy_precision": 0.1579,
+            "buy_recall": 0.3582,
+            "buy_fpr": 0.3689,
+            "completed_trades": 48,
+            "win_rate": 0.4375,
+            "exposure_bars": 176,
+            "exposure_pct": 0.4251,
+            "total_net_return": 1.6745,
+            "avg_trade_return": 0.0349,
+            "profit_factor": 2.8563,
+            "max_drawdown": -0.3188,
+            "annualized_sharpe": 1.0547,
+            "bull_market_net_return": 0.0638,
+            "bear_market_net_return": 1.6107,
+            "confusion_matrix": [
+                [
+                    156,
+                    55,
+                    125
+                ],
+                [
+                    6,
+                    2,
+                    3
+                ],
+                [
+                    30,
+                    13,
+                    24
+                ]
+            ]
+        },
+        {
+            "family": "Baseline_plus_Both_36Feat",
+            "fold": 4,
+            "n_val_samples": 414,
+            "accuracy": 0.4662,
+            "balanced_accuracy": 0.3066,
+            "macro_f1": 0.2994,
+            "unnormalized_brier": 0.5845,
+            "ece_max_conf": 0.0661,
+            "log_loss": 0.9429,
+            "buy_predictions": 126,
+            "buy_support": 80,
+            "buy_true_positives": 16,
+            "buy_precision": 0.127,
+            "buy_recall": 0.2,
+            "buy_fpr": 0.3293,
+            "completed_trades": 35,
+            "win_rate": 0.4286,
+            "exposure_bars": 134,
+            "exposure_pct": 0.3237,
+            "total_net_return": 0.0183,
+            "avg_trade_return": 0.0005,
+            "profit_factor": 1.0586,
+            "max_drawdown": -0.1864,
+            "annualized_sharpe": 0.1712,
+            "bull_market_net_return": 0.0183,
+            "bear_market_net_return": 0.0,
+            "confusion_matrix": [
+                [
+                    173,
+                    29,
+                    107
+                ],
+                [
+                    18,
+                    4,
+                    3
+                ],
+                [
+                    55,
+                    9,
+                    16
+                ]
+            ]
+        }
+    ],
+    "governance_gate_disposition": {
+        "unnormalized_brier_le_0_20": {
+            "threshold": "<= 0.20",
+            "baseline_measured": 0.5964,
+            "lead_lag_measured": 0.5889,
+            "status": "FAIL (Brier remains > 0.50 across all configurations)"
+        },
+        "canonical_ece_le_0_08": {
+            "threshold": "<= 0.08",
+            "baseline_measured": 0.0964,
+            "lead_lag_measured": 0.0867,
+            "status": "FAIL"
+        },
+        "incremental_net_expectancy": {
+            "threshold": "Superior to Baseline (+33.92%)",
+            "lead_lag_measured": "+9.97%",
+            "vol_regime_measured": "+208.68%",
+            "combined_measured": "+189.72%",
+            "status": "FAIL"
+        },
+        "v24_manifest_integrity": {
+            "threshold": "Byte-for-byte identical",
+            "measured": "d580b50a441c2f5a3881bb72eb0c8b23d90077dea61ddc506193affcfe993da5",
+            "status": "PASS"
+        },
+        "production_integration_authorization": {
+            "threshold": "Authorized",
+            "measured": "BLOCKED \u2014 PROPOSED_CANDIDATE_PENDING_AUTHORIZATION",
+            "status": "BLOCKED"
+        }
+    }
+}

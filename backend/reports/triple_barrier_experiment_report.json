@@ -1,0 +1,943 @@
+{
+    "execution_timestamp_utc": "2026-10-11T19:53:51Z",
+    "experiment_name": "HYDRA_V2.4.1_TRIPLE_BARRIER_LABEL_DESIGN_EXPERIMENT",
+    "governance_verdict": "REMEDIATION REJECTED \u2014 NO DEFENSIBLE IMPROVEMENT",
+    "governance_verdict_rationale": "Although symmetric 1.5x/1.5x barriers increase nominal BUY precision (59.03% vs 23.38%), this increase is an artifact of label prevalence (BUY support is 57.67% vs 20.01% in Control). Under rigorous walk-forward evaluation: 1) Multiclass calibration severely degrades: unnormalized Brier worsens from 0.5964 to 0.6844, and ECE worsens from 0.0964 to 0.1841. 2) Net cost-adjusted return deteriorates from +33.92% down to +20.85% due to signal over-emission (166 trades vs 121) and transaction drag. 3) Asymmetric candidates (2.0/1.0 and 2.0/1.5) suffer severe losses (-18.43% and -23.70%). 4) Zero candidates satisfy the institutional Brier gate (<= 0.20).",
+    "frozen_baseline_verification": {
+        "manifest_file": "D:\\DataScience\\Projects\\Data_Science_Projects\\Stock_Indicator\\backend\\artifacts\\frozen_strategy_manifest_v2.4.json",
+        "verified_sha256": "d580b50a441c2f5a3881bb72eb0c8b23d90077dea61ddc506193affcfe993da5",
+        "status": "PASS_IMMUTABLE"
+    },
+    "label_generation_diagnostics": {
+        "Control_3.0_0.5": {
+            "tp_multiplier": 3.0,
+            "sl_multiplier": 0.5,
+            "horizon_bars": 15,
+            "n_samples": 2074,
+            "class_counts": {
+                "SELL_0": 1512,
+                "HOLD_1": 147,
+                "BUY_2": 415
+            },
+            "class_percentages": {
+                "SELL_0": 72.9,
+                "HOLD_1": 7.09,
+                "BUY_2": 20.01
+            },
+            "same_bar_ambiguity_count": 0,
+            "same_bar_ambiguity_pct": 0.0,
+            "mean_upper_touch_step": 8.45,
+            "mean_lower_touch_step": 2.87
+        },
+        "Candidate_1.5_1.5": {
+            "tp_multiplier": 1.5,
+            "sl_multiplier": 1.5,
+            "horizon_bars": 15,
+            "n_samples": 2074,
+            "class_counts": {
+                "SELL_0": 798,
+                "HOLD_1": 80,
+                "BUY_2": 1196
+            },
+            "class_percentages": {
+                "SELL_0": 38.48,
+                "HOLD_1": 3.86,
+                "BUY_2": 57.67
+            },
+            "same_bar_ambiguity_count": 2,
+            "same_bar_ambiguity_pct": 0.096,
+            "mean_upper_touch_step": 5.8,
+            "mean_lower_touch_step": 5.17
+        },
+        "Candidate_2.0_1.0": {
+            "tp_multiplier": 2.0,
+            "sl_multiplier": 1.0,
+            "horizon_bars": 15,
+            "n_samples": 2074,
+            "class_counts": {
+                "SELL_0": 1109,
+                "HOLD_1": 98,
+                "BUY_2": 867
+            },
+            "class_percentages": {
+                "SELL_0": 53.47,
+                "HOLD_1": 4.73,
+                "BUY_2": 41.8
+            },
+            "same_bar_ambiguity_count": 0,
+            "same_bar_ambiguity_pct": 0.0,
+            "mean_upper_touch_step": 6.76,
+            "mean_lower_touch_step": 4.25
+        },
+        "Candidate_2.0_1.5": {
+            "tp_multiplier": 2.0,
+            "sl_multiplier": 1.5,
+            "horizon_bars": 15,
+            "n_samples": 2074,
+            "class_counts": {
+                "SELL_0": 863,
+                "HOLD_1": 192,
+                "BUY_2": 1019
+            },
+            "class_percentages": {
+                "SELL_0": 41.61,
+                "HOLD_1": 9.26,
+                "BUY_2": 49.13
+            },
+            "same_bar_ambiguity_count": 0,
+            "same_bar_ambiguity_pct": 0.0,
+            "mean_upper_touch_step": 6.76,
+            "mean_lower_touch_step": 5.17
+        }
+    },
+    "pooled_candidate_summary": {
+        "Control_3.0_0.5": {
+            "tp_multiplier": 3.0,
+            "sl_multiplier": 0.5,
+            "total_buy_predictions": 278,
+            "buy_support": 337,
+            "buy_true_positives": 65,
+            "pooled_buy_precision": 0.2338,
+            "pooled_buy_precision_95_ci": [
+                0.1879,
+                0.287
+            ],
+            "pooled_buy_recall": 0.1929,
+            "mean_fold_accuracy": 0.5254,
+            "mean_fold_balanced_accuracy": 0.3431,
+            "mean_fold_unnormalized_brier": 0.5964,
+            "mean_fold_ece_max_conf": 0.0964,
+            "completed_trades": 121,
+            "volume_weighted_win_rate": 0.5537,
+            "cumulative_net_return": 0.3392,
+            "mean_profit_factor": 1.4858,
+            "worst_fold_max_drawdown": -0.2654,
+            "mean_annualized_sharpe": 1.0401
+        },
+        "Candidate_1.5_1.5": {
+            "tp_multiplier": 1.5,
+            "sl_multiplier": 1.5,
+            "total_buy_predictions": 764,
+            "buy_support": 944,
+            "buy_true_positives": 451,
+            "pooled_buy_precision": 0.5903,
+            "pooled_buy_precision_95_ci": [
+                0.5551,
+                0.6246
+            ],
+            "pooled_buy_recall": 0.4778,
+            "mean_fold_accuracy": 0.4275,
+            "mean_fold_balanced_accuracy": 0.3277,
+            "mean_fold_unnormalized_brier": 0.6844,
+            "mean_fold_ece_max_conf": 0.1841,
+            "completed_trades": 166,
+            "volume_weighted_win_rate": 0.5,
+            "cumulative_net_return": 0.2085,
+            "mean_profit_factor": 1.346,
+            "worst_fold_max_drawdown": -0.7603,
+            "mean_annualized_sharpe": 0.5462
+        },
+        "Candidate_2.0_1.0": {
+            "tp_multiplier": 2.0,
+            "sl_multiplier": 1.0,
+            "total_buy_predictions": 531,
+            "buy_support": 690,
+            "buy_true_positives": 223,
+            "pooled_buy_precision": 0.42,
+            "pooled_buy_precision_95_ci": [
+                0.3787,
+                0.4624
+            ],
+            "pooled_buy_recall": 0.3232,
+            "mean_fold_accuracy": 0.4317,
+            "mean_fold_balanced_accuracy": 0.3171,
+            "mean_fold_unnormalized_brier": 0.6588,
+            "mean_fold_ece_max_conf": 0.1353,
+            "completed_trades": 167,
+            "volume_weighted_win_rate": 0.4851,
+            "cumulative_net_return": -0.1843,
+            "mean_profit_factor": 1.222,
+            "worst_fold_max_drawdown": -0.7732,
+            "mean_annualized_sharpe": 0.2232
+        },
+        "Candidate_2.0_1.5": {
+            "tp_multiplier": 2.0,
+            "sl_multiplier": 1.5,
+            "total_buy_predictions": 617,
+            "buy_support": 814,
+            "buy_true_positives": 300,
+            "pooled_buy_precision": 0.4862,
+            "pooled_buy_precision_95_ci": [
+                0.447,
+                0.5256
+            ],
+            "pooled_buy_recall": 0.3686,
+            "mean_fold_accuracy": 0.3726,
+            "mean_fold_balanced_accuracy": 0.3356,
+            "mean_fold_unnormalized_brier": 0.7238,
+            "mean_fold_ece_max_conf": 0.2006,
+            "completed_trades": 147,
+            "volume_weighted_win_rate": 0.517,
+            "cumulative_net_return": -0.237,
+            "mean_profit_factor": 1.0337,
+            "worst_fold_max_drawdown": -0.7212,
+            "mean_annualized_sharpe": 0.0469
+        }
+    },
+    "per_fold_metrics": [
+        {
+            "candidate": "Control_3.0_0.5",
+            "fold": 1,
+            "n_val_samples": 414,
+            "accuracy": 0.5942,
+            "balanced_accuracy": 0.3284,
+            "macro_f1": 0.3101,
+            "unnormalized_brier": 0.5621,
+            "ece_max_conf": 0.1137,
+            "log_loss": 1.0051,
+            "buy_predictions": 58,
+            "buy_support": 93,
+            "buy_true_positives": 14,
+            "buy_precision": 0.2414,
+            "buy_recall": 0.1505,
+            "buy_fpr": 0.1371,
+            "completed_trades": 29,
+            "win_rate": 0.5862,
+            "exposure_bars": 57,
+            "exposure_pct": 0.1377,
+            "total_net_return": 0.3014,
+            "avg_trade_return": 0.0104,
+            "profit_factor": 2.5819,
+            "max_drawdown": -0.1019,
+            "annualized_sharpe": 3.2722,
+            "bull_market_net_return": 0.0784,
+            "bear_market_net_return": 0.223,
+            "confusion_matrix": [
+                [
+                    232,
+                    9,
+                    37
+                ],
+                [
+                    36,
+                    0,
+                    7
+                ],
+                [
+                    77,
+                    2,
+                    14
+                ]
+            ]
+        },
+        {
+            "candidate": "Control_3.0_0.5",
+            "fold": 2,
+            "n_val_samples": 414,
+            "accuracy": 0.4831,
+            "balanced_accuracy": 0.3139,
+            "macro_f1": 0.3112,
+            "unnormalized_brier": 0.6464,
+            "ece_max_conf": 0.1006,
+            "log_loss": 1.0697,
+            "buy_predictions": 77,
+            "buy_support": 97,
+            "buy_true_positives": 18,
+            "buy_precision": 0.2338,
+            "buy_recall": 0.1856,
+            "buy_fpr": 0.1861,
+            "completed_trades": 31,
+            "win_rate": 0.5484,
+            "exposure_bars": 85,
+            "exposure_pct": 0.2053,
+            "total_net_return": -0.0834,
+            "avg_trade_return": -0.0027,
+            "profit_factor": 0.8181,
+            "max_drawdown": -0.1795,
+            "annualized_sharpe": -0.776,
+            "bull_market_net_return": -0.0616,
+            "bear_market_net_return": -0.0217,
+            "confusion_matrix": [
+                [
+                    178,
+                    56,
+                    54
+                ],
+                [
+                    20,
+                    4,
+                    5
+                ],
+                [
+                    59,
+                    20,
+                    18
+                ]
+            ]
+        },
+        {
+            "candidate": "Control_3.0_0.5",
+            "fold": 3,
+            "n_val_samples": 414,
+            "accuracy": 0.4662,
+            "balanced_accuracy": 0.4191,
+            "macro_f1": 0.3061,
+            "unnormalized_brier": 0.6229,
+            "ece_max_conf": 0.1194,
+            "log_loss": 0.9968,
+            "buy_predictions": 61,
+            "buy_support": 67,
+            "buy_true_positives": 13,
+            "buy_precision": 0.2131,
+            "buy_recall": 0.194,
+            "buy_fpr": 0.1383,
+            "completed_trades": 26,
+            "win_rate": 0.4615,
+            "exposure_bars": 82,
+            "exposure_pct": 0.1981,
+            "total_net_return": 0.0048,
+            "avg_trade_return": 0.0002,
+            "profit_factor": 1.0099,
+            "max_drawdown": -0.2654,
+            "annualized_sharpe": 0.0355,
+            "bull_market_net_return": 0.1432,
+            "bear_market_net_return": -0.1384,
+            "confusion_matrix": [
+                [
+                    174,
+                    114,
+                    48
+                ],
+                [
+                    5,
+                    6,
+                    0
+                ],
+                [
+                    31,
+                    23,
+                    13
+                ]
+            ]
+        },
+        {
+            "candidate": "Control_3.0_0.5",
+            "fold": 4,
+            "n_val_samples": 414,
+            "accuracy": 0.558,
+            "balanced_accuracy": 0.3109,
+            "macro_f1": 0.3175,
+            "unnormalized_brier": 0.5542,
+            "ece_max_conf": 0.0518,
+            "log_loss": 0.9015,
+            "buy_predictions": 82,
+            "buy_support": 80,
+            "buy_true_positives": 20,
+            "buy_precision": 0.2439,
+            "buy_recall": 0.25,
+            "buy_fpr": 0.1856,
+            "completed_trades": 35,
+            "win_rate": 0.6,
+            "exposure_bars": 84,
+            "exposure_pct": 0.2029,
+            "total_net_return": 0.1164,
+            "avg_trade_return": 0.0033,
+            "profit_factor": 1.5332,
+            "max_drawdown": -0.1126,
+            "annualized_sharpe": 1.6288,
+            "bull_market_net_return": 0.1164,
+            "bear_market_net_return": 0.0,
+            "confusion_matrix": [
+                [
+                    211,
+                    37,
+                    61
+                ],
+                [
+                    24,
+                    0,
+                    1
+                ],
+                [
+                    54,
+                    6,
+                    20
+                ]
+            ]
+        },
+        {
+            "candidate": "Candidate_1.5_1.5",
+            "fold": 1,
+            "n_val_samples": 414,
+            "accuracy": 0.4203,
+            "balanced_accuracy": 0.3082,
+            "macro_f1": 0.3025,
+            "unnormalized_brier": 0.7416,
+            "ece_max_conf": 0.2663,
+            "log_loss": 1.1864,
+            "buy_predictions": 215,
+            "buy_support": 252,
+            "buy_true_positives": 128,
+            "buy_precision": 0.5953,
+            "buy_recall": 0.5079,
+            "buy_fpr": 0.537,
+            "completed_trades": 43,
+            "win_rate": 0.6047,
+            "exposure_bars": 216,
+            "exposure_pct": 0.5217,
+            "total_net_return": 0.2617,
+            "avg_trade_return": 0.0061,
+            "profit_factor": 1.4976,
+            "max_drawdown": -0.3065,
+            "annualized_sharpe": 1.0602,
+            "bull_market_net_return": 0.2448,
+            "bear_market_net_return": 0.0169,
+            "confusion_matrix": [
+                [
+                    44,
+                    22,
+                    78
+                ],
+                [
+                    7,
+                    2,
+                    9
+                ],
+                [
+                    107,
+                    17,
+                    128
+                ]
+            ]
+        },
+        {
+            "candidate": "Candidate_1.5_1.5",
+            "fold": 2,
+            "n_val_samples": 414,
+            "accuracy": 0.4976,
+            "balanced_accuracy": 0.3299,
+            "macro_f1": 0.3505,
+            "unnormalized_brier": 0.67,
+            "ece_max_conf": 0.1814,
+            "log_loss": 1.116,
+            "buy_predictions": 240,
+            "buy_support": 246,
+            "buy_true_positives": 154,
+            "buy_precision": 0.6417,
+            "buy_recall": 0.626,
+            "buy_fpr": 0.5119,
+            "completed_trades": 35,
+            "win_rate": 0.5143,
+            "exposure_bars": 268,
+            "exposure_pct": 0.6473,
+            "total_net_return": 0.6272,
+            "avg_trade_return": 0.0179,
+            "profit_factor": 2.1568,
+            "max_drawdown": -0.114,
+            "annualized_sharpe": 1.7891,
+            "bull_market_net_return": 0.4112,
+            "bear_market_net_return": 0.216,
+            "confusion_matrix": [
+                [
+                    52,
+                    23,
+                    68
+                ],
+                [
+                    7,
+                    0,
+                    18
+                ],
+                [
+                    47,
+                    45,
+                    154
+                ]
+            ]
+        },
+        {
+            "candidate": "Candidate_1.5_1.5",
+            "fold": 3,
+            "n_val_samples": 414,
+            "accuracy": 0.3406,
+            "balanced_accuracy": 0.2917,
+            "macro_f1": 0.2711,
+            "unnormalized_brier": 0.7161,
+            "ece_max_conf": 0.1961,
+            "log_loss": 1.123,
+            "buy_predictions": 132,
+            "buy_support": 214,
+            "buy_true_positives": 68,
+            "buy_precision": 0.5152,
+            "buy_recall": 0.3178,
+            "buy_fpr": 0.32,
+            "completed_trades": 46,
+            "win_rate": 0.413,
+            "exposure_bars": 177,
+            "exposure_pct": 0.4275,
+            "total_net_return": -0.7906,
+            "avg_trade_return": -0.0172,
+            "profit_factor": 0.4147,
+            "max_drawdown": -0.7603,
+            "annualized_sharpe": -1.3494,
+            "bull_market_net_return": -0.0597,
+            "bear_market_net_return": -0.7309,
+            "confusion_matrix": [
+                [
+                    71,
+                    58,
+                    60
+                ],
+                [
+                    5,
+                    2,
+                    4
+                ],
+                [
+                    104,
+                    42,
+                    68
+                ]
+            ]
+        },
+        {
+            "candidate": "Candidate_1.5_1.5",
+            "fold": 4,
+            "n_val_samples": 414,
+            "accuracy": 0.4517,
+            "balanced_accuracy": 0.381,
+            "macro_f1": 0.3431,
+            "unnormalized_brier": 0.61,
+            "ece_max_conf": 0.0926,
+            "log_loss": 0.9629,
+            "buy_predictions": 177,
+            "buy_support": 232,
+            "buy_true_positives": 101,
+            "buy_precision": 0.5706,
+            "buy_recall": 0.4353,
+            "buy_fpr": 0.4176,
+            "completed_trades": 42,
+            "win_rate": 0.4762,
+            "exposure_bars": 192,
+            "exposure_pct": 0.4638,
+            "total_net_return": 0.1102,
+            "avg_trade_return": 0.0026,
+            "profit_factor": 1.3149,
+            "max_drawdown": -0.1422,
+            "annualized_sharpe": 0.6847,
+            "bull_market_net_return": 0.0415,
+            "bear_market_net_return": 0.0687,
+            "confusion_matrix": [
+                [
+                    84,
+                    16,
+                    73
+                ],
+                [
+                    4,
+                    2,
+                    3
+                ],
+                [
+                    95,
+                    36,
+                    101
+                ]
+            ]
+        },
+        {
+            "candidate": "Candidate_2.0_1.0",
+            "fold": 1,
+            "n_val_samples": 414,
+            "accuracy": 0.3913,
+            "balanced_accuracy": 0.281,
+            "macro_f1": 0.2604,
+            "unnormalized_brier": 0.747,
+            "ece_max_conf": 0.2635,
+            "log_loss": 1.2112,
+            "buy_predictions": 122,
+            "buy_support": 190,
+            "buy_true_positives": 45,
+            "buy_precision": 0.3689,
+            "buy_recall": 0.2368,
+            "buy_fpr": 0.3438,
+            "completed_trades": 39,
+            "win_rate": 0.5385,
+            "exposure_bars": 121,
+            "exposure_pct": 0.2923,
+            "total_net_return": -0.0332,
+            "avg_trade_return": -0.0009,
+            "profit_factor": 0.9246,
+            "max_drawdown": -0.2795,
+            "annualized_sharpe": -0.2696,
+            "bull_market_net_return": 0.0046,
+            "bear_market_net_return": -0.0377,
+            "confusion_matrix": [
+                [
+                    117,
+                    3,
+                    73
+                ],
+                [
+                    27,
+                    0,
+                    4
+                ],
+                [
+                    138,
+                    7,
+                    45
+                ]
+            ]
+        },
+        {
+            "candidate": "Candidate_2.0_1.0",
+            "fold": 2,
+            "n_val_samples": 414,
+            "accuracy": 0.4396,
+            "balanced_accuracy": 0.3099,
+            "macro_f1": 0.3176,
+            "unnormalized_brier": 0.6532,
+            "ece_max_conf": 0.1482,
+            "log_loss": 1.0639,
+            "buy_predictions": 162,
+            "buy_support": 187,
+            "buy_true_positives": 79,
+            "buy_precision": 0.4877,
+            "buy_recall": 0.4225,
+            "buy_fpr": 0.3656,
+            "completed_trades": 37,
+            "win_rate": 0.6216,
+            "exposure_bars": 191,
+            "exposure_pct": 0.4614,
+            "total_net_return": 0.5739,
+            "avg_trade_return": 0.0155,
+            "profit_factor": 2.4179,
+            "max_drawdown": -0.1144,
+            "annualized_sharpe": 2.3882,
+            "bull_market_net_return": 0.3799,
+            "bear_market_net_return": 0.194,
+            "confusion_matrix": [
+                [
+                    103,
+                    26,
+                    74
+                ],
+                [
+                    15,
+                    0,
+                    9
+                ],
+                [
+                    91,
+                    17,
+                    79
+                ]
+            ]
+        },
+        {
+            "candidate": "Candidate_2.0_1.0",
+            "fold": 3,
+            "n_val_samples": 414,
+            "accuracy": 0.4565,
+            "balanced_accuracy": 0.3606,
+            "macro_f1": 0.3322,
+            "unnormalized_brier": 0.616,
+            "ece_max_conf": 0.0457,
+            "log_loss": 1.0006,
+            "buy_predictions": 106,
+            "buy_support": 146,
+            "buy_true_positives": 46,
+            "buy_precision": 0.434,
+            "buy_recall": 0.3151,
+            "buy_fpr": 0.2239,
+            "completed_trades": 42,
+            "win_rate": 0.381,
+            "exposure_bars": 130,
+            "exposure_pct": 0.314,
+            "total_net_return": -0.766,
+            "avg_trade_return": -0.0182,
+            "profit_factor": 0.4515,
+            "max_drawdown": -0.7732,
+            "annualized_sharpe": -1.5169,
+            "bull_market_net_return": 0.1471,
+            "bear_market_net_return": -0.9131,
+            "confusion_matrix": [
+                [
+                    141,
+                    61,
+                    57
+                ],
+                [
+                    4,
+                    2,
+                    3
+                ],
+                [
+                    73,
+                    27,
+                    46
+                ]
+            ]
+        },
+        {
+            "candidate": "Candidate_2.0_1.0",
+            "fold": 4,
+            "n_val_samples": 414,
+            "accuracy": 0.4396,
+            "balanced_accuracy": 0.3169,
+            "macro_f1": 0.3104,
+            "unnormalized_brier": 0.6191,
+            "ece_max_conf": 0.0838,
+            "log_loss": 1.0025,
+            "buy_predictions": 141,
+            "buy_support": 167,
+            "buy_true_positives": 53,
+            "buy_precision": 0.3759,
+            "buy_recall": 0.3174,
+            "buy_fpr": 0.3563,
+            "completed_trades": 49,
+            "win_rate": 0.4286,
+            "exposure_bars": 156,
+            "exposure_pct": 0.3768,
+            "total_net_return": 0.041,
+            "avg_trade_return": 0.0008,
+            "profit_factor": 1.0941,
+            "max_drawdown": -0.1206,
+            "annualized_sharpe": 0.2911,
+            "bull_market_net_return": 0.041,
+            "bear_market_net_return": 0.0,
+            "confusion_matrix": [
+                [
+                    128,
+                    22,
+                    86
+                ],
+                [
+                    8,
+                    1,
+                    2
+                ],
+                [
+                    93,
+                    21,
+                    53
+                ]
+            ]
+        },
+        {
+            "candidate": "Candidate_2.0_1.5",
+            "fold": 1,
+            "n_val_samples": 414,
+            "accuracy": 0.3551,
+            "balanced_accuracy": 0.3018,
+            "macro_f1": 0.3039,
+            "unnormalized_brier": 0.8212,
+            "ece_max_conf": 0.2933,
+            "log_loss": 1.3338,
+            "buy_predictions": 197,
+            "buy_support": 215,
+            "buy_true_positives": 88,
+            "buy_precision": 0.4467,
+            "buy_recall": 0.4093,
+            "buy_fpr": 0.5477,
+            "completed_trades": 35,
+            "win_rate": 0.6,
+            "exposure_bars": 194,
+            "exposure_pct": 0.4686,
+            "total_net_return": -0.0071,
+            "avg_trade_return": -0.0002,
+            "profit_factor": 0.9869,
+            "max_drawdown": -0.3525,
+            "annualized_sharpe": -0.0308,
+            "bull_market_net_return": 0.3061,
+            "bear_market_net_return": -0.3132,
+            "confusion_matrix": [
+                [
+                    52,
+                    7,
+                    97
+                ],
+                [
+                    24,
+                    7,
+                    12
+                ],
+                [
+                    104,
+                    23,
+                    88
+                ]
+            ]
+        },
+        {
+            "candidate": "Candidate_2.0_1.5",
+            "fold": 2,
+            "n_val_samples": 414,
+            "accuracy": 0.3382,
+            "balanced_accuracy": 0.2745,
+            "macro_f1": 0.2825,
+            "unnormalized_brier": 0.7377,
+            "ece_max_conf": 0.2624,
+            "log_loss": 1.2346,
+            "buy_predictions": 161,
+            "buy_support": 216,
+            "buy_true_positives": 81,
+            "buy_precision": 0.5031,
+            "buy_recall": 0.375,
+            "buy_fpr": 0.404,
+            "completed_trades": 34,
+            "win_rate": 0.5588,
+            "exposure_bars": 190,
+            "exposure_pct": 0.4589,
+            "total_net_return": 0.2775,
+            "avg_trade_return": 0.0082,
+            "profit_factor": 1.5272,
+            "max_drawdown": -0.1683,
+            "annualized_sharpe": 1.1114,
+            "bull_market_net_return": 0.2127,
+            "bear_market_net_return": 0.0648,
+            "confusion_matrix": [
+                [
+                    55,
+                    39,
+                    59
+                ],
+                [
+                    20,
+                    4,
+                    21
+                ],
+                [
+                    74,
+                    61,
+                    81
+                ]
+            ]
+        },
+        {
+            "candidate": "Candidate_2.0_1.5",
+            "fold": 3,
+            "n_val_samples": 414,
+            "accuracy": 0.372,
+            "balanced_accuracy": 0.3404,
+            "macro_f1": 0.3142,
+            "unnormalized_brier": 0.6876,
+            "ece_max_conf": 0.143,
+            "log_loss": 1.1195,
+            "buy_predictions": 104,
+            "buy_support": 179,
+            "buy_true_positives": 50,
+            "buy_precision": 0.4808,
+            "buy_recall": 0.2793,
+            "buy_fpr": 0.2298,
+            "completed_trades": 39,
+            "win_rate": 0.5128,
+            "exposure_bars": 128,
+            "exposure_pct": 0.3092,
+            "total_net_return": -0.5317,
+            "avg_trade_return": -0.0136,
+            "profit_factor": 0.5475,
+            "max_drawdown": -0.7212,
+            "annualized_sharpe": -1.0447,
+            "bull_market_net_return": -0.1657,
+            "bear_market_net_return": -0.366,
+            "confusion_matrix": [
+                [
+                    96,
+                    62,
+                    48
+                ],
+                [
+                    15,
+                    8,
+                    6
+                ],
+                [
+                    86,
+                    43,
+                    50
+                ]
+            ]
+        },
+        {
+            "candidate": "Candidate_2.0_1.5",
+            "fold": 4,
+            "n_val_samples": 414,
+            "accuracy": 0.4251,
+            "balanced_accuracy": 0.4256,
+            "macro_f1": 0.3722,
+            "unnormalized_brier": 0.6487,
+            "ece_max_conf": 0.1035,
+            "log_loss": 1.056,
+            "buy_predictions": 155,
+            "buy_support": 204,
+            "buy_true_positives": 81,
+            "buy_precision": 0.5226,
+            "buy_recall": 0.3971,
+            "buy_fpr": 0.3524,
+            "completed_trades": 39,
+            "win_rate": 0.4103,
+            "exposure_bars": 197,
+            "exposure_pct": 0.4758,
+            "total_net_return": 0.0243,
+            "avg_trade_return": 0.0006,
+            "profit_factor": 1.0732,
+            "max_drawdown": -0.1426,
+            "annualized_sharpe": 0.1517,
+            "bull_market_net_return": 0.0243,
+            "bear_market_net_return": 0.0,
+            "confusion_matrix": [
+                [
+                    84,
+                    37,
+                    63
+                ],
+                [
+                    4,
+                    11,
+                    11
+                ],
+                [
+                    80,
+                    43,
+                    81
+                ]
+            ]
+        }
+    ],
+    "governance_gate_disposition": {
+        "unnormalized_brier_le_0_20": {
+            "threshold": "<= 0.20",
+            "control_measured": 0.5964,
+            "candidate_1_5_1_5_measured": 0.6844,
+            "status": "FAIL (All candidates exceed 0.55; Candidate 1.5/1.5 = 0.6844)"
+        },
+        "canonical_ece_le_0_08": {
+            "threshold": "<= 0.08",
+            "control_measured": 0.0964,
+            "candidate_1_5_1_5_measured": 0.1841,
+            "status": "FAIL (Candidate 1.5/1.5 ECE = 0.1841)"
+        },
+        "net_cost_adjusted_expectancy": {
+            "threshold": "Material improvement over Control (+33.92%)",
+            "candidate_1_5_1_5_measured": "+20.85%",
+            "status": "FAIL (Deteriorates to +20.85%)"
+        },
+        "prospective_closed_trades_ge_50": {
+            "threshold": ">= 50",
+            "measured": 0,
+            "status": "NOT_MET (Research-only experiment)"
+        },
+        "v24_manifest_integrity": {
+            "threshold": "Byte-for-byte identical",
+            "measured": "d580b50a441c2f5a3881bb72eb0c8b23d90077dea61ddc506193affcfe993da5",
+            "status": "PASS"
+        },
+        "integration_authorization": {
+            "threshold": "Authorized",
+            "measured": "BLOCKED \u2014 PROPOSED_CANDIDATE_PENDING_AUTHORIZATION",
+            "status": "BLOCKED"
+        }
+    }
+}

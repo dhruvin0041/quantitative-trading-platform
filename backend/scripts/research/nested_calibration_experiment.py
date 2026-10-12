@@ -627,7 +627,7 @@ def run_nested_calibration_experiment(
                 "temperature_scaling": pooled_summary["Candidate_A_Temperature_Scaling"]["pooled_brier"],
                 "dirichlet_calibration": pooled_summary["Candidate_B_Dirichlet_Calibration"]["pooled_brier"],
                 "bayesian_shrinkage": pooled_summary["Candidate_C_Bayesian_Shrinkage"]["pooled_brier"],
-                "status": "FAIL (No candidate reaches <= 0.20; Bayesian Shrinkage achieves lowest Brier = 0.4224)",
+                "status": f"FAIL (No candidate reaches <= 0.20; Bayesian Shrinkage achieves lowest Brier = {pooled_summary['Candidate_C_Bayesian_Shrinkage']['pooled_brier']:.4f})",
             },
             "canonical_ece_le_0_08": {
                 "threshold": "<= 0.08",
@@ -635,7 +635,7 @@ def run_nested_calibration_experiment(
                 "temperature_scaling": pooled_summary["Candidate_A_Temperature_Scaling"]["canonical_ece"],
                 "dirichlet_calibration": pooled_summary["Candidate_B_Dirichlet_Calibration"]["canonical_ece"],
                 "bayesian_shrinkage": pooled_summary["Candidate_C_Bayesian_Shrinkage"]["canonical_ece"],
-                "status": "PASS (Temperature Scaling: 0.0465, Bayesian Shrinkage: 0.0413)",
+                "status": f"PASS (Temperature Scaling: {pooled_summary['Candidate_A_Temperature_Scaling']['canonical_ece']:.4f}, Bayesian Shrinkage: {pooled_summary['Candidate_C_Bayesian_Shrinkage']['canonical_ece']:.4f})",
             },
             "brier_skill_gt_0": {
                 "threshold": "> 0.00%",

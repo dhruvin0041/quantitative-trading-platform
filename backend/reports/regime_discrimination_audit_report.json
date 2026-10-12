@@ -1,0 +1,1037 @@
+{
+    "execution_timestamp_utc": "2026-10-11T19:46:15Z",
+    "audit_version": "HYDRA_V2.4.1_REGIME_DISCRIMINATION_AUDIT",
+    "governance_verdict": "REMEDIATION REJECTED \u2014 NO DEFENSIBLE IMPROVEMENT",
+    "governance_verdict_rationale": "The regime-conditioning candidate filters fail institutional acceptance criteria: 1) Precision improvement is statistically negligible (+1.94% from 27.05% to 28.99%, well within 95% CI [23.1%, 35.7%]). 2) Net cumulative return deteriorates from +50.55% down to +46.94% (and drops to +30.98% under asset-only SMA200 filter). 3) 72.3% of false BUYs occur during confirmed bull regimes, demonstrating that trend filters fail to address the root cause. 4) Unnormalized multiclass Brier score remains at 0.5876 (violating threshold <= 0.20).",
+    "environment_and_git": {
+        "repository_root": "D:\\DataScience\\Projects\\Data_Science_Projects\\Stock_Indicator",
+        "branch": "research/v2.3_phase_3a_remediation",
+        "starting_head": "88447a6c3c4fd8dfd818cb8c2a9eebde4f437e01",
+        "python_executable": "D:\\DataScience\\Projects\\Data_Science_Projects\\Stock_Indicator\\backend\\venv\\Scripts\\python.exe"
+    },
+    "protected_artifact_verification": {
+        "starting_hashes": {
+            "frozen_strategy_manifest_v2.4.json": "d580b50a441c2f5a3881bb72eb0c8b23d90077dea61ddc506193affcfe993da5",
+            "inference_service.py": "c0b544b16e774b01b3c354831c70aecce36ccaf26d6a5bbd26288a88e60960bb",
+            "calibration.py": "badff3d49e1ee755231b0e2f159dc539a199ac6263831d66910c9863884958f5",
+            "evaluation_contract.py": "94399aefe5015e318eeeafa3e23b7103c8ae4809146948e06b1c3f13e1300720"
+        },
+        "ending_hashes": {
+            "frozen_strategy_manifest_v2.4.json": "d580b50a441c2f5a3881bb72eb0c8b23d90077dea61ddc506193affcfe993da5",
+            "inference_service.py": "c0b544b16e774b01b3c354831c70aecce36ccaf26d6a5bbd26288a88e60960bb",
+            "calibration.py": "badff3d49e1ee755231b0e2f159dc539a199ac6263831d66910c9863884958f5",
+            "evaluation_contract.py": "94399aefe5015e318eeeafa3e23b7103c8ae4809146948e06b1c3f13e1300720"
+        },
+        "v2_4_manifest_unmutated": true,
+        "inference_service_unmutated": true
+    },
+    "phase_one_hold_label_direct_measurement": {
+        "total_evaluated_bars": 2381,
+        "tp_atr_multiplier": 3.0,
+        "sl_atr_multiplier": 0.5,
+        "horizon_bars": 15,
+        "label_counts": {
+            "SELL_0": 1754,
+            "HOLD_1": 165,
+            "BUY_2": 462
+        },
+        "label_percentages": {
+            "SELL_0": 73.67,
+            "HOLD_1": 6.93,
+            "BUY_2": 19.4
+        },
+        "barrier_touch_frequencies": {
+            "lower_barrier_ever_touched": 1804,
+            "lower_barrier_ever_touched_pct": 75.77,
+            "upper_barrier_ever_touched": 919,
+            "upper_barrier_ever_touched_pct": 38.6,
+            "both_hit_same_step": 0,
+            "neither_hit_horizon_expiration": 165
+        },
+        "touch_timing_statistics": {
+            "lower_barrier_mean_step": 2.88,
+            "lower_barrier_median_step": 2.0,
+            "lower_barrier_25pct_step": 1.0,
+            "lower_barrier_75pct_step": 4.0,
+            "upper_barrier_mean_step": 8.5,
+            "upper_barrier_median_step": 8.0,
+            "upper_barrier_25pct_step": 6.0,
+            "upper_barrier_75pct_step": 12.0
+        },
+        "empirical_finding": "Direct measurement confirms HOLD scarcity is an algebraic consequence of barrier asymmetry: with lower barrier at 0.5x ATR and upper at 3.0x ATR, ordinary market volatility touches the lower barrier on 75.8% of bars with a median latency of only 2.0 trading days. Only 6.93% of bars survive 15 trading days without touching either barrier."
+    },
+    "phase_one_forensic_false_buy_analysis": {
+        "total_emitted_buy_signals": 281,
+        "true_positives": 76,
+        "false_positives_sell_regimes": 188,
+        "false_positives_hold_regimes": 17,
+        "false_positive_sell_percentage": 66.9,
+        "feature_distribution_divergence": {
+            "rsi": {
+                "true_buy_mean": 55.725,
+                "true_buy_std": 11.3728,
+                "false_buy_sell_mean": 56.7822,
+                "false_buy_sell_std": 12.5917,
+                "absolute_mean_difference": 1.0572
+            },
+            "bb_pos": {
+                "true_buy_mean": 0.6093,
+                "true_buy_std": 0.2558,
+                "false_buy_sell_mean": 0.5925,
+                "false_buy_sell_std": 0.2803,
+                "absolute_mean_difference": 0.0168
+            },
+            "bb_width": {
+                "true_buy_mean": 0.0979,
+                "true_buy_std": 0.0496,
+                "false_buy_sell_mean": 0.108,
+                "false_buy_sell_std": 0.0506,
+                "absolute_mean_difference": 0.01
+            },
+            "z_return_20": {
+                "true_buy_mean": -0.086,
+                "true_buy_std": 0.8448,
+                "false_buy_sell_mean": -0.0802,
+                "false_buy_sell_std": 0.7561,
+                "absolute_mean_difference": 0.0058
+            },
+            "z_rsi_20": {
+                "true_buy_mean": 0.1039,
+                "true_buy_std": 0.9392,
+                "false_buy_sell_mean": 0.0431,
+                "false_buy_sell_std": 1.0273,
+                "absolute_mean_difference": 0.0607
+            },
+            "rel_strength": {
+                "true_buy_mean": 0.0004,
+                "true_buy_std": 0.0119,
+                "false_buy_sell_mean": -0.0002,
+                "false_buy_sell_std": 0.0092,
+                "absolute_mean_difference": 0.0005
+            },
+            "vix": {
+                "true_buy_mean": 17.4753,
+                "true_buy_std": 4.8298,
+                "false_buy_sell_mean": 18.2085,
+                "false_buy_sell_std": 4.9754,
+                "absolute_mean_difference": 0.7332
+            },
+            "atr_ratio": {
+                "true_buy_mean": 0.8627,
+                "true_buy_std": 0.1925,
+                "false_buy_sell_mean": 0.9194,
+                "false_buy_sell_std": 0.2306,
+                "absolute_mean_difference": 0.0567
+            },
+            "p_buy": {
+                "true_buy_mean": 0.5409,
+                "true_buy_std": 0.0904,
+                "false_buy_sell_mean": 0.5335,
+                "false_buy_sell_std": 0.0952,
+                "absolute_mean_difference": 0.0074
+            },
+            "p_sell": {
+                "true_buy_mean": 0.3436,
+                "true_buy_std": 0.073,
+                "false_buy_sell_mean": 0.3381,
+                "false_buy_sell_std": 0.0729,
+                "absolute_mean_difference": 0.0055
+            }
+        },
+        "false_buy_regime_taxonomy": {
+            "category_1_asset_below_sma200": {
+                "count": 43,
+                "percentage_of_fp_sell": 22.87,
+                "description": "Counter-trend BUY emitted while asset is below its 200-day moving average."
+            },
+            "category_2_broad_market_bear_spy": {
+                "count": 23,
+                "percentage_of_fp_sell": 12.23,
+                "description": "BUY emitted during broad market downturn (SPY < SMA200)."
+            },
+            "category_3_elevated_volatility_vix_ge_20": {
+                "count": 53,
+                "percentage_of_fp_sell": 28.19,
+                "description": "BUY emitted during elevated market volatility (VIX >= 20)."
+            },
+            "category_4_depressed_oscillator_dip_buying": {
+                "count": 43,
+                "percentage_of_fp_sell": 22.87,
+                "description": "BUY emitted on oversold RSI (<45), mistaking falling knives for reversals."
+            },
+            "category_5_strong_bull_market_shakeout": {
+                "count": 136,
+                "percentage_of_fp_sell": 72.34,
+                "description": "False BUY occurring even when both asset and SPY are in confirmed bull trends (intraday dip touches SL 0.5x ATR)."
+            }
+        },
+        "critical_forensic_discovery": "The feature distributions of True BUYs and False BUYs on SELL bars are statistically INDISTINGUISHABLE: mean RSI is 55.73 for TP vs 56.78 for FP; mean BB_Position is 0.61 for TP vs 0.59 for FP; mean model confidence P(BUY) is 0.541 for TP vs 0.533 for FP. Furthermore, 72.3% (136/188) of false BUYs occur in CONFIRMED BULL REGIMES (AAPL >= SMA200 AND SPY >= SMA200). Moving-average trend filters CANNOT solve this discrimination defect because the failures are not confined to downtrends\u2014they are caused by the extreme sensitivity of the 0.5x ATR stop-loss barrier being tripped by normal market noise in all regimes."
+    },
+    "phase_two_candidate_specifications": {
+        "Candidate_A": "Unfiltered baseline",
+        "Candidate_B": "AAPL Close >= SMA200",
+        "Candidate_C": "SPY Close >= SMA200",
+        "Candidate_D": "AAPL Close >= SMA200 AND SPY Close >= SMA200"
+    },
+    "phase_three_pooled_candidate_summary": {
+        "Candidate_A_Baseline": {
+            "description": "Unfiltered Raw XGBoost predictions (Frozen Candidate baseline)",
+            "total_oof_samples": 1656,
+            "total_buy_predictions": 281,
+            "buy_support": 334,
+            "buy_true_positives": 76,
+            "buy_false_positives_sell": 188,
+            "buy_false_positives_hold": 17,
+            "pooled_buy_precision": 0.2705,
+            "pooled_buy_precision_95_ci": [
+                0.2219,
+                0.3252
+            ],
+            "pooled_buy_recall": 0.2275,
+            "mean_fold_accuracy": 0.538,
+            "mean_fold_balanced_accuracy": 0.3417,
+            "mean_fold_unnormalized_brier": 0.5876,
+            "mean_fold_ece_max_conf": 0.0924,
+            "completed_trades": 120,
+            "volume_weighted_win_rate": 0.5833,
+            "cumulative_net_return": 0.5055,
+            "mean_profit_factor": 1.6991,
+            "worst_fold_max_drawdown": -0.1478,
+            "mean_annualized_sharpe": 1.8176
+        },
+        "Candidate_B_Asset_SMA200": {
+            "description": "Asset-Trend Confirmation: BUY signals accepted only if AAPL Close >= AAPL SMA200",
+            "total_oof_samples": 1656,
+            "total_buy_predictions": 218,
+            "buy_support": 334,
+            "buy_true_positives": 62,
+            "buy_false_positives_sell": 145,
+            "buy_false_positives_hold": 11,
+            "pooled_buy_precision": 0.2844,
+            "pooled_buy_precision_95_ci": [
+                0.2287,
+                0.3476
+            ],
+            "pooled_buy_recall": 0.1856,
+            "mean_fold_accuracy": 0.5544,
+            "mean_fold_balanced_accuracy": 0.3397,
+            "mean_fold_unnormalized_brier": 0.5876,
+            "mean_fold_ece_max_conf": 0.0924,
+            "completed_trades": 101,
+            "volume_weighted_win_rate": 0.5941,
+            "cumulative_net_return": 0.3098,
+            "mean_profit_factor": 2.0679,
+            "worst_fold_max_drawdown": -0.2197,
+            "mean_annualized_sharpe": 1.9435
+        },
+        "Candidate_C_SPY_SMA200": {
+            "description": "Broad-Market Confirmation: BUY signals accepted only if SPY Close >= SPY SMA200",
+            "total_oof_samples": 1656,
+            "total_buy_predictions": 247,
+            "buy_support": 334,
+            "buy_true_positives": 67,
+            "buy_false_positives_sell": 165,
+            "buy_false_positives_hold": 15,
+            "pooled_buy_precision": 0.2713,
+            "pooled_buy_precision_95_ci": [
+                0.2196,
+                0.3299
+            ],
+            "pooled_buy_recall": 0.2006,
+            "mean_fold_accuracy": 0.5459,
+            "mean_fold_balanced_accuracy": 0.3366,
+            "mean_fold_unnormalized_brier": 0.5876,
+            "mean_fold_ece_max_conf": 0.0924,
+            "completed_trades": 109,
+            "volume_weighted_win_rate": 0.6055,
+            "cumulative_net_return": 0.4934,
+            "mean_profit_factor": 1.7674,
+            "worst_fold_max_drawdown": -0.0829,
+            "mean_annualized_sharpe": 2.1268
+        },
+        "Candidate_D_Combined": {
+            "description": "Combined Regime Conditioning: BUY signals accepted only if AAPL Close >= SMA200 AND SPY Close >= SMA200",
+            "total_oof_samples": 1656,
+            "total_buy_predictions": 207,
+            "buy_support": 334,
+            "buy_true_positives": 60,
+            "buy_false_positives_sell": 136,
+            "buy_false_positives_hold": 11,
+            "pooled_buy_precision": 0.2899,
+            "pooled_buy_precision_95_ci": [
+                0.2323,
+                0.355
+            ],
+            "pooled_buy_recall": 0.1796,
+            "mean_fold_accuracy": 0.5586,
+            "mean_fold_balanced_accuracy": 0.3398,
+            "mean_fold_unnormalized_brier": 0.5876,
+            "mean_fold_ece_max_conf": 0.0924,
+            "completed_trades": 96,
+            "volume_weighted_win_rate": 0.625,
+            "cumulative_net_return": 0.4694,
+            "mean_profit_factor": 2.2765,
+            "worst_fold_max_drawdown": -0.0931,
+            "mean_annualized_sharpe": 2.7996
+        }
+    },
+    "phase_three_per_fold_metrics": [
+        {
+            "fold": 1,
+            "candidate": "Candidate_A_Baseline",
+            "n_samples": 414,
+            "accuracy": 0.5942,
+            "balanced_accuracy": 0.3556,
+            "macro_f1": 0.3474,
+            "unnormalized_brier": 0.5748,
+            "ece_max_conf": 0.1159,
+            "log_loss": 1.0059,
+            "buy_predictions": 69,
+            "buy_support": 93,
+            "buy_true_positives": 22,
+            "buy_fp_sell": 38,
+            "buy_fp_hold": 9,
+            "buy_precision": 0.3188,
+            "buy_recall": 0.2366,
+            "buy_fpr": 0.1464,
+            "completed_trades": 31,
+            "win_rate": 0.6774,
+            "exposure_bars": 69,
+            "exposure_pct": 0.1667,
+            "total_net_return": 0.2378,
+            "avg_trade_return": 0.0077,
+            "profit_factor": 2.6498,
+            "max_drawdown": -0.0614,
+            "annualized_sharpe": 3.8758,
+            "confusion_matrix": [
+                [
+                    223,
+                    15,
+                    38
+                ],
+                [
+                    35,
+                    1,
+                    9
+                ],
+                [
+                    70,
+                    1,
+                    22
+                ]
+            ]
+        },
+        {
+            "fold": 1,
+            "candidate": "Candidate_B_Asset_SMA200",
+            "n_samples": 414,
+            "accuracy": 0.6256,
+            "balanced_accuracy": 0.3665,
+            "macro_f1": 0.3589,
+            "unnormalized_brier": 0.5748,
+            "ece_max_conf": 0.1159,
+            "log_loss": 1.0059,
+            "buy_predictions": 49,
+            "buy_support": 93,
+            "buy_true_positives": 20,
+            "buy_fp_sell": 23,
+            "buy_fp_hold": 6,
+            "buy_precision": 0.4082,
+            "buy_recall": 0.2151,
+            "buy_fpr": 0.0903,
+            "completed_trades": 22,
+            "win_rate": 0.7273,
+            "exposure_bars": 49,
+            "exposure_pct": 0.1184,
+            "total_net_return": 0.2003,
+            "avg_trade_return": 0.0091,
+            "profit_factor": 4.653,
+            "max_drawdown": -0.0251,
+            "annualized_sharpe": 6.2178,
+            "confusion_matrix": [
+                [
+                    238,
+                    15,
+                    23
+                ],
+                [
+                    38,
+                    1,
+                    6
+                ],
+                [
+                    72,
+                    1,
+                    20
+                ]
+            ]
+        },
+        {
+            "fold": 1,
+            "candidate": "Candidate_C_SPY_SMA200",
+            "n_samples": 414,
+            "accuracy": 0.6039,
+            "balanced_accuracy": 0.358,
+            "macro_f1": 0.3498,
+            "unnormalized_brier": 0.5748,
+            "ece_max_conf": 0.1159,
+            "log_loss": 1.0059,
+            "buy_predictions": 62,
+            "buy_support": 93,
+            "buy_true_positives": 21,
+            "buy_fp_sell": 33,
+            "buy_fp_hold": 8,
+            "buy_precision": 0.3387,
+            "buy_recall": 0.2258,
+            "buy_fpr": 0.1277,
+            "completed_trades": 27,
+            "win_rate": 0.6667,
+            "exposure_bars": 62,
+            "exposure_pct": 0.1498,
+            "total_net_return": 0.1463,
+            "avg_trade_return": 0.0054,
+            "profit_factor": 2.0903,
+            "max_drawdown": -0.0567,
+            "annualized_sharpe": 2.9327,
+            "confusion_matrix": [
+                [
+                    228,
+                    15,
+                    33
+                ],
+                [
+                    36,
+                    1,
+                    8
+                ],
+                [
+                    71,
+                    1,
+                    21
+                ]
+            ]
+        },
+        {
+            "fold": 1,
+            "candidate": "Candidate_D_Combined",
+            "n_samples": 414,
+            "accuracy": 0.6256,
+            "balanced_accuracy": 0.3665,
+            "macro_f1": 0.3589,
+            "unnormalized_brier": 0.5748,
+            "ece_max_conf": 0.1159,
+            "log_loss": 1.0059,
+            "buy_predictions": 49,
+            "buy_support": 93,
+            "buy_true_positives": 20,
+            "buy_fp_sell": 23,
+            "buy_fp_hold": 6,
+            "buy_precision": 0.4082,
+            "buy_recall": 0.2151,
+            "buy_fpr": 0.0903,
+            "completed_trades": 22,
+            "win_rate": 0.7273,
+            "exposure_bars": 49,
+            "exposure_pct": 0.1184,
+            "total_net_return": 0.2003,
+            "avg_trade_return": 0.0091,
+            "profit_factor": 4.653,
+            "max_drawdown": -0.0251,
+            "annualized_sharpe": 6.2178,
+            "confusion_matrix": [
+                [
+                    238,
+                    15,
+                    23
+                ],
+                [
+                    38,
+                    1,
+                    6
+                ],
+                [
+                    72,
+                    1,
+                    20
+                ]
+            ]
+        },
+        {
+            "fold": 2,
+            "candidate": "Candidate_A_Baseline",
+            "n_samples": 414,
+            "accuracy": 0.4903,
+            "balanced_accuracy": 0.3161,
+            "macro_f1": 0.3229,
+            "unnormalized_brier": 0.6271,
+            "ece_max_conf": 0.0905,
+            "log_loss": 1.0449,
+            "buy_predictions": 71,
+            "buy_support": 97,
+            "buy_true_positives": 22,
+            "buy_fp_sell": 45,
+            "buy_fp_hold": 4,
+            "buy_precision": 0.3099,
+            "buy_recall": 0.2268,
+            "buy_fpr": 0.1546,
+            "completed_trades": 28,
+            "win_rate": 0.5714,
+            "exposure_bars": 78,
+            "exposure_pct": 0.1884,
+            "total_net_return": 0.17,
+            "avg_trade_return": 0.0061,
+            "profit_factor": 1.8279,
+            "max_drawdown": -0.0829,
+            "annualized_sharpe": 2.3678,
+            "confusion_matrix": [
+                [
+                    178,
+                    65,
+                    45
+                ],
+                [
+                    22,
+                    3,
+                    4
+                ],
+                [
+                    55,
+                    20,
+                    22
+                ]
+            ]
+        },
+        {
+            "fold": 2,
+            "candidate": "Candidate_B_Asset_SMA200",
+            "n_samples": 414,
+            "accuracy": 0.4879,
+            "balanced_accuracy": 0.3127,
+            "macro_f1": 0.3191,
+            "unnormalized_brier": 0.6271,
+            "ece_max_conf": 0.0905,
+            "log_loss": 1.0449,
+            "buy_predictions": 70,
+            "buy_support": 97,
+            "buy_true_positives": 21,
+            "buy_fp_sell": 45,
+            "buy_fp_hold": 4,
+            "buy_precision": 0.3,
+            "buy_recall": 0.2165,
+            "buy_fpr": 0.1546,
+            "completed_trades": 29,
+            "win_rate": 0.5862,
+            "exposure_bars": 77,
+            "exposure_pct": 0.186,
+            "total_net_return": 0.1523,
+            "avg_trade_return": 0.0053,
+            "profit_factor": 1.6664,
+            "max_drawdown": -0.0931,
+            "annualized_sharpe": 2.0836,
+            "confusion_matrix": [
+                [
+                    178,
+                    65,
+                    45
+                ],
+                [
+                    22,
+                    3,
+                    4
+                ],
+                [
+                    56,
+                    20,
+                    21
+                ]
+            ]
+        },
+        {
+            "fold": 2,
+            "candidate": "Candidate_C_SPY_SMA200",
+            "n_samples": 414,
+            "accuracy": 0.4928,
+            "balanced_accuracy": 0.315,
+            "macro_f1": 0.3217,
+            "unnormalized_brier": 0.6271,
+            "ece_max_conf": 0.0905,
+            "log_loss": 1.0449,
+            "buy_predictions": 68,
+            "buy_support": 97,
+            "buy_true_positives": 21,
+            "buy_fp_sell": 43,
+            "buy_fp_hold": 4,
+            "buy_precision": 0.3088,
+            "buy_recall": 0.2165,
+            "buy_fpr": 0.1483,
+            "completed_trades": 27,
+            "win_rate": 0.5926,
+            "exposure_bars": 75,
+            "exposure_pct": 0.1812,
+            "total_net_return": 0.1791,
+            "avg_trade_return": 0.0066,
+            "profit_factor": 1.9126,
+            "max_drawdown": -0.0829,
+            "annualized_sharpe": 2.5624,
+            "confusion_matrix": [
+                [
+                    180,
+                    65,
+                    43
+                ],
+                [
+                    22,
+                    3,
+                    4
+                ],
+                [
+                    56,
+                    20,
+                    21
+                ]
+            ]
+        },
+        {
+            "fold": 2,
+            "candidate": "Candidate_D_Combined",
+            "n_samples": 414,
+            "accuracy": 0.4903,
+            "balanced_accuracy": 0.3115,
+            "macro_f1": 0.3178,
+            "unnormalized_brier": 0.6271,
+            "ece_max_conf": 0.0905,
+            "log_loss": 1.0449,
+            "buy_predictions": 67,
+            "buy_support": 97,
+            "buy_true_positives": 20,
+            "buy_fp_sell": 43,
+            "buy_fp_hold": 4,
+            "buy_precision": 0.2985,
+            "buy_recall": 0.2062,
+            "buy_fpr": 0.1483,
+            "completed_trades": 28,
+            "win_rate": 0.6071,
+            "exposure_bars": 74,
+            "exposure_pct": 0.1787,
+            "total_net_return": 0.1614,
+            "avg_trade_return": 0.0058,
+            "profit_factor": 1.7355,
+            "max_drawdown": -0.0931,
+            "annualized_sharpe": 2.2663,
+            "confusion_matrix": [
+                [
+                    180,
+                    65,
+                    43
+                ],
+                [
+                    22,
+                    3,
+                    4
+                ],
+                [
+                    57,
+                    20,
+                    20
+                ]
+            ]
+        },
+        {
+            "fold": 3,
+            "candidate": "Candidate_A_Baseline",
+            "n_samples": 414,
+            "accuracy": 0.4952,
+            "balanced_accuracy": 0.3657,
+            "macro_f1": 0.321,
+            "unnormalized_brier": 0.5991,
+            "ece_max_conf": 0.0838,
+            "log_loss": 0.9625,
+            "buy_predictions": 60,
+            "buy_support": 64,
+            "buy_true_positives": 16,
+            "buy_fp_sell": 43,
+            "buy_fp_hold": 1,
+            "buy_precision": 0.2667,
+            "buy_recall": 0.25,
+            "buy_fpr": 0.1257,
+            "completed_trades": 22,
+            "win_rate": 0.5,
+            "exposure_bars": 87,
+            "exposure_pct": 0.2101,
+            "total_net_return": 0.0647,
+            "avg_trade_return": 0.0029,
+            "profit_factor": 1.1946,
+            "max_drawdown": -0.1478,
+            "annualized_sharpe": 0.5292,
+            "confusion_matrix": [
+                [
+                    186,
+                    111,
+                    43
+                ],
+                [
+                    6,
+                    3,
+                    1
+                ],
+                [
+                    29,
+                    19,
+                    16
+                ]
+            ]
+        },
+        {
+            "fold": 3,
+            "candidate": "Candidate_B_Asset_SMA200",
+            "n_samples": 414,
+            "accuracy": 0.4976,
+            "balanced_accuracy": 0.3286,
+            "macro_f1": 0.2853,
+            "unnormalized_brier": 0.5991,
+            "ece_max_conf": 0.0838,
+            "log_loss": 0.9625,
+            "buy_predictions": 39,
+            "buy_support": 64,
+            "buy_true_positives": 7,
+            "buy_fp_sell": 32,
+            "buy_fp_hold": 0,
+            "buy_precision": 0.1795,
+            "buy_recall": 0.1094,
+            "buy_fpr": 0.0914,
+            "completed_trades": 16,
+            "win_rate": 0.4375,
+            "exposure_bars": 41,
+            "exposure_pct": 0.099,
+            "total_net_return": -0.1122,
+            "avg_trade_return": -0.007,
+            "profit_factor": 0.5741,
+            "max_drawdown": -0.2197,
+            "annualized_sharpe": -2.0219,
+            "confusion_matrix": [
+                [
+                    196,
+                    112,
+                    32
+                ],
+                [
+                    7,
+                    3,
+                    0
+                ],
+                [
+                    34,
+                    23,
+                    7
+                ]
+            ]
+        },
+        {
+            "fold": 3,
+            "candidate": "Candidate_C_SPY_SMA200",
+            "n_samples": 414,
+            "accuracy": 0.5145,
+            "balanced_accuracy": 0.3439,
+            "macro_f1": 0.3039,
+            "unnormalized_brier": 0.5991,
+            "ece_max_conf": 0.0838,
+            "log_loss": 0.9625,
+            "buy_predictions": 36,
+            "buy_support": 64,
+            "buy_true_positives": 9,
+            "buy_fp_sell": 27,
+            "buy_fp_hold": 0,
+            "buy_precision": 0.25,
+            "buy_recall": 0.1406,
+            "buy_fpr": 0.0771,
+            "completed_trades": 16,
+            "win_rate": 0.625,
+            "exposure_bars": 46,
+            "exposure_pct": 0.1111,
+            "total_net_return": 0.135,
+            "avg_trade_return": 0.0084,
+            "profit_factor": 1.9426,
+            "max_drawdown": -0.0641,
+            "annualized_sharpe": 2.5145,
+            "confusion_matrix": [
+                [
+                    201,
+                    112,
+                    27
+                ],
+                [
+                    7,
+                    3,
+                    0
+                ],
+                [
+                    34,
+                    21,
+                    9
+                ]
+            ]
+        },
+        {
+            "fold": 3,
+            "candidate": "Candidate_D_Combined",
+            "n_samples": 414,
+            "accuracy": 0.5121,
+            "balanced_accuracy": 0.3303,
+            "macro_f1": 0.287,
+            "unnormalized_brier": 0.5991,
+            "ece_max_conf": 0.0838,
+            "log_loss": 0.9625,
+            "buy_predictions": 31,
+            "buy_support": 64,
+            "buy_true_positives": 6,
+            "buy_fp_sell": 25,
+            "buy_fp_hold": 0,
+            "buy_precision": 0.1935,
+            "buy_recall": 0.0938,
+            "buy_fpr": 0.0714,
+            "completed_trades": 12,
+            "win_rate": 0.5833,
+            "exposure_bars": 33,
+            "exposure_pct": 0.0797,
+            "total_net_return": 0.0383,
+            "avg_trade_return": 0.0032,
+            "profit_factor": 1.3396,
+            "max_drawdown": -0.0871,
+            "annualized_sharpe": 1.2197,
+            "confusion_matrix": [
+                [
+                    203,
+                    112,
+                    25
+                ],
+                [
+                    7,
+                    3,
+                    0
+                ],
+                [
+                    35,
+                    23,
+                    6
+                ]
+            ]
+        },
+        {
+            "fold": 4,
+            "candidate": "Candidate_A_Baseline",
+            "n_samples": 414,
+            "accuracy": 0.5725,
+            "balanced_accuracy": 0.3296,
+            "macro_f1": 0.3291,
+            "unnormalized_brier": 0.5495,
+            "ece_max_conf": 0.0792,
+            "log_loss": 0.8985,
+            "buy_predictions": 81,
+            "buy_support": 80,
+            "buy_true_positives": 16,
+            "buy_fp_sell": 62,
+            "buy_fp_hold": 3,
+            "buy_precision": 0.1975,
+            "buy_recall": 0.2,
+            "buy_fpr": 0.1946,
+            "completed_trades": 39,
+            "win_rate": 0.5641,
+            "exposure_bars": 88,
+            "exposure_pct": 0.2126,
+            "total_net_return": 0.033,
+            "avg_trade_return": 0.0008,
+            "profit_factor": 1.124,
+            "max_drawdown": -0.0804,
+            "annualized_sharpe": 0.4977,
+            "confusion_matrix": [
+                [
+                    219,
+                    28,
+                    62
+                ],
+                [
+                    20,
+                    2,
+                    3
+                ],
+                [
+                    57,
+                    7,
+                    16
+                ]
+            ]
+        },
+        {
+            "fold": 4,
+            "candidate": "Candidate_B_Asset_SMA200",
+            "n_samples": 414,
+            "accuracy": 0.6063,
+            "balanced_accuracy": 0.3508,
+            "macro_f1": 0.3478,
+            "unnormalized_brier": 0.5495,
+            "ece_max_conf": 0.0792,
+            "log_loss": 0.8985,
+            "buy_predictions": 60,
+            "buy_support": 80,
+            "buy_true_positives": 14,
+            "buy_fp_sell": 45,
+            "buy_fp_hold": 1,
+            "buy_precision": 0.2333,
+            "buy_recall": 0.175,
+            "buy_fpr": 0.1377,
+            "completed_trades": 34,
+            "win_rate": 0.5882,
+            "exposure_bars": 60,
+            "exposure_pct": 0.1449,
+            "total_net_return": 0.0694,
+            "avg_trade_return": 0.002,
+            "profit_factor": 1.3781,
+            "max_drawdown": -0.0509,
+            "annualized_sharpe": 1.4946,
+            "confusion_matrix": [
+                [
+                    234,
+                    30,
+                    45
+                ],
+                [
+                    21,
+                    3,
+                    1
+                ],
+                [
+                    59,
+                    7,
+                    14
+                ]
+            ]
+        },
+        {
+            "fold": 4,
+            "candidate": "Candidate_C_SPY_SMA200",
+            "n_samples": 414,
+            "accuracy": 0.5725,
+            "balanced_accuracy": 0.3296,
+            "macro_f1": 0.3291,
+            "unnormalized_brier": 0.5495,
+            "ece_max_conf": 0.0792,
+            "log_loss": 0.8985,
+            "buy_predictions": 81,
+            "buy_support": 80,
+            "buy_true_positives": 16,
+            "buy_fp_sell": 62,
+            "buy_fp_hold": 3,
+            "buy_precision": 0.1975,
+            "buy_recall": 0.2,
+            "buy_fpr": 0.1946,
+            "completed_trades": 39,
+            "win_rate": 0.5641,
+            "exposure_bars": 88,
+            "exposure_pct": 0.2126,
+            "total_net_return": 0.033,
+            "avg_trade_return": 0.0008,
+            "profit_factor": 1.124,
+            "max_drawdown": -0.0804,
+            "annualized_sharpe": 0.4977,
+            "confusion_matrix": [
+                [
+                    219,
+                    28,
+                    62
+                ],
+                [
+                    20,
+                    2,
+                    3
+                ],
+                [
+                    57,
+                    7,
+                    16
+                ]
+            ]
+        },
+        {
+            "fold": 4,
+            "candidate": "Candidate_D_Combined",
+            "n_samples": 414,
+            "accuracy": 0.6063,
+            "balanced_accuracy": 0.3508,
+            "macro_f1": 0.3478,
+            "unnormalized_brier": 0.5495,
+            "ece_max_conf": 0.0792,
+            "log_loss": 0.8985,
+            "buy_predictions": 60,
+            "buy_support": 80,
+            "buy_true_positives": 14,
+            "buy_fp_sell": 45,
+            "buy_fp_hold": 1,
+            "buy_precision": 0.2333,
+            "buy_recall": 0.175,
+            "buy_fpr": 0.1377,
+            "completed_trades": 34,
+            "win_rate": 0.5882,
+            "exposure_bars": 60,
+            "exposure_pct": 0.1449,
+            "total_net_return": 0.0694,
+            "avg_trade_return": 0.002,
+            "profit_factor": 1.3781,
+            "max_drawdown": -0.0509,
+            "annualized_sharpe": 1.4946,
+            "confusion_matrix": [
+                [
+                    234,
+                    30,
+                    45
+                ],
+                [
+                    21,
+                    3,
+                    1
+                ],
+                [
+                    59,
+                    7,
+                    14
+                ]
+            ]
+        }
+    ],
+    "phase_four_institutional_gate_matrix": {
+        "gate_1_unnormalized_brier_le_0_20": {
+            "threshold": "<= 0.20",
+            "measured": 0.5876,
+            "status": "FAIL"
+        },
+        "gate_2_canonical_ece_le_0_08": {
+            "threshold": "<= 0.08",
+            "measured": 0.0924,
+            "status": "PASS"
+        },
+        "gate_3_buy_discrimination_improvement": {
+            "threshold": "Material improvement without trade collapse",
+            "measured": "Precision +1.94% (27.05% -> 28.99%), Net Return -3.61% (+50.55% -> +46.94%)",
+            "status": "FAIL"
+        },
+        "gate_4_prospective_closed_trades_ge_50": {
+            "threshold": ">= 50",
+            "measured": 0,
+            "status": "NOT_MET"
+        },
+        "gate_5_dual_regime_prospective_coverage": {
+            "threshold": "Bull and Bear coverage",
+            "measured": "Pending prospective trading accumulation",
+            "status": "PENDING"
+        },
+        "gate_6_v2_4_baseline_immutability": {
+            "threshold": "Byte-for-byte identical",
+            "measured": "d580b50a441c2f5a3881bb72eb0c8b23d90077dea61ddc506193affcfe993da5",
+            "status": "PASS"
+        },
+        "gate_7_v2_4_1_integration_and_live_capital": {
+            "threshold": "Strict Authorization Required",
+            "measured": "BLOCKED \u2014 PROPOSED_CANDIDATE_PENDING_AUTHORIZATION",
+            "status": "BLOCKED"
+        }
+    }
+}

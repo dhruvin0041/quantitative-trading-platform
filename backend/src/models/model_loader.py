@@ -1,3 +1,5 @@
+import hashlib
+import io
 import json
 import logging
 from pathlib import Path
@@ -237,8 +239,11 @@ class ModelManager:
                 p = Path(__file__).resolve().parent.parent.parent / "artifacts" / "latest_scaler.joblib"
             if p.exists():
                 try:
-                    self.scaler = joblib.load(p)
-                    logger.info("Loaded scaler with %d features.", getattr(self.scaler, "n_features_in_", 0))
+                    raw_bytes = p.read_bytes()
+                    self.scaler = joblib.load(io.BytesIO(raw_bytes))
+                    setattr(self.scaler, "_artifact_hash", hashlib.sha256(raw_bytes).hexdigest())
+                    setattr(self.scaler, "_artifact_source_path", str(p))
+                    logger.info("Loaded scaler with %d features (digest=%s).", getattr(self.scaler, "n_features_in_", 0), getattr(self.scaler, "_artifact_hash"))
                     break
                 except Exception as e:
                     logger.warning(f"Could not load scaler: {e}")
@@ -252,14 +257,20 @@ class ModelManager:
                 v3_path = Path(__file__).resolve().parent.parent.parent / "artifacts" / "v3" / "xgb_ensemble.json"
 
             if is_universal and v3_path.exists():
-                self.xgb_model.load_model(str(v3_path))
-                logger.info("Loaded V3.0 Universal XGBoost ensemble (31 features).")
+                raw_bytes = v3_path.read_bytes()
+                self.xgb_model.load_model(bytearray(raw_bytes))
+                setattr(self.xgb_model, "_artifact_hash", hashlib.sha256(raw_bytes).hexdigest())
+                setattr(self.xgb_model, "_artifact_source_path", str(v3_path))
+                logger.info("Loaded V3.0 Universal XGBoost ensemble (31 features, digest=%s).", getattr(self.xgb_model, "_artifact_hash"))
             else:
                 xgb_path = Path("artifacts/xgb_ensemble.json")
                 if not xgb_path.exists():
                     xgb_path = Path(__file__).resolve().parent.parent.parent / "artifacts" / "xgb_ensemble.json"
-                self.xgb_model.load_model(str(xgb_path))
-                logger.info("Loaded Authorized Primary XGBoost ensemble (%d features).", self.num_features)
+                raw_bytes = xgb_path.read_bytes()
+                self.xgb_model.load_model(bytearray(raw_bytes))
+                setattr(self.xgb_model, "_artifact_hash", hashlib.sha256(raw_bytes).hexdigest())
+                setattr(self.xgb_model, "_artifact_source_path", str(xgb_path))
+                logger.info("Loaded Authorized Primary XGBoost ensemble (%d features, digest=%s).", self.num_features, getattr(self.xgb_model, "_artifact_hash"))
         except Exception as e:
             logger.warning(f"Could not load XGB ensemble: {e}")
 

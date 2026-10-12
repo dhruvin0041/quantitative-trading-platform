@@ -189,3 +189,142 @@ def test_moving_block_bootstrap_ranking_ci():
 
     assert len(buy_pr_ci) == 2
     assert buy_pr_ci[0] <= buy_pr_ci[1]
+
+
+def test_phase_3e_exact_fold_brier_reconciliation():
+    """Verify that arithmetic mean of fold prior Brier scores reproduces pooled score exactly."""
+    import joblib
+
+    from src.execution.evaluation_contract import canonical_multiclass_brier
+
+    p3e_path = BACKEND_DIR / "artifacts" / "research" / "phase_3e_nested_calibrated_predictions.joblib"
+    assert p3e_path.exists()
+
+    data = joblib.load(p3e_path)
+    y_val = data["y_val_pooled"]
+    p_tp = data["p_tp_pooled"]
+    p_raw = data["p_raw_pooled"]
+
+    fold_briers_tp = []
+    fold_briers_raw = []
+    fold_briers_tp_exact = []
+    fold_briers_raw_exact = []
+    for f in range(4):
+        yf = y_val[f * 414 : (f + 1) * 414]
+        ptp_f = p_tp[f * 414 : (f + 1) * 414]
+        praw_f = p_raw[f * 414 : (f + 1) * 414]
+        yf_onehot = np.zeros_like(ptp_f)
+        yf_onehot[np.arange(len(yf)), yf] = 1.0
+
+        fold_briers_tp.append(float(canonical_multiclass_brier(yf, ptp_f)))
+        fold_briers_raw.append(float(canonical_multiclass_brier(yf, praw_f)))
+        fold_briers_tp_exact.append(float(np.mean(np.sum((ptp_f - yf_onehot) ** 2, axis=1))))
+        fold_briers_raw_exact.append(float(np.mean(np.sum((praw_f - yf_onehot) ** 2, axis=1))))
+
+    # Verify Fold 3 prior Brier is 0.3339 (reconciled from 0.3240)
+    assert np.isclose(fold_briers_tp[2], 0.333938, atol=1e-4)
+
+    # Verify exact unrounded arithmetic mean identity (machine precision)
+    mean_tp_exact = np.mean(fold_briers_tp_exact)
+    y_onehot = np.zeros_like(p_tp)
+    y_onehot[np.arange(len(y_val)), y_val] = 1.0
+    pooled_tp_exact = float(np.mean(np.sum((p_tp - y_onehot) ** 2, axis=1)))
+    assert np.isclose(mean_tp_exact, pooled_tp_exact, atol=1e-12)
+
+    # Verify rounded canonical metrics round to 0.4224
+    assert round(mean_tp_exact, 4) == 0.4224
+    assert canonical_multiclass_brier(y_val, p_tp) == 0.4224
+
+    mean_raw_exact = np.mean(fold_briers_raw_exact)
+    pooled_raw_exact = float(np.mean(np.sum((p_raw - y_onehot) ** 2, axis=1)))
+    assert np.isclose(mean_raw_exact, pooled_raw_exact, atol=1e-12)
+    assert canonical_multiclass_brier(y_val, p_raw) == 0.5964
+
+
+def test_multiclass_temperature_scaling_cross_observation_swaps():
+    """Verify that multiclass temperature scaling shifts cross-observation rankings while preserving argmax."""
+    import joblib
+    p3e_path = BACKEND_DIR / "artifacts" / "research" / "phase_3e_nested_calibrated_predictions.joblib"
+    data = joblib.load(p3e_path)
+
+    p_raw = data["p_raw_pooled"]
+    p_temp = data["p_temp_pooled"]
+
+    # 1. Within-observation argmax is strictly preserved
+    assert np.array_equal(np.argmax(p_raw, axis=1), np.argmax(p_temp, axis=1))
+
+    # 2. Cross-observation rankings for BUY class shift due to denominator variation
+    ranks_raw = np.argsort(np.argsort(p_raw[:, 2]))
+    ranks_temp = np.argsort(np.argsort(p_temp[:, 2]))
+    swaps = np.sum(ranks_raw != ranks_temp)
+    assert swaps > 1000, "Substantial cross-observation rank swaps must occur in multiclass setting"
+
+
+def test_prior_baseline_within_fold_vs_pooled_ranking():
+    """Verify that constant within-fold priors produce AUC 0.5 within-fold but deviate when pooled."""
+    import joblib
+    from sklearn.metrics import roc_auc_score
+
+    p3e_path = BACKEND_DIR / "artifacts" / "research" / "phase_3e_nested_calibrated_predictions.joblib"
+    data = joblib.load(p3e_path)
+
+    y_val = data["y_val_pooled"]
+    p_tp = data["p_tp_pooled"]
+
+    # Pooled metrics reflect cross-fold prior variation
+    y_buy = (y_val == 2).astype(int)
+    pooled_buy_auc = roc_auc_score(y_buy, p_tp[:, 2])
+    # Pooled AUC is NOT 0.5 because prior shifts across folds (0.175, 0.191, 0.214, 0.200)
+    assert pooled_buy_auc < 0.49 or pooled_buy_auc > 0.51
+
+    # Within each fold, prediction is strictly constant
+    for f in range(4):
+        ptp_f = p_tp[f * 414 : (f + 1) * 414, 2]
+        assert np.all(ptp_f == ptp_f[0]), "Within each fold, prior prediction must be constant"
+
+
+def test_canonical_reconciliation_artifacts_integrity():
+    """Verify that canonical reconciliation artifacts exist, match hashes, and encode exact metrics."""
+    json_path = BACKEND_DIR / "reports" / "canonical_phase_3e_reconciliation_report.json"
+    md_path = BACKEND_DIR / "reports" / "canonical_phase_3e_reconciliation.md"
+    csv_path = BACKEND_DIR / "reports" / "canonical_phase_3e_reconciliation_metrics.csv"
+
+    assert json_path.exists(), "Canonical JSON report must exist"
+    assert md_path.exists(), "Canonical Markdown report must exist"
+    assert csv_path.exists(), "Canonical CSV metrics must exist"
+
+    with open(json_path, "r") as f:
+        data = json.load(f)
+
+    # Check verified hashes
+    hashes = data["authoritative_archive_hashes"]
+    assert hashes["phase_3d_oof_predictions"]["sha256"] == "d85d5243743027c2e6849016acd79e89a4a70813ed3ff731c7e2ada97cee4c2b"
+    assert hashes["phase_3e_nested_calibrated_predictions"]["sha256"] == "1e257def5ce0d89657b241d9a58c56efd8ec92ec985fd3c273a0b208d76b7d32"
+    assert hashes["frozen_strategy_manifest_v2_4"]["sha256"] == "d580b50a441c2f5a3881bb72eb0c8b23d90077dea61ddc506193affcfe993da5"
+
+    records = data["candidate_audit_records"]
+
+    # Check Temperature scaling
+    temp = records["Candidate_A_Temperature_Scaling"]
+    assert temp["pooled"]["brier_canonical"] == 0.5872
+    assert temp["pooled"]["canonical_ece"] == 0.0506
+    assert temp["mean_of_folds"]["brier_canonical"] == 0.5873
+
+    # Check Dirichlet
+    diri = records["Candidate_B_Dirichlet_Calibration"]
+    assert diri["pooled"]["brier_canonical"] == 0.4776
+    assert diri["pooled"]["canonical_ece"] == 0.1336
+    assert diri["mean_of_folds"]["brier_canonical"] == 0.4776
+
+    # Check Prior
+    prior = records["Training_Prior_Baseline"]
+    assert prior["pooled"]["brier_canonical"] == 0.4224
+    assert prior["pooled"]["canonical_ece"] == 0.0413
+    assert prior["mean_of_folds"]["brier_canonical"] == 0.4224
+    assert prior["ranking"]["within_fold"]["mean_macro_auc"] == 0.5000
+    assert prior["ranking"]["within_fold"]["mean_buy_auc"] == 0.5000
+    assert prior["ranking"]["within_fold"]["mean_buy_pr"] == 0.2035
+    assert prior["ranking"]["pooled"]["macro_auc"] == 0.4838
+    assert prior["ranking"]["pooled"]["buy_auc"] == 0.4558
+    assert prior["ranking"]["pooled"]["buy_pr"] == 0.1870
+

@@ -25,6 +25,10 @@ from src.execution.signal_ledger import SignalLedger
 
 class MockAlphaModel:
     """Deterministic mock model that assigns signals based on point-in-time features."""
+    def __init__(self, n_features: int = len(FEATURE_COLUMNS)):
+        self.n_features_in_ = n_features
+        self._artifact_hash = "a7291fd14368bb2035779a34dd6494a31b8532820c7bcce96155fbef9dcd2d80"
+
     def predict_proba(self, X):
         n = len(X)
         probs = np.zeros((n, 3))
@@ -144,6 +148,7 @@ class TestCausalityAndExecutionTiming(unittest.TestCase):
 
         # Fit scaler on features
         scaler = StandardScaler().fit(df[FEATURE_COLUMNS].values)
+        scaler._artifact_hash = "15ba081e304a6abcd2fb181733c1841205f5be9d8bd2ba53a6a03ee0abd6bd49"
         self.mock_mm.scaler = scaler
 
         # Mock check_bar_forming_status to simulate active trading session on the last bar
@@ -182,15 +187,17 @@ class TestCausalityAndExecutionTiming(unittest.TestCase):
         Then append later market data (T+1 .. T+40) and rerun.
         All signals decided at or before time T must remain 100% IDENTICAL (zero repainting).
         """
-        # 1. Dataset at Time T (60 bars)
-        df_T = self._generate_synthetic_ohlcv(num_bars=60, seed=123)
+        # 1. Dataset at Time T (60 bars) vs extended dataset (100 bars)
+        df_extended = self._generate_synthetic_ohlcv(num_bars=100, seed=123)
+        df_T = df_extended.iloc[:60].copy()
 
         scaler = StandardScaler().fit(df_T[FEATURE_COLUMNS].values)
+        scaler._artifact_hash = "15ba081e304a6abcd2fb181733c1841205f5be9d8bd2ba53a6a03ee0abd6bd49"
         self.mock_mm.scaler = scaler
 
         # Run replay at Time T
         self.service._replay_causal_ml_signals("AAPL", df_T)
-        signals_at_T = self.ledger.get_signals("AAPL")
+        signals_at_T = self.ledger.get_signals("AAPL", actions_filter=["BUY", "SELL"])
         self.assertGreater(len(signals_at_T), 0, "Signals should have been generated at Time T")
 
         signal_snapshot_T = {
@@ -204,11 +211,9 @@ class TestCausalityAndExecutionTiming(unittest.TestCase):
         }
 
         # 2. Append 40 subsequent days of extreme market action (simulated rally and crash)
-        df_extended = self._generate_synthetic_ohlcv(num_bars=100, seed=123)
-
         # Rerun evaluation on the extended dataset
         self.service.get_causal_chart_markers("AAPL", df_extended)
-        signals_after_append = self.ledger.get_signals("AAPL")
+        signals_after_append = self.ledger.get_signals("AAPL", actions_filter=["BUY", "SELL"])
 
         signal_snapshot_after = {
             s["bar_timestamp"]: {

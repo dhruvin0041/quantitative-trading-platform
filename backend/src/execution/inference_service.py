@@ -1,8 +1,11 @@
 import asyncio
+import hashlib
+import io
+import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import joblib
 import numpy as np
@@ -53,6 +56,45 @@ from src.schemas import (
 from src.utils.timezone_utils import format_new_york_display
 
 logger = logging.getLogger(__name__)
+
+
+def load_bound_scaler(path: Union[str, Path]) -> Any:
+    """
+    Loads a scaler artifact from disk, cryptographically computes its SHA-256
+    digest from raw file bytes at load time, and binds provenance attributes
+    ('_artifact_hash', '_artifact_source_path') to the loaded object.
+    Fails closed if the file does not exist or fails to deserialize.
+    """
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"Scaler artifact not found at {p}")
+    raw_bytes = p.read_bytes()
+    digest = hashlib.sha256(raw_bytes).hexdigest()
+    obj = joblib.load(io.BytesIO(raw_bytes))
+    setattr(obj, "_artifact_hash", digest)
+    setattr(obj, "_artifact_source_path", str(p))
+    return obj
+
+
+def load_bound_xgb(path: Union[str, Path]) -> Any:
+    """
+    Loads an XGBoost classifier from disk, cryptographically computes its SHA-256
+    digest from raw file bytes at load time, and binds provenance attributes
+    ('_artifact_hash', '_artifact_source_path') to the loaded object.
+    Fails closed if the file does not exist or fails to deserialize.
+    """
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"XGBoost artifact not found at {p}")
+    raw_bytes = p.read_bytes()
+    digest = hashlib.sha256(raw_bytes).hexdigest()
+    import xgboost as xgb
+
+    model = xgb.XGBClassifier()
+    model.load_model(bytearray(raw_bytes))
+    setattr(model, "_artifact_hash", digest)
+    setattr(model, "_artifact_source_path", str(p))
+    return model
 
 
 class InferenceService:
@@ -117,6 +159,363 @@ class InferenceService:
         self.asset_engine = AssetProfileEngine()
         self.weight_engine = AdaptiveWeightingEngine()
         self.mtf_engine = MultiTimeframeEngine()
+        self.last_replay_audit: Optional[Dict[str, Any]] = None
+
+    @staticmethod
+    def is_manifest_formally_authorized(
+        manifest_data: Dict[str, Any], target_version: Optional[str] = None
+    ) -> bool:
+        """
+        Evaluates formal governance authorization with strict negative precedence.
+
+        Precedence Order:
+        1. Explicit unauthorized/pending terms in candidate_status -> FAIL CLOSED (False).
+        2. Explicit unauthorized/pending terms in top-level status -> FAIL CLOSED (False).
+        3. Authorization record inspection:
+           - If present, must be a dict. If malformed -> FAIL CLOSED (False).
+           - If status contains unauthorized terms -> FAIL CLOSED (False).
+           - 'formal_authorization_granted' must be boolean True. If False or missing -> FAIL CLOSED (False).
+           - A frozen status or anti-overfitting lock NEVER overrides formal_authorization_granted == False.
+        4. If candidate_status is non-empty without a valid positive authorization record -> FAIL CLOSED (False).
+        5. Narrowly Scoped Legacy Baseline Rule:
+           - Permit this exception ONLY for the specifically designated, immutable V2.4 baseline
+             ('Institutional_Mesh_V2.4' with strategy_version 'HYDRA_PROSPECTIVE_V2.4').
+           - Requires exact git_commit 'e687e2321da9159dca2b10c6744f2166fb44a506',
+             freeze timestamp '2026-10-01T09:39:11Z', and verified manifest hash.
+           - Manifest hash MUST be present, non-empty, a valid 64-char hex SHA-256 digest,
+             and match V24_EXPECTED_MANIFEST_HASH. If missing, empty, malformed, or mismatched -> FAIL CLOSED (False).
+           - If _manifest_raw_bytes is attached, SHA-256 computed from bytes MUST match expected hash.
+           - An otherwise identical manifest for ANY other version (e.g. V2.4.1, V2.5, V3) without a positive
+             formal authorization record MUST FAIL CLOSED (False).
+        """
+        if not isinstance(manifest_data, dict):
+            return False
+
+        unauthorized_terms = {
+            "PROPOSED",
+            "PENDING",
+            "REVOKED",
+            "REJECTED",
+            "UNAUTHORIZED",
+            "DRAFT",
+            "SUSPENDED",
+            "CANDIDATE",
+        }
+
+        # 1. Candidate status negative check
+        cand_status = str(manifest_data.get("candidate_status", "")).strip().upper()
+        if any(term in cand_status for term in unauthorized_terms):
+            return False
+
+        # 2. Top-level status negative check
+        top_status = str(manifest_data.get("status", "")).strip().upper()
+        if any(term in top_status for term in unauthorized_terms):
+            return False
+
+        # 3. Authorization record inspection
+        auth_record = manifest_data.get("authorization_record")
+        if auth_record is not None:
+            if not isinstance(auth_record, dict):
+                return False
+            auth_status = str(auth_record.get("status", "")).strip().upper()
+            if any(term in auth_status for term in unauthorized_terms):
+                return False
+            if auth_record.get("formal_authorization_granted") is not True:
+                return False
+            return True
+
+        # If candidate status was set but no authorization record exists, fail closed
+        if cand_status:
+            return False
+
+        # 4. Narrowly scoped legacy baseline exception:
+        strat_ver = str(manifest_data.get("strategy_version", "")).strip()
+        resolved_target = (target_version or "").strip()
+
+        V24_EXPECTED_MANIFEST_HASH = "d580b50a441c2f5a3881bb72eb0c8b23d90077dea61ddc506193affcfe993da5"
+        actual_m_hash = manifest_data.get("_manifest_file_hash")
+        if not isinstance(actual_m_hash, str) or not actual_m_hash.strip():
+            return False
+        actual_m_hash_clean = actual_m_hash.strip().lower()
+        if len(actual_m_hash_clean) != 64 or not all(c in "0123456789abcdef" for c in actual_m_hash_clean):
+            return False
+        if actual_m_hash_clean != V24_EXPECTED_MANIFEST_HASH.lower():
+            return False
+
+        raw_bytes = manifest_data.get("_manifest_raw_bytes")
+        if not isinstance(raw_bytes, (bytes, bytearray)) or not raw_bytes:
+            return False
+        computed_from_bytes = hashlib.sha256(raw_bytes).hexdigest().lower()
+        if computed_from_bytes != V24_EXPECTED_MANIFEST_HASH.lower():
+            return False
+        if computed_from_bytes != actual_m_hash_clean:
+            return False
+
+        try:
+            parsed_raw = json.loads(raw_bytes.decode("utf-8"))
+            if not isinstance(parsed_raw, dict):
+                return False
+            if str(parsed_raw.get("strategy_version", "")).strip() != strat_ver:
+                return False
+            if str(parsed_raw.get("git_commit", "")).strip() != "e687e2321da9159dca2b10c6744f2166fb44a506":
+                return False
+            if str(parsed_raw.get("freeze_timestamp_utc", "")).strip() != "2026-10-01T09:39:11Z":
+                return False
+            if str(parsed_raw.get("status", "")).strip() != "FROZEN_FOR_PROSPECTIVE_VALIDATION":
+                return False
+        except Exception:
+            return False
+
+        is_designated_v24_baseline = (
+            (resolved_target == "Institutional_Mesh_V2.4" or (not resolved_target and strat_ver == "HYDRA_PROSPECTIVE_V2.4"))
+            and strat_ver == "HYDRA_PROSPECTIVE_V2.4"
+            and str(manifest_data.get("git_commit", "")).strip() == "e687e2321da9159dca2b10c6744f2166fb44a506"
+            and str(manifest_data.get("freeze_timestamp_utc", "")).strip() == "2026-10-01T09:39:11Z"
+            and top_status == "FROZEN_FOR_PROSPECTIVE_VALIDATION"
+            and manifest_data.get("anti_overfitting_lock") is True
+            and not cand_status
+        )
+        if is_designated_v24_baseline:
+            return True
+
+        return False
+
+    VERSION_CONFIGS: Dict[str, Any] = {
+        "Institutional_Mesh_V2.4.1": {
+            "manifest_candidates": [
+                Path("artifacts/frozen_strategy_manifest_v2.4.1.json"),
+                Path("backend/artifacts/frozen_strategy_manifest_v2.4.1.json"),
+            ],
+            "allowed_dims": {31},
+            "model_key": "xgb_ensemble.json",
+            "scaler_key": "latest_scaler.joblib",
+        },
+        "Institutional_Mesh_V2.4": {
+            "manifest_candidates": [
+                Path("artifacts/frozen_strategy_manifest_v2.4.json"),
+                Path("backend/artifacts/frozen_strategy_manifest_v2.4.json"),
+            ],
+            "allowed_dims": {27, 31},
+            "model_key": "xgb_ensemble.json",
+            "scaler_key": "latest_scaler.joblib",
+        },
+        "Institutional_Mesh_V3": {
+            "manifest_candidates": [
+                Path("artifacts/frozen_strategy_manifest_v3.0.json"),
+                Path("backend/artifacts/frozen_strategy_manifest_v3.0.json"),
+            ],
+            "allowed_dims": {31},
+            "model_key": "v3/xgb_ensemble.json",
+            "scaler_key": "v3/latest_scaler.joblib",
+        },
+    }
+
+    SUPPORTED_RESEARCH_CANDIDATE_VERSIONS: Dict[str, Dict[str, Any]] = {
+        "Institutional_Mesh_V2.4.1": {
+            "expected_strategy_version": "HYDRA_PROSPECTIVE_V2.4.1",
+            "permitted_candidate_statuses": {
+                "PROPOSED_CANDIDATE_PENDING_AUTHORIZATION",
+                "RESEARCH_CANDIDATE_PENDING_EVALUATION",
+            },
+            "expected_feature_count": 31,
+            "model_key": "xgb_ensemble.json",
+            "scaler_key": "latest_scaler.joblib",
+        },
+    }
+
+    PROHIBITED_CANDIDATE_STATUS_TERMS = {
+        "REVOKED",
+        "SUSPENDED",
+        "REJECTED",
+        "UNAUTHORIZED",
+        "DEPRECATED",
+        "TERMINATED",
+        "EXPIRED",
+        "INVALID",
+    }
+
+    def _load_manifest_data(self, ver: str) -> Optional[Dict[str, Any]]:
+        """
+        Loads manifest JSON by reading raw file bytes once, calculating SHA-256
+        directly over those raw bytes, and deserializing the exact same byte buffer.
+        Attaches _manifest_file_hash, _manifest_raw_bytes, and _manifest_path.
+        """
+        cfg = self.VERSION_CONFIGS.get(ver, {})
+        for p in cfg.get("manifest_candidates", []):
+            if p.exists():
+                try:
+                    raw_bytes = p.read_bytes()
+                    m_hash = hashlib.sha256(raw_bytes).hexdigest()
+                    data = json.loads(raw_bytes.decode("utf-8"))
+                    if isinstance(data, dict):
+                        data["_manifest_file_hash"] = m_hash
+                        data["_manifest_raw_bytes"] = raw_bytes
+                        data["_manifest_path"] = str(p)
+                        return data
+                    return None
+                except Exception:
+                    return None
+        return None
+
+    def _resolve_verified_model_provenance(
+        self,
+        requested_version: Optional[str],
+        scaler: Any,
+        xgb_model: Any,
+    ) -> Optional[str]:
+        """
+        Zero-Default Governance Mandate: Resolves model-version provenance strictly
+        from verified model/manifest identity and explicit governance authorization.
+
+        Rules:
+        1. Both scaler and xgb_model must be loaded and non-None.
+        2. Scaler and model feature dimensions must match (n_features_in_).
+        3. Exact authorized identifiers only:
+           - Strictly rejects ambiguous version strings, prefixes, and substrings (e.g., 'V2.4', 'V2.4.1', 'v3').
+           - Exact authorized identifiers: 'Institutional_Mesh_V2.4', 'Institutional_Mesh_V2.4.1', 'Institutional_Mesh_V3'.
+        4. Manifest and Authorization Separation:
+           - A manifest must exist for the target version.
+           - Pending candidates (e.g., formal_authorization_granted=False or candidate_status contains unauthorized terms)
+             remain strictly unauthorized and fail closed. Ordinary inference never authorizes pending candidates.
+        5. Cryptographic In-Memory Identity Binding:
+           - Loaded model and scaler objects MUST have '_artifact_hash' attributes cryptographically bound at load time.
+           - In-memory digests MUST match the hashes in the selected manifest for BOTH explicit and implicit requests.
+           - On-disk fallback hashing is strictly prohibited. Failing to prove in-memory provenance fails closed.
+           - Scaler and model are verified as a compatible pair under the same manifest.
+        6. When requested_version is None:
+           - Determines active authorized strategy from verified manifests on disk.
+           - Unapproved pending candidates are strictly excluded.
+           - Fails closed if no authorized strategy cryptographically matches the loaded artifacts.
+        """
+        if scaler is None or xgb_model is None:
+            return None
+
+        scaler_n = getattr(scaler, "n_features_in_", None)
+        xgb_n = getattr(xgb_model, "n_features_in_", None)
+        if scaler_n is None or xgb_n is None or scaler_n != xgb_n:
+            logger.error(
+                f"[PROVENANCE MISMATCH] Dimension mismatch between scaler ({scaler_n}) and model ({xgb_n})."
+            )
+            return None
+
+        version_configs = self.VERSION_CONFIGS
+        _load_manifest_data = self._load_manifest_data
+        _is_formally_authorized = self.is_manifest_formally_authorized
+
+        def _verify_manifest_hashes(manifest_data: Dict[str, Any], ver: str) -> bool:
+            """
+            Verifies that in-memory model and scaler objects are cryptographically bound
+            to the exact digests declared in the manifest for version 'ver'.
+
+            Strictly prohibits on-disk fallback hashing:
+            - If loaded objects lack '_artifact_hash', provenance is unproven -> FAILS CLOSED.
+            - If loaded objects have digests differing from the manifest -> FAILS CLOSED.
+            - Verifies both model and scaler as a compatible pair under the same manifest.
+            """
+            cfg = version_configs[ver]
+            model_key = cfg["model_key"]
+            scaler_key = cfg["scaler_key"]
+            manifest_hashes = manifest_data.get("model_hashes", {})
+            expected_xgb = manifest_hashes.get(model_key)
+            expected_scaler = manifest_hashes.get(scaler_key)
+            if not expected_xgb or not expected_scaler:
+                logger.error(
+                    f"[HASH MISMATCH] Manifest for '{ver}' missing expected hash for {model_key} or {scaler_key}."
+                )
+                return False
+
+            actual_xgb = getattr(xgb_model, "_artifact_hash", None)
+            if not isinstance(actual_xgb, str) or not actual_xgb:
+                logger.error(
+                    "[PROVENANCE UNVERIFIABLE] In-memory XGBoost model has no bound '_artifact_hash'. "
+                    "Provenance cannot be cryptographically proven. Disk fallback is prohibited. Failing closed."
+                )
+                return False
+
+            actual_scaler = getattr(scaler, "_artifact_hash", None)
+            if not isinstance(actual_scaler, str) or not actual_scaler:
+                logger.error(
+                    "[PROVENANCE UNVERIFIABLE] In-memory scaler has no bound '_artifact_hash'. "
+                    "Provenance cannot be cryptographically proven. Disk fallback is prohibited. Failing closed."
+                )
+                return False
+
+            if actual_xgb != expected_xgb:
+                logger.error(
+                    f"[HASH MISMATCH] In-memory XGBoost model digest does not match manifest for '{ver}'. "
+                    f"Actual (in-memory): {actual_xgb}, Expected (manifest): {expected_xgb}."
+                )
+                return False
+
+            if actual_scaler != expected_scaler:
+                logger.error(
+                    f"[HASH MISMATCH] In-memory scaler digest does not match manifest for '{ver}'. "
+                    f"Actual (in-memory): {actual_scaler}, Expected (manifest): {expected_scaler}."
+                )
+                return False
+
+            return True
+
+        if requested_version is not None:
+            req_clean = requested_version.strip()
+            if req_clean not in version_configs:
+                logger.error(
+                    f"[PROVENANCE REJECTED] Ambiguous or unauthorized model version requested: '{requested_version}'. "
+                    f"Version string must exactly match an authorized identifier: {sorted(version_configs.keys())}. "
+                    f"Substring, prefix, or alias matching is strictly prohibited."
+                )
+                return None
+            target_ver = req_clean
+
+            manifest_data = _load_manifest_data(target_ver)
+            if not manifest_data:
+                logger.error(f"[PROVENANCE REJECTED] Manifest for '{target_ver}' not found on disk. Failing closed.")
+                return None
+
+            if not _is_formally_authorized(manifest_data, target_ver):
+                auth_rec = manifest_data.get("authorization_record")
+                granted_val = (
+                    auth_rec.get("formal_authorization_granted", False)
+                    if isinstance(auth_rec, dict)
+                    else False
+                )
+                logger.error(
+                    f"[GOVERNANCE BLOCKED] Candidate '{target_ver}' is not formally authorized "
+                    f"(status='{manifest_data.get('candidate_status', manifest_data.get('status'))}', "
+                    f"formal_authorization_granted={granted_val}). "
+                    f"Ordinary inference strictly rejects unauthorized candidates. Failing closed."
+                )
+                return None
+
+            allowed_dims = version_configs[target_ver]["allowed_dims"]
+            if scaler_n not in allowed_dims:
+                logger.error(
+                    f"[DIMENSION MISMATCH] Requested version '{target_ver}' expects dimensions in {allowed_dims}, got {scaler_n}."
+                )
+                return None
+
+            if not _verify_manifest_hashes(manifest_data, target_ver):
+                return None
+
+            return target_ver
+
+        # requested_version is None: establish identity from verified ACTIVE AUTHORIZED manifest
+        eval_order = ["Institutional_Mesh_V2.4.1", "Institutional_Mesh_V2.4"]
+        for cand_ver in eval_order:
+            cand_manifest = _load_manifest_data(cand_ver)
+            if not cand_manifest:
+                continue
+            if not _is_formally_authorized(cand_manifest, cand_ver):
+                # Unapproved candidates are strictly excluded from ordinary inference routing
+                continue
+            cand_dims = version_configs[cand_ver]["allowed_dims"]
+            if scaler_n not in cand_dims:
+                continue
+            if _verify_manifest_hashes(cand_manifest, cand_ver):
+                return cand_ver
+
+        logger.error("[PROVENANCE FAILED] Could not establish verified, authorized model identity. Failing closed.")
+        return None
 
     def _replay_causal_ml_signals(
         self,
@@ -133,8 +532,18 @@ class InferenceService:
         Confirmed signals are committed to the append-only SignalLedger.
         """
         try:
+            self.last_replay_audit = {
+                "symbol": ticker,
+                "generation_success": False,
+                "persistence_success": False,
+                "staged_count": 0,
+                "model_version": None,
+                "error": None,
+            }
+
             df = clean_multiindex_columns(ticker_df.copy())
             if df.empty or len(df) < 30:
+                self.last_replay_audit["error"] = "INSUFFICIENT_BARS"
                 return []
 
             spy = clean_multiindex_columns(spy_df.copy()) if spy_df is not None else None
@@ -153,13 +562,14 @@ class InferenceService:
                     p = Path(sp)
                     if p.exists():
                         try:
-                            scaler = joblib.load(p)
+                            scaler = load_bound_scaler(p)
                             break
                         except Exception:
                             pass
 
             if scaler is None:
                 logger.warning("No scaler available for causal ML replay.")
+                self.last_replay_audit["error"] = "MISSING_SCALER"
                 return []
 
             # Dynamically align active feature columns to scaler's exact fitted dimensions
@@ -174,11 +584,12 @@ class InferenceService:
             df_filtered = df_feat.reindex(columns=active_cols).dropna()
 
             if df_filtered.empty or len(df_filtered) < 15:
+                self.last_replay_audit["error"] = "INSUFFICIENT_VALID_BARS"
                 return []
 
             scaled_rows = scaler.transform(df_filtered.values)
 
-            # Multi-Model Alpha Ensemble: XGBoost + LightGBM
+            # Multi-Model Alpha Ensemble: XGBoost
             xgb_model = getattr(self.mm, "xgb_model", None)
             if xgb_model is not None:
                 n_feats = getattr(xgb_model, "n_features_in_", None)
@@ -195,17 +606,39 @@ class InferenceService:
                     mp = Path(m_path)
                     if mp.exists():
                         try:
-                            import xgboost as xgb
-
-                            xgb_model = xgb.XGBClassifier()
-                            xgb_model.load_model(str(mp))
+                            xgb_model = load_bound_xgb(mp)
                             break
                         except Exception:
                             pass
 
             if xgb_model is None:
                 logger.warning("No XGBoost model available for causal ML replay.")
+                self.last_replay_audit["error"] = "MISSING_XGB_MODEL"
                 return []
+
+            # Strict Candidate Model-Version Provenance Resolution (Zero-Default Governance Mandate)
+            resolved_model_version = self._resolve_verified_model_provenance(
+                requested_version=version,
+                scaler=scaler,
+                xgb_model=xgb_model,
+            )
+            if resolved_model_version is None:
+                logger.error(
+                    f"[PROVENANCE REJECTED] {ticker}: Cannot verify candidate model provenance. "
+                    f"Requested version='{version}', Scaler features={getattr(scaler, 'n_features_in_', None)}, "
+                    f"XGB features={getattr(xgb_model, 'n_features_in_', None)}. Failing closed."
+                )
+                self.last_replay_audit = {
+                    "symbol": ticker,
+                    "generation_success": False,
+                    "persistence_success": False,
+                    "staged_count": 0,
+                    "model_version": None,
+                    "error": "UNVERIFIED_MODEL_PROVENANCE",
+                }
+                return []
+
+            self.last_replay_audit["model_version"] = resolved_model_version
 
             xgb_probs = xgb_model.predict_proba(scaled_rows)
 
@@ -264,12 +697,15 @@ class InferenceService:
                 else pd.Series(20.0, index=valid_indices)
             )
 
+            intended_bars = len(valid_indices)
+            bars_processed = 0
             current_pos = "FLAT"
             last_trade_idx = -10
             last_trade_price = 0.0
             peak_price = 0.0
+            staged_signals = []
 
-            for i in range(len(valid_indices)):
+            for i in range(intended_bars):
                 v_idx = valid_indices[i]
                 bar_time = (
                     v_idx.strftime("%Y-%m-%d")
@@ -456,18 +892,18 @@ class InferenceService:
                         exec_price = float(df["Close"].iloc[orig_idx]) * 1.0005
                         exec_time_str = "NEXT_SESSION_OPEN 09:30:00 ET"
 
-                    self.signal_ledger.record_signal(
-                        symbol=ticker,
-                        bar_timestamp=bar_time,
-                        signal="BUY",
-                        confidence=conf,
-                        execution_target_bar=exec_target,
-                        execution_price=round(exec_price, 2),
-                        model_version="Institutional_Mesh_V2.4",
-                        raw_features_hash=SignalLedger.compute_features_hash(
+                    staged_signals.append({
+                        "symbol": ticker,
+                        "bar_timestamp": bar_time,
+                        "signal": "BUY",
+                        "confidence": conf,
+                        "execution_target_bar": exec_target,
+                        "execution_price": round(exec_price, 2),
+                        "model_version": resolved_model_version,
+                        "raw_features_hash": SignalLedger.compute_features_hash(
                             scaled_rows[i]
                         ),
-                        metadata={
+                        "metadata": {
                             "source": "causal_replay",
                             "rule": "Open[t+1] + 5bps",
                             "source_candle_timestamp": format_new_york_display(f"{bar_time} 16:00:00"),
@@ -476,7 +912,7 @@ class InferenceService:
                             "execution_price": round(exec_price, 2),
                             "signal_state": "CONFIRMED",
                         },
-                    )
+                    })
 
                 elif (
                     filtered_signal == "SELL"
@@ -503,18 +939,18 @@ class InferenceService:
                         exec_price = float(df["Close"].iloc[orig_idx]) * 0.9995
                         exec_time_str = "NEXT_SESSION_OPEN 09:30:00 ET"
 
-                    self.signal_ledger.record_signal(
-                        symbol=ticker,
-                        bar_timestamp=bar_time,
-                        signal="SELL",
-                        confidence=conf,
-                        execution_target_bar=exec_target,
-                        execution_price=round(exec_price, 2),
-                        model_version="Institutional_Mesh_V2.4",
-                        raw_features_hash=SignalLedger.compute_features_hash(
+                    staged_signals.append({
+                        "symbol": ticker,
+                        "bar_timestamp": bar_time,
+                        "signal": "SELL",
+                        "confidence": conf,
+                        "execution_target_bar": exec_target,
+                        "execution_price": round(exec_price, 2),
+                        "model_version": resolved_model_version,
+                        "raw_features_hash": SignalLedger.compute_features_hash(
                             scaled_rows[i]
                         ),
-                        metadata={
+                        "metadata": {
                             "source": "causal_replay",
                             "rule": "Open[t+1] - 5bps",
                             "source_candle_timestamp": format_new_york_display(f"{bar_time} 16:00:00"),
@@ -523,10 +959,28 @@ class InferenceService:
                             "execution_price": round(exec_price, 2),
                             "signal_state": "CONFIRMED",
                         },
-                    )
+                    })
 
                 elif current_pos == "LONG":
                     peak_price = max(peak_price, cur_h)
+
+                bars_processed += 1
+
+            # Replay Completeness Gate: Every bar in the intended window must be processed successfully
+            if bars_processed != intended_bars or intended_bars < 15:
+                logger.error(
+                    f"[REPLAY INCOMPLETE] {ticker}: {bars_processed}/{intended_bars} bars processed (minimum 15 required). "
+                    f"Failing closed without modifying database ledger."
+                )
+                self.last_replay_audit = {
+                    "symbol": ticker,
+                    "generation_success": False,
+                    "persistence_success": False,
+                    "staged_count": 0,
+                    "model_version": resolved_model_version,
+                    "error": "INCOMPLETE_REPLAY_WINDOW",
+                }
+                return []
 
             # Record checkpoint for the latest evaluated bar if no BUY/SELL occurred on it
             if len(valid_indices) > 0:
@@ -536,23 +990,58 @@ class InferenceService:
                     if hasattr(last_v_idx, "strftime")
                     else str(last_v_idx)[:10]
                 )
-                self.signal_ledger.record_signal(
-                    symbol=ticker,
-                    bar_timestamp=last_bar_time,
-                    signal="HOLD" if current_pos == "FLAT" else "HOLD_LONG",
-                    confidence=0.5,
-                    execution_target_bar="NEXT_SESSION_OPEN",
-                    execution_price=round(float(df["Close"].loc[last_v_idx]), 2),
-                    model_version="Institutional_Mesh_V2.4",
-                    raw_features_hash="latest_bar_marker",
-                    metadata={
+                staged_signals.append({
+                    "symbol": ticker,
+                    "bar_timestamp": last_bar_time,
+                    "signal": "HOLD" if current_pos == "FLAT" else "HOLD_LONG",
+                    "confidence": 0.5,
+                    "execution_target_bar": "NEXT_SESSION_OPEN",
+                    "execution_price": round(float(df["Close"].loc[last_v_idx]), 2),
+                    "model_version": resolved_model_version,
+                    "raw_features_hash": "latest_bar_marker",
+                    "metadata": {
                         "source": "causal_replay_checkpoint",
                         "source_candle_timestamp": format_new_york_display(f"{last_bar_time} 16:00:00"),
                         "signal_generation_timestamp": format_new_york_display(f"{last_bar_time} 16:00:00"),
                         "execution_timestamp": "NEXT_SESSION_OPEN 09:30:00 ET",
                         "signal_state": "CONFIRMED",
                     },
+                })
+
+            # Atomic transactional replacement in a single database transaction
+            replaced = self.signal_ledger.replace_historical_replay_atomically(
+                symbol=ticker,
+                validated_signals=staged_signals,
+                replay_status="COMPLETED",
+                allow_empty=True,
+                expected_bars=intended_bars,
+                processed_bars=bars_processed,
+            )
+            if not replaced:
+                logger.error(
+                    f"[INFERENCE ERROR] Atomic historical replay persistence failed for {ticker}. "
+                    f"Replay generation succeeded ({len(staged_signals)} signals staged), but database transaction was rejected or rolled back. "
+                    f"Existing ledger records remain preserved without modification."
                 )
+                self.last_replay_audit = {
+                    "symbol": ticker,
+                    "generation_success": True,
+                    "persistence_success": False,
+                    "staged_count": len(staged_signals),
+                    "model_version": resolved_model_version,
+                    "error": "LEDGER_REPLACEMENT_FAILED",
+                }
+                # Do NOT silently present existing records as newly recomputed results
+                return []
+
+            self.last_replay_audit = {
+                "symbol": ticker,
+                "generation_success": True,
+                "persistence_success": True,
+                "staged_count": len(staged_signals),
+                "model_version": resolved_model_version,
+                "error": None,
+            }
 
             return self.signal_ledger.get_signals(
                 symbol=ticker, actions_filter=["BUY", "SELL"]
@@ -560,6 +1049,15 @@ class InferenceService:
 
         except Exception as e:
             logger.error("Error during causal ML replay for %s: %s", ticker, e)
+            self.last_replay_audit = {
+                "symbol": ticker,
+                "generation_success": False,
+                "persistence_success": False,
+                "staged_count": 0,
+                "model_version": locals().get("resolved_model_version", "UNKNOWN"),
+                "error": str(e),
+            }
+            # Historical records in database remain preserved because no deletion was executed
             return []
 
     def get_causal_chart_markers(
@@ -594,8 +1092,9 @@ class InferenceService:
         )
 
         if force_recompute or len(all_signals) < 2:
-            self.signal_ledger.clear_historical_replay(ticker)
-            return self._replay_causal_ml_signals(ticker, ticker_df, spy_df, version=version)
+            return self._replay_causal_ml_signals(
+                ticker, ticker_df, spy_df, version=version
+            )
 
         if (
             latest_completed_bar_date is not None
@@ -609,6 +1108,257 @@ class InferenceService:
             return [s for s in all_signals if s.get("bar_timestamp", "") <= latest_completed_bar_date]
 
         return self._replay_causal_ml_signals(ticker, ticker_df, spy_df, version=version)
+
+    def replay_research_candidate_dry_run(
+        self,
+        ticker: str,
+        ticker_df: pd.DataFrame,
+        spy_df: Optional[pd.DataFrame] = None,
+        candidate_version: str = "Institutional_Mesh_V2.4.1",
+    ) -> Dict[str, Any]:
+        """
+        Isolated Research-Only Candidate Dry-Run Pathway.
+
+        Strict Governance Invariants:
+        1. Zero Production Routing: This method is strictly isolated for offline/research evaluation.
+        2. Zero Ledger Writes: NEVER writes or modifies records in SignalLedger or prospective_signals SQLite tables.
+        3. Zero Live Orders: NEVER routes or creates live execution orders.
+        4. Cryptographic Provenance Verification: Model and scaler digests are verified against the candidate manifest.
+        5. Fails closed if artifact digests do not match candidate manifest.
+        """
+        result: Dict[str, Any] = {
+            "symbol": ticker,
+            "candidate_version": candidate_version,
+            "is_research_dry_run": True,
+            "production_routing_blocked": True,
+            "ledger_writes_blocked": True,
+            "status": "FAILED",
+            "marker_count": 0,
+            "markers": [],
+            "error": None,
+        }
+
+        df = clean_multiindex_columns(ticker_df.copy())
+        if df.empty or len(df) < 30:
+            result["error"] = "INSUFFICIENT_BARS"
+            return result
+
+        # 1. Version Policy: Strictly restrict to supported research candidates
+        cand_policy = self.SUPPORTED_RESEARCH_CANDIDATE_VERSIONS.get(candidate_version)
+        if not cand_policy:
+            result["error"] = (
+                f"UNSUPPORTED_RESEARCH_CANDIDATE_VERSION: '{candidate_version}'. "
+                f"Dry-run evaluation is strictly restricted to designated research candidates: "
+                f"{sorted(self.SUPPORTED_RESEARCH_CANDIDATE_VERSIONS.keys())}. "
+                f"Production baselines and unrecognized versions are prohibited."
+            )
+            return result
+
+        manifest_data = self._load_manifest_data(candidate_version)
+        if not manifest_data:
+            result["error"] = f"CANDIDATE_MANIFEST_NOT_FOUND: {candidate_version}"
+            return result
+
+        # 2. Candidate Status Validation: Explicit rejection of prohibited terms + strict allowlist check
+        cand_status = str(manifest_data.get("candidate_status", "")).strip().upper()
+        if not cand_status:
+            result["error"] = (
+                f"MISSING_CANDIDATE_STATUS: candidate_version='{candidate_version}' has empty candidate_status"
+            )
+            return result
+
+        if any(term in cand_status for term in self.PROHIBITED_CANDIDATE_STATUS_TERMS):
+            result["error"] = f"PROHIBITED_CANDIDATE_STATUS: '{cand_status}' contains prohibited governance terms"
+            return result
+
+        permitted_statuses = cand_policy["permitted_candidate_statuses"]
+        if cand_status not in permitted_statuses:
+            result["error"] = (
+                f"UNPERMITTED_CANDIDATE_STATUS: '{cand_status}'. "
+                f"Permitted research statuses for {candidate_version}: {sorted(permitted_statuses)}"
+            )
+            return result
+
+        # 3. Strategy Version Identity Validation
+        declared_strat = str(manifest_data.get("strategy_version", "")).strip()
+        expected_strat = cand_policy["expected_strategy_version"]
+        if declared_strat != expected_strat:
+            result["error"] = (
+                f"VERSION_LABEL_MISMATCH: requested '{candidate_version}', "
+                f"expected strategy '{expected_strat}', but manifest declared '{declared_strat}'"
+            )
+            return result
+
+        # 4. Manifest Model Hashes
+        model_key = cand_policy["model_key"]
+        scaler_key = cand_policy["scaler_key"]
+        expected_xgb = manifest_data.get("model_hashes", {}).get(model_key)
+        expected_scaler = manifest_data.get("model_hashes", {}).get(scaler_key)
+
+        if not expected_xgb or not expected_scaler:
+            result["error"] = f"MANIFEST_MISSING_MODEL_HASHES: {model_key}, {scaler_key}"
+            return result
+
+        # 5. Artifact Resolution across Working Directories (Repo-Root and Backend/)
+        manifest_path = manifest_data.get("_manifest_path")
+        search_dirs: List[Path] = []
+        if manifest_path:
+            m_parent = Path(manifest_path).parent
+            if m_parent not in search_dirs:
+                search_dirs.append(m_parent)
+        for base_p in [Path("artifacts"), Path("backend/artifacts")]:
+            if base_p not in search_dirs:
+                search_dirs.append(base_p)
+
+        # Discard or reload in-memory artifacts if their hashes do not match candidate manifest
+        scaler = getattr(self.mm, "scaler", None)
+        in_memory_scaler_bad = False
+        if scaler is not None and getattr(scaler, "_artifact_hash", None) != expected_scaler:
+            in_memory_scaler_bad = True
+            scaler = None
+
+        if scaler is None:
+            for d in search_dirs:
+                sp = d / scaler_key
+                if sp.exists():
+                    try:
+                        loaded = load_bound_scaler(sp)
+                        scaler = loaded
+                        if getattr(loaded, "_artifact_hash", None) == expected_scaler:
+                            break
+                    except Exception:
+                        pass
+
+        xgb_model = getattr(self.mm, "xgb_model", None)
+        in_memory_xgb_bad = False
+        if xgb_model is not None and getattr(xgb_model, "_artifact_hash", None) != expected_xgb:
+            in_memory_xgb_bad = True
+            xgb_model = None
+
+        if xgb_model is None:
+            for d in search_dirs:
+                mp = d / model_key
+                if mp.exists():
+                    try:
+                        loaded = load_bound_xgb(mp)
+                        xgb_model = loaded
+                        if getattr(loaded, "_artifact_hash", None) == expected_xgb:
+                            break
+                    except Exception:
+                        pass
+
+        if scaler is None or xgb_model is None:
+            if in_memory_scaler_bad or in_memory_xgb_bad:
+                result["error"] = "CRYPTOGRAPHIC_DIGEST_MISMATCH"
+            else:
+                result["error"] = "MISSING_ARTIFACTS"
+            return result
+
+        actual_xgb = getattr(xgb_model, "_artifact_hash", None)
+        actual_scaler = getattr(scaler, "_artifact_hash", None)
+
+        if not actual_xgb or actual_xgb != expected_xgb or not actual_scaler or actual_scaler != expected_scaler:
+            result["error"] = "CRYPTOGRAPHIC_DIGEST_MISMATCH"
+            return result
+
+        # 6. Strict Dimension & Pair Integrity Verification
+        scaler_n = getattr(scaler, "n_features_in_", None)
+        xgb_n = getattr(xgb_model, "n_features_in_", None)
+        expected_dim = cand_policy["expected_feature_count"]
+        manifest_dim = manifest_data.get("feature_schema", {}).get("feature_count")
+
+        if scaler_n is None or xgb_n is None or scaler_n != xgb_n:
+            result["error"] = f"DIMENSION_MISMATCH: scaler={scaler_n}, model={xgb_n}"
+            return result
+        if scaler_n != expected_dim:
+            result["error"] = f"POLICY_DIMENSION_MISMATCH: scaler={scaler_n}, policy_expected={expected_dim}"
+            return result
+        if manifest_dim is not None and scaler_n != manifest_dim:
+            result["error"] = f"SCHEMA_DIMENSION_MISMATCH: scaler={scaler_n}, manifest_schema={manifest_dim}"
+            return result
+
+        # Run feature calculation and dry-run inference
+        spy = clean_multiindex_columns(spy_df.copy()) if spy_df is not None else None
+        df_feat = add_upgraded_features(df.copy(), spy, None)
+        df_feat = df_feat.loc[:, ~df_feat.columns.duplicated()].copy()
+
+        active_cols = (
+            FEATURE_COLUMNS_V30
+            if getattr(scaler, "n_features_in_", 0) == len(FEATURE_COLUMNS_V30)
+            else FEATURE_COLUMNS
+        )
+        df_filtered = df_feat.reindex(columns=active_cols).dropna()
+        if df_filtered.empty or len(df_filtered) < 15:
+            result["error"] = "INSUFFICIENT_VALID_BARS"
+            return result
+
+        scaled_rows = scaler.transform(df_filtered.values)
+        xgb_probs = xgb_model.predict_proba(scaled_rows)
+
+        # In-memory signal calculation ONLY (NO persistence, NO SignalLedger calls)
+        staged_markers = []
+        in_pos = False
+        entry_price = 0.0
+        pos_type = None
+
+        valid_indices = df_filtered.index
+        for i in range(len(valid_indices) - 1):
+            idx_t = valid_indices[i]
+            idx_next = valid_indices[i + 1]
+            p_sell, p_hold, p_buy = xgb_probs[i]
+            close_t = float(df.loc[idx_t, "Close"])
+            open_next = float(df.loc[idx_next, "Open"])
+
+            if not in_pos:
+                if p_buy >= 0.55 and p_buy > p_sell:
+                    in_pos = True
+                    pos_type = "LONG"
+                    entry_price = open_next * 1.0005
+                    staged_markers.append({
+                        "symbol": ticker,
+                        "action": "BUY",
+                        "bar_timestamp": (
+                            idx_t.strftime("%Y-%m-%d") if hasattr(idx_t, "strftime") else str(idx_t)[:10]
+                        ),
+                        "model_version": f"{candidate_version}_RESEARCH_DRY_RUN",
+                        "strategy_version": declared_strat,
+                        "manifest_file_hash": str(manifest_data.get("_manifest_file_hash", "")),
+                        "scaler_hash": actual_scaler,
+                        "xgb_hash": actual_xgb,
+                        "execution_price": entry_price,
+                        "is_dry_run": True,
+                    })
+            else:
+                if pos_type == "LONG" and (
+                    p_sell >= 0.50 or close_t <= entry_price * 0.95 or close_t >= entry_price * 1.10
+                ):
+                    in_pos = False
+                    exit_price = open_next * 0.9995
+                    staged_markers.append({
+                        "symbol": ticker,
+                        "action": "SELL",
+                        "bar_timestamp": (
+                            idx_t.strftime("%Y-%m-%d") if hasattr(idx_t, "strftime") else str(idx_t)[:10]
+                        ),
+                        "model_version": f"{candidate_version}_RESEARCH_DRY_RUN",
+                        "strategy_version": declared_strat,
+                        "manifest_file_hash": str(manifest_data.get("_manifest_file_hash", "")),
+                        "scaler_hash": actual_scaler,
+                        "xgb_hash": actual_xgb,
+                        "execution_price": exit_price,
+                        "is_dry_run": True,
+                    })
+                    pos_type = None
+
+        result["status"] = "SUCCESS"
+        result["strategy_version"] = declared_strat
+        result["manifest_file_hash"] = str(manifest_data.get("_manifest_file_hash", ""))
+        result["scaler_hash"] = actual_scaler
+        result["xgb_hash"] = actual_xgb
+        result["feature_dimension"] = scaler_n
+        result["marker_count"] = len(staged_markers)
+        result["markers"] = staged_markers
+        return result
 
     async def get_prediction(self, ticker, config, metadata):
         import uuid

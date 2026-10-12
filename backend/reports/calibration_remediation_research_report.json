@@ -1,0 +1,171 @@
+{
+    "timestamp_utc": "2026-10-11T19:16:50Z",
+    "provenance": {
+        "development_samples": 2074,
+        "development_period": "2016-06-23 to 2024-12-09",
+        "h1_calibration_eligible_samples": 48,
+        "h1_calibration_period": "2025-03-31 to 2025-06-06",
+        "h1_purged_crossing_samples": 15,
+        "h1_purged_period": "2025-06-09 to 2025-06-30",
+        "h2_evaluation_samples": 112,
+        "h2_evaluation_period": "2025-07-01 to 2025-12-08",
+        "h2_class_frequencies": {
+            "SELL": 0.7589,
+            "HOLD": 0.0714,
+            "BUY": 0.1696
+        },
+        "canonical_classes": [
+            "SELL",
+            "HOLD",
+            "BUY"
+        ],
+        "temporal_separation_verified": true,
+        "zero_h2_leakage_in_h1": true
+    },
+    "institutional_thresholds": {
+        "brier_gate_max": 0.2,
+        "ece_gate_max": 0.08,
+        "multiclass_brier_rule": "Sum over all K=3 classes without division by 3. Binary reduction prohibited.",
+        "canonical_ece_rule": "10 equal-width bins on [0, 1] measuring max confidence calibration."
+    },
+    "candidate_evaluations": {
+        "0_uncalibrated_baseline": {
+            "n_samples": 112,
+            "brier_score": 0.5394,
+            "brier_gate_passed": false,
+            "brier_gate_threshold": 0.2,
+            "ece_score": 0.0342,
+            "ece_gate_passed": true,
+            "ece_gate_threshold": 0.08,
+            "all_gates_passed": false,
+            "governance_status": "FAILED_GATE",
+            "accuracy": 0.5625,
+            "mean_predicted_probabilities": {
+                "SELL": 0.4968,
+                "HOLD": 0.1239,
+                "BUY": 0.3793
+            }
+        },
+        "1_platt_sigmoid_h1_fit": {
+            "n_samples": 112,
+            "brier_score": 0.4226,
+            "brier_gate_passed": false,
+            "brier_gate_threshold": 0.2,
+            "ece_score": 0.097,
+            "ece_gate_passed": false,
+            "ece_gate_threshold": 0.08,
+            "all_gates_passed": false,
+            "governance_status": "FAILED_GATE",
+            "accuracy": 0.7589,
+            "mean_predicted_probabilities": {
+                "SELL": 0.8559,
+                "HOLD": 0.1232,
+                "BUY": 0.0209
+            }
+        },
+        "2_platt_sigmoid_dev_fit": {
+            "n_samples": 112,
+            "brier_score": 0.4711,
+            "brier_gate_passed": false,
+            "brier_gate_threshold": 0.2,
+            "ece_score": 0.1726,
+            "ece_gate_passed": false,
+            "ece_gate_threshold": 0.08,
+            "all_gates_passed": false,
+            "governance_status": "FAILED_GATE",
+            "accuracy": 0.6875,
+            "mean_predicted_probabilities": {
+                "SELL": 0.8108,
+                "HOLD": 0.0208,
+                "BUY": 0.1684
+            }
+        },
+        "3_isotonic_regression_h1_fit": {
+            "n_samples": 112,
+            "brier_score": 0.4163,
+            "brier_gate_passed": false,
+            "brier_gate_threshold": 0.2,
+            "ece_score": 0.1213,
+            "ece_gate_passed": false,
+            "ece_gate_threshold": 0.08,
+            "all_gates_passed": false,
+            "governance_status": "FAILED_GATE",
+            "accuracy": 0.7589,
+            "mean_predicted_probabilities": {
+                "SELL": 0.8802,
+                "HOLD": 0.0929,
+                "BUY": 0.0269
+            }
+        },
+        "4_isotonic_regression_dev_fit": {
+            "n_samples": 112,
+            "brier_score": 0.495,
+            "brier_gate_passed": false,
+            "brier_gate_threshold": 0.2,
+            "ece_score": 0.2003,
+            "ece_gate_passed": false,
+            "ece_gate_threshold": 0.08,
+            "all_gates_passed": false,
+            "governance_status": "FAILED_GATE",
+            "accuracy": 0.6875,
+            "mean_predicted_probabilities": {
+                "SELL": 0.8291,
+                "HOLD": 0.0134,
+                "BUY": 0.1575
+            }
+        },
+        "5_temperature_scaling_h1_fit_T1.60": {
+            "n_samples": 112,
+            "brier_score": 0.5519,
+            "brier_gate_passed": false,
+            "brier_gate_threshold": 0.2,
+            "ece_score": 0.0792,
+            "ece_gate_passed": true,
+            "ece_gate_threshold": 0.08,
+            "all_gates_passed": false,
+            "governance_status": "FAILED_GATE",
+            "accuracy": 0.5625,
+            "mean_predicted_probabilities": {
+                "SELL": 0.449,
+                "HOLD": 0.1741,
+                "BUY": 0.3769
+            }
+        },
+        "6_temperature_scaling_dev_fit_T0.37": {
+            "n_samples": 112,
+            "brier_score": 0.6029,
+            "brier_gate_passed": false,
+            "brier_gate_threshold": 0.2,
+            "ece_score": 0.1836,
+            "ece_gate_passed": false,
+            "ece_gate_threshold": 0.08,
+            "all_gates_passed": false,
+            "governance_status": "FAILED_GATE",
+            "accuracy": 0.5625,
+            "mean_predicted_probabilities": {
+                "SELL": 0.6082,
+                "HOLD": 0.053,
+                "BUY": 0.3388
+            }
+        },
+        "7_vector_scaling_dev_fit": {
+            "n_samples": 112,
+            "brier_score": 0.4895,
+            "brier_gate_passed": false,
+            "brier_gate_threshold": 0.2,
+            "ece_score": 0.1714,
+            "ece_gate_passed": false,
+            "ece_gate_threshold": 0.08,
+            "all_gates_passed": false,
+            "governance_status": "FAILED_GATE",
+            "accuracy": 0.6875,
+            "mean_predicted_probabilities": {
+                "SELL": 0.8164,
+                "HOLD": 0.0158,
+                "BUY": 0.1678
+            }
+        }
+    },
+    "overall_status": "FAILED_GOVERNANCE_GATES",
+    "governance_disposition": "NO-GO FOR INTEGRATION & LIVE CAPITAL: All candidate calibration methods fail the institutional multiclass Brier gate (threshold <= 0.2). Platt scaling achieves best Brier reduction to 0.4226 (vs raw 0.5394), but fails the 0.20 threshold due to 56.25% underlying classification accuracy."
+}
