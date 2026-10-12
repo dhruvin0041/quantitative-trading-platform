@@ -1,6 +1,6 @@
 {
     "document_id": "HYDRA-AUDIT-20261012-WORKSTREAM-1-TARGET-FEATURE-FORENSICS",
-    "generated_at_utc": "2026-10-12T10:13:15Z",
+    "generated_at_utc": "2026-10-12T15:14:07Z",
     "governance_status": {
         "frozen_strategy_manifest_v2_4_sha256": "d580b50a441c2f5a3881bb72eb0c8b23d90077dea61ddc506193affcfe993da5",
         "calibration_py_sha256": "badff3d49e1ee755231b0e2f159dc539a199ac6263831d66910c9863884958f5",
@@ -8,6 +8,39 @@
         "calibration_branch_status": "PERMANENTLY_TERMINATED",
         "production_integration": "STRICTLY_BLOCKED",
         "live_capital_allocation": "STRICT_NO_GO"
+    },
+    "data_lineage_reconciliation": {
+        "stage_1_raw_ingestion": {
+            "date_range": "2015-01-02 to 2024-12-30",
+            "bar_count": 2515,
+            "purpose": "Full market history including 1-year warmup for rolling indicators"
+        },
+        "stage_2_warmup_removal": {
+            "bars_purged": 119,
+            "warmup_window": "120-period rolling z-scores and 200-day moving average",
+            "purpose": "Ensures bar 1 of 2016 has zero NaN feature values"
+        },
+        "stage_3_clean_continuous_features": {
+            "date_range": "2015-06-24 to 2024-12-30",
+            "bar_count": 2396,
+            "purpose": "Complete clean feature matrix in pinned dataset"
+        },
+        "stage_4_target_audit_subset": {
+            "date_range": "2015-06-24 to 2024-11-29",
+            "bar_count": 2376,
+            "purpose": "Target collision audit with final 20 bars trimmed for H=20 labeling"
+        },
+        "stage_5_strict_development_universe": {
+            "date_range": "2016-01-04 to 2024-12-30",
+            "bar_count": 2263,
+            "purpose": "Institutional 2016-2024 development window (zero 2015 training rows)"
+        },
+        "stage_6_walk_forward_cross_validation": {
+            "total_observations": 2074,
+            "outer_validation_observations": 1656,
+            "initial_train_split": 418,
+            "purpose": "4 outer folds of 414 validation samples with 15-day embargo"
+        }
     },
     "pinned_dataset": {
         "file_path": "D:\\DataScience\\Projects\\Data_Science_Projects\\Stock_Indicator\\backend\\artifacts\\research\\workstream_1_pinned_development_dataset.joblib",
@@ -49,8 +82,14 @@
             "label_flip_pessimistic_vs_optimistic_pct": 0.0,
             "mean_upper_touch_step": 3.59,
             "mean_lower_touch_step": 1.82,
-            "theoretical_brownian_survival_pct": 18.97,
-            "monte_carlo_simulated_hold_pct": 28.9,
+            "theoretical_brownian_survival": {
+                "b_effective": 0.0315,
+                "exponent_magnitude": 1.904,
+                "first_term_probability": 0.189703,
+                "full_series_probability": 0.189703,
+                "full_series_pct": 18.9703
+            },
+            "monte_carlo_simulated_hold_pct": 10.76,
             "hold_under_10_pct_flag": false
         },
         {
@@ -83,8 +122,14 @@
             "label_flip_pessimistic_vs_optimistic_pct": 0.0,
             "mean_upper_touch_step": 6.38,
             "mean_lower_touch_step": 2.4,
-            "theoretical_brownian_survival_pct": 2.83,
-            "monte_carlo_simulated_hold_pct": 9.87,
+            "theoretical_brownian_survival": {
+                "b_effective": 0.0315,
+                "exponent_magnitude": 3.808,
+                "first_term_probability": 0.028264,
+                "full_series_probability": 0.028264,
+                "full_series_pct": 2.8264
+            },
+            "monte_carlo_simulated_hold_pct": 1.62,
             "hold_under_10_pct_flag": false
         },
         {
@@ -117,8 +162,14 @@
             "label_flip_pessimistic_vs_optimistic_pct": 0.0,
             "mean_upper_touch_step": 8.51,
             "mean_lower_touch_step": 2.88,
-            "theoretical_brownian_survival_pct": 0.42,
-            "monte_carlo_simulated_hold_pct": 3.29,
+            "theoretical_brownian_survival": {
+                "b_effective": 0.0315,
+                "exponent_magnitude": 5.712,
+                "first_term_probability": 0.004211,
+                "full_series_probability": 0.004211,
+                "full_series_pct": 0.4211
+            },
+            "monte_carlo_simulated_hold_pct": 0.23,
             "hold_under_10_pct_flag": true
         },
         {
@@ -151,8 +202,14 @@
             "label_flip_pessimistic_vs_optimistic_pct": 0.0,
             "mean_upper_touch_step": 10.27,
             "mean_lower_touch_step": 3.3,
-            "theoretical_brownian_survival_pct": 0.06,
-            "monte_carlo_simulated_hold_pct": 1.1,
+            "theoretical_brownian_survival": {
+                "b_effective": 0.0315,
+                "exponent_magnitude": 7.615,
+                "first_term_probability": 0.000627,
+                "full_series_probability": 0.000627,
+                "full_series_pct": 0.0627
+            },
+            "monte_carlo_simulated_hold_pct": 0.03,
             "hold_under_10_pct_flag": true
         },
         {
@@ -185,8 +242,14 @@
             "label_flip_pessimistic_vs_optimistic_pct": 0.084,
             "mean_upper_touch_step": 3.05,
             "mean_lower_touch_step": 2.82,
-            "theoretical_brownian_survival_pct": 9.54,
-            "monte_carlo_simulated_hold_pct": 30.25,
+            "theoretical_brownian_survival": {
+                "b_effective": 0.027,
+                "exponent_magnitude": 2.591,
+                "first_term_probability": 0.095388,
+                "full_series_probability": 0.095388,
+                "full_series_pct": 9.5388
+            },
+            "monte_carlo_simulated_hold_pct": 9.0,
             "hold_under_10_pct_flag": false
         },
         {
@@ -219,8 +282,14 @@
             "label_flip_pessimistic_vs_optimistic_pct": 0.084,
             "mean_upper_touch_step": 4.51,
             "mean_lower_touch_step": 4.12,
-            "theoretical_brownian_survival_pct": 0.71,
-            "monte_carlo_simulated_hold_pct": 7.83,
+            "theoretical_brownian_survival": {
+                "b_effective": 0.027,
+                "exponent_magnitude": 5.183,
+                "first_term_probability": 0.007146,
+                "full_series_probability": 0.007146,
+                "full_series_pct": 0.7146
+            },
+            "monte_carlo_simulated_hold_pct": 0.69,
             "hold_under_10_pct_flag": false
         },
         {
@@ -253,8 +322,14 @@
             "label_flip_pessimistic_vs_optimistic_pct": 0.084,
             "mean_upper_touch_step": 5.78,
             "mean_lower_touch_step": 5.16,
-            "theoretical_brownian_survival_pct": 0.05,
-            "monte_carlo_simulated_hold_pct": 1.98,
+            "theoretical_brownian_survival": {
+                "b_effective": 0.027,
+                "exponent_magnitude": 7.774,
+                "first_term_probability": 0.000535,
+                "full_series_probability": 0.000535,
+                "full_series_pct": 0.0535
+            },
+            "monte_carlo_simulated_hold_pct": 0.06,
             "hold_under_10_pct_flag": true
         },
         {
@@ -287,8 +362,14 @@
             "label_flip_pessimistic_vs_optimistic_pct": 0.084,
             "mean_upper_touch_step": 6.71,
             "mean_lower_touch_step": 6.12,
-            "theoretical_brownian_survival_pct": 0.0,
-            "monte_carlo_simulated_hold_pct": 0.5,
+            "theoretical_brownian_survival": {
+                "b_effective": 0.027,
+                "exponent_magnitude": 10.365,
+                "first_term_probability": 4e-05,
+                "full_series_probability": 4e-05,
+                "full_series_pct": 0.004
+            },
+            "monte_carlo_simulated_hold_pct": 0.01,
             "hold_under_10_pct_flag": true
         },
         {
@@ -321,8 +402,14 @@
             "label_flip_pessimistic_vs_optimistic_pct": 0.0,
             "mean_upper_touch_step": 3.36,
             "mean_lower_touch_step": 2.4,
-            "theoretical_brownian_survival_pct": 9.54,
-            "monte_carlo_simulated_hold_pct": 28.56,
+            "theoretical_brownian_survival": {
+                "b_effective": 0.027,
+                "exponent_magnitude": 2.591,
+                "first_term_probability": 0.095388,
+                "full_series_probability": 0.095388,
+                "full_series_pct": 9.5388
+            },
+            "monte_carlo_simulated_hold_pct": 8.28,
             "hold_under_10_pct_flag": false
         },
         {
@@ -355,8 +442,14 @@
             "label_flip_pessimistic_vs_optimistic_pct": 0.0,
             "mean_upper_touch_step": 5.36,
             "mean_lower_touch_step": 3.5,
-            "theoretical_brownian_survival_pct": 0.71,
-            "monte_carlo_simulated_hold_pct": 7.37,
+            "theoretical_brownian_survival": {
+                "b_effective": 0.027,
+                "exponent_magnitude": 5.183,
+                "first_term_probability": 0.007146,
+                "full_series_probability": 0.007146,
+                "full_series_pct": 0.7146
+            },
+            "monte_carlo_simulated_hold_pct": 0.64,
             "hold_under_10_pct_flag": false
         },
         {
@@ -389,8 +482,14 @@
             "label_flip_pessimistic_vs_optimistic_pct": 0.0,
             "mean_upper_touch_step": 6.76,
             "mean_lower_touch_step": 4.24,
-            "theoretical_brownian_survival_pct": 0.05,
-            "monte_carlo_simulated_hold_pct": 1.9,
+            "theoretical_brownian_survival": {
+                "b_effective": 0.027,
+                "exponent_magnitude": 7.774,
+                "first_term_probability": 0.000535,
+                "full_series_probability": 0.000535,
+                "full_series_pct": 0.0535
+            },
+            "monte_carlo_simulated_hold_pct": 0.05,
             "hold_under_10_pct_flag": true
         },
         {
@@ -423,8 +522,14 @@
             "label_flip_pessimistic_vs_optimistic_pct": 0.0,
             "mean_upper_touch_step": 8.05,
             "mean_lower_touch_step": 5.01,
-            "theoretical_brownian_survival_pct": 0.0,
-            "monte_carlo_simulated_hold_pct": 0.48,
+            "theoretical_brownian_survival": {
+                "b_effective": 0.027,
+                "exponent_magnitude": 10.365,
+                "first_term_probability": 4e-05,
+                "full_series_probability": 4e-05,
+                "full_series_pct": 0.004
+            },
+            "monte_carlo_simulated_hold_pct": 0.0,
             "hold_under_10_pct_flag": true
         },
         {
@@ -457,8 +562,14 @@
             "label_flip_pessimistic_vs_optimistic_pct": 0.0,
             "mean_upper_touch_step": 3.36,
             "mean_lower_touch_step": 2.82,
-            "theoretical_brownian_survival_pct": 18.97,
-            "monte_carlo_simulated_hold_pct": 40.22,
+            "theoretical_brownian_survival": {
+                "b_effective": 0.0315,
+                "exponent_magnitude": 1.904,
+                "first_term_probability": 0.189703,
+                "full_series_probability": 0.189703,
+                "full_series_pct": 18.9703
+            },
+            "monte_carlo_simulated_hold_pct": 16.91,
             "hold_under_10_pct_flag": false
         },
         {
@@ -491,8 +602,14 @@
             "label_flip_pessimistic_vs_optimistic_pct": 0.0,
             "mean_upper_touch_step": 5.36,
             "mean_lower_touch_step": 4.12,
-            "theoretical_brownian_survival_pct": 2.83,
-            "monte_carlo_simulated_hold_pct": 13.7,
+            "theoretical_brownian_survival": {
+                "b_effective": 0.0315,
+                "exponent_magnitude": 3.808,
+                "first_term_probability": 0.028264,
+                "full_series_probability": 0.028264,
+                "full_series_pct": 2.8264
+            },
+            "monte_carlo_simulated_hold_pct": 2.38,
             "hold_under_10_pct_flag": false
         },
         {
@@ -525,8 +642,14 @@
             "label_flip_pessimistic_vs_optimistic_pct": 0.0,
             "mean_upper_touch_step": 6.76,
             "mean_lower_touch_step": 5.16,
-            "theoretical_brownian_survival_pct": 0.42,
-            "monte_carlo_simulated_hold_pct": 4.62,
+            "theoretical_brownian_survival": {
+                "b_effective": 0.0315,
+                "exponent_magnitude": 5.712,
+                "first_term_probability": 0.004211,
+                "full_series_probability": 0.004211,
+                "full_series_pct": 0.4211
+            },
+            "monte_carlo_simulated_hold_pct": 0.35,
             "hold_under_10_pct_flag": true
         },
         {
@@ -559,8 +682,14 @@
             "label_flip_pessimistic_vs_optimistic_pct": 0.0,
             "mean_upper_touch_step": 8.05,
             "mean_lower_touch_step": 6.12,
-            "theoretical_brownian_survival_pct": 0.06,
-            "monte_carlo_simulated_hold_pct": 1.52,
+            "theoretical_brownian_survival": {
+                "b_effective": 0.0315,
+                "exponent_magnitude": 7.615,
+                "first_term_probability": 0.000627,
+                "full_series_probability": 0.000627,
+                "full_series_pct": 0.0627
+            },
+            "monte_carlo_simulated_hold_pct": 0.05,
             "hold_under_10_pct_flag": true
         },
         {
@@ -593,8 +722,14 @@
             "label_flip_pessimistic_vs_optimistic_pct": 0.547,
             "mean_upper_touch_step": 2.53,
             "mean_lower_touch_step": 2.4,
-            "theoretical_brownian_survival_pct": 0.37,
-            "monte_carlo_simulated_hold_pct": 10.7,
+            "theoretical_brownian_survival": {
+                "b_effective": 0.018,
+                "exponent_magnitude": 5.831,
+                "first_term_probability": 0.003739,
+                "full_series_probability": 0.003739,
+                "full_series_pct": 0.3739
+            },
+            "monte_carlo_simulated_hold_pct": 0.86,
             "hold_under_10_pct_flag": false
         },
         {
@@ -627,8 +762,14 @@
             "label_flip_pessimistic_vs_optimistic_pct": 0.547,
             "mean_upper_touch_step": 3.61,
             "mean_lower_touch_step": 3.5,
-            "theoretical_brownian_survival_pct": 0.0,
-            "monte_carlo_simulated_hold_pct": 1.07,
+            "theoretical_brownian_survival": {
+                "b_effective": 0.018,
+                "exponent_magnitude": 11.661,
+                "first_term_probability": 1.1e-05,
+                "full_series_probability": 1.1e-05,
+                "full_series_pct": 0.0011
+            },
+            "monte_carlo_simulated_hold_pct": 0.01,
             "hold_under_10_pct_flag": true
         },
         {
@@ -661,8 +802,14 @@
             "label_flip_pessimistic_vs_optimistic_pct": 0.547,
             "mean_upper_touch_step": 4.46,
             "mean_lower_touch_step": 4.24,
-            "theoretical_brownian_survival_pct": 0.0,
-            "monte_carlo_simulated_hold_pct": 0.1,
+            "theoretical_brownian_survival": {
+                "b_effective": 0.018,
+                "exponent_magnitude": 17.492,
+                "first_term_probability": 0.0,
+                "full_series_probability": 0.0,
+                "full_series_pct": 0.0
+            },
+            "monte_carlo_simulated_hold_pct": 0.0,
             "hold_under_10_pct_flag": true
         },
         {
@@ -695,12 +842,27 @@
             "label_flip_pessimistic_vs_optimistic_pct": 0.547,
             "mean_upper_touch_step": 5.06,
             "mean_lower_touch_step": 5.01,
-            "theoretical_brownian_survival_pct": 0.0,
-            "monte_carlo_simulated_hold_pct": 0.01,
+            "theoretical_brownian_survival": {
+                "b_effective": 0.018,
+                "exponent_magnitude": 23.322,
+                "first_term_probability": 0.0,
+                "full_series_probability": 0.0,
+                "full_series_pct": 0.0
+            },
+            "monte_carlo_simulated_hold_pct": 0.0,
             "hold_under_10_pct_flag": true
         }
     ],
     "point_in_time_causality_audit": {
+        "calendar_alignment_audit": {
+            "equity_bars": 2515,
+            "spy_bars": 2515,
+            "vix_bars": 2515,
+            "missing_equity_in_vix": 0,
+            "missing_vix_in_equity": 0,
+            "missing_equity_in_spy": 0,
+            "calendar_synchrony_verdict": "PERFECT_SYNCHRONY_0_GAPS"
+        },
         "vix_settlement_audit": {
             "cboe_vix_settlement_time_et": "16:15:00 ET",
             "us_equity_market_close_time_et": "16:00:00 ET",
@@ -945,17 +1107,205 @@
             }
         }
     },
+    "feature_information_coefficients": [
+        {
+            "feature": "Keltner_Position",
+            "horizon": 1,
+            "N": 2395,
+            "IC": 0.0142,
+            "p_unadj": 0.4882,
+            "se_hac": 0.0204,
+            "t_hac": 0.693,
+            "p_hac": 0.4881,
+            "q_fdr": 0.71
+        },
+        {
+            "feature": "Keltner_Position",
+            "horizon": 5,
+            "N": 2391,
+            "IC": 0.064,
+            "p_unadj": 0.0017,
+            "se_hac": 0.0345,
+            "t_hac": 1.854,
+            "p_hac": 0.0638,
+            "q_fdr": 1.0
+        },
+        {
+            "feature": "Keltner_Position",
+            "horizon": 10,
+            "N": 2386,
+            "IC": 0.0686,
+            "p_unadj": 0.0008,
+            "se_hac": 0.0469,
+            "t_hac": 1.463,
+            "p_hac": 0.1436,
+            "q_fdr": 0.7657
+        },
+        {
+            "feature": "Keltner_Position",
+            "horizon": 15,
+            "N": 2381,
+            "IC": 0.0593,
+            "p_unadj": 0.0038,
+            "se_hac": 0.055,
+            "t_hac": 1.079,
+            "p_hac": 0.2807,
+            "q_fdr": 0.7486
+        },
+        {
+            "feature": "HMA_Slope",
+            "horizon": 1,
+            "N": 2395,
+            "IC": -0.0212,
+            "p_unadj": 0.3005,
+            "se_hac": 0.0204,
+            "t_hac": -1.036,
+            "p_hac": 0.3004,
+            "q_fdr": 0.6866
+        },
+        {
+            "feature": "HMA_Slope",
+            "horizon": 5,
+            "N": 2391,
+            "IC": 0.0062,
+            "p_unadj": 0.7617,
+            "se_hac": 0.0299,
+            "t_hac": 0.208,
+            "p_hac": 0.8355,
+            "q_fdr": 0.8355
+        },
+        {
+            "feature": "HMA_Slope",
+            "horizon": 10,
+            "N": 2386,
+            "IC": 0.0338,
+            "p_unadj": 0.0993,
+            "se_hac": 0.0305,
+            "t_hac": 1.106,
+            "p_hac": 0.2689,
+            "q_fdr": 0.8603
+        },
+        {
+            "feature": "HMA_Slope",
+            "horizon": 15,
+            "N": 2381,
+            "IC": 0.01,
+            "p_unadj": 0.626,
+            "se_hac": 0.0307,
+            "t_hac": 0.326,
+            "p_hac": 0.7447,
+            "q_fdr": 0.8511
+        },
+        {
+            "feature": "Connors_RSI",
+            "horizon": 1,
+            "N": 2395,
+            "IC": -0.0118,
+            "p_unadj": 0.5624,
+            "se_hac": 0.0204,
+            "t_hac": -0.579,
+            "p_hac": 0.5623,
+            "q_fdr": 0.692
+        },
+        {
+            "feature": "Connors_RSI",
+            "horizon": 5,
+            "N": 2391,
+            "IC": 0.0054,
+            "p_unadj": 0.7907,
+            "se_hac": 0.0245,
+            "t_hac": 0.222,
+            "p_hac": 0.8243,
+            "q_fdr": 0.8793
+        },
+        {
+            "feature": "Connors_RSI",
+            "horizon": 10,
+            "N": 2386,
+            "IC": 0.0332,
+            "p_unadj": 0.1054,
+            "se_hac": 0.0255,
+            "t_hac": 1.298,
+            "p_hac": 0.1943,
+            "q_fdr": 0.7773
+        },
+        {
+            "feature": "Connors_RSI",
+            "horizon": 15,
+            "N": 2381,
+            "IC": 0.0199,
+            "p_unadj": 0.3315,
+            "se_hac": 0.0259,
+            "t_hac": 0.769,
+            "p_hac": 0.442,
+            "q_fdr": 0.7072
+        },
+        {
+            "feature": "CMF_Divergence",
+            "horizon": 1,
+            "N": 2395,
+            "IC": -0.0141,
+            "p_unadj": 0.4894,
+            "se_hac": 0.0204,
+            "t_hac": -0.691,
+            "p_hac": 0.4893,
+            "q_fdr": 0.6524
+        },
+        {
+            "feature": "CMF_Divergence",
+            "horizon": 5,
+            "N": 2391,
+            "IC": -0.0426,
+            "p_unadj": 0.0371,
+            "se_hac": 0.0282,
+            "t_hac": -1.512,
+            "p_hac": 0.1304,
+            "q_fdr": 1.0
+        },
+        {
+            "feature": "CMF_Divergence",
+            "horizon": 10,
+            "N": 2386,
+            "IC": -0.034,
+            "p_unadj": 0.0965,
+            "se_hac": 0.0348,
+            "t_hac": -0.977,
+            "p_hac": 0.3286,
+            "q_fdr": 0.5843
+        },
+        {
+            "feature": "CMF_Divergence",
+            "horizon": 15,
+            "N": 2381,
+            "IC": -0.0382,
+            "p_unadj": 0.062,
+            "se_hac": 0.0384,
+            "t_hac": -0.997,
+            "p_hac": 0.3187,
+            "q_fdr": 0.6375
+        }
+    ],
     "mathematical_imbalance_derivation": {
         "model": "Two-Sided Absorbing Barrier Brownian Motion First-Passage Time",
         "formula": "P(tau > T) = (4 / pi) * sum_{n=0}^inf [(-1)^n / (2n+1)] * exp(- (2n+1)^2 pi^2 sigma^2 T / (8 b^2))",
-        "finding": "For multi-week horizons (H >= 15 bars), diffusion spread sigma * sqrt(T) dominates barrier width b, forcing survival probability P(HOLD) < 7%.",
-        "ml_implication": "Creates severe gradient starvation and split distortion in tree-based models, collapsing HOLD recall to ~0% and dragging balanced accuracy below 33.3%."
+        "theoretical_exponent_magnitude": 7.774,
+        "first_term_probability": 0.000535,
+        "assumptions": "Continuous-time, driftless, symmetric boundaries, continuous monitoring",
+        "discrete_ohlc_simulation": "Models discrete daily OHLC bars with asymmetric barriers and intraday range",
+        "empirical_finding": "Realized AAPL HOLD prevalence is 6.94% (Control) to 4.12% (Candidate 1.5/1.5), structurally below 10%",
+        "ml_implication": "Creates severe gradient starvation and split distortion in tree-based models, collapsing HOLD recall to ~0% and dragging balanced accuracy below 33.3%"
+    },
+    "four_feature_disposition": {
+        "Keltner_Position": "RETAIN_AS_RESEARCH_CANDIDATE (Test incremental value and temporal stability)",
+        "HMA_Slope": "DEPRIORITIZE (Weak IC, insignificant under HAC adjustment)",
+        "Connors_RSI": "HOLD_PENDING_INCREMENTAL_TEST (Point estimate +0.0054, p=0.791, insignificant)",
+        "CMF_Divergence": "UNDER_REVIEW (Negative IC at 5d, requires predeclared hypothesis)"
     },
     "predeclared_workstream_sequencing": {
-        "workstream_1": "Target Construction & Feature Forensics (COMPLETE)",
+        "workstream_1": "Target Construction & Feature Forensics (COMPLETE WITH AUDIT CORRECTIONS)",
         "workstream_2": "Simple Directional Baselines (200-day SMA, 20-day Donchian Breakout)",
-        "workstream_3": "Feature Representation Quality & Causality (OOS Ranking Discrimination & Rank Correlation)",
-        "workstream_4": "Prospective Holdout Screening Gates (ROC-AUC > 0.55 & BSS > 0.00%)",
-        "workstream_5": "Cost-Adjusted Trading Simulations (Only after statistical skill is verified)"
+        "workstream_3": "Feature Representation Quality & Incremental Value (Purged WFA Screening)",
+        "workstream_4": "Target Re-Engineering & Prospective Screening Gates (ROC-AUC > 0.55 & BSS > 0.00%)",
+        "workstream_5": "Cost-Adjusted Trading Simulations & Live Paper Burn-In"
     }
 }

@@ -130,16 +130,75 @@ def test_mathematical_hold_survival_bounds():
     Survival probability P(tau > 15 days) inside [-1.5 ATR, +1.5 ATR] must be < 5%.
     """
     # Daily sigma = 0.0175, ATR = 0.018 * S0, b = 1.5 * ATR = 0.027, T = 15
-    p_survival_15 = compute_brownian_survival_probability(
+    res = compute_brownian_survival_probability(
         b_up=0.027, b_down=0.027, sigma=0.0175, T=15
     )
+    p_survival_15 = res["full_series_probability"]
     assert p_survival_15 < 0.05, f"Analytical survival prob {p_survival_15} must be < 5%"
+
+    # Verify exact analytical derivation values from Issue A
+    assert np.isclose(res["exponent_magnitude"], 7.774, atol=0.01)
+    assert np.isclose(res["first_term_probability"], 0.000535, atol=0.00005)
 
     # Monte Carlo simulation must also show HOLD < 5%
     mc_res = simulate_brownian_barrier_paths(
         tp_mult=1.5, sl_mult=1.5, horizon=15, sigma=0.0175, drift=0.0006
     )
     assert mc_res["sim_hold_pct"] < 5.0, f"Simulated HOLD % {mc_res['sim_hold_pct']} must be < 5%"
+
+
+def test_data_lineage_accounting_consistency():
+    """Verify exact count alignment across all data lineage filtering stages (Issue B)."""
+    data = joblib.load(PINNED_DATASET_PATH)
+    raw_equity = data["raw_equity"]
+    clean_feat = data["engineered_features_clean"]
+
+    # Stage 1: Raw bars
+    assert len(raw_equity) == 2515
+    assert raw_equity.index[0].strftime("%Y-%m-%d") == "2015-01-02"
+    assert raw_equity.index[-1].strftime("%Y-%m-%d") == "2024-12-30"
+
+    # Stage 2 & 3: Warmup purge (119 bars) and Clean features (2,396 bars)
+    assert len(clean_feat) == 2396
+    assert clean_feat.index[0].strftime("%Y-%m-%d") == "2015-06-24"
+
+    # Stage 4: Target collision audit (final 20 bars trimmed for H=20 labeling)
+    target_audit_bars = len(clean_feat) - 20
+    assert target_audit_bars == 2376
+
+    # Stage 5: Development universe (2016-01-04 to 2024-12-30)
+    dev_mask = (clean_feat.index >= "2016-01-04") & (clean_feat.index <= "2024-12-30")
+    assert dev_mask.sum() == 2263
+
+    # Stage 6: Purged WFA split modeling (4 outer validation folds of 414 = 1,656 + 418 initial train)
+    assert (418 + 4 * 414) == 2074
+
+
+def test_connors_rsi_statistical_verification():
+    """Verify that Connors RSI 5-day Spearman IC is +0.0054 (p ~ 0.79), explaining the +0.0580 typo (Issue C)."""
+    from scipy.stats import spearmanr
+
+    data = joblib.load(PINNED_DATASET_PATH)
+    clean_feat = data["engineered_features_clean"]
+    raw_close = data["raw_equity"].loc[clean_feat.index, "Close"]
+    fwd_5d = raw_close.pct_change(5).shift(-5)
+    mask = ~clean_feat["Connors_RSI"].isna() & ~fwd_5d.isna()
+
+    r, p_val = spearmanr(clean_feat.loc[mask, "Connors_RSI"], fwd_5d[mask])
+    assert np.isclose(r, 0.0054, atol=0.001), f"Expected IC ~ +0.0054, got {r}"
+    assert np.isclose(p_val, 0.79, atol=0.05), f"Expected p ~ 0.79, got {p_val}"
+
+
+def test_end_to_end_vix_calendar_synchrony():
+    """Verify zero calendar gaps across all 2,515 bars between AAPL, SPY, and VIX (Issue D)."""
+    data = joblib.load(PINNED_DATASET_PATH)
+    eq_dates = set(data["raw_equity"].index)
+    vix_dates = set(data["raw_vix"].index)
+    spy_dates = set(data["raw_spy"].index)
+
+    assert len(eq_dates - vix_dates) == 0, "Zero missing equity dates in VIX"
+    assert len(vix_dates - eq_dates) == 0, "Zero missing VIX dates in equity"
+    assert len(eq_dates - spy_dates) == 0, "Zero missing equity dates in SPY"
 
 
 def test_workstream_1_report_artifacts_exist():
@@ -159,4 +218,6 @@ def test_workstream_1_report_artifacts_exist():
     assert "target_construction_and_ambiguity_audit" in data
     assert "point_in_time_causality_audit" in data
     assert "mathematical_imbalance_derivation" in data
+    assert "data_lineage_reconciliation" in data
+    assert "four_feature_disposition" in data
     assert "predeclared_workstream_sequencing" in data

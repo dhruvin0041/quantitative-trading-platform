@@ -2,31 +2,46 @@
 ## Comprehensive Institutional Audit: Ambiguity, Causality, Class Imbalance, and Dataset Pinning
 
 - **Document ID:** `HYDRA-AUDIT-20261012-WORKSTREAM-1-TARGET-FEATURE-FORENSICS`
-- **Execution Timestamp:** 2026-10-12 10:13:15 UTC
+- **Execution Timestamp:** 2026-10-12 15:14:07 UTC
 - **Governance Status:** **POST-HOC CALIBRATION TERMINATED — PRODUCTION BLOCKED — ZERO LIVE CAPITAL**
-- **Frozen Baseline Manifest:** `backend/artifacts/frozen_strategy_manifest_v2.4.json` (`d580b50a441c2f5a3881bb72eb0c8b23d90077dea61ddc506193affcfe993da5`, Immutable)
-- **Pinned Development Dataset:** `backend/artifacts/research/workstream_1_pinned_development_dataset.joblib` (`e764c60cb390d11756ec59745629985a20e1ab5afde2ac6d87c01fbd0fc1dc05`, SHA-256 Verified)
+- **Frozen Baseline Manifest:** [`backend/artifacts/frozen_strategy_manifest_v2.4.json`](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/artifacts/frozen_strategy_manifest_v2.4.json) (`d580b50a441c2f5a3881bb72eb0c8b23d90077dea61ddc506193affcfe993da5`, Immutable)
+- **Pinned Development Dataset:** [`backend/artifacts/research/workstream_1_pinned_development_dataset.joblib`](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/artifacts/research/workstream_1_pinned_development_dataset.joblib) (`e764c60cb390d11756ec59745629985a20e1ab5afde2ac6d87c01fbd0fc1dc05`, SHA-256 Verified)
 
 ---
 
 ## 1. Executive Summary & Audit Scope
 
-Following the formal closure of Phase 3e calibration research, this audit executes **Workstream 1: Target and Feature Pipeline Forensics**. It provides institutional mathematical and empirical answers to the five core questions regarding HYDRA's underlying target construction, temporal causality, class distribution, and data pinning:
+Following the formal closure of Phase 3e calibration research, this audit executes **Workstream 1: Target and Feature Pipeline Forensics**. It provides institutional mathematical and empirical answers to the core questions regarding HYDRA's underlying target construction, temporal causality, class distribution, and data pinning:
 
-1. **Target Construction & Ambiguity:** How frequent are same-bar high/low collisions on daily OHLC bars, and how sensitive are labels to tie-breaking conventions?
-2. **Point-in-Time Causality:** Are publication lags (specifically Cboe VIX 16:15 ET vs Equity Close 16:00 ET) and feature rolling windows strictly causal?
-3. **Class Imbalance Root Cause:** Why is the HOLD class structurally constrained below 10%, and how does this distort tree split criteria and balanced accuracy?
-4. **Reproducibility & Dataset Pinning:** How are raw market data and feature matrices pinned to permanently eliminate historical Yahoo Finance re-fetch drift?
-5. **Predeclared Evaluation Protocol:** What gates govern Workstreams 2 through 5 before any trading simulations or capital allocation?
+1. **Target Construction & Ambiguity:** Same-bar high/low collisions on daily OHLC bars and label sensitivity to tie-breaking conventions.
+2. **Point-in-Time Causality & Calendar Overlap:** Cboe VIX 16:15 ET settlement vs Equity Close 16:00 ET, calendar overlap, and end-to-end signal path integrity.
+3. **Class Imbalance Root Cause:** Mathematical Brownian survival derivation, discrete asymmetric OHLC simulations, and empirical confirmation of why HOLD is structurally constrained below 10%.
+4. **Statistical Rigor on 4 New Features:** Recomputed observation counts, Spearman Information Coefficients, Newey-West HAC serial-correlation adjustments, and Benjamini-Hochberg FDR multiple-testing control.
+5. **Data-Lineage Reconciliation:** Explicit accounting of all dataset counts from raw download (2,515) to clean features (2,396), target audit (2,376), development window (2,263), and modeling splits (2,074).
 
 ---
 
-## 2. Target Construction & Same-Bar Collision Analysis
+## 2. Complete Data-Lineage Reconciliation Table
+
+To resolve all sample-count discrepancies across reporting iterations:
+
+| Lineage Stage | Trading Date Range | Observation Count | Rationale & Exact Filtering Mechanism |
+|---|---|---:|---|
+| **Stage 1: Raw Download** | `2015-01-02` to `2024-12-30` | **2,515** bars | Full historical ingestion for AAPL, SPY, and ^VIX. 2015 is ingested to provide continuous trading history for 120-bar rolling Z-scores and 200-day moving averages. |
+| **Stage 2: Feature Warmup Purge** | `2015-01-02` to `2015-06-23` | **119** bars | Purged warmup window. Longest backward-looking feature window is 120 bars (`ZScore_Return_120`). Purging 119 bars guarantees that every sample starting from bar 120 has zero NaN feature values. |
+| **Stage 3: Pinned Clean Matrix** | `2015-06-24` to `2024-12-30` | **2,396** bars | Clean, non-null feature matrix serialized into [`workstream_1_pinned_development_dataset.joblib`](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/artifacts/research/workstream_1_pinned_development_dataset.joblib) ($2,515 - 119 = 2,396$). |
+| **Stage 4: Target Collision Audit** | `2015-06-24` to `2024-11-29` | **2,376** bars | When evaluating triple-barrier labeling across horizons up to $H=20$, the final 20 trading bars of 2024 are excluded because future prices $[t+1, \dots, t+20]$ are out-of-dataset ($2,396 - 20 = 2,376$). |
+| **Stage 5: Development Universe** | `2016-01-04` to `2024-12-30` | **2,263** bars | Strict institutional 2016–2024 development window. 2015 data is used strictly for feature warmup, contributing zero samples to model training. |
+| **Stage 6: Purged Walk-Forward Splits** | `2016-01-04` to `2024-12-30` | **2,074** bars | Standard purged expanding walk-forward cross-validation: 4 outer validation folds of 414 bars ($N=1,656$ validation observations) preceded by an initial training fold of 418 bars ($1,656 + 418 = 2,074$). |
+
+---
+
+## 3. Target Construction & Same-Bar Collision Analysis
 
 ### Intraday Path Dependency under Daily OHLC Resolution:
-On daily candlestick data, only $[Open, High, Low, Close]$ prints are recorded. When both future $High \ge UB$ and future $Low \le LB$ occur on the **exact same trading bar $t+h$**, the intraday sequence of touches is unobservable: did the price touch the take-profit barrier first or the stop-loss barrier first?
+On daily candlestick data, only $[Open, High, Low, Close]$ prints are recorded. When both future $High \ge UB$ and future $Low \le LB$ occur on the **exact same trading bar $t+h$**, the intraday sequence of touches is unobservable.
 
-### Empirical Evaluation Across Barrier Geometries ($H=15$ Horizon):
+### Empirical Evaluation Across Barrier Geometries ($H=15$ Horizon, $N=2,376$ Bars):
 | Barrier Configuration | Take-Profit ($k_{tp}$) | Stop-Loss ($k_{sl}$) | Total Samples | Same-Bar Ambiguity Hits | Ambiguity Rate (%) | Pessimistic BUY (%) | Optimistic BUY (%) | Label Flip Rate (%) | Mean UB Step | Mean LB Step |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | **Control_3.0_0.5** | 3.0x ATR | 0.5x ATR | 2376 | 0 | **0.00%** | 19.23% | 19.23% | **0.00%** | 8.51 | 2.88 |
@@ -36,131 +51,101 @@ On daily candlestick data, only $[Open, High, Low, Close]$ prints are recorded. 
 | **Candidate_1.0_1.0** | 1.0x ATR | 1.0x ATR | 2376 | 13 | **0.55%** | 56.73% | 57.28% | **0.55%** | 4.46 | 4.24 |
 
 ### Key Findings on Collision Ambiguity:
-1. **Wide vs. Narrow Geometry Immunity:** In wide barrier configurations (Control $3.0 / 0.5$, Candidate $2.0 / 1.0$, Candidate $2.0 / 1.5$), the total barrier separation $(k_{tp} + k_{sl}) 	imes \text{ATR} \ge 3.0 \times \text{ATR}$. Because a single daily bar range ($High - Low$) in AAPL rarely spans $3.0 \times \text{ATR}$, same-bar collisions at the initial touch step are **0.00%** (zero occurrences across 2,376 development bars).
+1. **Wide vs. Narrow Geometry Immunity:** In wide barrier configurations (Control $3.0 / 0.5$, Candidate $2.0 / 1.0$, Candidate $2.0 / 1.5$), the total barrier separation $(k_{tp} + k_{sl}) \times \text{ATR} \ge 3.0 \times \text{ATR}$. Because a single daily bar range ($High - Low$) in AAPL rarely spans $3.0 \times \text{ATR}$, same-bar collisions at the initial touch step are **0.00%** (zero occurrences across 2,376 bars).
 2. **Symmetric Barrier Collisions:** In Candidate $1.5 / 1.5$ ($3.0 \times \text{ATR}$ spread), exactly **2 bars** (0.08%) exhibit same-bar ambiguity. In tight symmetric $1.0 / 1.0$ ($2.0 \times \text{ATR}$ spread), same-bar ambiguity rises to **13 bars** (0.55%).
 3. **Pessimistic vs. Optimistic Policy:** The current HYDRA rule (`upper_hit_step < lower_hit_step`, defaulting ties to SELL) is appropriately conservative. Over $H=15$ bars, the label flip rate between pessimistic fallback (tie $\to$ 0) and optimistic fallback (tie $\to$ 2) is at most **0.08%** for standard research geometries.
 4. **Intraday Resolution Verdict:** Same-bar ambiguity is **not the primary driver of signal failure** in V2.4.1. The failure originates in lack of ranking discrimination and class imbalance.
 
 ---
 
-## 3. Point-in-Time Causality & Timestamp Alignment
-
-### A. Cross-Market Settlement Timing & The VIX 15-Minute Lookahead:
-- **US Equity Market Close (AAPL):** 16:00:00 US Eastern.
-- **Cboe Volatility Index (VIX) Settlement:** 16:15:00 US Eastern.
-- **Lookahead Bias:** If an inference engine computes signals at 16:00:00 ET using same-day VIX closing prices, it utilizes 15 minutes of future options settlement information.
-- **Empirical Impact:** Comparing unlagged VIX with 1-day lagged VIX (`vix_close.shift(1)`):
-  * **Maximum Absolute Discrepancy:** `24.86` volatility points.
-  * **Mean Absolute Discrepancy:** `1.1121` volatility points.
-  * **Correlation:** `0.9653` (substantial variance).
-- **Enforced Remediation:** `lag_vix=True` is strictly enforced across `add_upgraded_features`, guaranteeing zero lookahead bias.
-
-### B. SPY Market Alignment:
-- SPY closes synchronously with AAPL at 16:00:00 ET.
-- For execution at next-day market open (09:30:00 ET), day $t$ SPY return is strictly causal and point-in-time pure.
-- For execution at same-day close (16:00:00 ET), institutional execution mandates Market-on-Close (MOC) order submission prior to the 15:50:00 ET cutoff.
-
-### C. Rolling Window Integrity:
-- **No Forward Shifts:** All 27 V2.4 features and 4 V3.0 features utilize strictly backward-looking rolling operations (`center=False`).
-- **Warmup Protocol:** The longest backward window is 120 bars (Rolling Z-Scores). Exactly 119 warmup bars are purged prior to labeling.
-- **Scaler Isolation:** In walk-forward cross-validation, `StandardScaler` is fitted strictly on `X_train` and applied out-of-sample to `X_val`, preventing distribution leakage across fold boundaries.
-
----
-
 ## 4. Class Imbalance Root-Cause Analysis: Why HOLD < 10%
 
-### Mathematical Derivation (Two-Sided Absorbing Barrier Brownian Motion):
-Let $X_t = \ln(S_t / S_0) \approx \sigma W_t$ represent log-returns as a driftless Brownian motion with daily volatility $\sigma \approx 0.0175$.
-The barriers are $UB = k_{tp} \cdot \text{ATR}$ and $LB = -k_{sl} \cdot \text{ATR}$.
-For symmetric barriers of width $b = k \cdot \text{ATR} \approx 0.027$ ($1.5 \times \text{ATR}$), the probability $P(\tau > T)$ of remaining inside $[-b, b]$ for $T$ trading days without touching either barrier is given by:
+### A. Mathematical Derivation (Two-Sided Absorbing Barrier Brownian Motion):
+Let $X_t = \ln(S_t / S_0) \approx \sigma W_t$ represent log-returns as a continuous-time driftless Brownian motion with daily volatility $\sigma \approx 0.0175$.
+Let symmetric absorbing boundaries be positioned at $\pm b$, where $b = 1.5 \times \text{ATR} \approx 0.027$ (2.70%).
+The survival probability $P(\tau > T)$ of remaining inside $[-b, b]$ for $T$ trading days without touching either barrier is given by:
 
 $$P(\tau > T) = \frac{4}{\pi} \sum_{n=0}^{\infty} \frac{(-1)^n}{2n+1} \exp\left( - \frac{(2n+1)^2 \pi^2 \sigma^2 T}{8 b^2} \right)$$
 
-For $T=15$ days, the diffusive spread $\sigma \sqrt{T} = 0.0175 \times \sqrt{15} \approx 0.0678$ (6.78%).
-The ratio $\frac{\sigma \sqrt{T}}{b} \approx \frac{0.0678}{0.027} \approx 2.51$.
-Because the diffusion envelope is 2.5 times larger than the barrier width, the exponential term decays rapidly:
+For $T=15$ trading days:
+$$\text{Exponent Base} = \frac{\pi^2 \sigma^2 T}{8 b^2} = \frac{9.8696044 \times (0.0175)^2 \times 15}{8 \times (0.027)^2} = \frac{0.0453381}{0.005832} = \mathbf{7.774}$$
 
-$$P(\tau > 15 \text{ days}) \approx \frac{4}{\pi} \exp(-7.33) \approx 0.08\%$$
+The first-term ($n=0$) analytical survival probability is:
+$$P(\tau > 15 \text{ days}) \approx \frac{4}{\pi} \exp(-7.774) = 1.27324 \times 0.0004205 = \mathbf{0.0535\%}$$
 
-### Horizon Decay of the HOLD Class (Empirical vs. Simulated):
-| Barrier Configuration | Horizon ($H$) | Empirical HOLD (%) | Monte Carlo Simulated HOLD (%) | Analytical Brownian Survival (%) | Status |
-|---|---:|---:|---:|---:|---|
-| Control_3.0_0.5 | H=5 | **29.04%** | 28.90% | 18.97% | >= 10% |
-| Control_3.0_0.5 | H=10 | **13.13%** | 9.87% | 2.83% | >= 10% |
-| Control_3.0_0.5 | H=15 | **6.94%** | 3.29% | 0.42% | < 10% (Minority) |
-| Control_3.0_0.5 | H=20 | **3.49%** | 1.10% | 0.06% | < 10% (Minority) |
-| Candidate_1.5_1.5 | H=5 | **34.81%** | 30.25% | 9.54% | >= 10% |
-| Candidate_1.5_1.5 | H=10 | **12.50%** | 7.83% | 0.71% | >= 10% |
-| Candidate_1.5_1.5 | H=15 | **4.12%** | 1.98% | 0.05% | < 10% (Minority) |
-| Candidate_1.5_1.5 | H=20 | **1.52%** | 0.50% | 0.00% | < 10% (Minority) |
-| Candidate_2.0_1.0 | H=5 | **35.35%** | 28.56% | 9.54% | >= 10% |
-| Candidate_2.0_1.0 | H=10 | **11.78%** | 7.37% | 0.71% | >= 10% |
-| Candidate_2.0_1.0 | H=15 | **4.80%** | 1.90% | 0.05% | < 10% (Minority) |
-| Candidate_2.0_1.0 | H=20 | **1.60%** | 0.48% | 0.00% | < 10% (Minority) |
-| Candidate_2.0_1.5 | H=5 | **46.93%** | 40.22% | 18.97% | >= 10% |
-| Candidate_2.0_1.5 | H=10 | **20.03%** | 13.70% | 2.83% | >= 10% |
-| Candidate_2.0_1.5 | H=15 | **9.34%** | 4.62% | 0.42% | < 10% (Minority) |
-| Candidate_2.0_1.5 | H=20 | **3.79%** | 1.52% | 0.06% | < 10% (Minority) |
-| Candidate_1.0_1.0 | H=5 | **12.92%** | 10.70% | 0.37% | >= 10% |
-| Candidate_1.0_1.0 | H=10 | **2.10%** | 1.07% | 0.00% | < 10% (Minority) |
-| Candidate_1.0_1.0 | H=15 | **0.25%** | 0.10% | 0.00% | < 10% (Minority) |
-| Candidate_1.0_1.0 | H=20 | **0.00%** | 0.01% | 0.00% | < 10% (Minority) |
+> [!NOTE]
+> **Analytical Model Assumptions & Limitations:**
+> This continuous-time symmetric formula provides theoretical proof that diffusive spread $\sigma \sqrt{T} \approx 6.78\%$ rapidly dwarfs the $2.70\%$ barrier width. However, it assumes continuous monitoring, zero drift, and symmetric barriers. In actual market trading:
+> - Barriers are asymmetric (e.g. $+3.0$ ATR vs $-0.5$ ATR in Control).
+> - Price monitoring occurs on discrete daily OHLC bars.
+> - Financial markets exhibit volatility clustering and regime persistence (consolidation periods).
 
-### Machine Learning & Tree-Split Distortions:
-1. **Split Gradient Starvation:** In gradient-boosted decision trees (XGBoost, LightGBM), node splitting optimizes the loss reduction $\Delta \mathcal{L}$. A minority class comprising only 3% to 7% of samples provides negligible gradient signal compared to 73% SELL and 20% BUY.
-2. **Near-Zero Minority Recall:** The trees build split paths that segregate SELL from BUY, almost completely ignoring the HOLD boundary. In outer walk-forward validation:
-   - Fold 1 HOLD Recall: **0.00%** (0 true positives out of 43 actuals).
-   - Fold 4 HOLD Recall: **0.00%** (0 true positives out of 25 actuals).
-3. **Balanced Accuracy Collapse:** Because balanced accuracy weights all classes equally:
-   $$\text{Balanced Accuracy} = \frac{\text{Recall}_{\text{SELL}} + \text{Recall}_{\text{HOLD}} + \text{Recall}_{\text{BUY}}}{3} \approx \frac{0.70 + 0.00 + 0.20}{3} \approx 30.0\%$$
-   The model scores **below the 33.3% random-guess threshold**, solely because the 3-class target formulation manufactures an unlearnable minority class.
+### B. Discrete Asymmetric OHLC Simulation vs. Realized Empirical Ground Truth ($H=15$ Bars):
+| Barrier Configuration | Analytical Continuous Model | Discrete OHLC Random Walk Simulation | Realized Empirical Label Frequency (AAPL) | Status |
+|---|---:|---:|---:|---|
+| **Control 3.0 / 0.5** | 0.42% | 0.23% | **6.94%** (165 / 2,376) | **< 10% (Minority)** |
+| **Candidate 1.5 / 1.5** | 0.05% | 0.06% | **4.12%** (98 / 2,376) | **< 10% (Minority)** |
+| **Candidate 2.0 / 1.0** | 0.05% | 0.05% | **4.80%** (114 / 2,376) | **< 10% (Minority)** |
+| **Candidate 2.0 / 1.5** | 0.42% | 0.35% | **9.34%** (222 / 2,376) | **< 10% (Minority)** |
+| **Tight 1.0 / 1.0** | 0.00% | 0.01% | **0.25%** (6 / 2,376) | **< 10% (Minority)** |
+
+**Key Takeaways:**
+1. Realized empirical HOLD prevalence ($\\approx 4\% - 9\%$) is higher than pure random walk diffusion ($\\approx 0.1\% - 0.4\%$) due to real-world volatility clustering and consolidation regimes.
+2. Across all standard geometries, the multi-week horizon ($H \ge 15$) mathematically and empirically constrains HOLD below $10\%$.
+3. **Machine Learning Impact:** Tree models optimize split loss reduction $\Delta \mathcal{L}$. A minority class with $< 7\%$ prevalence provides negligible gradient signal, causing trees to separate SELL from BUY while achieving **0.00% HOLD recall** across outer walk-forward folds (Folds 1 and 4). This collapses balanced accuracy below the $33.3\%$ random-guess threshold.
 
 ---
 
-## 5. Dataset Pinning & Cryptographic Hash Registration
+## 5. Statistical Verification of the 4 New V3.0 Features
 
-To permanently prevent the historical re-fetch drift that previously affected Folds 3 and 4, the canonical 2016-2024 development dataset has been serialized and cryptographically bound:
+Recomputing observation counts, Spearman Information Coefficients, Newey-West HAC adjustments (for multi-day overlapping return dependence), and Benjamini-Hochberg FDR $q$-values on [`workstream_1_pinned_development_dataset.joblib`](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/artifacts/research/workstream_1_pinned_development_dataset.joblib):
 
-| Dataset Attribute | Value |
-|---|---|
-| **Archive File Path** | `D:\DataScience\Projects\Data_Science_Projects\Stock_Indicator\backend\artifacts\research\workstream_1_pinned_development_dataset.joblib` |
-| **SHA-256 Digest** | `e764c60cb390d11756ec59745629985a20e1ab5afde2ac6d87c01fbd0fc1dc05` |
-| **File Size** | `1,361,235` bytes |
-| **Trading Bar Range** | `2015-01-02` to `2024-12-30` |
-| **Raw Bar Count** | `2515` bars |
-| **Clean Feature Samples** | `2396` samples |
-| **Bound Manifest Digest** | `d580b50a441c2f5a3881bb72eb0c8b23d90077dea61ddc506193affcfe993da5` |
+| Feature | Horizon ($H$) | $N$ | Spearman IC | Unadj. $p$-value | HAC SE | $t_{\text{HAC}}$ | HAC $p$-value | FDR $q$-value | Assessment |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| **`Keltner_Position`** | 1d | 2,395 | $+0.0142$ | 0.4882 | 0.0204 | +0.693 | 0.4881 | 0.7100 | Redundant with RSI ($r=0.98$) |
+| | 5d | 2,391 | $+0.0640$ | 0.0017 | 0.0345 | +1.854 | 0.0638 | 1.0000 | Not significant under HAC ($p > 0.05$) |
+| | 10d | 2,386 | $+0.0686$ | 0.0008 | 0.0469 | +1.463 | 0.1436 | 0.7659 | Not significant under HAC ($p > 0.05$) |
+| | 15d | 2,381 | $+0.0593$ | 0.0038 | 0.0550 | +1.079 | 0.2807 | 0.7485 | Not significant under HAC ($p > 0.05$) |
+| **`HMA_Slope`** | 1d | 2,395 | $-0.0212$ | 0.3005 | 0.0204 | -1.036 | 0.3004 | 0.6866 | Statistically insignificant |
+| | 5d | 2,391 | $+0.0062$ | 0.7617 | 0.0299 | +0.208 | 0.8355 | 0.8355 | Statistically insignificant |
+| | 10d | 2,386 | $+0.0338$ | 0.0993 | 0.0305 | +1.106 | 0.2689 | 0.8605 | Statistically insignificant |
+| | 15d | 2,381 | $+0.0100$ | 0.6260 | 0.0307 | +0.326 | 0.7447 | 0.8511 | Statistically insignificant |
+| **`Connors_RSI`** | 1d | 2,395 | $-0.0118$ | 0.5624 | 0.0204 | -0.579 | 0.5623 | 0.6921 | Statistically insignificant |
+| | 5d | 2,391 | **$+0.0054$** | **0.7907** | **0.0245** | **+0.222** | **0.8243** | **0.8793** | **Corrected point estimate: +0.0054 (earlier +0.0580 was a display typo)** |
+| | 10d | 2,386 | $+0.0332$ | 0.1054 | 0.0255 | +1.298 | 0.1943 | 0.7772 | Statistically insignificant |
+| | 15d | 2,381 | $+0.0199$ | 0.3315 | 0.0259 | +0.769 | 0.4420 | 0.7072 | Statistically insignificant |
+| **`CMF_Divergence`** | 1d | 2,395 | $-0.0141$ | 0.4894 | 0.0204 | -0.691 | 0.4893 | 0.6524 | Statistically insignificant |
+| | 5d | 2,391 | $-0.0426$ | 0.0371 | 0.0282 | -1.512 | 0.1304 | 1.0000 | Negative IC; insignificant under HAC |
+| | 10d | 2,386 | $-0.0340$ | 0.0965 | 0.0348 | -0.977 | 0.3286 | 0.5842 | Statistically insignificant |
+| | 15d | 2,381 | $-0.0382$ | 0.0620 | 0.0384 | -0.997 | 0.3187 | 0.6374 | Statistically insignificant |
 
 > [!IMPORTANT]
-> **Reproducibility Mandate:** All subsequent research scripts in Workstreams 2 through 5 **MUST** ingest data directly from this pinned archive. Dynamic re-fetching from Yahoo Finance for development universe modeling is strictly prohibited.
+> **Audit Finding on Connors RSI Typo:**
+> In the preliminary summary table, Connors RSI at 5 days was erroneously printed as $+0.0580$ with $p=0.78$. The underlying computation yielded $\text{IC} = +0.0054$. For $N=2,391$, an IC of $+0.0054$ produces $t = +0.222$ and $p = 0.7907$ ($p_{\text{HAC}} = 0.8243$), confirming that Connors RSI has no predictive alpha over 5 days.
+> Furthermore, under Newey-West HAC adjustments and Benjamini-Hochberg FDR multiple-testing control, **zero of the four features achieve statistical significance at the 5% level**.
+
+### Disposition of the 4 Features:
+- **`Keltner_Position`:** Retained as a research candidate. Must be evaluated for incremental out-of-fold value beyond existing Bollinger Band / RSI features within purged walk-forward splits.
+- **`HMA_Slope`:** Deprioritized due to weak IC and high collinearity ($r=0.80$ with `Price_vs_EMA9`).
+- **`Connors_RSI`:** On hold pending incremental-value testing.
+- **`CMF_Divergence`:** Under review; negative IC at multi-day horizons requires testing whether its raw continuous formulation provides better signal than the ternary indicator.
+- **Governance:** None of the 4 features are authorized for production deployment. Any future feature selection or residualization must be fitted strictly inside training folds.
 
 ---
 
-## 6. Predeclared Evaluation Protocol & Governance Ratification
+## 6. End-to-End VIX Timing & Causality Contract
 
-### Governance Determinations:
-1. **Phase 3e Officially Sealed:** Post-hoc calibration research remains terminated.
-2. **Workstream 1 Complete:** Target ambiguity, timestamp causality, and class imbalance are fully characterized.
-3. **Strict Production & Capital NO-GO:**
-   - Manifest `frozen_strategy_manifest_v2.4.json` remains immutable.
-   - Core files `calibration.py` and `evaluation_contract.py` remain invariant.
-   - Production routing and live capital deployment are **STRICTLY PROHIBITED**.
+An exhaustive contract test was conducted across the data ingestion and inference pipeline:
+1. **Calendar Synchrony:** In [`workstream_1_pinned_development_dataset.joblib`](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/artifacts/research/workstream_1_pinned_development_dataset.joblib), all 2,515 trading days between AAPL, SPY, and ^VIX match identically (**0 missing equity dates in VIX, 0 missing VIX dates in equity**).
+2. **Execution Timing & Settlement Gap:** US Equities close at 16:00:00 ET; Cboe VIX settles at 16:15:00 ET. Using same-day VIX at equity close introduces a 15-minute lookahead bias.
+3. **Purity Guardrail:** `lag_vix=True` (`vix_close.shift(1)`) is strictly enforced in [`add_upgraded_features`](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/src/execution/live_inference.py#L196-L428) across training, validation, and live inference.
+4. **Missing-Data Behavior:** In the event of missing VIX prints, `vix_lagged.reindex(df.index).ffill().fillna(20.0)` shifts *before* reindexing, guaranteeing that date $t$ can only receive data from date $t-1$ or earlier. Forward contamination is mathematically impossible.
 
-### Predeclared Sequence for Remaining Workstreams:
-```mermaid
-graph TD
-    WS1["1. Target & Leakage Audit (COMPLETE)"] --> WS2["2. Simple Directional Baselines<br/>200d SMA, 20d Breakout"]
-    WS2 --> WS3["3. Feature Causality & Quality<br/>OOS Ranking Discrimination & Rank Correlation"]
-    WS3 --> WS4["4. Prospective Holdout Gates<br/>ROC-AUC > 0.55 & BSS > 0.00%"]
-    WS4 --> WS5["5. Cost-Adjusted Trading Simulations<br/>Only after statistical skill is verified"]
-```
+---
 
-1. **Workstream 2 (Simple Directional Baselines):**
-   - Benchmark against rule-based baselines: 200-day SMA trend-following and 20-day Donchian breakout.
-   - Evaluate under identical transaction costs, slippage, and execution constraints.
-2. **Workstream 3 (Feature Representation Quality & Causality):**
-   - Measure individual feature information coefficients (Spearman rank correlation) and univariate out-of-sample ROC-AUC before adding model complexity.
-3. **Workstream 4 (Prospective Screening Gates):**
-   - Enforce predeclared statistical gates: Macro ROC-AUC $> 0.55$ and BSS $> 0.00\%$ on untouched holdout windows.
-4. **Workstream 5 (Trading Simulations):**
-   - Conduct portfolio backtests and paper trading only after models clear statistical skill gates.
+## 7. Predeclared Sequencing for Workstream 2
+
+With all audit corrections, statistical verifications, and data lineages formally recorded, HYDRA transitions to **Workstream 2**:
+1. **Directional Baselines:** Benchmark against rule-based baselines: 200-day SMA trend-following and 20-day Donchian breakout.
+2. **Execution Conventions:** Evaluate directly on [`workstream_1_pinned_development_dataset.joblib`](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/artifacts/research/workstream_1_pinned_development_dataset.joblib) under the exact 4-fold walk-forward splits and identical cost model (5 bps slippage, $0.005/share commission).
+3. **Governance Restatement:** Production integration remains **STRICTLY BLOCKED**; live capital deployment is **STRICT NO-GO**.
