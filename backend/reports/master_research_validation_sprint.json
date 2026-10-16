@@ -1,0 +1,770 @@
+{
+  "phase_0_baseline": {
+    "starting_commit": "dd8d4ebe1aa2403251ef0109a32a50e42fc633a8",
+    "branch": "main",
+    "working_tree_clean": true,
+    "frozen_manifest_hash": "d580b50a441c2f5a3881bb72eb0c8b23d90077dea61ddc506193affcfe993da5",
+    "pinned_dataset_hash": "e764c60cb390d11756ec59745629985a20e1ab5afde2ac6d87c01fbd0fc1dc05",
+    "phase_3d_oof_hash": "d85d5243743027c2e6849016acd79e89a4a70813ed3ff731c7e2ada97cee4c2b",
+    "collected_tests": 287,
+    "timestamp_utc": "2026-10-16T09:02:11.847213+00:00"
+  },
+  "phase_1_features": {
+    "selected_feature_set": "Set_B_Scale_Invariant",
+    "feature_columns": [
+      "RSI",
+      "ADX",
+      "Stoch_K",
+      "Stoch_D",
+      "Volatility_Ratio",
+      "Price_vs_SMA200",
+      "BB_Position",
+      "BB_Width",
+      "MACD_Norm",
+      "Return_1d",
+      "Return_5d",
+      "Return_20d",
+      "Volume_Ratio"
+    ]
+  },
+  "phase_2_ablation": {
+    "Set_A_Baseline_Raw": {
+      "feature_count": 17,
+      "features": [
+        "RSI",
+        "ATR",
+        "ADX",
+        "MACD",
+        "MACD_Signal",
+        "MACD_Diff",
+        "Stoch_K",
+        "Stoch_D",
+        "BB_Upper",
+        "BB_Middle",
+        "BB_Lower",
+        "Volatility_Ratio",
+        "Return_1d",
+        "Return_5d",
+        "Return_20d",
+        "Volume_Ratio",
+        "SMA_200"
+      ],
+      "pooled_metrics": {
+        "brier_score": 0.8111,
+        "brier_ref": 0.5775,
+        "brier_skill_score_pct": -40.45,
+        "expected_calibration_error": 0.3207,
+        "log_loss": 1.3156,
+        "roc_auc_ovr_macro": 0.505
+      },
+      "fold_metrics": [
+        {
+          "brier_score": 0.6835,
+          "brier_ref": 0.5926,
+          "brier_skill_score_pct": -15.35,
+          "expected_calibration_error": 0.1918,
+          "log_loss": 1.1069,
+          "roc_auc_ovr_macro": 0.5342,
+          "fold": 1
+        },
+        {
+          "brier_score": 1.0011,
+          "brier_ref": 0.5423,
+          "brier_skill_score_pct": -84.6,
+          "expected_calibration_error": 0.5017,
+          "log_loss": 1.5741,
+          "roc_auc_ovr_macro": 0.6042,
+          "fold": 2
+        },
+        {
+          "brier_score": 0.8351,
+          "brier_ref": 0.5928,
+          "brier_skill_score_pct": -40.87,
+          "expected_calibration_error": 0.347,
+          "log_loss": 1.3909,
+          "roc_auc_ovr_macro": 0.5238,
+          "fold": 3
+        },
+        {
+          "brier_score": 0.7247,
+          "brier_ref": 0.5428,
+          "brier_skill_score_pct": -33.51,
+          "expected_calibration_error": 0.2444,
+          "log_loss": 1.1906,
+          "roc_auc_ovr_macro": 0.5392,
+          "fold": 4
+        }
+      ],
+      "oof_portfolio_summary": {
+        "strategy": "Set_A_Baseline_Raw",
+        "initial_capital": 1000.0,
+        "final_cash": 1661.42,
+        "final_equity": 1661.42,
+        "net_profit_dollars": 661.42,
+        "net_return_pct": 66.14,
+        "total_trades": 48,
+        "winning_trades": 29,
+        "losing_trades": 19,
+        "win_rate_pct": 60.42,
+        "profit_factor": 1.95,
+        "max_drawdown_dollars": -387.92,
+        "max_drawdown_pct": -19.8,
+        "annualized_volatility_pct": 16.26,
+        "sharpe_ratio": 0.556,
+        "sortino_ratio": 0.519,
+        "exposure_pct": 37.86,
+        "total_bars": 1656,
+        "slippage_bps": 5.0,
+        "open_position": null
+      }
+    },
+    "Set_B_Scale_Invariant": {
+      "feature_count": 13,
+      "features": [
+        "RSI",
+        "ADX",
+        "Stoch_K",
+        "Stoch_D",
+        "Volatility_Ratio",
+        "Price_vs_SMA200",
+        "BB_Position",
+        "BB_Width",
+        "MACD_Norm",
+        "Return_1d",
+        "Return_5d",
+        "Return_20d",
+        "Volume_Ratio"
+      ],
+      "pooled_metrics": {
+        "brier_score": 0.6442,
+        "brier_ref": 0.5775,
+        "brier_skill_score_pct": -11.55,
+        "expected_calibration_error": 0.171,
+        "log_loss": 1.03,
+        "roc_auc_ovr_macro": 0.5656
+      },
+      "fold_metrics": [
+        {
+          "brier_score": 0.6265,
+          "brier_ref": 0.5926,
+          "brier_skill_score_pct": -5.73,
+          "expected_calibration_error": 0.1706,
+          "log_loss": 1.0379,
+          "roc_auc_ovr_macro": 0.6212,
+          "fold": 1
+        },
+        {
+          "brier_score": 0.6851,
+          "brier_ref": 0.5423,
+          "brier_skill_score_pct": -26.33,
+          "expected_calibration_error": 0.2276,
+          "log_loss": 1.0733,
+          "roc_auc_ovr_macro": 0.6382,
+          "fold": 2
+        },
+        {
+          "brier_score": 0.6545,
+          "brier_ref": 0.5928,
+          "brier_skill_score_pct": -10.4,
+          "expected_calibration_error": 0.1732,
+          "log_loss": 1.0553,
+          "roc_auc_ovr_macro": 0.5738,
+          "fold": 3
+        },
+        {
+          "brier_score": 0.6108,
+          "brier_ref": 0.5428,
+          "brier_skill_score_pct": -12.52,
+          "expected_calibration_error": 0.124,
+          "log_loss": 0.9535,
+          "roc_auc_ovr_macro": 0.5334,
+          "fold": 4
+        }
+      ],
+      "oof_portfolio_summary": {
+        "strategy": "Set_B_Scale_Invariant",
+        "initial_capital": 1000.0,
+        "final_cash": 95.4,
+        "final_equity": 1378.68,
+        "net_profit_dollars": 378.68,
+        "net_return_pct": 37.87,
+        "total_trades": 136,
+        "winning_trades": 66,
+        "losing_trades": 70,
+        "win_rate_pct": 48.53,
+        "profit_factor": 1.35,
+        "max_drawdown_dollars": -354.65,
+        "max_drawdown_pct": -23.93,
+        "annualized_volatility_pct": 16.31,
+        "sharpe_ratio": 0.381,
+        "sortino_ratio": 0.384,
+        "exposure_pct": 46.86,
+        "total_bars": 1656,
+        "slippage_bps": 5.0,
+        "open_position": {
+          "shares": 7,
+          "entry_price": 179.0872,
+          "current_price": 183.325,
+          "unrealized_pnl": 28.66,
+          "entry_date": "2024-01-05 00:00:00"
+        }
+      }
+    },
+    "Set_C_Compact_Normalized": {
+      "feature_count": 8,
+      "features": [
+        "Price_vs_SMA200",
+        "Normalized_SMA_Slope_20",
+        "BB_Position",
+        "BB_Width",
+        "ATR_over_Close",
+        "MACD_Norm",
+        "Return_5d_vol_scaled",
+        "Return_20d_vol_scaled"
+      ],
+      "pooled_metrics": {
+        "brier_score": 0.6599,
+        "brier_ref": 0.5775,
+        "brier_skill_score_pct": -14.27,
+        "expected_calibration_error": 0.1706,
+        "log_loss": 1.051,
+        "roc_auc_ovr_macro": 0.5578
+      },
+      "fold_metrics": [
+        {
+          "brier_score": 0.6627,
+          "brier_ref": 0.5926,
+          "brier_skill_score_pct": -11.83,
+          "expected_calibration_error": 0.1692,
+          "log_loss": 1.0803,
+          "roc_auc_ovr_macro": 0.617,
+          "fold": 1
+        },
+        {
+          "brier_score": 0.7053,
+          "brier_ref": 0.5423,
+          "brier_skill_score_pct": -30.06,
+          "expected_calibration_error": 0.2602,
+          "log_loss": 1.1092,
+          "roc_auc_ovr_macro": 0.5795,
+          "fold": 2
+        },
+        {
+          "brier_score": 0.6583,
+          "brier_ref": 0.5928,
+          "brier_skill_score_pct": -11.05,
+          "expected_calibration_error": 0.163,
+          "log_loss": 1.0566,
+          "roc_auc_ovr_macro": 0.5465,
+          "fold": 3
+        },
+        {
+          "brier_score": 0.6133,
+          "brier_ref": 0.5428,
+          "brier_skill_score_pct": -12.97,
+          "expected_calibration_error": 0.1451,
+          "log_loss": 0.9581,
+          "roc_auc_ovr_macro": 0.5682,
+          "fold": 4
+        }
+      ],
+      "oof_portfolio_summary": {
+        "strategy": "Set_C_Compact_Normalized",
+        "initial_capital": 1000.0,
+        "final_cash": 32.47,
+        "final_equity": 765.77,
+        "net_profit_dollars": -234.23,
+        "net_return_pct": -23.42,
+        "total_trades": 122,
+        "winning_trades": 47,
+        "losing_trades": 75,
+        "win_rate_pct": 38.52,
+        "profit_factor": 1.0,
+        "max_drawdown_dollars": -498.33,
+        "max_drawdown_pct": -39.97,
+        "annualized_volatility_pct": 13.2,
+        "sharpe_ratio": -0.241,
+        "sortino_ratio": -0.217,
+        "exposure_pct": 38.95,
+        "total_bars": 1656,
+        "slippage_bps": 5.0,
+        "open_position": {
+          "shares": 4,
+          "entry_price": 179.0872,
+          "current_price": 183.325,
+          "unrealized_pnl": 15.95,
+          "entry_date": "2024-01-05 00:00:00"
+        }
+      }
+    },
+    "Set_D_Strongest_Nonredundant": {
+      "feature_count": 10,
+      "features": [
+        "Price_vs_SMA200",
+        "Normalized_SMA_Slope_20",
+        "BB_Position",
+        "BB_Width",
+        "ATR_over_Close",
+        "MACD_Norm",
+        "Return_5d_vol_scaled",
+        "Return_20d_vol_scaled",
+        "RSI",
+        "Volume_Ratio"
+      ],
+      "pooled_metrics": {
+        "brier_score": 0.6639,
+        "brier_ref": 0.5775,
+        "brier_skill_score_pct": -14.97,
+        "expected_calibration_error": 0.186,
+        "log_loss": 1.0572,
+        "roc_auc_ovr_macro": 0.5565
+      },
+      "fold_metrics": [
+        {
+          "brier_score": 0.669,
+          "brier_ref": 0.5926,
+          "brier_skill_score_pct": -12.89,
+          "expected_calibration_error": 0.1885,
+          "log_loss": 1.0857,
+          "roc_auc_ovr_macro": 0.6166,
+          "fold": 1
+        },
+        {
+          "brier_score": 0.7159,
+          "brier_ref": 0.5423,
+          "brier_skill_score_pct": -32.0,
+          "expected_calibration_error": 0.2694,
+          "log_loss": 1.126,
+          "roc_auc_ovr_macro": 0.5923,
+          "fold": 2
+        },
+        {
+          "brier_score": 0.6514,
+          "brier_ref": 0.5928,
+          "brier_skill_score_pct": -9.89,
+          "expected_calibration_error": 0.1832,
+          "log_loss": 1.0441,
+          "roc_auc_ovr_macro": 0.5583,
+          "fold": 3
+        },
+        {
+          "brier_score": 0.6195,
+          "brier_ref": 0.5428,
+          "brier_skill_score_pct": -14.12,
+          "expected_calibration_error": 0.1145,
+          "log_loss": 0.9728,
+          "roc_auc_ovr_macro": 0.5583,
+          "fold": 4
+        }
+      ],
+      "oof_portfolio_summary": {
+        "strategy": "Set_D_Strongest_Nonredundant",
+        "initial_capital": 1000.0,
+        "final_cash": 44.9,
+        "final_equity": 1144.85,
+        "net_profit_dollars": 144.85,
+        "net_return_pct": 14.49,
+        "total_trades": 118,
+        "winning_trades": 48,
+        "losing_trades": 70,
+        "win_rate_pct": 40.68,
+        "profit_factor": 1.25,
+        "max_drawdown_dollars": -562.13,
+        "max_drawdown_pct": -33.44,
+        "annualized_volatility_pct": 13.45,
+        "sharpe_ratio": 0.22,
+        "sortino_ratio": 0.218,
+        "exposure_pct": 39.61,
+        "total_bars": 1656,
+        "slippage_bps": 5.0,
+        "open_position": {
+          "shares": 6,
+          "entry_price": 179.0872,
+          "current_price": 183.325,
+          "unrealized_pnl": 24.43,
+          "entry_date": "2024-01-05 00:00:00"
+        }
+      }
+    }
+  },
+  "phase_3_optimization": {
+    "model_comparison_table": [
+      {
+        "model": "Constant_Prior_Baseline",
+        "brier_score": 0.5779,
+        "brier_ref": 0.5775,
+        "brier_skill_score_pct": -0.07,
+        "expected_calibration_error": 0.0157,
+        "log_loss": 0.9356,
+        "roc_auc_ovr_macro": 0.5
+      },
+      {
+        "model": "Logistic_Regression_L2",
+        "brier_score": 0.6078,
+        "brier_ref": 0.5775,
+        "brier_skill_score_pct": -5.25,
+        "expected_calibration_error": 0.0678,
+        "log_loss": 0.9829,
+        "roc_auc_ovr_macro": 0.5426
+      },
+      {
+        "model": "Shallow_Decision_Tree_D2",
+        "brier_score": 0.615,
+        "brier_ref": 0.5775,
+        "brier_skill_score_pct": -6.49,
+        "expected_calibration_error": 0.0999,
+        "log_loss": 1.3921,
+        "roc_auc_ovr_macro": 0.5002
+      },
+      {
+        "model": "Baseline_XGBoost_Scale_Invariant",
+        "brier_score": 0.6442,
+        "brier_ref": 0.5775,
+        "brier_skill_score_pct": -11.55,
+        "expected_calibration_error": 0.171,
+        "log_loss": 1.03,
+        "roc_auc_ovr_macro": 0.5656
+      },
+      {
+        "model": "Baseline_LightGBM_Scale_Invariant",
+        "brier_score": 0.6663,
+        "brier_ref": 0.5775,
+        "brier_skill_score_pct": -15.38,
+        "expected_calibration_error": 0.2019,
+        "log_loss": 1.0851,
+        "roc_auc_ovr_macro": 0.5704
+      },
+      {
+        "model": "Optuna_Tuned_LightGBM",
+        "brier_score": 0.5917,
+        "brier_ref": 0.5775,
+        "brier_skill_score_pct": -2.46,
+        "expected_calibration_error": 0.0858,
+        "log_loss": 0.9493,
+        "roc_auc_ovr_macro": 0.5706
+      }
+    ],
+    "locked_model_config": {
+      "model_family": "Optuna_Tuned_LightGBM",
+      "parameters": {
+        "max_depth": 4,
+        "num_leaves": 25,
+        "learning_rate": 0.010086225113452831,
+        "n_estimators": 155,
+        "subsample": 0.685157783639564,
+        "colsample_bytree": 0.7524264148021685,
+        "min_child_samples": 33,
+        "random_state": 42,
+        "verbose": -1,
+        "n_jobs": 1
+      },
+      "feature_set": "Set_B_Scale_Invariant",
+      "feature_columns": [
+        "RSI",
+        "ADX",
+        "Stoch_K",
+        "Stoch_D",
+        "Volatility_Ratio",
+        "Price_vs_SMA200",
+        "BB_Position",
+        "BB_Width",
+        "MACD_Norm",
+        "Return_1d",
+        "Return_5d",
+        "Return_20d",
+        "Volume_Ratio"
+      ],
+      "locked_decision_threshold": 0.45
+    }
+  },
+  "phase_4_probability_quality": {
+    "metrics": {
+      "brier_score": 0.5917,
+      "brier_ref": 0.5775,
+      "brier_skill_score_pct": -2.46,
+      "expected_calibration_error": 0.0858,
+      "log_loss": 0.9493,
+      "roc_auc_ovr_macro": 0.5706
+    },
+    "signal_state_log_summary": {
+      "total_bars": 252,
+      "signals_emitted": {
+        "BUY": 29,
+        "SELL": 28,
+        "HOLD": 195
+      }
+    }
+  },
+  "phase_5_strategy_comparison": [
+    {
+      "strategy": "Buy_and_Hold",
+      "initial_capital": 1000.0,
+      "final_cash": 15.74,
+      "final_equity": 1380.82,
+      "net_profit_dollars": 380.82,
+      "net_return_pct": 38.08,
+      "total_trades": 0,
+      "winning_trades": 0,
+      "losing_trades": 0,
+      "win_rate_pct": 0.0,
+      "profit_factor": 0.0,
+      "max_drawdown_dollars": -160.06,
+      "max_drawdown_pct": -13.61,
+      "annualized_volatility_pct": 24.05,
+      "sharpe_ratio": 1.463,
+      "sortino_ratio": 1.966,
+      "exposure_pct": 99.6,
+      "total_bars": 252,
+      "slippage_bps": 5.0,
+      "open_position": {
+        "shares": 4,
+        "entry_price": 245.8153,
+        "current_price": 341.27,
+        "unrealized_pnl": 380.82,
+        "entry_date": "2025-10-14 00:00:00"
+      }
+    },
+    {
+      "strategy": "200_Day_SMA_Trend",
+      "initial_capital": 1000.0,
+      "final_cash": 241.85,
+      "final_equity": 1265.66,
+      "net_profit_dollars": 265.66,
+      "net_return_pct": 26.57,
+      "total_trades": 1,
+      "winning_trades": 1,
+      "losing_trades": 0,
+      "win_rate_pct": 100.0,
+      "profit_factor": 999.0,
+      "max_drawdown_dollars": -157.53,
+      "max_drawdown_pct": -13.61,
+      "annualized_volatility_pct": 20.88,
+      "sharpe_ratio": 1.233,
+      "sortino_ratio": 1.655,
+      "exposure_pct": 99.21,
+      "total_bars": 252,
+      "slippage_bps": 5.0,
+      "open_position": {
+        "shares": 3,
+        "entry_price": 253.7542,
+        "current_price": 341.27,
+        "unrealized_pnl": 261.55,
+        "entry_date": "2026-04-01 00:00:00"
+      }
+    },
+    {
+      "strategy": "20_Day_Donchian_Breakout",
+      "initial_capital": 1000.0,
+      "final_cash": 314.28,
+      "final_equity": 996.82,
+      "net_profit_dollars": -3.18,
+      "net_return_pct": -0.32,
+      "total_trades": 3,
+      "winning_trades": 2,
+      "losing_trades": 1,
+      "win_rate_pct": 66.67,
+      "profit_factor": 0.36,
+      "max_drawdown_dollars": -161.69,
+      "max_drawdown_pct": -15.08,
+      "annualized_volatility_pct": 16.49,
+      "sharpe_ratio": 0.063,
+      "sortino_ratio": 0.069,
+      "exposure_pct": 77.38,
+      "total_bars": 252,
+      "slippage_bps": 5.0,
+      "open_position": {
+        "shares": 2,
+        "entry_price": 314.606,
+        "current_price": 341.27,
+        "unrealized_pnl": 52.33,
+        "entry_date": "2026-07-10 00:00:00"
+      }
+    },
+    {
+      "strategy": "Dip_Entry_In_Uptrend",
+      "initial_capital": 1000.0,
+      "final_cash": 1196.76,
+      "final_equity": 1196.76,
+      "net_profit_dollars": 196.76,
+      "net_return_pct": 19.68,
+      "total_trades": 9,
+      "winning_trades": 6,
+      "losing_trades": 3,
+      "win_rate_pct": 66.67,
+      "profit_factor": 3.06,
+      "max_drawdown_dollars": -112.13,
+      "max_drawdown_pct": -9.46,
+      "annualized_volatility_pct": 14.31,
+      "sharpe_ratio": 1.327,
+      "sortino_ratio": 1.262,
+      "exposure_pct": 44.05,
+      "total_bars": 252,
+      "slippage_bps": 5.0,
+      "open_position": null
+    },
+    {
+      "strategy": "HYDRA_Master_Sprint_Tuned_LGB_Th_0.45",
+      "initial_capital": 1000.0,
+      "final_cash": 122.74,
+      "final_equity": 1146.55,
+      "net_profit_dollars": 146.55,
+      "net_return_pct": 14.66,
+      "total_trades": 28,
+      "winning_trades": 12,
+      "losing_trades": 16,
+      "win_rate_pct": 42.86,
+      "profit_factor": 1.92,
+      "max_drawdown_dollars": -130.58,
+      "max_drawdown_pct": -12.34,
+      "annualized_volatility_pct": 16.3,
+      "sharpe_ratio": 0.921,
+      "sortino_ratio": 1.032,
+      "exposure_pct": 62.3,
+      "total_bars": 252,
+      "slippage_bps": 5.0,
+      "open_position": {
+        "shares": 3,
+        "entry_price": 331.8659,
+        "current_price": 341.27,
+        "unrealized_pnl": 27.21,
+        "entry_date": "2026-10-09 00:00:00"
+      }
+    }
+  ],
+  "phase_5_cost_sensitivity": [
+    {
+      "slippage_bps": 0.0,
+      "final_equity": 1170.56,
+      "net_profit_dollars": 170.56,
+      "net_return_pct": 17.06,
+      "total_trades": 28,
+      "win_rate_pct": 46.43,
+      "sharpe_ratio": 1.062,
+      "max_drawdown_pct": -11.8
+    },
+    {
+      "slippage_bps": 5.0,
+      "final_equity": 1146.55,
+      "net_profit_dollars": 146.55,
+      "net_return_pct": 14.66,
+      "total_trades": 28,
+      "win_rate_pct": 42.86,
+      "sharpe_ratio": 0.921,
+      "max_drawdown_pct": -12.34
+    },
+    {
+      "slippage_bps": 10.0,
+      "final_equity": 1122.55,
+      "net_profit_dollars": 122.55,
+      "net_return_pct": 12.25,
+      "total_trades": 28,
+      "win_rate_pct": 39.29,
+      "sharpe_ratio": 0.781,
+      "max_drawdown_pct": -12.9
+    },
+    {
+      "slippage_bps": 15.0,
+      "final_equity": 1098.54,
+      "net_profit_dollars": 98.54,
+      "net_return_pct": 9.85,
+      "total_trades": 28,
+      "win_rate_pct": 39.29,
+      "sharpe_ratio": 0.642,
+      "max_drawdown_pct": -13.61
+    }
+  ],
+  "phase_6_shadow_signal": {
+    "model_version": "HYDRA_V2.4.2+_MasterSprint_Tuned_LGB",
+    "model_family": "LightGBM",
+    "feature_set": "Set_B_Scale_Invariant",
+    "data_cutoff_timestamp": "2026-10-13 00:00:00",
+    "latest_close_price": 341.27,
+    "latest_sma_200": 291.09,
+    "macro_bull_regime": true,
+    "probabilities": {
+      "P_SELL": 0.4206,
+      "P_HOLD": 0.0809,
+      "P_BUY": 0.4984
+    },
+    "locked_decision_threshold": 0.45,
+    "current_position_state": "IN_LONG",
+    "emitted_action": "HOLD",
+    "suppression_or_action_reason": "HOLD_MAINTAINED_EXISTING_LONG (P(BUY)=0.498)",
+    "intended_execution_assumption": "No execution if FLAT/HOLD. If action is BUY, target fill is Open[t+1] + 5 bps adverse slippage. SHADOW/PAPER MODE ONLY \u2014 ZERO BROKER ROUTING.",
+    "timestamp_generated_utc": "2026-10-16T09:02:31.938562+00:00"
+  },
+  "phase_7_acceptance_gates": [
+    {
+      "gate": "Automated Test Suite",
+      "required_criterion": "100% pass (0 failures)",
+      "observed_value": "287 passed, 0 failed",
+      "verdict": "PASS"
+    },
+    {
+      "gate": "Frozen Strategy Manifest Hash",
+      "required_criterion": "Byte-for-byte identical (d580b50a...)",
+      "observed_value": "d580b50a441c2f5a... (matches exactly)",
+      "verdict": "PASS"
+    },
+    {
+      "gate": "Pinned Dataset Hash",
+      "required_criterion": "Byte-for-byte identical (e764c60c...)",
+      "observed_value": "e764c60cb390d117... (matches exactly)",
+      "verdict": "PASS"
+    },
+    {
+      "gate": "Causal Execution Invariants",
+      "required_criterion": "Next-bar execution, whole shares, non-negative cash",
+      "observed_value": "All 287 invariant tests verified",
+      "verdict": "PASS"
+    },
+    {
+      "gate": "Penny-Exact Trade Ledger Accounting",
+      "required_criterion": "Ending equity == Cash + Position Value; reconciles to the penny",
+      "observed_value": "100% exact cent reconciliation across all fills",
+      "verdict": "PASS"
+    },
+    {
+      "gate": "Multiclass Brier Score",
+      "required_criterion": "<= 0.2000",
+      "observed_value": "0.5917",
+      "verdict": "FAIL"
+    },
+    {
+      "gate": "Brier Skill Score (BSS)",
+      "required_criterion": "> 0.00%",
+      "observed_value": "-2.46%",
+      "verdict": "FAIL"
+    },
+    {
+      "gate": "Expected Calibration Error (ECE)",
+      "required_criterion": "<= 0.0800",
+      "observed_value": "0.0858",
+      "verdict": "FAIL"
+    },
+    {
+      "gate": "Out-of-Sample Cost-Adjusted Expectancy",
+      "required_criterion": "Positive net return after 5 bps slippage & ticket commissions",
+      "observed_value": "+14.66% ($1146.55)",
+      "verdict": "PASS"
+    },
+    {
+      "gate": "Benchmark Comparison vs 200-Day SMA",
+      "required_criterion": "Net Alpha > 0 over 200-day SMA (+26.57%)",
+      "observed_value": "Trailed 200-day SMA by 11.91%",
+      "verdict": "FAIL"
+    },
+    {
+      "gate": "Prospective Closed Paper Trades",
+      "required_criterion": ">= 50 independent closed prospective trades",
+      "observed_value": "28 closed forward trades (17 trades)",
+      "verdict": "PENDING"
+    },
+    {
+      "gate": "Live-Money Capital Deployment",
+      "required_criterion": "All 11 gates cleared",
+      "observed_value": "Multiple predictive quality and benchmark gates failed",
+      "verdict": "STRICT NO-GO"
+    }
+  ]
+}

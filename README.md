@@ -5,7 +5,7 @@
 [![Next.js](https://img.shields.io/badge/Next.js-16.2+-black.svg?logo=next.js&logoColor=white)](https://nextjs.org/)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](#)
 [![Code Style: Ruff](https://img.shields.io/badge/Code%20Style-Ruff-black.svg)](https://github.com/astral-sh/ruff)
-[![Tests: 279 Passed](https://img.shields.io/badge/Tests-279%20Passed-brightgreen.svg)](#)
+[![Tests: 293 Passed](https://img.shields.io/badge/Tests-293%20Passed-brightgreen.svg)](#)
 
 HYDRA is an institutional quantitative trading, machine learning research, and systematic risk management platform designed for US equity markets. The system couples multi-modal financial data ingestion, causal stationarized feature engineering, multi-agent model consensus (XGBoost, LightGBM, neural branches, DQN), macroeconomic regime filters, and deterministic chronological portfolio execution simulation.
 
@@ -154,7 +154,8 @@ The platform answers how a hypothetical **US$1,000.00 cash portfolio** performed
 | **20-Day Donchian Breakout** | $1,000.00 | $314.28 | **$996.82** | **-$3.18** | **-0.32%** | 3 | 66.7% | -15.08% | 0.064 | 2 shares @ $314.61 (unrealized +$52.33) |
 | **Dip-Entry in Uptrend** | $1,000.00 | $969.15 | **$969.15** | **-$30.85** | **-3.09%** | 5 | 40.0% | -12.26% | -0.224 | FLAT (0 shares) |
 | **HYDRA Frozen V2.4 ML** | $1,000.00 | $1,000.00 | **$1,000.00** | **$0.00** | **+0.00%** | 0 | N/A | 0.00% | 0.000 | FLAT (100% Cash; 0 BUY signals) |
-| **HYDRA Remediated ML Candidate** | $1,000.00 | $1,000.00 | **$1,000.00** | **$0.00** | **+0.00%** | 0 | N/A | 0.00% | 0.000 | FLAT (100% Cash; 0 BUY signals) |
+| **HYDRA Remediated ML Baseline** | $1,000.00 | $1,000.00 | **$1,000.00** | **$0.00** | **+0.00%** | 0 | N/A | 0.00% | 0.000 | FLAT (100% Cash; 0 BUY signals) |
+| **HYDRA Master Sprint Tuned LightGBM** | $1,000.00 | $122.74 | **$1,146.55** | **+$146.55** | **+14.66%** | **28** | **42.9%** | **-12.34%** | **0.921** | 3 shares @ $331.87 (unrealized +$27.21) |
 
 ---
 
@@ -206,9 +207,9 @@ pip install -r requirements.txt
 ```
 
 ### 8.3 Automated Verification
-Run the complete 279-test regression and quantitative test suite:
+Run the complete 293-test regression and quantitative test suite:
 ```bash
-# Run full pytest test suite (all 279 tests must pass):
+# Run full pytest test suite (all 293 tests must pass):
 python -m pytest tests/
 
 # Execute Workstream 1 Forensics (Lineage & target forensics):
@@ -216,6 +217,12 @@ python scripts/research/workstream_1_target_and_feature_forensics.py
 
 # Execute Workstream 2 Baselines & $1,000 Portfolio Simulation:
 python scripts/research/workstream_2_directional_baselines.py
+
+# Execute Workstream 4 Abstention Audit & Cent-Reconciliation:
+python scripts/research/workstream_4_abstention_and_threshold_audit.py
+
+# Execute Master Research-to-Validation Sprint (Phases 0 to 7):
+python scripts/research/master_research_validation_sprint.py
 ```
 
 ---
@@ -224,12 +231,15 @@ python scripts/research/workstream_2_directional_baselines.py
 
 | Gate Metric | Threshold | Realized Value | Gate Status |
 |---|---|---|:---:|
-| **Net Out-of-Sample Expectancy** | $> 0.00$ after 5 bps slippage & fees | +$1,366.82 (SMA200) / +$154.36 (ML) | **PASS** |
-| **Multiclass Brier Score** | $\le 0.20$ | 0.4224 (Uncalibrated) | **FAIL** |
-| **Expected Calibration Error (ECE)** | $\le 0.08$ | 0.0413 | **PASS** |
-| **Prospective Closed Paper Trades** | $\ge 50$ independent closed trades | In Progress (Forward Paper Ledger) | **PENDING** |
+| **Net Out-of-Sample Expectancy** | $> 0.00$ after 5 bps slippage & fees | +$146.55 (Tuned ML / +14.66%) / +$265.66 (SMA200) | **PASS** |
+| **Multiclass Brier Score** | $\le 0.20$ | 0.5917 (Tuned LightGBM) | **FAIL** |
+| **Brier Skill Score (BSS)** | $> 0.00\%$ | −2.46% vs training prior | **FAIL** |
+| **Expected Calibration Error (ECE)** | $\le 0.08$ | 0.0858 (Tuned LightGBM) | **FAIL** |
+| **Benchmark Alpha vs 200-Day SMA** | Net Alpha $> 0$ over SMA (+26.57%) | Trailed 200-day SMA by 11.91% | **FAIL** |
+| **Prospective Closed Paper Trades** | $\ge 50$ independent closed trades | 28 closed trades in forward window | **PENDING** |
 | **Regime Coverage** | Positive expectancy across Bull & Bear | Capital preserved in 2018/2022 bear markets | **PASS** |
-| **Software Regression Suite** | 100% clean test passes | 279 passed / 0 failed | **PASS** |
+| **Software Regression Suite** | 100% clean test passes | 293 passed / 0 failed | **PASS** |
+| **Live Capital Deployment** | All gates cleared | Multiple predictive quality gates failed | **STRICT NO-GO** |
 
 ---
 

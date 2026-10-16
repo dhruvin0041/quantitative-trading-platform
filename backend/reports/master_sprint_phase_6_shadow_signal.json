@@ -1,0 +1,20 @@
+{
+  "model_version": "HYDRA_V2.4.2+_MasterSprint_Tuned_LGB",
+  "model_family": "LightGBM",
+  "feature_set": "Set_B_Scale_Invariant",
+  "data_cutoff_timestamp": "2026-10-13 00:00:00",
+  "latest_close_price": 341.27,
+  "latest_sma_200": 291.09,
+  "macro_bull_regime": true,
+  "probabilities": {
+    "P_SELL": 0.4206,
+    "P_HOLD": 0.0809,
+    "P_BUY": 0.4984
+  },
+  "locked_decision_threshold": 0.45,
+  "current_position_state": "IN_LONG",
+  "emitted_action": "HOLD",
+  "suppression_or_action_reason": "HOLD_MAINTAINED_EXISTING_LONG (P(BUY)=0.498)",
+  "intended_execution_assumption": "No execution if FLAT/HOLD. If action is BUY, target fill is Open[t+1] + 5 bps adverse slippage. SHADOW/PAPER MODE ONLY \u2014 ZERO BROKER ROUTING.",
+  "timestamp_generated_utc": "2026-10-16T09:02:31.938562+00:00"
+}
