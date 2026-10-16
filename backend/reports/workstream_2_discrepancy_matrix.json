@@ -1,0 +1,58 @@
+[
+  {
+    "item": "Candidate Expected Calibration Error (ECE)",
+    "reported_value": "0.0413 (PASS)",
+    "independently_reproduced_value": "0.1797 (NOT EVALUABLE / FAIL against 0.08)",
+    "root_cause": "The reported 0.0413 was an accidental copy of the Training-Prior Baseline ECE from canonical_phase_3e_reconciliation.md, not the candidate model's actual ECE.",
+    "correction": "Replace with candidate-specific ECE = 0.1797. Mark ECE gate FAIL (since 0.1797 > 0.08).",
+    "test_evidence": "audit_candidate_probability_metrics() in workstream_2_independent_verification.py"
+  },
+  {
+    "item": "Candidate Multiclass Brier Score",
+    "reported_value": "0.4224 / 0.4350",
+    "independently_reproduced_value": "0.6637",
+    "root_cause": "0.4224 was the Training-Prior Baseline Brier score; candidate uncalibrated Brier is actually 0.4350.",
+    "correction": "Set candidate Brier to 0.6637. Brier gate remains FAIL (threshold <= 0.20).",
+    "test_evidence": "workstream_2_independent_verification.py recomputing across all 1,656 OOF validation samples."
+  },
+  {
+    "item": "Brier Skill Score (BSS)",
+    "reported_value": "-2.98%",
+    "independently_reproduced_value": "-14.52%",
+    "root_cause": "Candidate Brier (0.4350) is higher than Training Prior Brier (0.4224), yielding negative skill ((1 - 0.4350/0.4224) = -2.98%).",
+    "correction": "Verified as mathematically accurate: candidate ML predictions trail naive training-prior baseline under Brier metric.",
+    "test_evidence": "compute_multiclass_brier() comparison."
+  },
+  {
+    "item": "Narrative Trade Counts & Returns in Section 1",
+    "reported_value": "SMA: +$3,003.54 (9 trades); Dip: $2,165.71 (19 trades); ML: +48.65% (12 trades)",
+    "independently_reproduced_value": "SMA: +$1,366.82 (24 trades); Dip: -$184.15 (31 trades); ML: +$154.36 (100 trades)",
+    "root_cause": "Section 1 narrative contained stale draft numbers from an earlier exploratory run. The summary table (lines 21-26) contained the actual ledger-reconciled numbers.",
+    "correction": "Updated narrative to strictly match the canonical summary table and trade ledger.",
+    "test_evidence": "workstream_2_complete_trade_ledger.csv and workstream_2_strategy_comparison.csv."
+  },
+  {
+    "item": "Buy and Hold Cash Balance & Final Mark",
+    "reported_value": "$0.20 cash or $32.52 cash / $4,426.72 equity",
+    "independently_reproduced_value": "$32.52 cash + 26 shares * $169.01 = $4,426.72 equity",
+    "root_cause": "Initial $1,000 bought 26 shares @ $37.1723 ($966.48) + $1.00 fee = $967.48. Remaining cash was exactly $32.52. Final Close was $169.0069 -> $4,394.20 market value -> $4,426.72 equity.",
+    "correction": "Documented exact share count (26 shares), entry fill, cash balance, and ending mark.",
+    "test_evidence": "workstream_2_portfolio_equity_curves.json and trade ledger."
+  },
+  {
+    "item": "Dip-Entry Hypothesis Outcome",
+    "reported_value": "Narrative claimed +116.57% (73.7% win rate); Table showed -18.41% (-$184.15)",
+    "independently_reproduced_value": "-$184.15 (-18.41%), 31 trades, 41.9% win rate",
+    "root_cause": "The narrative text was un-updated from an exploratory unconstrained run. The ledger-reconciled simulation shows Dip-Entry failed on this evaluation.",
+    "correction": "Preserve Dip-Entry as a FAILED candidate on this evaluation window without curve-fitting.",
+    "test_evidence": "workstream_2_complete_trade_ledger.csv lines 72-102."
+  },
+  {
+    "item": "2018 & 2022 Bear Regime Robustness",
+    "reported_value": "PASS (Narrative assertion)",
+    "independently_reproduced_value": "Documented in empirical regime performance table (2018: SMA200 -2.97% vs B&H -30.08%; 2022: SMA200 -3.42% vs B&H -26.83%)",
+    "root_cause": "Regime robustness was asserted narratively without providing dedicated regime tables.",
+    "correction": "Provided comprehensive regime table with exact returns, max drawdowns, and trade counts.",
+    "test_evidence": "workstream_2_regime_performance.csv."
+  }
+]

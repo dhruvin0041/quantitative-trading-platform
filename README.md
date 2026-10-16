@@ -129,7 +129,7 @@ The platform answers how a hypothetical **US$1,000.00 cash portfolio** performed
 
 | Strategy | Initial Capital | Final Cash | Final Equity | Net P&L ($) | Return (%) | CAGR (%) | Trades | Win Rate | Profit Factor | Max DD (%) | Sharpe | Exposure |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| **Buy & Hold** | $1,000.00 | $0.20 | **$4,426.72** | +$3,426.72 | **+342.67%** | 25.04% | 0 (1 open) | N/A | N/A | -37.66% | 0.900 | 100.0% |
+| **Buy & Hold** | $1,000.00 | $32.52 | **$4,426.72** | +$3,426.72 | **+342.67%** | 25.04% | 0 (1 open) | N/A | N/A | -37.66% | 0.900 | 100.0% |
 | **200-Day SMA Trend** | $1,000.00 | $2,366.82 | **$2,366.82** | +$1,366.82 | **+136.68%** | 14.15% | 24 | 33.3% | 2.51 | **-30.49%** | **0.646** | 68.4% |
 | **20-Day Donchian Breakout** | $1,000.00 | $2,342.52 | **$2,342.52** | +$1,342.52 | **+134.25%** | 13.98% | 22 | 54.5% | 2.18 | -31.84% | 0.759 | 59.2% |
 | **Dip-Entry in Uptrend** | $1,000.00 | $815.85 | **$815.85** | -$184.15 | **-18.41%** | -3.12% | 31 | 41.9% | 0.81 | -37.37% | -0.119 | 31.8% |
@@ -137,11 +137,24 @@ The platform answers how a hypothetical **US$1,000.00 cash portfolio** performed
 | **HYDRA Remediated ML Candidate** | $1,000.00 | $1,154.36 | **$1,154.36** | +$154.36 | **+15.44%** | 2.21% | 100 | 50.0% | 1.15 | -25.21% | 0.220 | 54.8% |
 
 > [!NOTE]
-> Complete trade-by-trade ledgers (including every winning and losing trade), chronological signal logs, and daily equity curves are stored in `backend/reports/`:
+> Reconciled accounting: Buy & Hold purchased 26 shares @ $37.1723 ($966.48) + $1.00 commission = $967.48 on 2017-08-25, leaving $32.52 cash. Marked at final Close $169.0069 on 2024-03-25, equity is $32.52 + (26 × $169.0069) = **$4,426.72**. All active systematic strategies closed FLAT at the end of the 1,656-bar simulation, perfectly reconciling cash to equity.
+>
+> Complete trade-by-trade ledgers, chronological signal logs, and daily equity curves are stored in `backend/reports/`:
 > - [`workstream_2_complete_trade_ledger.csv`](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/reports/workstream_2_complete_trade_ledger.csv)
-> - [`workstream_2_chronological_signals.csv`](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/reports/workstream_2_chronological_signals.csv)
+> - [`workstream_2_regime_performance.csv`](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/reports/workstream_2_regime_performance.csv)
+> - [`workstream_2_discrepancy_matrix.csv`](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/reports/workstream_2_discrepancy_matrix.csv)
 > - [`workstream_2_portfolio_equity_curves.csv`](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/reports/workstream_2_portfolio_equity_curves.csv)
-> - [`workstream_2_slippage_sensitivity.csv`](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/reports/workstream_2_slippage_sensitivity.csv)
+
+### Forward Portfolio Simulation (1-Year Window: 2025-10-13 to 2026-10-13, $1,000 Capital):
+
+| Strategy | Initial Capital | Final Cash | Final Equity | Net P&L ($) | Return (%) | Trades | Win Rate | Max DD (%) | Sharpe | Active Position (as of 2026-10-13) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| **Buy & Hold** | $1,000.00 | $15.72 | **$1,380.82** | **+$380.82** | **+38.08%** | 0 | N/A | -13.61% | 1.469 | 4 shares @ $245.82 (unrealized +$380.82) |
+| **200-Day SMA Trend** | $1,000.00 | $241.85 | **$1,265.66** | **+$265.66** | **+26.57%** | 1 | 100.0% | -13.61% | 1.238 | 3 shares @ $253.75 (unrealized +$261.55) |
+| **20-Day Donchian Breakout** | $1,000.00 | $314.28 | **$996.82** | **-$3.18** | **-0.32%** | 3 | 66.7% | -15.08% | 0.064 | 2 shares @ $314.61 (unrealized +$52.33) |
+| **Dip-Entry in Uptrend** | $1,000.00 | $969.15 | **$969.15** | **-$30.85** | **-3.09%** | 5 | 40.0% | -12.26% | -0.224 | FLAT (0 shares) |
+| **HYDRA Frozen V2.4 ML** | $1,000.00 | $1,000.00 | **$1,000.00** | **$0.00** | **+0.00%** | 0 | N/A | 0.00% | 0.000 | FLAT (100% Cash; 0 BUY signals) |
+| **HYDRA Remediated ML Candidate** | $1,000.00 | $1,000.00 | **$1,000.00** | **$0.00** | **+0.00%** | 0 | N/A | 0.00% | 0.000 | FLAT (100% Cash; 0 BUY signals) |
 
 ---
 
