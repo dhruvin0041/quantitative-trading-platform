@@ -5,7 +5,7 @@
 [![Next.js](https://img.shields.io/badge/Next.js-16.2+-black.svg?logo=next.js&logoColor=white)](https://nextjs.org/)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](#)
 [![Code Style: Ruff](https://img.shields.io/badge/Code%20Style-Ruff-black.svg)](https://github.com/astral-sh/ruff)
-[![Tests: 301 Passed](https://img.shields.io/badge/Tests-301%20Passed-brightgreen.svg)](#)
+[![Tests: 308 Passed](https://img.shields.io/badge/Tests-308%20Passed-brightgreen.svg)](#)
 
 HYDRA is an institutional quantitative trading, machine learning research, and systematic risk management platform designed for US equity markets. The system couples multi-modal financial data ingestion, causal stationarized feature engineering, multi-agent model consensus (XGBoost, LightGBM, neural branches, DQN), macroeconomic regime filters, and deterministic chronological portfolio execution simulation.
 
@@ -207,9 +207,9 @@ pip install -r requirements.txt
 ```
 
 ### 8.3 Automated Verification
-Run the complete 301-test regression and quantitative test suite:
+Run the complete 308-test regression and quantitative test suite:
 ```bash
-# Run full pytest test suite (all 301 tests must pass):
+# Run full pytest test suite (all 308 tests must pass):
 python -m pytest tests/
 
 # Execute Workstream 1 Forensics (Lineage & target forensics):
@@ -226,6 +226,9 @@ python scripts/research/master_research_validation_sprint.py
 
 # Execute V2.4.3 Hierarchical Regime-Switching Strategy Research:
 python scripts/research/v2_4_3_hierarchical_regime_strategy.py
+
+# Execute V2.4.4 Optimization Lineage, Deflated Sharpe Ratio & Multi-Asset Generalization:
+python scripts/research/v2_4_4_optimization_lineage_and_generalization.py
 ```
 
 ---
@@ -234,15 +237,17 @@ python scripts/research/v2_4_3_hierarchical_regime_strategy.py
 
 | Gate Metric | Threshold | Realized Value | Gate Status |
 |---|---|---|:---:|
-| **Net Out-of-Sample Expectancy** | $> 0.00$ after 5 bps slippage & fees | +$188.34 (Hierarchical / +18.83%) / +$265.66 (SMA200) | **PASS** |
+| **Net Out-of-Sample Expectancy** | $> 0.00$ after 5 bps slippage & fees | AAPL +16.25%, MSFT +7.29%, NVDA +13.26%, SPY +9.44% | **PASS** |
+| **Multi-Asset Structural Value vs Pure ML** | Hierarchical exceeds Pure ML across universe | Outperformed on MSFT (+8.51%), NVDA (+10.71%), SPY (+6.78%) | **PASS** |
+| **Deflated Sharpe Ratio (DSR)** | $p < 0.05$ across 12 parameter trials | $p = 0.5538$ (DSR Prob = 44.62%, $E[\max] = 1.077 > 1.024$) | **FAIL** |
 | **Multiclass Brier Score** | $\le 0.20$ | 0.5917 (Tuned LightGBM) | **FAIL** |
-| **Brier Skill Score (BSS)** | $> 0.00\%$ | −2.45% vs training prior | **FAIL** |
+| **Brier Skill Score (BSS)** | $> 0.00\%$ | −2.45% vs empirical reference prior | **FAIL** |
 | **Expected Calibration Error (ECE)** | $\le 0.08$ | 0.0816 (Tuned LightGBM) | **FAIL** |
-| **Benchmark Alpha vs 200-Day SMA** | Net Alpha $> 0$ over SMA (+26.57%) | Trailed 200-day SMA by 7.74% | **FAIL** |
-| **Prospective Closed Paper Trades** | $\ge 50$ independent closed trades | 18 closed forward trades in Hierarchical strategy | **PENDING** |
-| **Regime Coverage** | Positive expectancy across Bull & Bear | Capital preserved in bear markets; 50% win rate | **PASS** |
-| **Software Regression Suite** | 100% clean test passes | 301 passed / 0 failed | **PASS** |
-| **Live Capital Deployment** | All gates cleared | Multiple predictive quality & benchmark gates failed | **STRICT NO-GO** |
+| **Benchmark Alpha vs 200-Day SMA** | Net Alpha $> 0$ over SMA | Trailed 200-day SMA on AAPL (-10.32%) and SPY (-1.28%) | **FAIL** |
+| **Prospective Closed Paper Trades** | $\ge 50$ independent closed trades | 18 closed forward trades in Hierarchical AAPL strategy | **PENDING** |
+| **Regime Transition Churn Prevention** | Zero duplicate buys or whipsaw exits during oscillation | 1 BUY, 0 SELLs across 50 oscillating bars | **PASS** |
+| **Software Regression Suite** | 100% clean test passes | 308 passed / 0 failed | **PASS** |
+| **Live Capital Deployment** | All gates cleared | Multiple predictive quality, DSR, & benchmark gates failed | **STRICT NO-GO** |
 
 ---
 

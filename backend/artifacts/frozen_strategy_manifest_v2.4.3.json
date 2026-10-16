@@ -1,0 +1,61 @@
+{
+  "strategy_version": "HYDRA_V2.4.3_Hierarchical_Regime_Strategy",
+  "date_frozen": "2026-10-16",
+  "governance_status": "FROZEN_RESEARCH_CANDIDATE_FOR_PAPER_EVALUATION",
+  "live_trading_permissible": false,
+  "primary_asset": "AAPL",
+  "macro_filter_rules": {
+    "delta_sma_distance": 0.07,
+    "volatility_threshold": 0.02,
+    "strong_uptrend": "Close >= 1.07 * SMA200 and Normalized_SMA_Slope_20 >= 0",
+    "neutral_consolidation": "0 <= (Close - SMA200)/SMA200 < 0.07, or Close >= 1.07*SMA200 with negative slope",
+    "downtrend": "Close < SMA200",
+    "elevated_volatility": "ATR_over_Close > 0.020"
+  },
+  "ml_agent_specifications": {
+    "model_family": "LightGBM",
+    "hyperparameters": {
+      "max_depth": 4,
+      "num_leaves": 25,
+      "learning_rate": 0.010086225113452831,
+      "n_estimators": 155,
+      "subsample": 0.685157783639564,
+      "colsample_bytree": 0.7524264148021685,
+      "min_child_samples": 33,
+      "random_state": 42,
+      "verbose": -1,
+      "n_jobs": 1
+    },
+    "feature_set": "Set_B_Scale_Invariant",
+    "feature_columns": [
+      "RSI",
+      "ADX",
+      "Stoch_K",
+      "Stoch_D",
+      "Volatility_Ratio",
+      "Price_vs_SMA200",
+      "BB_Position",
+      "BB_Width",
+      "MACD_Norm",
+      "Return_1d",
+      "Return_5d",
+      "Return_20d",
+      "Volume_Ratio"
+    ],
+    "decision_threshold": 0.45
+  },
+  "execution_rules": {
+    "timing": "Signal generated at Close[t] (16:00 ET); executed at Open[t+1] (09:30 ET)",
+    "slippage_bps": 5.0,
+    "commission_per_share": 0.005,
+    "min_commission": 1.0,
+    "whole_shares_only": true,
+    "cash_constraint": "Non-negative available cash"
+  },
+  "target_geometry": {
+    "profit_target_multiplier": 2.0,
+    "stop_loss_multiplier": 1.5,
+    "horizon_bars": 15
+  },
+  "manifest_sha256": "e3468981077500b203a9ea5608bf657723090be90e90fd099accd2814dd5f32f"
+}
