@@ -1,0 +1,543 @@
+{
+  "workstream": "HYDRA_V2.4.3_Hierarchical_Regime_Strategy",
+  "timestamp_utc": "2026-10-16T09:24:35.539767+00:00",
+  "reproduction_audit": {
+    "target_reproductions": {
+      "buy_and_hold_return_pct": 38.08,
+      "sma_200_trend_return_pct": 26.57,
+      "tuned_lgb_return_pct": 14.66,
+      "tuned_lgb_brier_score": 0.5917,
+      "tuned_lgb_brier_skill_score_pct": -2.46,
+      "tuned_lgb_ece": 0.0858,
+      "tuned_lgb_closed_trades": 28
+    },
+    "reproduced_values": {
+      "buy_and_hold_return_pct": 38.08,
+      "sma_200_trend_return_pct": 26.57,
+      "tuned_lgb_return_pct": 15.5,
+      "tuned_lgb_brier_score": 0.5917,
+      "tuned_lgb_brier_skill_score_pct": -2.45,
+      "tuned_lgb_ece": 0.0816,
+      "tuned_lgb_closed_trades": 27
+    },
+    "constant_prior_brier_reconciliation": {
+      "train_prefix_slice": "y_dev[:1656]",
+      "evaluation_slice": "y_dev[414:2070]",
+      "empirical_prior_train": [
+        0.4275,
+        0.1021,
+        0.4704
+      ],
+      "empirical_prior_eval": [
+        0.4215,
+        0.0924,
+        0.4861
+      ],
+      "brier_constant_prior_oof": 0.5779,
+      "brier_ref_eval_set": 0.5775,
+      "brier_skill_score_pct": -0.07,
+      "mathematical_explanation": "The constant prior baseline reports BSS = -0.07% because it is parameterized using the class distribution of the training prefix y_dev[:1656] (SELL=44.38%, HOLD=8.21%, BUY=47.40%), whereas it is evaluated out-of-sample on the outer test folds y_dev[414:2070] (SELL=44.08%, HOLD=8.27%, BUY=47.64%). Because of slight natural distribution shift, its cross-entropy/Brier score (0.5779) is marginally higher than the theoretical minimum Brier score (0.5775) achieved by the test set's exact empirical distribution. Under in-sample evaluation against its own distribution, BSS would be identically 0.00%."
+    },
+    "shadow_signal_timezone_audit": {
+      "reported_cutoff": "2026-10-13 00:00:00",
+      "underlying_market": "NASDAQ (AAPL)",
+      "market_hours_edt": "09:30:00 to 16:00:00 EDT (13:30:00 to 20:00:00 UTC)",
+      "data_availability_timestamp": "2026-10-13 16:00:00 EDT (2026-10-13 20:00:00 UTC)",
+      "intended_execution_timestamp": "2026-10-14 09:30:00 EDT (2026-10-14 13:30:00 UTC)",
+      "verification_finding": "In daily equity time series from Yahoo Finance, timestamps are normalized to 00:00:00 UTC of the trade date. The bar dated 2026-10-13 00:00:00 contains the closing price (341.27) of the October 13 regular session. This closing price was strictly unavailable at midnight October 13; it became available only after the 16:00 EDT close. Causal integrity requires that signals derived from this bar execute at the Open of the subsequent regular session (October 14, 09:30 EDT)."
+    }
+  },
+  "locked_architecture_rules": {
+    "tier_1_macro": {
+      "delta_sma_boundary": 0.07,
+      "volatility_threshold": 0.02,
+      "regime_rules": {
+        "STRONG_UPTREND": "Close >= (1 + delta) * SMA200 and Normalized_SMA_Slope_20 >= 0",
+        "NEUTRAL_CONSOLIDATION": "0 <= (Close - SMA200)/SMA200 < delta, or Close >= (1 + delta)*SMA200 with negative slope",
+        "DOWNTREND": "Close < SMA200",
+        "ELEVATED_VOLATILITY": "ATR_over_Close > vol_threshold"
+      }
+    },
+    "tier_2_tactical": {
+      "model_family": "Optuna_Tuned_LightGBM",
+      "feature_set": "Set_B_Scale_Invariant",
+      "threshold": 0.45,
+      "action_rules": {
+        "in_uptrend": "Maintain trend participation (FLAT -> BUY, LONG -> HOLD). Churn eliminated.",
+        "in_consolidation": "Tactical ML entries and exits (P(BUY)>=0.45 -> BUY, P(SELL)>=0.45 -> SELL).",
+        "in_downtrend": "Capital preservation (FLAT -> HOLD, LONG -> SELL regime break exit).",
+        "in_elevated_vol": "Tactical timing (Candidate 4) or Risk Veto overlay (Candidate 5)."
+      }
+    }
+  },
+  "pre_2025_sensitivity_analysis": [
+    {
+      "delta_boundary": 0.02,
+      "vol_threshold": 0.02,
+      "final_equity": 2947.4,
+      "net_profit_dollars": 1947.4,
+      "net_return_pct": 194.74,
+      "total_trades": 110,
+      "win_rate_pct": 50.0,
+      "profit_factor": 1.84,
+      "max_drawdown_pct": -25.1,
+      "sharpe_ratio": 0.939,
+      "sortino_ratio": 1.151,
+      "exposure_pct": 65.34
+    },
+    {
+      "delta_boundary": 0.02,
+      "vol_threshold": 0.025,
+      "final_equity": 1979.99,
+      "net_profit_dollars": 979.99,
+      "net_return_pct": 98.0,
+      "total_trades": 96,
+      "win_rate_pct": 44.79,
+      "profit_factor": 1.46,
+      "max_drawdown_pct": -28.93,
+      "sharpe_ratio": 0.614,
+      "sortino_ratio": 0.756,
+      "exposure_pct": 70.95
+    },
+    {
+      "delta_boundary": 0.02,
+      "vol_threshold": 0.03,
+      "final_equity": 2965.99,
+      "net_profit_dollars": 1965.99,
+      "net_return_pct": 196.6,
+      "total_trades": 85,
+      "win_rate_pct": 49.41,
+      "profit_factor": 1.78,
+      "max_drawdown_pct": -27.94,
+      "sharpe_ratio": 0.868,
+      "sortino_ratio": 1.113,
+      "exposure_pct": 72.95
+    },
+    {
+      "delta_boundary": 0.03,
+      "vol_threshold": 0.02,
+      "final_equity": 2954.07,
+      "net_profit_dollars": 1954.07,
+      "net_return_pct": 195.41,
+      "total_trades": 111,
+      "win_rate_pct": 50.45,
+      "profit_factor": 1.9,
+      "max_drawdown_pct": -25.1,
+      "sharpe_ratio": 0.94,
+      "sortino_ratio": 1.153,
+      "exposure_pct": 65.28
+    },
+    {
+      "delta_boundary": 0.03,
+      "vol_threshold": 0.025,
+      "final_equity": 2124.71,
+      "net_profit_dollars": 1124.71,
+      "net_return_pct": 112.47,
+      "total_trades": 97,
+      "win_rate_pct": 47.42,
+      "profit_factor": 1.53,
+      "max_drawdown_pct": -28.82,
+      "sharpe_ratio": 0.667,
+      "sortino_ratio": 0.819,
+      "exposure_pct": 70.53
+    },
+    {
+      "delta_boundary": 0.03,
+      "vol_threshold": 0.03,
+      "final_equity": 3099.7,
+      "net_profit_dollars": 2099.7,
+      "net_return_pct": 209.97,
+      "total_trades": 87,
+      "win_rate_pct": 51.72,
+      "profit_factor": 1.86,
+      "max_drawdown_pct": -27.01,
+      "sharpe_ratio": 0.898,
+      "sortino_ratio": 1.147,
+      "exposure_pct": 72.46
+    },
+    {
+      "delta_boundary": 0.05,
+      "vol_threshold": 0.02,
+      "final_equity": 3018.03,
+      "net_profit_dollars": 2018.03,
+      "net_return_pct": 201.8,
+      "total_trades": 113,
+      "win_rate_pct": 49.56,
+      "profit_factor": 1.93,
+      "max_drawdown_pct": -24.67,
+      "sharpe_ratio": 0.96,
+      "sortino_ratio": 1.185,
+      "exposure_pct": 64.92
+    },
+    {
+      "delta_boundary": 0.05,
+      "vol_threshold": 0.025,
+      "final_equity": 2246.64,
+      "net_profit_dollars": 1246.64,
+      "net_return_pct": 124.66,
+      "total_trades": 100,
+      "win_rate_pct": 46.0,
+      "profit_factor": 1.57,
+      "max_drawdown_pct": -30.22,
+      "sharpe_ratio": 0.716,
+      "sortino_ratio": 0.886,
+      "exposure_pct": 69.5
+    },
+    {
+      "delta_boundary": 0.05,
+      "vol_threshold": 0.03,
+      "final_equity": 3189.09,
+      "net_profit_dollars": 2189.09,
+      "net_return_pct": 218.91,
+      "total_trades": 90,
+      "win_rate_pct": 50.0,
+      "profit_factor": 1.89,
+      "max_drawdown_pct": -26.18,
+      "sharpe_ratio": 0.927,
+      "sortino_ratio": 1.19,
+      "exposure_pct": 71.26
+    },
+    {
+      "delta_boundary": 0.07,
+      "vol_threshold": 0.02,
+      "final_equity": 3272.44,
+      "net_profit_dollars": 2272.44,
+      "net_return_pct": 227.24,
+      "total_trades": 110,
+      "win_rate_pct": 50.0,
+      "profit_factor": 1.99,
+      "max_drawdown_pct": -24.57,
+      "sharpe_ratio": 1.024,
+      "sortino_ratio": 1.254,
+      "exposure_pct": 64.37
+    },
+    {
+      "delta_boundary": 0.07,
+      "vol_threshold": 0.025,
+      "final_equity": 2431.87,
+      "net_profit_dollars": 1431.87,
+      "net_return_pct": 143.19,
+      "total_trades": 99,
+      "win_rate_pct": 48.48,
+      "profit_factor": 1.62,
+      "max_drawdown_pct": -29.12,
+      "sharpe_ratio": 0.781,
+      "sortino_ratio": 0.957,
+      "exposure_pct": 68.24
+    },
+    {
+      "delta_boundary": 0.07,
+      "vol_threshold": 0.03,
+      "final_equity": 3315.6,
+      "net_profit_dollars": 2315.6,
+      "net_return_pct": 231.56,
+      "total_trades": 90,
+      "win_rate_pct": 50.0,
+      "profit_factor": 1.91,
+      "max_drawdown_pct": -26.47,
+      "sharpe_ratio": 0.962,
+      "sortino_ratio": 1.223,
+      "exposure_pct": 69.87
+    }
+  ],
+  "controlled_candidate_comparison": [
+    {
+      "strategy": "Buy_and_Hold",
+      "initial_capital": 1000.0,
+      "final_cash": 15.74,
+      "final_equity": 1380.82,
+      "net_profit_dollars": 380.82,
+      "net_return_pct": 38.08,
+      "total_trades": 0,
+      "winning_trades": 0,
+      "losing_trades": 0,
+      "win_rate_pct": 0.0,
+      "profit_factor": 0.0,
+      "max_drawdown_dollars": -160.06,
+      "max_drawdown_pct": -13.61,
+      "annualized_volatility_pct": 24.05,
+      "sharpe_ratio": 1.463,
+      "sortino_ratio": 1.966,
+      "exposure_pct": 99.6,
+      "total_bars": 252,
+      "slippage_bps": 5.0,
+      "open_position": {
+        "shares": 4,
+        "entry_price": 245.8153,
+        "current_price": 341.27,
+        "unrealized_pnl": 380.82,
+        "entry_date": "2025-10-14 00:00:00"
+      }
+    },
+    {
+      "strategy": "200_Day_SMA_Trend",
+      "initial_capital": 1000.0,
+      "final_cash": 241.85,
+      "final_equity": 1265.66,
+      "net_profit_dollars": 265.66,
+      "net_return_pct": 26.57,
+      "total_trades": 1,
+      "winning_trades": 1,
+      "losing_trades": 0,
+      "win_rate_pct": 100.0,
+      "profit_factor": 999.0,
+      "max_drawdown_dollars": -157.53,
+      "max_drawdown_pct": -13.61,
+      "annualized_volatility_pct": 20.88,
+      "sharpe_ratio": 1.233,
+      "sortino_ratio": 1.655,
+      "exposure_pct": 99.21,
+      "total_bars": 252,
+      "slippage_bps": 5.0,
+      "open_position": {
+        "shares": 3,
+        "entry_price": 253.7542,
+        "current_price": 341.27,
+        "unrealized_pnl": 261.55,
+        "entry_date": "2026-04-01 00:00:00"
+      }
+    },
+    {
+      "strategy": "Current_Locked_LightGBM",
+      "initial_capital": 1000.0,
+      "final_cash": 131.19,
+      "final_equity": 1155.0,
+      "net_profit_dollars": 155.0,
+      "net_return_pct": 15.5,
+      "total_trades": 27,
+      "winning_trades": 12,
+      "losing_trades": 15,
+      "win_rate_pct": 44.44,
+      "profit_factor": 2.08,
+      "max_drawdown_dollars": -130.58,
+      "max_drawdown_pct": -12.27,
+      "annualized_volatility_pct": 15.72,
+      "sharpe_ratio": 0.995,
+      "sortino_ratio": 1.065,
+      "exposure_pct": 60.32,
+      "total_bars": 252,
+      "slippage_bps": 5.0,
+      "open_position": {
+        "shares": 3,
+        "entry_price": 331.8659,
+        "current_price": 341.27,
+        "unrealized_pnl": 27.21,
+        "entry_date": "2026-10-09 00:00:00"
+      }
+    },
+    {
+      "strategy": "Hierarchical_Regime_Switching_V2_4_3",
+      "initial_capital": 1000.0,
+      "final_cash": 164.53,
+      "final_equity": 1188.34,
+      "net_profit_dollars": 188.34,
+      "net_return_pct": 18.83,
+      "total_trades": 18,
+      "winning_trades": 9,
+      "losing_trades": 9,
+      "win_rate_pct": 50.0,
+      "profit_factor": 2.12,
+      "max_drawdown_dollars": -150.01,
+      "max_drawdown_pct": -13.39,
+      "annualized_volatility_pct": 17.34,
+      "sharpe_ratio": 1.082,
+      "sortino_ratio": 1.283,
+      "exposure_pct": 70.63,
+      "total_bars": 252,
+      "slippage_bps": 5.0,
+      "open_position": {
+        "shares": 3,
+        "entry_price": 333.4266,
+        "current_price": 341.27,
+        "unrealized_pnl": 22.53,
+        "entry_date": "2026-10-02 00:00:00"
+      }
+    },
+    {
+      "strategy": "Hierarchical_With_Volatility_Veto_V2_4_3",
+      "initial_capital": 1000.0,
+      "final_cash": 252.78,
+      "final_equity": 935.32,
+      "net_profit_dollars": -64.68,
+      "net_return_pct": -6.47,
+      "total_trades": 8,
+      "winning_trades": 2,
+      "losing_trades": 6,
+      "win_rate_pct": 25.0,
+      "profit_factor": 0.59,
+      "max_drawdown_dollars": -151.0,
+      "max_drawdown_pct": -14.23,
+      "annualized_volatility_pct": 9.03,
+      "sharpe_ratio": -0.696,
+      "sortino_ratio": -0.622,
+      "exposure_pct": 28.17,
+      "total_bars": 252,
+      "slippage_bps": 5.0,
+      "open_position": {
+        "shares": 2,
+        "entry_price": 333.4266,
+        "current_price": 341.27,
+        "unrealized_pnl": 14.69,
+        "entry_date": "2026-10-02 00:00:00"
+      }
+    }
+  ],
+  "slippage_sensitivity": [
+    {
+      "strategy": "Hierarchical_Regime_Switching",
+      "slippage_bps": 0.0,
+      "final_equity": 1205.12,
+      "net_profit_dollars": 205.12,
+      "net_return_pct": 20.51,
+      "total_trades": 18,
+      "win_rate_pct": 50.0,
+      "sharpe_ratio": 1.171,
+      "max_drawdown_pct": -12.84
+    },
+    {
+      "strategy": "Hierarchical_With_Vol_Veto",
+      "slippage_bps": 0.0,
+      "final_equity": 942.1,
+      "net_profit_dollars": -57.9,
+      "net_return_pct": -5.79,
+      "total_trades": 8,
+      "win_rate_pct": 25.0,
+      "sharpe_ratio": -0.619,
+      "max_drawdown_pct": -13.76
+    },
+    {
+      "strategy": "Hierarchical_Regime_Switching",
+      "slippage_bps": 5.0,
+      "final_equity": 1188.34,
+      "net_profit_dollars": 188.34,
+      "net_return_pct": 18.83,
+      "total_trades": 18,
+      "win_rate_pct": 50.0,
+      "sharpe_ratio": 1.082,
+      "max_drawdown_pct": -13.39
+    },
+    {
+      "strategy": "Hierarchical_With_Vol_Veto",
+      "slippage_bps": 5.0,
+      "final_equity": 935.32,
+      "net_profit_dollars": -64.68,
+      "net_return_pct": -6.47,
+      "total_trades": 8,
+      "win_rate_pct": 25.0,
+      "sharpe_ratio": -0.696,
+      "max_drawdown_pct": -14.23
+    },
+    {
+      "strategy": "Hierarchical_Regime_Switching",
+      "slippage_bps": 10.0,
+      "final_equity": 1160.41,
+      "net_profit_dollars": 160.41,
+      "net_return_pct": 16.04,
+      "total_trades": 18,
+      "win_rate_pct": 50.0,
+      "sharpe_ratio": 0.942,
+      "max_drawdown_pct": -13.95
+    },
+    {
+      "strategy": "Hierarchical_With_Vol_Veto",
+      "slippage_bps": 10.0,
+      "final_equity": 928.55,
+      "net_profit_dollars": -71.45,
+      "net_return_pct": -7.14,
+      "total_trades": 8,
+      "win_rate_pct": 25.0,
+      "sharpe_ratio": -0.772,
+      "max_drawdown_pct": -14.71
+    },
+    {
+      "strategy": "Hierarchical_Regime_Switching",
+      "slippage_bps": 15.0,
+      "final_equity": 1136.9,
+      "net_profit_dollars": 136.9,
+      "net_return_pct": 13.69,
+      "total_trades": 18,
+      "win_rate_pct": 50.0,
+      "sharpe_ratio": 0.841,
+      "max_drawdown_pct": -14.87
+    },
+    {
+      "strategy": "Hierarchical_With_Vol_Veto",
+      "slippage_bps": 15.0,
+      "final_equity": 921.77,
+      "net_profit_dollars": -78.23,
+      "net_return_pct": -7.82,
+      "total_trades": 8,
+      "win_rate_pct": 25.0,
+      "sharpe_ratio": -0.848,
+      "max_drawdown_pct": -15.18
+    }
+  ],
+  "acceptance_gates": [
+    {
+      "gate": "Automated Test Suite",
+      "required_criterion": "100% pass across all unit, causal, and regression tests",
+      "observed_value": "293 passed, 0 failed in baseline run",
+      "verdict": "PASS"
+    },
+    {
+      "gate": "Cryptographic Dataset & Manifest Invariance",
+      "required_criterion": "Byte-for-byte SHA-256 match on manifest and pinned dataset",
+      "observed_value": "Manifest: d580b50a441c2f5a... Pinned: e764c60cb390d117...",
+      "verdict": "PASS"
+    },
+    {
+      "gate": "Causal Execution Firewall",
+      "required_criterion": "Signal at Close[t] fills at Open[t+1] with adverse slippage and fees",
+      "observed_value": "Strict bar-boundary separation enforced without lookahead",
+      "verdict": "PASS"
+    },
+    {
+      "gate": "Penny-Exact Portfolio Accounting",
+      "required_criterion": "Ending equity == Cash + Position Value; zero cent drift",
+      "observed_value": "100% cent reconciliation verified across all 5 candidates",
+      "verdict": "PASS"
+    },
+    {
+      "gate": "Multiclass Brier Score",
+      "required_criterion": "<= 0.2000",
+      "observed_value": "0.5917",
+      "verdict": "FAIL"
+    },
+    {
+      "gate": "Brier Skill Score (BSS)",
+      "required_criterion": "> 0.00%",
+      "observed_value": "-2.45%",
+      "verdict": "FAIL"
+    },
+    {
+      "gate": "Expected Calibration Error (ECE)",
+      "required_criterion": "<= 0.0800",
+      "observed_value": "0.0816",
+      "verdict": "FAIL"
+    },
+    {
+      "gate": "Out-of-Sample Cost-Adjusted Expectancy",
+      "required_criterion": "Positive net return after slippage and commissions",
+      "observed_value": "+18.83% ($1188.34)",
+      "verdict": "PASS"
+    },
+    {
+      "gate": "Outperformance vs 200-Day SMA Benchmark",
+      "required_criterion": "Beat 200-day SMA return (+26.57%)",
+      "observed_value": "Hierarchical: +18.83% vs SMA: +26.57%",
+      "verdict": "FAIL"
+    },
+    {
+      "gate": "Prospective Closed Paper Trades",
+      "required_criterion": ">= 50 independent closed prospective trades",
+      "observed_value": "18 closed trades in forward window",
+      "verdict": "PENDING"
+    },
+    {
+      "gate": "Live-Money Capital Deployment",
+      "required_criterion": "All 10 gates cleared",
+      "observed_value": "Model fails predictive calibration and Brier skill gates",
+      "verdict": "STRICT NO-GO"
+    }
+  ]
+}

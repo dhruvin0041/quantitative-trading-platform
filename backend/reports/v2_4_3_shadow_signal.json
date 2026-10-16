@@ -1,0 +1,23 @@
+{
+  "workstream": "HYDRA_V2.4.3_Hierarchical_Regime_Strategy",
+  "model_version": "HYDRA_V2.4.3_Hierarchical_LGBM",
+  "data_cutoff_timestamp": "2026-10-13 00:00:00",
+  "timezone_semantics": "Yahoo Finance Daily Equity: Bar dated 2026-10-13 00:00:00 represents regular US trading session (09:30-16:00 EDT / 13:30-20:00 UTC on 2026-10-13). Available only at 16:00 EDT (20:00 UTC).",
+  "latest_close_price": 341.27,
+  "latest_sma_200": 291.09,
+  "distance_to_sma200_pct": 17.24,
+  "normalized_sma_slope_20": 0.0159,
+  "atr_over_close": 0.019,
+  "regime_classification": "STRONG_UPTREND",
+  "probabilities": {
+    "P_SELL": 0.4246,
+    "P_HOLD": 0.0812,
+    "P_BUY": 0.4943
+  },
+  "locked_decision_threshold": 0.45,
+  "current_position_state": "IN_LONG",
+  "emitted_action": "HOLD",
+  "suppression_or_action_reason": "TIER_1_UPTREND_HOLD_MAINTAINED (Close 341.27 >= 1.05*SMA 291.09)",
+  "intended_execution_assumption": "No execution if FLAT/HOLD. If action is BUY, target fill is Open[2026-10-14 09:30 EDT] + 5 bps adverse slippage. SHADOW/PAPER MODE ONLY \u2014 ZERO REAL CAPITAL DEPLOYED.",
+  "timestamp_generated_utc": "2026-10-16T09:24:35.537398+00:00"
+}

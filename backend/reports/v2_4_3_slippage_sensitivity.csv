@@ -1,0 +1,9 @@
+strategy,slippage_bps,final_equity,net_profit_dollars,net_return_pct,total_trades,win_rate_pct,sharpe_ratio,max_drawdown_pct
+Hierarchical_Regime_Switching,0.0,1205.12,205.12,20.51,18,50.0,1.171,-12.84
+Hierarchical_With_Vol_Veto,0.0,942.1,-57.9,-5.79,8,25.0,-0.619,-13.76
+Hierarchical_Regime_Switching,5.0,1188.34,188.34,18.83,18,50.0,1.082,-13.39
+Hierarchical_With_Vol_Veto,5.0,935.32,-64.68,-6.47,8,25.0,-0.696,-14.23
+Hierarchical_Regime_Switching,10.0,1160.41,160.41,16.04,18,50.0,0.942,-13.95
+Hierarchical_With_Vol_Veto,10.0,928.55,-71.45,-7.14,8,25.0,-0.772,-14.71
+Hierarchical_Regime_Switching,15.0,1136.9,136.9,13.69,18,50.0,0.841,-14.87
+Hierarchical_With_Vol_Veto,15.0,921.77,-78.23,-7.82,8,25.0,-0.848,-15.18
