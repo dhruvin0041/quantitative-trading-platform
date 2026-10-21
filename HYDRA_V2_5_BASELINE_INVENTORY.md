@@ -3,7 +3,7 @@
 **Document ID:** `HYDRA-V2.5-INV-001` (Historical Baseline Inception Record)  
 **Date of Baseline Snapshot:** October 16, 2026  
 **Baseline Inception Commit:** `6d8fae8` on branch `main`  
-**Current Authoritative Remediated Commit:** `2f82ea2` (Refer to `HYDRA_V2_5_REMEDIATION_LOG.md` Entry 007 and REC-007)  
+**Authoritative Remediated Head:** `e9a1a04` (Refer to `HYDRA_V2_5_REMEDIATION_LOG.md` Entry 008 and REC-008 Certification)  
 **Corpus / Repository:** `dhruvin0041/quantitative-trading-platform`  
 **Audit Scope:** Complete system architecture, data lineage, artifact provenance, discrepancy reconciliation, test coverage, and prioritized remediation roadmap.  
 **Operational Status:** **RESEARCH-ONLY. Real-Money Capital Deployment STRICTLY BLOCKED.**
@@ -14,12 +14,13 @@
 
 - **Current Git Branch:** `main`
 - **Baseline Inception Commit:** `6d8fae8` (`feat(research): implement HYDRA V2.4.4 optimization lineage, DSR audit, and multi-asset generalization`)
-- **Remediation & Prospective Fix:** Phase 2.1 accounting reconciliation, Phase 3 prospective feature pipeline (31-feature schema parity with `kept_features.json`), and trade ledger valuation timestamp standardization (`terminal_valuation_timestamp_ny`).
+- **Authoritative Remediated Head Commit:** `e9a1a04` (`fix(governance): purify open position win semantics, label baseline records, and establish commit-bound evidence`)
+- **Remediation & Prospective Fix:** Phase 2.1 accounting reconciliation, Phase 3 prospective feature pipeline (31-feature schema parity with `kept_features.json`), trade ledger valuation timestamp standardization (`terminal_valuation_timestamp_ny`), open position win-rate purification (`is_profitable_at_mark` isolated, `is_winner = NULL`), and commit-to-commit Git blob identity verification.
 - **Remote Tracking:** `origin/main` (`https://github.com/dhruvin0041/quantitative-trading-platform.git`)
-- **Tracked Working Tree Status:** Remediation code and acceptance test suite packaged for authoritative commit.
+- **Tracked Working Tree Status:** Clean (0 uncommitted modifications).
 - **Python Virtual Environment:** Python 3.11.9 (`backend/venv/Scripts/python.exe`)
 - **Static Code Analysis:** `ruff check backend` passes with **0 errors**.
-- **Automated Regression Suite:** 17/17 remediation test suites passing (including 7 acceptance tests in `test_prospective_pipeline_remediation.py` and 10 tests in `test_v2_5_phase_2_reconciliation.py`). Full repository suite 325/325 passing.
+- **Automated Regression Suite:** 18/18 targeted remediation tests passing (7 in `test_prospective_pipeline_remediation.py` and 11 in `test_v2_5_phase_2_reconciliation.py`). Full repository suite 326/326 passing.
 
 
 ---

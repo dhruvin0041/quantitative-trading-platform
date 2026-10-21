@@ -232,3 +232,14 @@
      - Full repository suite: 326/326 passed in 70.15s (`pytest backend/tests`).
      - Code quality: `ruff check backend` 0 errors.
   6. **Deployment Gate:** Real-money live trading remains **STRICT NO-GO**. Prospective closed trades: **0 / 50**.
+
+---
+
+## Remediation Entry 009: Historical Baseline Documentation Index Alignment (October 21, 2026 07:00 UTC)
+- **Problem Identified (Review of REC-008):**
+  - In commit `e9a1a04`, `HYDRA_V2_5_BASELINE_INVENTORY.md` and `HYDRA_V2_5_PERFORMANCE_RECONCILIATION.md` still contained header cross-references to intermediate commit `2f82ea2` and `REC-007` instead of pointing to `e9a1a04` and `REC-008`.
+- **Root Cause Isolated & Remediated:**
+  - Updated both `HYDRA_V2_5_BASELINE_INVENTORY.md` and `HYDRA_V2_5_PERFORMANCE_RECONCILIATION.md` headers to formally identify `e9a1a04` as the authoritative remediated release head and reference `REC-008`, while preserving `6d8fae8` as the historical baseline inception commit.
+  - Zero code, model, test, or ledger modifications occurred in this documentation alignment step.
+  - Deployment gate: Real-money live trading remains **STRICT NO-GO**. Prospective closed trades: **0 / 50**.
+
