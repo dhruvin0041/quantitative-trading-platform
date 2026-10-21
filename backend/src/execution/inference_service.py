@@ -665,9 +665,11 @@ class InferenceService:
             sma200_s = sma200_full.reindex(valid_indices).ffill()
             if spy is not None and "Close" in spy.columns:
                 spy_close_s = spy["Close"].reindex(valid_indices).ffill()
+                spy_sma200_s = spy["Close"].rolling(window=200, min_periods=10).mean().reindex(valid_indices).ffill()
                 spy_sma50_s = spy["Close"].rolling(window=50, min_periods=10).mean().reindex(valid_indices).ffill()
             else:
                 spy_close_s = close_s
+                spy_sma200_s = sma200_s
                 spy_sma50_s = df["Close"].rolling(window=50, min_periods=10).mean().reindex(valid_indices).ffill()
 
             # Point-in-time swing exhaustion and trend indicators from feature frame
@@ -763,56 +765,57 @@ class InferenceService:
                 dir_buy = p_buy / denom
                 dir_sell = p_sell / denom
 
-                # 1. Trend-Persistence (Confirmed Bull Trend: EMA9 > EMA21 > SMA200 and ADX > 25)
-                is_bull_trend = bool(
-                    (cur_ema9 > cur_ema21)
-                    and (cur_ema21 > cur_sma200)
-                    and (cur_adx > 25.0)
-                    and (cur_c >= cur_sma200)
+                # 1. Macro Regime Check (SPY 200 SMA + Ticker 200 SMA institutional benchmark)
+                cur_spy_macro = (
+                    float(spy_sma200_s.iloc[i])
+                    if pd.notna(spy_sma200_s.iloc[i])
+                    else cur_spy
                 )
-                # Shallow ribbon touch with bullish price action confirmation
-                is_ribbon_continuation = bool(
-                    is_bull_trend
-                    and (cur_l <= cur_ema9 * 1.01 or cur_l <= cur_ema21 * 1.01)
-                    and (cur_c >= cur_ema21 * 0.995)
-                    and (cur_c >= cur_o or cur_c > cur_l + (cur_h - cur_l) * 0.4)
-                    and dir_buy >= 0.55
-                    and p_buy >= 0.25
-                    and p_buy > p_sell
+                macro_bull = bool((cur_c >= cur_sma200) and (cur_spy >= cur_spy_macro))
+                is_bull_trend = bool((cur_ema9 >= cur_ema21 * 0.998) and (cur_c >= cur_sma200))
+
+                # 2. Bullish Price Action Confirmation
+                bullish_candle = bool((cur_c >= cur_o) or (cur_c > cur_l + 0.4 * (cur_h - cur_l)))
+
+                # 3. Tactical Dip Reversal in Bull Regime (pullback to EMA21 or oversold RSI with bullish confirmation)
+                is_dip_reversal = bool(
+                    macro_bull
+                    and (cur_rsi <= 48.0 or cur_l <= cur_ema21 * 1.015)
+                    and bullish_candle
+                    and (dir_buy >= 0.45 and p_buy >= 0.20)
                 )
 
-                # 2. Correction Filter Conditions
-                is_below_ema21 = bool(cur_c < cur_ema21)
-                has_base_5d = False
-                if i >= 5:
-                    past_lows = [float(low_s.iloc[k]) for k in range(i - 4, i)]
-                    has_base_5d = bool(cur_l >= min(past_lows) and cur_c > prev_l)
+                # 4. Momentum / Trend Continuation in Bull Regime
+                is_continuation = bool(
+                    macro_bull
+                    and is_bull_trend
+                    and (cur_c >= cur_ema9 * 0.995)
+                    and (dir_buy >= 0.52 and p_buy >= 0.25 and p_buy > p_sell)
+                )
 
-                if p_buy >= 0.58 and p_buy > p_sell:
-                    raw_signal = "BUY"
-                    conf = p_buy
-                elif dir_buy >= 0.60 and p_buy >= 0.28 and p_buy > p_sell:
+                # 5. Pure High-Conviction ML Signal
+                is_ml_buy = bool(
+                    (p_buy >= 0.55 and p_buy > p_sell)
+                    or (dir_buy >= 0.60 and p_buy >= 0.28 and p_buy > p_sell)
+                )
+
+                # 6. ML Sell / Bearish Pressure Signal
+                is_ml_sell = bool(
+                    (p_sell >= 0.58 and p_sell > p_buy)
+                    or (dir_sell >= 0.62 and p_sell >= 0.30 and p_sell > p_buy)
+                )
+
+                raw_signal = "HOLD"
+                conf = float(prob_vec[1])
+
+                if is_ml_buy or is_continuation or is_dip_reversal:
                     raw_signal = "BUY"
                     conf = max(p_buy, min(1.0, dir_buy * 0.80))
-                elif is_ribbon_continuation:
-                    raw_signal = "BUY"
-                    conf = max(p_buy, min(1.0, dir_buy * 0.80))
-                elif p_sell >= 0.58 and p_sell > p_buy:
-                    raw_signal = "SELL"
-                    conf = p_sell
-                elif dir_sell >= 0.60 and p_sell >= 0.30 and p_sell > p_buy:
+                elif is_ml_sell:
                     raw_signal = "SELL"
                     conf = max(p_sell, min(1.0, dir_sell * 0.80))
-                else:
-                    raw_signal = "HOLD"
-                    conf = float(prob_vec[1])
 
-                # Correction Filter: Require dir_buy >= 0.68 or 5-day base when below EMA21
-                if raw_signal == "BUY" and is_below_ema21 and not is_ribbon_continuation:
-                    if not (dir_buy >= 0.68 or has_base_5d):
-                        raw_signal = "HOLD"
-
-                # Position-Aware Dynamic Risk Exits for Active Longs (Trailing Stop & Overbought Climax)
+                # 7. Position-Aware Dynamic Risk Exits for Active Longs (Trailing Stop & Overbought Climax)
                 if current_pos == "LONG":
                     trailing_stop = peak_price - (3.0 * cur_atr) if peak_price > 0 else 0.0
                     hit_trailing = bool(cur_c < trailing_stop)
@@ -825,43 +828,27 @@ class InferenceService:
                         raw_signal = "SELL"
                         conf = 0.85
 
+                # 8. Macro Filter at bar t (Zero lookahead)
+                short_ok = bool((cur_c < cur_sma200) or (cur_spy < cur_spy_macro))
+                sell_allowed = True if current_pos == "LONG" else short_ok
 
-                # Macro Filter at bar t (Zero lookahead)
-                long_ok = bool((cur_c >= cur_sma200) and (cur_spy >= cur_spy_sma50))
-                short_ok = bool((cur_c < cur_sma200) or (cur_spy < cur_spy_sma50))
-
-                # An existing LONG position can ALWAYS exit/take profit on a SELL signal.
-                # Only opening a new naked SHORT when FLAT requires macro short_ok confirmation.
-                if current_pos == "LONG":
-                    sell_allowed = True
-                else:
-                    sell_allowed = short_ok
-
-                if raw_signal == "BUY" and not long_ok:
+                if raw_signal == "BUY" and not macro_bull:
                     filtered_signal = "HOLD"
                 elif raw_signal == "SELL" and not sell_allowed:
                     filtered_signal = "HOLD"
                 else:
                     filtered_signal = raw_signal
 
-                # Price-Aware Adaptive Cooldown
+                # 9. Price-Aware Adaptive Cooldown
                 bars_since_trade = i - last_trade_idx
-                cooldown_ok = False
-                if bars_since_trade >= 3:
-                    cooldown_ok = True
-                elif bars_since_trade >= 1:
-                    if (
-                        current_pos != "LONG"
+                cooldown_ok = bool(
+                    bars_since_trade >= 2
+                    or (
+                        bars_since_trade >= 1
                         and last_trade_price > 0
-                        and cur_c <= last_trade_price * 0.985
-                    ):
-                        cooldown_ok = True  # Bought dip >= 1.5% below prior trade price
-                    elif (
-                        current_pos == "LONG"
-                        and last_trade_price > 0
-                        and cur_c >= last_trade_price * 1.015
-                    ):
-                        cooldown_ok = True  # Exited rally >= 1.5% above prior entry price
+                        and abs(cur_c - last_trade_price) / last_trade_price >= 0.015
+                    )
+                )
 
                 # State machine alternation: BUY -> SELL -> BUY
                 # Target execution is Open[t+1]
