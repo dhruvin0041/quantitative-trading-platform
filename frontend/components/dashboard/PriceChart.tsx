@@ -24,6 +24,7 @@ export function PriceChart({ data, loading }: PriceChartProps) {
   const forecastP50Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const forecastP10Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const seriesMarkersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
+  const candleCountRef = useRef<number>(0);
   const { resolvedTheme } = useTheme();
   const [legendContent, setLegendContent] = React.useState<React.ReactNode>(null);
 
@@ -59,6 +60,9 @@ export function PriceChart({ data, loading }: PriceChartProps) {
       },
       timeScale: {
         borderColor: gridColor,
+        rightOffset: 5,
+        minBarSpacing: 0.5,
+        lockVisibleTimeRangeOnResize: false,
       },
       rightPriceScale: {
         borderColor: gridColor,
@@ -110,6 +114,12 @@ export function PriceChart({ data, loading }: PriceChartProps) {
           width: newRect.width,
           height: newRect.height 
         });
+        if (candleCountRef.current > 0) {
+          chartRef.current.timeScale().setVisibleLogicalRange({
+            from: 0,
+            to: candleCountRef.current + 4,
+          });
+        }
       }
     });
 
@@ -220,7 +230,22 @@ export function PriceChart({ data, loading }: PriceChartProps) {
       seriesMarkersRef.current.setMarkers(markers);
     }
 
-    chartRef.current.timeScale().fitContent();
+    candleCountRef.current = sortedCandles.length;
+
+    // Enforce dynamic full 1-year visible range: exactly from candle 0 (1 year ago) to latest candle (today)
+    if (sortedCandles.length > 0) {
+      chartRef.current.timeScale().fitContent();
+      requestAnimationFrame(() => {
+        if (chartRef.current && candleCountRef.current > 0) {
+          chartRef.current.timeScale().setVisibleLogicalRange({
+            from: 0,
+            to: candleCountRef.current + 4,
+          });
+        }
+      });
+    } else {
+      chartRef.current.timeScale().fitContent();
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handleCrosshairMove = (param: any) => {
