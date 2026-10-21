@@ -1,0 +1,106 @@
+================================================================================
+INSTITUTIONAL QUANT TRADING PLATFORM: DAILY ROUTINE & MODEL MAINTENANCE GUIDE
+================================================================================
+
+PART 1: INDIA (IST) DAILY TRADING SCHEDULE
+================================================================================
+Because US markets operate in New York (Eastern Time), trading US stocks from 
+India has a major natural advantage: you do not have to watch the market in the 
+middle of the night. You have the entire morning and afternoon in India to review 
+confirmed signals at your own pace with zero hurry.
+
+US Daylight Saving Time changes the clocks by 1 hour twice a year:
+
++----------------------------------+-------------------------+-----------------------------------+------------------------------------------+
+| Period                           | US Market Closes        | Best Time to Check in India (IST) | US Market Opens (Trade Fill in India)    |
+|                                  | (Signal Confirmed)      |                                   |                                          |
++----------------------------------+-------------------------+-----------------------------------+------------------------------------------+
+| Current (EDT: March to November) | 01:30 AM IST (Midnight) | Morning: 07:00 AM – 12:00 PM IST  | 07:00 PM IST (19:00 Evening)             |
+| Winter  (EST: November to March) | 02:30 AM IST (Midnight) | Morning: 07:00 AM – 12:00 PM IST  | 08:00 PM IST (20:00 Evening)             |
++----------------------------------+-------------------------+-----------------------------------+------------------------------------------+
+
+--------------------------------------------------------------------------------
+THE IDEAL INDIA DAILY ROUTINE (IST)
+--------------------------------------------------------------------------------
+
+1. MORNING (08:00 AM – 12:00 PM IST): REVIEW SIGNALS (Takes ~30 seconds)
+   • Wake up, open browser to: http://localhost:3000
+   • The US market closed hours ago. Data is 100% finalized and confirmed.
+   • Look at the AAPL chart: Did a new BUY or SELL arrow appear on yesterday's bar?
+   • If HOLD (no new arrow): You are done for the day! (No action needed).
+   • If new BUY or SELL: Note the trade direction.
+
+2. DAYTIME (FREE TIME & ORDER PLACEMENT)
+   • You have all day until evening with zero rush.
+   • Log into your broker app (e.g., Interactive Brokers, Vested, INDmoney, Schwab).
+   • Enter a Market-on-Open (MOO) order or queue a standard Market order.
+   • Sizing: 100% Cash / 100% Stock (Flat, Zero Margin, Zero Borrowing).
+
+3. EVENING (07:00 PM IST Summer / 08:00 PM IST Winter): EXECUTION
+   • The US market opening bell rings.
+   • Your order executes automatically at the market open.
+   • Open your broker app to confirm your execution fill price.
+
+
+================================================================================
+PART 2: MODEL TRAINING & OPTIMIZATION ROUTINE
+================================================================================
+In quantitative systematic trading, YOU SHOULD NEVER RETRAIN DAILY. Retraining 
+every day causes high parameter churn, overfits to short-term noise, and harms 
+live performance. Follow this institutional schedule:
+
++-------------------------------+----------------------+------------------------------------------+-------------------------------------------------+
+| Task                          | Frequency            | Purpose                                  | When to Do It                                   |
++-------------------------------+----------------------+------------------------------------------+-------------------------------------------------+
+| Signal Inference (Scan)       | Daily                | Generate live signals for today's trade  | Automatic via running FastAPI backend.          |
+| Software Integrity Test       | Weekly (Saturdays)   | Verify zero bugs, parity & no lookahead  | Every weekend before Monday open.               |
+| Model Retraining (Weights)    | Monthly or Quarterly | Incorporate latest 20–60 days of data    | First weekend of month or post-earnings.        |
+| Hyperparameter Optimization   | Every 3 to 6 Months  | Re-tune tree depth, ATR bands & features | Biannually or during major macro regime shifts. |
++-------------------------------+----------------------+------------------------------------------+-------------------------------------------------+
+
+--------------------------------------------------------------------------------
+STEP-BY-STEP TRAINING & MAINTENANCE GUIDE
+--------------------------------------------------------------------------------
+
+1. WEEKLY HEALTH CHECK (Every Saturday, ~1 minute)
+   Before each new trading week, run the automated test suite to confirm zero 
+   software regression or lookahead leakage:
+
+   powershell:
+   cd d:\DataScience\Projects\Data_Science_Projects\Stock_Indicator\backend
+   .\venv\Scripts\python.exe -m unittest tests/test_replay_live_parity.py
+   .\venv\Scripts\python.exe -m pytest tests/test_live_signals_and_lookahead.py
+   .\venv\Scripts\python.exe -m unittest tests/test_causality_and_execution_timing.py
+   .\venv\Scripts\python.exe -m unittest tests/test_prospective_integrity.py
+
+   *If all pass with OK, your system is mathematically verified for the week.*
+
+2. MONTHLY RETRAINING ROUTINE (First Saturday of the Month, ~10 minutes)
+   a. Clear old artifact cache to prevent weight contamination:
+      powershell:
+      python scripts/ops/clean_artifacts.py
+
+   b. Re-run multi-modal training pipeline (XGBoost, LSTM, CNN ensemble).
+
+   c. Verify all model checkpoints:
+      powershell:
+      python scripts/ops/verify_all_models.py
+
+   d. Restart the FastAPI backend server to load updated model artifacts:
+      powershell:
+      python -m uvicorn api:app --host 0.0.0.0 --port 8000
+
+3. BIANNUAL OPTIMIZATION ROUTINE (Every 6 Months)
+   • Run Optuna hyperparameter sweeps across feature windows and Chandelier ratchets.
+   • Always evaluate on Walk-Forward Analysis (WFA) out-of-sample data.
+   • Target Metric: Maximize Jensen's Alpha and Sortino Ratio (not raw trade count).
+   • Lock in stable parameter sets that survive multiple rolling market regimes.
+
+================================================================================
+CRITICAL OPERATIONAL RULES TO REMEMBER
+================================================================================
+1. Never enter intraday while the candle is forming (09:30 - 15:59 ET).
+2. Always trade the confirmed signal at 16:00 ET close, executed at 09:30 ET open.
+3. Keep simple flat signal following: 100% Cash when flat, 100% Stock when long.
+4. Let the adaptive Chandelier ratchet protect capital—never cancel a stop.
+================================================================================
