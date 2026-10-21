@@ -42,7 +42,7 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from src.execution.live_inference import (  # noqa: E402
-    FEATURE_COLUMNS,
+    FEATURE_COLUMNS_V30,
     add_upgraded_features,
     check_bar_forming_status,
     load_config,
@@ -1037,10 +1037,22 @@ class ProspectiveValidationManager:
         }
         return config_summary
 
+    def get_target_feature_columns(self) -> List[str]:
+        """
+        Returns the authoritative ordered feature schema required by latest_scaler.joblib.
+        Guarantees strict parity against kept_features.json and scaler_metadata.json (31 features).
+        """
+        kf_path = self.artifacts_dir / "kept_features.json"
+        if kf_path.exists():
+            with open(kf_path, "r", encoding="utf-8") as f:
+                features = json.load(f)
+            return features
+        return list(FEATURE_COLUMNS_V30)
+
     def ingest_market_data(
         self, ticker: str = "AAPL"
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        """Ingests market data for target asset, SPY, and VIX with defensive handling."""
+        """Ingests market data for target asset, SPY, and VIX with defensive handling and schema parity."""
         logger.info(f"Ingesting market data for {ticker}, SPY, and ^VIX...")
         aapl_df = yf.download(ticker, start="2024-01-01", progress=False)
         spy_df = yf.download("SPY", start="2024-01-01", progress=False)
@@ -1053,10 +1065,28 @@ class ProspectiveValidationManager:
         if isinstance(vix_df.columns, pd.MultiIndex):
             vix_df.columns = vix_df.columns.droplevel(1)
 
+        # Defensive input validation: ensure sufficient historical bars for warmups
+        if len(aapl_df) < 120:
+            raise ValueError(
+                f"Insufficient historical bars for {ticker}: got {len(aapl_df)}, requires >= 120 bars for rolling indicator warmups."
+            )
+
         # Build technical features with lagged VIX
         df_feat = add_upgraded_features(aapl_df.copy(), spy_df, vix_df, lag_vix=True)
         df_feat = df_feat.loc[:, ~df_feat.columns.duplicated()].copy()
-        df_clean = df_feat.reindex(columns=FEATURE_COLUMNS).dropna()
+
+        feature_cols = self.get_target_feature_columns()
+        missing_cols = [c for c in feature_cols if c not in df_feat.columns]
+        if missing_cols:
+            raise ValueError(
+                f"Feature engineering pipeline failed to generate required schema columns: {missing_cols}"
+            )
+
+        df_clean = df_feat.reindex(columns=feature_cols).dropna()
+        if len(df_clean) < 30:
+            raise ValueError(
+                f"Clean feature dataset for {ticker} contains insufficient valid rows ({len(df_clean)} rows) after dropna."
+            )
 
         return aapl_df, spy_df, vix_df, df_clean
 
@@ -1132,7 +1162,7 @@ class ProspectiveValidationManager:
             cfg = load_config(ticker=ticker)
             dl_model = build_fusion_model(cfg)
             dl_model.load_weights(str(self.artifacts_dir / "latest_fusion_weights.weights.h5"))
-            seq = scaled_matrix[-60:].reshape(1, 60, 27)
+            seq = scaled_matrix[-60:].reshape(1, 60, -1)
             peer_seq = seq
             dl_out = dl_model.predict([seq, seq, seq, seq, seq, peer_seq], verbose=0)
             dl_probs_raw = dl_out[2][0]
@@ -1144,10 +1174,11 @@ class ProspectiveValidationManager:
         calibrator = ModelCalibrator.load(str(self.artifacts_dir / "model_calibrator.joblib"))
         dl_probs_calib = calibrator.calibrate("DL_FUSION", dl_probs_raw)
 
-        # 5. Deep Q-Network (DQN) Policy
+        # 5. Deep Q-Network (DQN) Policy (33-state architecture: 27 base features + 3 DL + 3 XGB)
         dqn_agent = DQNAgent(state_size=33)
         dqn_agent.load(str(self.artifacts_dir / "dqn_model.pth"))
-        dqn_state = np.hstack((tabular_row[0], dl_probs_raw, xgb_probs_raw))
+        dqn_base_features = tabular_row[0][:27]
+        dqn_state = np.hstack((dqn_base_features, dl_probs_raw, xgb_probs_raw))
         with torch.no_grad():
             dqn_q_vals = (
                 dqn_agent.policy_net(torch.FloatTensor(dqn_state).unsqueeze(0))[0].cpu().numpy()

@@ -1,0 +1,19 @@
+{
+  "feature_set_name": "Set_B_Scale_Invariant",
+  "feature_count": 13,
+  "feature_columns": [
+    "RSI",
+    "ADX",
+    "Stoch_K",
+    "Stoch_D",
+    "Volatility_Ratio",
+    "Price_vs_SMA200",
+    "BB_Position",
+    "BB_Width",
+    "MACD_Norm",
+    "Return_1d",
+    "Return_5d",
+    "Return_20d",
+    "Volume_Ratio"
+  ]
+}

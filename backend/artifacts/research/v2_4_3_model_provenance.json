@@ -1,0 +1,110 @@
+{
+  "artifact_version": "HYDRA_V2.5_PHASE_2_1_LOCKED_INFERENCE_BUNDLE",
+  "timestamp_utc": "2026-10-16T10:54:16.104130+00:00",
+  "terminal_valuation_parameters": {
+    "terminal_date": "2026-10-13",
+    "terminal_close_price": 341.27,
+    "pricing_source": "v2_4_3_forward_market_data.parquet Close[t_final]",
+    "terminal_timestamp_ny": "2026-10-13 16:00:00 America/New_York",
+    "terminal_timestamp_utc": "2026-10-13T20:00:00.000000Z"
+  },
+  "frozen_baseline_policy": {
+    "delta_sma_distance": 0.07,
+    "volatility_threshold": 0.02,
+    "decision_threshold_theta": 0.45
+  },
+  "cryptographic_hashes": {
+    "frozen_model_sha256": "6f4a85bbab000554d61741652a9646680102d270693f4f23d05585797547536d",
+    "frozen_scaler_sha256": "fa26c99c062aa442604726ede16de3862eb3846b59354f2fd88d39608b8e3a41",
+    "feature_columns_sha256": "b7bed6a3fdffaf3b1d62485fa59276c2f85cf0ec646c2ef267feeef7a822267a",
+    "market_data_sha256": "4a5cf250f0e32facaf4509a04ec05d17d4d741300c9281befe5181b7fcba2d35",
+    "strategy_manifest_sha256": "63a482e9cb1553d9add1e0012f09e6218e97412d7795d85a44db09200deb0cbc",
+    "run1_signal_log_sha256": "09a20fdbc0facb3eefb989f11add909d37280709becc5eabd3f9a2833c0bf95b",
+    "run3a_signal_log_sha256": "92babc239ece60c81f62d7bb133361ede7440c43a4f3b802b811678654700917",
+    "run2_multiasset_log_sha256": "00664200b6ccc468b03702d7595556b19320ac6946e53506ca71d9eb98a47249"
+  },
+  "training_environment": {
+    "python_version": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+    "lightgbm_version": "4.6.0",
+    "numpy_version": "2.4.6",
+    "pandas_version": "2.3.3"
+  },
+  "model_hyperparameters": {
+    "max_depth": 4,
+    "num_leaves": 25,
+    "learning_rate": 0.010086225113452831,
+    "n_estimators": 155,
+    "subsample": 0.685157783639564,
+    "colsample_bytree": 0.7524264148021685,
+    "min_child_samples": 33,
+    "random_state": 42,
+    "verbose": -1,
+    "n_jobs": 1,
+    "deterministic": true
+  },
+  "historical_reproduction_vs_new_artifact": {
+    "deterministic_inference_status": "PROVEN (max_diff == 0.0 across 5 disk re-loads)",
+    "historical_reproduction_signal_agreement": "95.24% (240 of 252 bars match archived baseline)",
+    "mean_absolute_probability_error": 0.002473,
+    "max_absolute_probability_error": 0.023056,
+    "first_divergence_bar": 90,
+    "first_divergence_timestamp": "2026-02-23",
+    "reproduction_verdict": "REPLACEMENT_ARTIFACT_ONLY (Original in-memory weights were not serialized to disk; replacement model is deterministic but not bit-for-bit historical clone)"
+  },
+  "run_taxonomy": {
+    "RUN-1-ARCHIVED-BASELINE": {
+      "description": "Baseline strategy replayed from archived probabilities (v2_4_3_regime_state_log.csv)",
+      "final_cash": 164.53,
+      "open_position": "3 shares @ $333.43 entry, marked @ $341.27 ($1,023.81 MTM)",
+      "final_equity": 1188.34,
+      "trades": 18,
+      "signal_log": "v2_4_3_regime_state_log.csv",
+      "signal_log_sha256": "09a20fdbc0facb3eefb989f11add909d37280709becc5eabd3f9a2833c0bf95b",
+      "model_status": "HISTORICAL_IN_MEMORY"
+    },
+    "RUN-2-MULTIASSET-PIPELINE": {
+      "description": "AAPL run in multi-asset pipeline (v2_4_4_multi_asset_comparison.csv)",
+      "final_cash": 138.74,
+      "open_position": "3 shares @ $333.43 entry, marked @ $341.27 ($1,023.81 MTM)",
+      "final_equity": 1162.55,
+      "trades": 18,
+      "signal_log": "v2_4_4_multi_asset_comparison.csv",
+      "signal_log_sha256": "00664200b6ccc468b03702d7595556b19320ac6946e53506ca71d9eb98a47249",
+      "model_status": "MULTIASSET_IN_MEMORY"
+    },
+    "RUN-3A-PHASE4-LOG-REPLAY": {
+      "description": "AAPL run replayed from Phase 4 signal state log (master_sprint_phase_4_signal_state_log.csv)",
+      "final_cash": 149.17,
+      "open_position": "3 shares @ $333.43 entry, marked @ $341.27 ($1,023.81 MTM)",
+      "final_equity": 1172.98,
+      "trades": 19,
+      "signal_log": "master_sprint_phase_4_signal_state_log.csv",
+      "signal_log_sha256": "92babc239ece60c81f62d7bb133361ede7440c43a4f3b802b811678654700917",
+      "model_status": "PHASE4_IN_MEMORY"
+    },
+    "RUN-3B-FRESH-DISCREPANCY": {
+      "description": "Reported fresh script execution discrepancy from non-deterministic RAM re-fit",
+      "final_cash": 131.85,
+      "open_position": "3 shares @ $333.43 entry, marked @ $341.27 ($1,023.81 MTM)",
+      "final_equity": 1155.66,
+      "trades": 18,
+      "signal_log": "HISTORICAL_FRESH_EXECUTION_DISCREPANCY",
+      "signal_log_sha256": "NON_REPRODUCIBLE_UNSEEDED",
+      "model_status": "UNSEEDED_IN_MEMORY"
+    },
+    "RUN-FROZEN-NEW-ARTIFACT": {
+      "description": "Inference and simulation using the newly serialized frozen model artifact",
+      "final_cash": 168.21,
+      "open_position": "3 shares @ $335.45 entry, marked @ $341.27 ($1,023.81 MTM)",
+      "final_equity": 1192.02,
+      "trades": 17,
+      "signal_log": "DETERMINISTIC_MODEL_INFERENCE_PIPELINE",
+      "signal_log_sha256": "DETERMINISTIC_ON_DEMAND",
+      "model_artifact": "v2_4_3_lightgbm_frozen_model.joblib",
+      "model_sha256": "6f4a85bbab000554d61741652a9646680102d270693f4f23d05585797547536d",
+      "scaler_artifact": "v2_4_3_scaler_frozen.joblib",
+      "scaler_sha256": "fa26c99c062aa442604726ede16de3862eb3846b59354f2fd88d39608b8e3a41",
+      "model_status": "SERIALIZED_DETERMINISTIC_REPLACEMENT"
+    }
+  }
+}
