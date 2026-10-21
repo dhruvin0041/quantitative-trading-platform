@@ -1,10 +1,11 @@
-# Python
+# ==============================================================================
+# Byte-compiled / Optimized / Python Artifacts
+# ==============================================================================
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-env/
 build/
 develop-eggs/
 dist/
@@ -21,70 +22,129 @@ wheels/
 .installed.cfg
 *.egg
 .pytest_cache/
+backend/.pytest_cache/
 .coverage
 .cache
 nosetests.xml
 coverage.xml
 *.cover
 .hypothesis/
+.ruff_cache/
+backend/.ruff_cache/
+catboost_info/
+backend/catboost_info/
 
-# Node
+# ==============================================================================
+# Virtual Environments
+# ==============================================================================
+env/
+venv/
+.venv/
+backend/env/
+backend/venv/
+backend/.venv/
+
+# ==============================================================================
+# Node.js & Next.js Frontend
+# ==============================================================================
 node_modules/
+frontend/node_modules/
 .next/
+frontend/.next/
 out/
-build/
+frontend/out/
 .vercel
-*.log
+frontend/.vercel
+*.tsbuildinfo
+frontend/*.tsbuildinfo
+next-env.d.ts
+frontend/next-env.d.ts
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.pnpm-debug.log*
 
-# OS
+# ==============================================================================
+# Operating System & IDE
+# ==============================================================================
 .DS_Store
 Thumbs.db
+desktop.ini
+.vscode/
+.idea/
 
-# Credentials
+# ==============================================================================
+# Environment Variables & Secrets
+# ==============================================================================
 .env
+.env.*
+*.env
+backend/.env
+frontend/.env.local
+*.pem
+*.key
 
-# Project Specific
+# ==============================================================================
+# Databases, WAL & Tracking Stores
+# ==============================================================================
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+mlflow.db
+backend/mlflow.db
+mlruns/
+backend/mlruns/
+
+# ==============================================================================
+# Logs & Terminal Dumps
+# ==============================================================================
+*.log
+logs/
+backend/logs/
 backend/logs/*
-!backend/logs/test_execution_149.log
-!backend/logs/ruff_check.log
+pip_output.txt
+backend/pip_output.txt
+
+# ==============================================================================
+# Scratch, Research Experiments & Temporary Directories
+# ==============================================================================
+scratch/
+backend/scratch/
+task_plan.md
 backend/optuna_studies/
 backend/models/
 backend/scalers/
 backend/charts/
 backend/backtest_results.png
-catboost_info/
-backend/catboost_info/
+backend/backtest_results/
+backtest_results/
+data/
 
-# Local-Only Institutional Assets
+# ==============================================================================
+# Local-Only Institutional Assets (Strict Rule 5 Enforcement)
+# ==============================================================================
 graphify-out/
 GEMINI.md
 .obsidian/
 
-# Virtual Environments
-backend/venv/
-
-# ML Artifacts & Data
+# ==============================================================================
+# ML Artifacts & Data Directory Rules
+# ==============================================================================
 backend/artifacts/*.joblib
 backend/artifacts/*.pth
 backend/artifacts/*.h5
 backend/artifacts/*.json
 backend/artifacts/*.pkl
 backend/artifacts/*.db*
-backend/data/*
-!backend/data/snapshots/
-backend/mlflow.db
-backend/mlruns/
 backend/artifacts/v2_0/
 backend/artifacts/v2_1/
-backend/backtest_results/
-backtest_results/
-mlruns/
-data/
+backend/data/*
+!backend/data/snapshots/
 
-# Allow specific trained models for institutional baseline
+# Allow specific verified production models for institutional baseline
 !backend/artifacts/lgbm_agent.joblib
 !backend/artifacts/xgb_ensemble.json
 !backend/artifacts/latest_fusion_weights.weights.h5
@@ -94,12 +154,11 @@ data/
 !backend/artifacts/meta_ensemble.joblib
 !backend/artifacts/tft_quantile_weights.weights.h5
 !backend/artifacts/frozen_strategy_manifest*.json
+!backend/artifacts/v2_3/
+!backend/artifacts/v3/
+!backend/artifacts/research/
 
 # Allow versioned immutable snapshot fixtures
 !backend/data/snapshots/
 !backend/data/snapshots/*.parquet
 !backend/data/snapshots/*.json
-
-# Local scratch directory
-scratch/
-
