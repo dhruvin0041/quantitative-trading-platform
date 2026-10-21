@@ -299,10 +299,41 @@ export default function HydraTerminal() {
                        Universal Model
                      </span>
                    )}
-                   <span className="text-[13px] text-muted-foreground">{chartData?.metadata?.name || ''}</span>
-                   <span className="px-2 py-0.5 rounded bg-muted text-[11px] text-foreground font-mono">
+                   <span className="text-[13px] text-muted-foreground hidden sm:inline">{chartData?.metadata?.name || ''}</span>
+                   <span className="px-2 py-0.5 rounded bg-muted text-[11px] text-foreground font-mono font-bold">
                      {chartData?.current_price ? `${currencySymbol}${chartData.current_price.toFixed(2)}` : '---'}
                    </span>
+
+                   {/* Active Live Signal Badge */}
+                   {chartData?.signal && (
+                     <span className={cn(
+                       "px-2.5 py-0.5 rounded text-[11px] font-black tracking-wider uppercase flex items-center gap-1.5",
+                       chartData.signal === 'BUY' ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" :
+                       chartData.signal === 'SELL' ? "bg-rose-500/20 text-rose-400 border border-rose-500/30" :
+                       "bg-muted text-muted-foreground border border-border"
+                     )}>
+                       <span className={cn(
+                         "w-2 h-2 rounded-full",
+                         chartData.signal === 'BUY' ? "bg-emerald-400 animate-pulse" :
+                         chartData.signal === 'SELL' ? "bg-rose-400 animate-pulse" : "bg-muted-foreground"
+                       )} />
+                       {chartData.signal}
+                       {chartData.confidence_score ? ` (${chartData.confidence_score.toFixed(0)}%)` : ''}
+                     </span>
+                   )}
+                 </div>
+
+                 {/* Signal Markers Legend & Counter */}
+                 <div className="flex items-center gap-3 text-[11px] font-mono">
+                   <div className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-muted/40 border border-border">
+                     <span className="text-emerald-400 font-bold flex items-center gap-1">
+                       ▲ BUY ({chartData?.historical_markers?.filter(m => (m.action || m.signal) === 'BUY').length || 0})
+                     </span>
+                     <span className="text-muted-foreground">|</span>
+                     <span className="text-rose-400 font-bold flex items-center gap-1">
+                       ▼ SELL ({chartData?.historical_markers?.filter(m => (m.action || m.signal) === 'SELL').length || 0})
+                     </span>
+                   </div>
                  </div>
               </div>
               <div className="flex-1 relative w-full h-full min-h-[300px]">

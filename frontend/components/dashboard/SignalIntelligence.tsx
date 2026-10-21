@@ -39,12 +39,16 @@ export function SignalIntelligence({ data }: SignalIntelligenceProps) {
   } = data;
 
   // Final Execution block
-  const executionStatus = execution_state || "PENDING";
   const finalDecision = signal || "NEUTRAL";
+  const executionStatus = execution_state || (finalDecision === "HOLD" ? "OBSERVE ONLY" : "PENDING");
   
-  // Risk Agent (Mock derived from payload if not present)
-  const isVetoed = risk?.target_size === 0 || executionStatus.includes("VETO");
+  // Risk Agent
+  const isVetoed = executionStatus.includes("VETO") || finalDecision === "VETOED";
   const riskDecision = isVetoed ? "VETOED" : "APPROVED";
+  const targetAllocationPercent = risk?.target_size != null
+    ? (risk.target_size > 2.0 ? risk.target_size : risk.target_size * 100).toFixed(1) + '%'
+    : '0.0%';
+  const structuralRegime = execution_authority?.structural_regime || data.structural_regime || "NEUTRAL";
 
   return (
     <div className="flex flex-col gap-6">
@@ -64,15 +68,21 @@ export function SignalIntelligence({ data }: SignalIntelligenceProps) {
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-[11px] font-bold text-muted-foreground uppercase">Execution Status</span>
-            <span className={cn("text-[20px] font-black uppercase", isVetoed ? "text-negative" : "text-primary")}>{executionStatus}</span>
+            <span className={cn(
+              "text-[20px] font-black uppercase",
+              isVetoed ? "text-negative" :
+              executionStatus.includes("EXECUTE") ? "text-positive" :
+              executionStatus === "BLOCKED" ? "text-amber-500" :
+              "text-primary"
+            )}>{executionStatus}</span>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-[11px] font-bold text-muted-foreground uppercase">Target Allocation</span>
-            <span className="text-[20px] font-mono font-black text-foreground">{risk?.target_size ? (risk.target_size * 100).toFixed(1) + '%' : '0.0%'}</span>
+            <span className="text-[20px] font-mono font-black text-foreground">{targetAllocationPercent}</span>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-[11px] font-bold text-muted-foreground uppercase">Regime Filter</span>
-            <span className="text-[20px] font-black uppercase text-foreground">{execution_authority?.structural_regime || "UNKNOWN"}</span>
+            <span className="text-[20px] font-black uppercase text-foreground">{structuralRegime}</span>
           </div>
         </div>
       </div>
@@ -94,11 +104,15 @@ export function SignalIntelligence({ data }: SignalIntelligenceProps) {
               </tr>
             </thead>
             <tbody className="text-[13px] font-mono text-foreground">
-              {Object.entries(models).map(([name, pred]) => {
+              {Object.entries(models).map(([name, pred], idx) => {
                 if (name.includes("META") || name.includes("ENSEMBLE")) return null;
                 const intel = model_weights?.[name] || { weight: 0.25, recent_accuracy: 0.75 };
                 const isBuy = pred.signal === 'BUY';
                 const isSell = pred.signal === 'SELL';
+                const driverObj = xai?.top_drivers?.[idx] || xai?.top_drivers?.[0];
+                const driverText = driverObj?.feature
+                  ? `${driverObj.feature.replace('_', ' ')} (${(driverObj.impact).toFixed(2)})`
+                  : "Momentum Array";
                 
                 return (
                   <tr key={name} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
@@ -111,7 +125,7 @@ export function SignalIntelligence({ data }: SignalIntelligenceProps) {
                     <td className="py-3 px-3">{(pred.probability * 100).toFixed(1)}%</td>
                     <td className="py-3 px-3">{(intel.weight * 100).toFixed(1)}%</td>
                     <td className="py-3 px-3 text-muted-foreground text-[11px] truncate max-w-[150px]">
-                      {xai?.top_drivers?.[0]?.feature?.replace('_', ' ') || "Momentum Array"}
+                      {driverText}
                     </td>
                   </tr>
                 );

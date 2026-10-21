@@ -37,6 +37,9 @@ class ExecutionAuthorityEngine:
         if risk_veto:
             action_state = "VETOED"
             reasoning = signal_note if signal_note else "Risk Agent Veto."
+        elif signal_data.get("signal") == "HOLD":
+            action_state = "OBSERVE ONLY"
+            reasoning = signal_note if signal_note else "Portfolio in neutral/monitoring regime. No execution required."
         elif ev_pct <= 0:
             action_state = "BLOCKED"
             reasoning = "Negative Expected Value (EV) detected."

@@ -196,8 +196,8 @@ export function PriceChart({ data, loading }: PriceChartProps) {
         position: (isBuy ? "belowBar" : "aboveBar") as "belowBar" | "aboveBar",
         color: isBuy ? "#10B981" : "#EF4444",
         shape: (isBuy ? "arrowUp" : "arrowDown") as "arrowUp" | "arrowDown",
-        text: "",
-        size: 1.2,
+        text: isBuy ? "BUY" : "SELL",
+        size: 2,
       };
     });
 

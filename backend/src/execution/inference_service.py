@@ -1442,7 +1442,6 @@ class InferenceService:
 
 
         # Directional ML conviction calibration (Strict Parity with Causal Replay)
-        is_ribbon_continuation = False
         try:
             if len(ticker_df_risk) >= 3:
                 # Directional conviction calculation in parity with causal replay
@@ -1452,7 +1451,7 @@ class InferenceService:
                 dir_b = p_b / denom
                 dir_s = p_s / denom
 
-                # Extract technical indicators for trend persistence & correction filter
+                # Extract technical indicators for trend persistence & dip reversal
                 c_close = float(ticker_df_risk["Close"].iloc[-1])
                 c_low = float(ticker_df_risk["Low"].iloc[-1])
                 c_high = float(ticker_df_risk["High"].iloc[-1])
@@ -1460,33 +1459,48 @@ class InferenceService:
                 c_sma200 = float(ticker_df_risk["Close"].rolling(200, min_periods=10).mean().iloc[-1])
                 c_ema9 = float(ticker_df_risk["EMA9"].iloc[-1]) if "EMA9" in ticker_df_risk.columns else c_close
                 c_ema21 = float(ticker_df_risk["EMA21"].iloc[-1]) if "EMA21" in ticker_df_risk.columns else c_close
-                c_adx = float(ticker_df_risk["ADX"].iloc[-1]) if "ADX" in ticker_df_risk.columns else 20.0
+                c_rsi = float(tech_snapshot.get("RSI", 50.0))
 
-                is_bull_trend = bool(
-                    (c_ema9 > c_ema21)
-                    and (c_ema21 > c_sma200)
-                    and (c_adx > 25.0)
-                    and (c_close >= c_sma200)
+                cur_spy_macro = (
+                    float(spy_df_risk["Close"].rolling(200, min_periods=10).mean().iloc[-1])
+                    if len(spy_df_risk) >= 10
+                    else float(spy_df_risk["Close"].iloc[-1])
                 )
-                is_ribbon_continuation = bool(
-                    is_bull_trend
-                    and (c_low <= c_ema9 * 1.01 or c_low <= c_ema21 * 1.01)
-                    and (c_close >= c_ema21 * 0.995)
-                    and (c_close >= c_open or c_close > c_low + (c_high - c_low) * 0.4)
-                    and dir_b >= 0.55
-                    and p_b >= 0.25
-                    and p_b > p_s
+                macro_bull = bool((c_close >= c_sma200) and (float(spy_df_risk["Close"].iloc[-1]) >= cur_spy_macro))
+                is_bull_trend = bool((c_ema9 >= c_ema21 * 0.998) and (c_close >= c_sma200))
+                bullish_candle = bool((c_close >= c_open) or (c_close > c_low + 0.4 * (c_high - c_low)))
+
+                # 1. Tactical Dip Reversal in Bull Regime
+                is_dip_reversal = bool(
+                    macro_bull
+                    and (c_rsi <= 48.0 or c_low <= c_ema21 * 1.015)
+                    and bullish_candle
+                    and (dir_b >= 0.45 and p_b >= 0.20)
                 )
 
-                if p_b >= 0.58 and p_b > p_s:
-                    pass
-                elif dir_b >= 0.60 and p_b >= 0.28 and p_b > p_s:
+                # 2. Momentum Continuation in Bull Regime
+                is_continuation = bool(
+                    macro_bull
+                    and is_bull_trend
+                    and (c_close >= c_ema9 * 0.995)
+                    and (dir_b >= 0.52 and p_b >= 0.25 and p_b > p_s)
+                )
+
+                # 3. Pure High-Conviction ML Signal
+                is_ml_buy = bool(
+                    (p_b >= 0.55 and p_b > p_s)
+                    or (dir_b >= 0.60 and p_b >= 0.28 and p_b > p_s)
+                )
+
+                # 4. ML Sell / Bearish Pressure Signal
+                is_ml_sell = bool(
+                    (p_s >= 0.58 and p_s > p_b)
+                    or (dir_s >= 0.62 and p_s >= 0.30 and p_s > p_b)
+                )
+
+                if is_ml_buy or is_continuation or is_dip_reversal:
                     xgb_preds_raw = np.array([p_s, max(0.0, 1.0 - dir_b - p_s), dir_b])
-                elif is_ribbon_continuation:
-                    xgb_preds_raw = np.array([p_s, max(0.0, 1.0 - dir_b - p_s), dir_b])
-                elif p_s >= 0.58 and p_s > p_b:
-                    pass
-                elif dir_s >= 0.60 and p_s >= 0.30 and p_s > p_b:
+                elif is_ml_sell:
                     xgb_preds_raw = np.array([dir_s, max(0.0, 1.0 - dir_s - p_b), p_b])
 
                 total_p = np.sum(xgb_preds_raw)
@@ -1494,16 +1508,6 @@ class InferenceService:
                     xgb_preds_raw = xgb_preds_raw / total_p
         except Exception as e:
             logger.warning(f"Error computing directional conviction in live inference: {e}")
-
-        # Enforce conviction threshold: if max(P_sell, P_hold, P_buy) < 0.58, model outputs HOLD ([0, 1, 0])
-        if np.max(dl_preds_raw) < 0.58:
-            dl_preds_raw = np.array([0.0, 1.0, 0.0])
-        if np.max(xgb_preds_raw) < 0.58:
-            xgb_preds_raw = np.array([0.0, 1.0, 0.0])
-        if np.max(lgbm_preds_raw) < 0.58:
-            lgbm_preds_raw = np.array([0.0, 1.0, 0.0])
-        if np.max(dqn_p) < 0.58:
-            dqn_p = np.array([0.0, 1.0, 0.0])
 
         # 4. Consensus & Decision Architecture
         # Flagship Default: Pure XGBoost as primary alpha generator
@@ -1717,35 +1721,13 @@ class InferenceService:
             final_signal = "HOLD"
             signal_note = (
                 f"Suppressed by Macro Regime Filter: Close ({curr_close:.2f} < SMA200 {sma_200:.2f}) "
-                f"or SPY ({curr_spy_close:.2f} < SMA50 {spy_sma_50:.2f})"
+                f"or SPY ({curr_spy_close:.2f} < SMA200 {spy_sma_200:.2f})"
             )
-        elif (
-            pre_signal == "BUY"
-            and bool(curr_close < (float(ticker_df_risk["EMA21"].iloc[-1]) if "EMA21" in ticker_df_risk.columns else curr_close))
-            and not is_ribbon_continuation
-        ):
-            # Correction Filter: Require dir_buy >= 0.68 or 5-day base when below EMA21
-            c_ema21 = float(ticker_df_risk["EMA21"].iloc[-1]) if "EMA21" in ticker_df_risk.columns else curr_close
-            p_b = float(xgb_preds_raw[2])
-            p_s = float(xgb_preds_raw[0])
-            dir_b = p_b / (p_b + p_s + 1e-9)
-            has_base_5d = False
-            if len(ticker_df_risk) >= 6:
-                past_lows = [float(ticker_df_risk["Low"].iloc[k]) for k in range(-5, -1)]
-                cur_l = float(ticker_df_risk["Low"].iloc[-1])
-                prev_l = float(ticker_df_risk["Low"].iloc[-2])
-                has_base_5d = bool(cur_l >= min(past_lows) and curr_close > prev_l)
-            if not (dir_b >= 0.68 or has_base_5d):
-                final_signal = "HOLD"
-                signal_note = (
-                    f"Suppressed by Correction Filter: Close ({curr_close:.2f} < EMA21 {c_ema21:.2f}) "
-                    f"without 0.68 conviction (dir_buy={dir_b:.2f}) or 5-day base"
-                )
         elif pre_signal == "SELL" and not short_allowed and not is_long_exit:
             final_signal = "HOLD"
             signal_note = (
                 f"Suppressed by Macro Regime Filter: Counter-trend SHORT forbidden in confirmed bull regime "
-                f"(Close {curr_close:.2f} >= SMA200 {sma_200:.2f} and SPY {curr_spy_close:.2f} >= SMA50 {spy_sma_50:.2f})"
+                f"(Close {curr_close:.2f} >= SMA200 {sma_200:.2f} and SPY {curr_spy_close:.2f} >= SMA200 {spy_sma_200:.2f})"
             )
         elif quality_metrics["grade"] == "NO_TRADE":
             final_signal = "HOLD"
@@ -1839,6 +1821,11 @@ class InferenceService:
             "signal_bias": forecast_data["forecast_bias"],
             "execution_state": auth_data["execution_state"],
             "execution_reasoning": auth_data["decision_reasoning"],
+            "execution_authority": {
+                "structural_regime": regime_detailed,
+                "execution_state": auth_data["execution_state"],
+                "decision_reasoning": auth_data["decision_reasoning"],
+            },
             # Institutional Logic
             "signal_reasoning": f"Consensus directional agreement ({agreement_data['dominant_direction']}) crossed confidence threshold.",
             "timing_reason": f"Momentum acc {timing_data.get('momentum_acceleration', 0.0):.2f}, Volatility expansion {timing_data.get('volatility_expansion', 0.0):.2f}",
@@ -1908,9 +1895,9 @@ class InferenceService:
                 "beta": float(beta),
                 "kelly_fraction": float(risk_profile.get("raw_fraction", 0.0)),
                 "target_size": float(
-                    target_exposure * 100.0
+                    target_exposure
                     if target_exposure is not None
-                    else risk_profile.get("raw_fraction", 0.0) * 100
+                    else risk_profile.get("raw_fraction", 0.0)
                 ),
                 "max_drawdown": float(risk_profile.get("max_drawdown", 0.0)),
                 "institutional_risk_index": 0.0,
