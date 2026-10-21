@@ -242,6 +242,12 @@ class PredictResponse(BaseModel):
     source_candle_timestamp: Optional[str] = None
     execution_timestamp: Optional[str] = None
 
+    # Core + Tactical Alpha Strategy Telemetry
+    strategy_mode: Optional[str] = "CORE_TACTICAL_ALPHA"
+    tactical_action: Optional[str] = None
+    target_exposure: Optional[float] = None
+    tactical_rationale: Optional[str] = None
+
 
 class UniverseStockItem(BaseModel):
     ticker: str

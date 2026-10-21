@@ -1609,7 +1609,7 @@ class InferenceService:
         signals_map = {0: "SELL", 1: "HOLD", 2: "BUY"}
         pre_signal = signals_map[final_signal_idx]
 
-        # Macro Regime Filter: 200-day SMA on underlying & 50-day SMA on SPY
+        # Macro Regime Filter: 200-day SMA on underlying & 200-day / 50-day SMA on SPY
         try:
             close_s = ticker_df_risk["Close"].dropna()
             spy_close_s = spy_df_risk["Close"].dropna()
@@ -1617,23 +1617,75 @@ class InferenceService:
             curr_spy_close = float(spy_close_s.iloc[-1])
             sma_200 = float(close_s.rolling(window=200, min_periods=10).mean().iloc[-1])
             spy_sma_50 = float(spy_close_s.rolling(window=50, min_periods=10).mean().iloc[-1])
-            base_long = bool((curr_close >= sma_200) and (curr_spy_close >= spy_sma_50))
+            spy_sma_200 = (
+                float(spy_close_s.rolling(window=200, min_periods=10).mean().iloc[-1])
+                if len(spy_close_s) >= 200
+                else spy_sma_50
+            )
+            base_long = bool((curr_close >= sma_200) and (curr_spy_close >= spy_sma_200))
             long_allowed = base_long
-            short_allowed = bool((curr_close < sma_200) or (curr_spy_close < spy_sma_50))
+            short_allowed = bool((curr_close < sma_200) or (curr_spy_close < spy_sma_200))
         except Exception as e:
             logger.warning(f"Error computing macro regime filter: {e}")
             long_allowed = True
             short_allowed = True
-            sma_200, spy_sma_50 = current_price, 1.0
-            curr_close, curr_spy_close = current_price, 1.0
+            sma_200, spy_sma_50, spy_sma_200 = current_price, 1.0, 1.0
+            curr_close, curr_spy_close = current_price, 1.0, 1.0
+            base_long = True
+
+        # Macro Core + Tactical Alpha Strategy Engine
+        c_rsi = float(tech_snapshot.get("RSI", 50.0))
+        lgbm_p_sell = float(lgbm_preds_raw[0])
+        lgbm_veto = bool(lgbm_p_sell >= 0.65)
+        p_b = float(xgb_preds_raw[2])
+        p_s = float(xgb_preds_raw[0])
+        dir_b = p_b / (p_b + p_s + 1e-9)
+
+        if not base_long:
+            tactical_action = "BEAR_REGIME_LIQUIDATION"
+            target_exposure = 0.0
+            tactical_rationale = (
+                f"Macro breakdown: Underlying ({curr_close:.2f} vs SMA200 {sma_200:.2f}) "
+                f"or SPY ({curr_spy_close:.2f} vs SMA200 {spy_sma_200:.2f}) below trend barrier. "
+                f"Capital protected in 100% Cash protective state."
+            )
+        elif (c_rsi <= 35.0 or dir_b >= 0.60) and not lgbm_veto:
+            tactical_action = "TACTICAL_OVERWEIGHT_BUY"
+            target_exposure = 1.40
+            tactical_rationale = (
+                f"Macro Bull intact. Tactical entry triggered: RSI={c_rsi:.1f} <= 35 or "
+                f"ML conviction dir_buy={dir_b:.2f} >= 0.60 (LGBM veto P_sell={lgbm_p_sell:.2f} < 0.65). "
+                f"Overweight exposure to 1.40x leverage."
+            )
+        elif (c_rsi >= 65.0 or lgbm_veto):
+            tactical_action = "TACTICAL_HARVEST_SELL"
+            target_exposure = 1.00
+            tactical_rationale = (
+                f"Macro Bull intact. Tactical harvest triggered: RSI={c_rsi:.1f} >= 65 or "
+                f"LGBM risk veto={lgbm_veto} (P_sell={lgbm_p_sell:.2f} >= 0.65). "
+                f"Harvest tactical overweights back to 1.0x Core equity."
+            )
+        else:
+            tactical_action = "HOLD_CORE_1.0X"
+            target_exposure = 1.00
+            tactical_rationale = (
+                f"Macro Bull intact (Close {curr_close:.2f} >= SMA200 {sma_200:.2f}, "
+                f"SPY {curr_spy_close:.2f} >= SMA200 {spy_sma_200:.2f}). "
+                f"Maintaining 1.0x Core long exposure. RSI={c_rsi:.1f} in neutral channel."
+            )
 
         macro_filter_data = {
             "underlying_close": round(curr_close, 2),
             "underlying_sma_200": round(sma_200, 2),
             "spy_close": round(curr_spy_close, 2),
             "spy_sma_50": round(spy_sma_50, 2),
+            "spy_sma_200": round(spy_sma_200, 2),
             "long_allowed": long_allowed,
             "short_allowed": short_allowed,
+            "is_macro_bull": base_long,
+            "tactical_action": tactical_action,
+            "target_exposure": target_exposure,
+            "tactical_rationale": tactical_rationale,
         }
 
         # 7. Quality & Confidence Decomposition
@@ -1748,6 +1800,9 @@ class InferenceService:
             asset_class=asset_class,
             volatility=recent_vol,
         )
+        trade_construction["tactical_action"] = tactical_action
+        trade_construction["target_exposure"] = target_exposure
+        trade_construction["strategy_mode"] = "CORE_TACTICAL_ALPHA"
 
         # Phase 2: Final Execution Authority
         auth_data = self.execution_authority.determine_execution_state(
@@ -1787,6 +1842,11 @@ class InferenceService:
             "confidence_score": round(calibrated_prob, 1),
             "uncertainty_score": round(uncertainty * 100, 1),
             "signal_note": signal_note,
+            # Core + Tactical Alpha Telemetry
+            "strategy_mode": "CORE_TACTICAL_ALPHA",
+            "tactical_action": tactical_action,
+            "target_exposure": target_exposure,
+            "tactical_rationale": tactical_rationale,
             # Phase 3: Semantic Separation
             "structural_regime": regime_detailed,
             "signal_bias": forecast_data["forecast_bias"],
@@ -1860,7 +1920,11 @@ class InferenceService:
                 "cvar": float(risk_profile.get("cvar", beta * 2.0)),
                 "beta": float(beta),
                 "kelly_fraction": float(risk_profile.get("raw_fraction", 0.0)),
-                "target_size": float(risk_profile.get("raw_fraction", 0.0)) * 100,
+                "target_size": float(
+                    target_exposure * 100.0
+                    if target_exposure is not None
+                    else risk_profile.get("raw_fraction", 0.0) * 100
+                ),
                 "max_drawdown": float(risk_profile.get("max_drawdown", 0.0)),
                 "institutional_risk_index": 0.0,
                 "risk_regime": "STABLE",
@@ -1985,6 +2049,10 @@ class InferenceService:
         response_data["signal_id"] = signal_id
 
         # Preserve the causal fields after package_chart_data update
+        response_data["strategy_mode"] = "CORE_TACTICAL_ALPHA"
+        response_data["tactical_action"] = tactical_action
+        response_data["target_exposure"] = target_exposure
+        response_data["tactical_rationale"] = tactical_rationale
         response_data["signal"] = confirmed_signal
         response_data["signal_state"] = signal_state
         response_data["is_bar_forming"] = is_bar_forming
