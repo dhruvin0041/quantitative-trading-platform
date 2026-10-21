@@ -1435,16 +1435,23 @@ class InferenceService:
             logger.debug("Applied isotonic calibration to model predictions")
 
         # DQN Probabilistic Prediction (Soft Temperature-Scaled Calibration)
+        raw_dim = getattr(self.mm.dqn_agent, "state_size", None)
+        dqn_in_dim = raw_dim if isinstance(raw_dim, int) else 33
+        base_features_dim = max(1, dqn_in_dim - 6)
+        dqn_base = tabular_row[:, :base_features_dim] if tabular_row.shape[1] >= base_features_dim else tabular_row
         dqn_state = np.hstack(
-            (tabular_row, dl_preds_raw.reshape(1, -1), xgb_preds_raw.reshape(1, -1))
+            (dqn_base, dl_preds_raw.reshape(1, -1), xgb_preds_raw.reshape(1, -1))
         )
-        if hasattr(self.mm.dqn_agent, "predict_proba"):
-            dqn_p = self.mm.dqn_agent.predict_proba(dqn_state[0], temperature=1.5)
+        if self.mm.dqn_agent is not None:
+            if hasattr(self.mm.dqn_agent, "predict_proba"):
+                dqn_p = self.mm.dqn_agent.predict_proba(dqn_state[0], temperature=1.5)
+            else:
+                dqn_action = self.mm.dqn_agent.act(dqn_state[0])
+                acc = self.mm.accuracies.get("dqn_accuracy", 0.50)
+                dqn_p = np.full(3, (1.0 - acc) / 2.0)
+                dqn_p[dqn_action] = acc
         else:
-            dqn_action = self.mm.dqn_agent.act(dqn_state[0])
-            acc = self.mm.accuracies.get("dqn_accuracy", 0.50)
-            dqn_p = np.full(3, (1.0 - acc) / 2.0)
-            dqn_p[dqn_action] = acc
+            dqn_p = np.array([0.33, 0.34, 0.33])
 
 
         # Directional ML conviction calibration (Strict Parity with Causal Replay)
@@ -1709,7 +1716,15 @@ class InferenceService:
             signal_note = "Suppressed: Negative Expected Value"
 
         # 8. Forecast & Trade Construction
-        tft_preds = self.mm.tft_model.predict(ts_sequence, verbose=0)[0]
+        if self.mm.tft_model is not None:
+            try:
+                tft_input = ts_sequence[:, :, :27] if ts_sequence.shape[-1] > 27 else ts_sequence
+                tft_preds = self.mm.tft_model.predict(tft_input, verbose=0)[0]
+            except Exception as e:
+                logger.warning(f"TFT prediction fallback: {e}")
+                tft_preds = np.zeros(5)
+        else:
+            tft_preds = np.zeros(5)
         recent_vol = float(
             tech_snapshot.get("ATR", current_price * 0.02) / current_price
         )

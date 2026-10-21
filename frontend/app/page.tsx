@@ -134,10 +134,12 @@ export default function HydraTerminal() {
     return stock?.market === 'india' ? '₹' : '$';
   }, [universe, ticker]);
 
-  // Extract Mock Risk Metrics from chartData or default
-  const portfolioVaR = chartData?.metadata?.portfolio_var || 0.042;
+  // Extract Risk Metrics from chartData or default
+  const portfolioVaR = chartData?.risk?.var_95 !== undefined && chartData?.risk?.var_95 !== null
+    ? Number(chartData.risk.var_95)
+    : (chartData?.metadata?.portfolio_var || 0.0);
   const isVaRBreach = portfolioVaR > 0.05;
-  const executionStatus = isVaRBreach ? "VETOED (VAR_BREACH)" : "ACTIVE_ROUTING";
+  const executionStatus = chartData?.execution_state || (isVaRBreach ? "VETOED (VAR_BREACH)" : "PAPER_SIMULATION");
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans flex flex-col selection:bg-primary/30">
@@ -354,16 +356,16 @@ export default function HydraTerminal() {
                   )}
                 </div>
 
-                {/* Crowding Warnings */}
+                {/* Asset Intelligence & Execution Telemetry */}
                 <div className="flex flex-col gap-2 p-4 border border-border rounded-lg bg-background">
-                  <span className="text-[11px] font-bold uppercase text-muted-foreground">Sector Crowding (Tech)</span>
+                  <span className="text-[11px] font-bold uppercase text-muted-foreground">Asset Intelligence</span>
                   <div className="flex justify-between items-center mt-1">
-                    <span className="text-[12px] text-foreground">Current Exposure</span>
-                    <span className="text-[13px] font-mono text-warning">14.2%</span>
+                    <span className="text-[12px] text-foreground">Asset Class</span>
+                    <span className="text-[13px] font-mono text-primary font-bold">{chartData?.asset_class || "EQUITY"}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-[12px] text-foreground">Purged Trades</span>
-                    <span className="text-[13px] font-mono text-muted-foreground">3</span>
+                    <span className="text-[12px] text-foreground">Execution Mode</span>
+                    <span className="text-[13px] font-mono text-muted-foreground">Modeled Paper Fill</span>
                   </div>
                 </div>
 

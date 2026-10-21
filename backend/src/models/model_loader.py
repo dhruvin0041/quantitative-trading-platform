@@ -219,15 +219,26 @@ class ModelManager:
             logger.warning(f"Could not load LSTM weights: {e}")
 
     def _load_tft(self):
-        try:
-            tft_input, tft_output = build_tft_branch(
-                time_steps=self.config["data"]["time_steps"],
-                num_features=self.num_features,
-            )
-            self.tft_model = keras.Model(inputs=tft_input, outputs=tft_output)
-            self.tft_model.load_weights("artifacts/tft_quantile_weights.weights.h5")
-        except Exception as e:
-            logger.warning(f"Could not load TFT weights: {e}")
+        tft_path = Path("artifacts/tft_quantile_weights.weights.h5")
+        if not tft_path.exists():
+            tft_path = Path(__file__).resolve().parent.parent.parent / "artifacts" / "tft_quantile_weights.weights.h5"
+        if not tft_path.exists():
+            return
+        # TFT branch weights were trained on 27 base features; fallback to self.num_features
+        for num_feat in [27, self.num_features]:
+            try:
+                tft_input, tft_output = build_tft_branch(
+                    time_steps=self.config["data"]["time_steps"],
+                    num_features=num_feat,
+                )
+                model = keras.Model(inputs=tft_input, outputs=tft_output)
+                model.load_weights(str(tft_path))
+                self.tft_model = model
+                logger.info("Loaded TFT quantile model (%d features).", num_feat)
+                return
+            except Exception as e:
+                logger.debug(f"TFT load attempt with {num_feat} features failed: {e}")
+        logger.warning("Could not load TFT weights.")
 
     def _load_scaler(self):
         for sp in [
@@ -275,16 +286,26 @@ class ModelManager:
             logger.warning(f"Could not load XGB ensemble: {e}")
 
     def _load_svm(self):
-        try:
-            self.svm_model = joblib.load("artifacts/svm_ensemble.joblib")
-        except Exception as e:
-            logger.warning(f"Could not load SVM model: {e}")
+        svm_path = Path("artifacts/svm_ensemble.joblib")
+        if not svm_path.exists():
+            svm_path = Path(__file__).resolve().parent.parent.parent / "artifacts" / "svm_ensemble.joblib"
+        if svm_path.exists():
+            try:
+                self.svm_model = joblib.load(str(svm_path))
+                logger.info("Loaded SVM ensemble model.")
+            except Exception as e:
+                logger.warning(f"Could not load SVM model: {e}")
 
     def _load_knn(self):
-        try:
-            self.knn_model = joblib.load("artifacts/knn_ensemble.joblib")
-        except Exception as e:
-            logger.warning(f"Could not load KNN model: {e}")
+        knn_path = Path("artifacts/knn_ensemble.joblib")
+        if not knn_path.exists():
+            knn_path = Path(__file__).resolve().parent.parent.parent / "artifacts" / "knn_ensemble.joblib"
+        if knn_path.exists():
+            try:
+                self.knn_model = joblib.load(str(knn_path))
+                logger.info("Loaded KNN ensemble model.")
+            except Exception as e:
+                logger.warning(f"Could not load KNN model: {e}")
 
     def _load_lgbm(self):
         try:
@@ -306,11 +327,22 @@ class ModelManager:
             logger.warning(f"Could not load LightGBM agent: {e}")
 
     def _load_dqn(self):
-        try:
-            self.dqn_agent = DQNAgent(state_size=self.num_features + 6)
-            self.dqn_agent.load("artifacts/dqn_model.pth")
-        except Exception as e:
-            logger.warning(f"Could not load DQN agent: {e}")
+        dqn_path = Path("artifacts/dqn_model.pth")
+        if not dqn_path.exists():
+            dqn_path = Path(__file__).resolve().parent.parent.parent / "artifacts" / "dqn_model.pth"
+        if not dqn_path.exists():
+            return
+        # Standard DQN agent architecture uses 33 states (27 base tabular + 3 DL + 3 XGB)
+        for state_size in [33, self.num_features + 6]:
+            try:
+                agent = DQNAgent(state_size=state_size)
+                agent.load(str(dqn_path))
+                self.dqn_agent = agent
+                logger.info("Loaded DQN agent (state_size=%d).", state_size)
+                return
+            except Exception as e:
+                logger.debug(f"DQN load attempt with state_size={state_size} failed: {e}")
+        logger.warning("Could not load DQN agent.")
 
     def _load_meta_ensemble(self):
         try:
