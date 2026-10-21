@@ -800,10 +800,13 @@ class InferenceService:
                 )
 
                 # 6. ML Sell / Bearish Pressure Signal
-                is_ml_sell = bool(
-                    (p_sell >= 0.58 and p_sell > p_buy)
-                    or (dir_sell >= 0.62 and p_sell >= 0.30 and p_sell > p_buy)
-                )
+                if macro_bull:
+                    is_ml_sell = bool(p_sell >= 0.55 and p_sell > p_buy)
+                else:
+                    is_ml_sell = bool(
+                        (p_sell >= 0.58 and p_sell > p_buy)
+                        or (dir_sell >= 0.62 and p_sell >= 0.30 and p_sell > p_buy)
+                    )
 
                 raw_signal = "HOLD"
                 conf = float(prob_vec[1])
@@ -817,16 +820,18 @@ class InferenceService:
 
                 # 7. Position-Aware Dynamic Risk Exits for Active Longs (Trailing Stop & Overbought Climax)
                 if current_pos == "LONG":
-                    trailing_stop = peak_price - (3.0 * cur_atr) if peak_price > 0 else 0.0
+                    trailing_stop = peak_price - (3.8 * cur_atr) if peak_price > 0 else 0.0
                     hit_trailing = bool(cur_c < trailing_stop)
-                    overbought_reversal = bool(
-                        cur_rsi > 78.0
-                        and is_bearish_candle
-                        and (cur_c < prev_h or cur_l < prev_l or prev_l < prev2_l)
-                    )
-                    if hit_trailing or overbought_reversal:
+                    hit_climax = bool(cur_rsi > 82.0 and is_bearish_candle)
+
+                    if hit_trailing or hit_climax:
                         raw_signal = "SELL"
                         conf = 0.85
+                    elif macro_bull and is_bull_trend:
+                        # In confirmed macro bull trend above trailing stop, hold through minor fluctuations unless strong conviction sell
+                        if raw_signal == "SELL" and not hit_trailing and not hit_climax and p_sell < 0.60:
+                            raw_signal = "HOLD"
+                            conf = float(prob_vec[1])
 
                 # 8. Macro Filter at bar t (Zero lookahead)
                 short_ok = bool((cur_c < cur_sma200) or (cur_spy < cur_spy_macro))
@@ -862,7 +867,7 @@ class InferenceService:
                     current_pos = "LONG"
                     last_trade_idx = i
                     last_trade_price = cur_c
-                    peak_price = cur_h
+                    peak_price = cur_c
                     if orig_idx + 1 < len(df):
                         next_idx = df.index[orig_idx + 1]
                         exec_target = (
@@ -949,7 +954,7 @@ class InferenceService:
                     })
 
                 elif current_pos == "LONG":
-                    peak_price = max(peak_price, cur_h)
+                    peak_price = max(peak_price, cur_c)
 
                 bars_processed += 1
 
@@ -1493,10 +1498,13 @@ class InferenceService:
                 )
 
                 # 4. ML Sell / Bearish Pressure Signal
-                is_ml_sell = bool(
-                    (p_s >= 0.58 and p_s > p_b)
-                    or (dir_s >= 0.62 and p_s >= 0.30 and p_s > p_b)
-                )
+                if macro_bull:
+                    is_ml_sell = bool(p_s >= 0.55 and p_s > p_b)
+                else:
+                    is_ml_sell = bool(
+                        (p_s >= 0.58 and p_s > p_b)
+                        or (dir_s >= 0.62 and p_s >= 0.30 and p_s > p_b)
+                    )
 
                 if is_ml_buy or is_continuation or is_dip_reversal:
                     xgb_preds_raw = np.array([p_s, max(0.0, 1.0 - dir_b - p_s), dir_b])
