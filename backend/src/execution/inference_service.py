@@ -705,6 +705,7 @@ class InferenceService:
             last_trade_idx = -10
             last_trade_price = 0.0
             peak_price = 0.0
+            trailing_stop = 0.0
             staged_signals = []
 
             for i in range(intended_bars):
@@ -818,9 +819,18 @@ class InferenceService:
                     raw_signal = "SELL"
                     conf = max(p_sell, min(1.0, dir_sell * 0.80))
 
-                # 7. Position-Aware Dynamic Risk Exits for Active Longs (Trailing Stop & Overbought Climax)
+                # 7. Position-Aware Dynamic Risk Exits for Active Longs (Adaptive Monotonic Chandelier Ratchet & Overbought Climax)
                 if current_pos == "LONG":
-                    trailing_stop = peak_price - (3.8 * cur_atr) if peak_price > 0 else 0.0
+                    unrealized_p = (
+                        (cur_c - last_trade_price) / (last_trade_price + 1e-9)
+                        if last_trade_price > 0
+                        else 0.0
+                    )
+                    # Profit-Based Volatility Compression: Accelerate ratchet when in deep profit (> 10%) with elevated RSI
+                    mult = 2.4 if (unrealized_p >= 0.10 and cur_rsi > 70.0) else 3.8
+                    new_stop = peak_price - (mult * cur_atr) if peak_price > 0 else 0.0
+                    trailing_stop = max(trailing_stop, new_stop)
+
                     hit_trailing = bool(cur_c < trailing_stop)
                     hit_climax = bool(cur_rsi > 82.0 and is_bearish_candle)
 
@@ -868,6 +878,7 @@ class InferenceService:
                     last_trade_idx = i
                     last_trade_price = cur_c
                     peak_price = cur_c
+                    trailing_stop = peak_price - (3.8 * cur_atr)
                     if orig_idx + 1 < len(df):
                         next_idx = df.index[orig_idx + 1]
                         exec_target = (
@@ -915,6 +926,7 @@ class InferenceService:
                     last_trade_idx = i
                     last_trade_price = cur_c
                     peak_price = 0.0
+                    trailing_stop = 0.0
                     if orig_idx + 1 < len(df):
                         next_idx = df.index[orig_idx + 1]
                         exec_target = (
