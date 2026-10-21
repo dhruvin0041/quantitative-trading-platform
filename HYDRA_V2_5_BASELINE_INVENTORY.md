@@ -3,7 +3,7 @@
 **Document ID:** `HYDRA-V2.5-INV-001` (Historical Baseline Inception Record)  
 **Date of Baseline Snapshot:** October 16, 2026  
 **Baseline Inception Commit:** `6d8fae8` on branch `main`  
-**Authoritative Remediated Head:** `e9a1a04` (Refer to `HYDRA_V2_5_REMEDIATION_LOG.md` Entry 008 and REC-008 Certification)  
+**Current Release Manifest & Authoritative Head Index:** Refer to `HYDRA_V2_5_RELEASE_INDEX.md`, `HYDRA_V2_5_REMEDIATION_LOG.md` Entry 009 (`6e19e22`), and Entry 010 (REC-010 Certification)  
 **Corpus / Repository:** `dhruvin0041/quantitative-trading-platform`  
 **Audit Scope:** Complete system architecture, data lineage, artifact provenance, discrepancy reconciliation, test coverage, and prioritized remediation roadmap.  
 **Operational Status:** **RESEARCH-ONLY. Real-Money Capital Deployment STRICTLY BLOCKED.**
@@ -14,7 +14,8 @@
 
 - **Current Git Branch:** `main`
 - **Baseline Inception Commit:** `6d8fae8` (`feat(research): implement HYDRA V2.4.4 optimization lineage, DSR audit, and multi-asset generalization`)
-- **Authoritative Remediated Head Commit:** `e9a1a04` (`fix(governance): purify open position win semantics, label baseline records, and establish commit-bound evidence`)
+- **Historical Governance Lineage:** `6d8fae8` (Inception Baseline) $\rightarrow$ `aa8dd8d` (Phase 3 31-Feature Schema Remediated Head) $\rightarrow$ `2f82ea2` (Phase 2.1 Terminal Mark & Event Semantics Remediated Head) $\rightarrow$ `e9a1a04` (Phase 2.1 Win Semantics Remediated Head — REC-008) $\rightarrow$ `6e19e22` (Historical Documentation Alignment Head — REC-009) $\rightarrow$ Current Commit (Canonical Release Head — REC-010)
+- **Authoritative Release Manifest Index:** Documented in `HYDRA_V2_5_RELEASE_INDEX.md` and `HYDRA_V2_5_RELEASE_INDEX.json`
 - **Remediation & Prospective Fix:** Phase 2.1 accounting reconciliation, Phase 3 prospective feature pipeline (31-feature schema parity with `kept_features.json`), trade ledger valuation timestamp standardization (`terminal_valuation_timestamp_ny`), open position win-rate purification (`is_profitable_at_mark` isolated, `is_winner = NULL`), and commit-to-commit Git blob identity verification.
 - **Remote Tracking:** `origin/main` (`https://github.com/dhruvin0041/quantitative-trading-platform.git`)
 - **Tracked Working Tree Status:** Clean (0 uncommitted modifications).

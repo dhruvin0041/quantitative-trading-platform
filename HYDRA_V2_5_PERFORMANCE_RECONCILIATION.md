@@ -4,7 +4,8 @@
 **Supersedes:** `HYDRA-V2.5-REC-002`  
 **Date of Snapshot:** October 16, 2026  
 **Baseline Inception Commit:** `6d8fae8` on branch `main`  
-**Authoritative Remediated Head:** `e9a1a04` (Refer to `HYDRA_V2_5_REMEDIATION_LOG.md` Entry 008 and REC-008 Certification)  
+**Current Release Manifest & Authoritative Head Index:** Refer to `HYDRA_V2_5_RELEASE_INDEX.md`, `HYDRA_V2_5_REMEDIATION_LOG.md` Entry 009 (`6e19e22`), and Entry 010 (REC-010 Certification)  
+**Historical Governance Lineage:** `6d8fae8` (Inception Baseline) $\rightarrow$ `aa8dd8d` $\rightarrow$ `2f82ea2` $\rightarrow$ `e9a1a04` (REC-008) $\rightarrow$ `6e19e22` (REC-009) $\rightarrow$ Current Commit (Canonical Release Head — REC-010)  
 **Evaluation Scope:** AAPL Forward Simulation Window (October 13, 2025 – October 14, 2026)  
 **Investigation Focus:** Ledger Cash Semantics Disambiguation, Exact Resolution of $22.52 vs $22.53 Math, Cryptographic Run Provenance Manifest, First-Principles Accounting Tests, and Phase 3 Readiness  
 **Operational Status:** **RESEARCH-ONLY. Real-Money Capital Deployment STRICTLY BLOCKED.**

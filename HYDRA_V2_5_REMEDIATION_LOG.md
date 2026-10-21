@@ -235,11 +235,43 @@
 
 ---
 
-## Remediation Entry 009: Historical Baseline Documentation Index Alignment (October 21, 2026 07:00 UTC)
+## Remediation Entry 009: Historical Baseline Documentation Index Alignment to REC-008 (Commit `6e19e22`, October 21, 2026 07:00 UTC)
 - **Problem Identified (Review of REC-008):**
-  - In commit `e9a1a04`, `HYDRA_V2_5_BASELINE_INVENTORY.md` and `HYDRA_V2_5_PERFORMANCE_RECONCILIATION.md` still contained header cross-references to intermediate commit `2f82ea2` and `REC-007` instead of pointing to `e9a1a04` and `REC-008`.
+  - In commit `e9a1a04` (REC-008), `HYDRA_V2_5_BASELINE_INVENTORY.md` and `HYDRA_V2_5_PERFORMANCE_RECONCILIATION.md` still contained header cross-references to intermediate commit `2f82ea2` and `REC-007` instead of pointing to `e9a1a04` and `REC-008`.
 - **Root Cause Isolated & Remediated:**
-  - Updated both `HYDRA_V2_5_BASELINE_INVENTORY.md` and `HYDRA_V2_5_PERFORMANCE_RECONCILIATION.md` headers to formally identify `e9a1a04` as the authoritative remediated release head and reference `REC-008`, while preserving `6d8fae8` as the historical baseline inception commit.
+  - In commit `6e19e22`, updated both `HYDRA_V2_5_BASELINE_INVENTORY.md` and `HYDRA_V2_5_PERFORMANCE_RECONCILIATION.md` headers to formally identify `e9a1a04` as the authoritative remediated release head and reference `REC-008`, while preserving `6d8fae8` as the historical baseline inception commit.
   - Zero code, model, test, or ledger modifications occurred in this documentation alignment step.
   - Deployment gate: Real-money live trading remains **STRICT NO-GO**. Prospective closed trades: **0 / 50**.
+
+---
+
+## Remediation Entry 010: Institutional Release Index Architecture, Historical Header Decoupling & REC-010 Final Certification (October 21, 2026 07:30 UTC)
+- **Problem Identified (Forensic Review of REC-009):**
+  1. **Documentation Alignment Discrepancy:** While commit `6e19e22` was submitted as release certification REC-009, its internal historical baseline documents (`HYDRA_V2_5_BASELINE_INVENTORY.md` and `HYDRA_V2_5_PERFORMANCE_RECONCILIATION.md`) still referenced parent commit `e9a1a04` and REC-008 in their headers. Furthermore, Entry 009 only recorded updating headers to `e9a1a04`, failing to document the claimed transition to `6e19e22` and REC-009.
+  2. **Inherent Commit Pointer Circularity:** Tracking volatile, forward-moving Git commit hashes inside static historical snapshot markdown files created an off-by-one synchronization lag whenever documentation commits were generated.
+- **Root Cause Isolated & Remediated:**
+  1. **Standalone Release Manifest Architecture:**
+     - Established a dedicated, authoritative release index: [HYDRA_V2_5_RELEASE_INDEX.md](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/HYDRA_V2_5_RELEASE_INDEX.md) and [HYDRA_V2_5_RELEASE_INDEX.json](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/HYDRA_V2_5_RELEASE_INDEX.json) (replicated in `backend/reports/`).
+     - This standalone index serves as the single source of truth for repository release status, active Git HEAD, commit lineage, document authority classification, cryptographic artifact registers, and governance gates.
+  2. **Historical Inception Document Decoupling:**
+     - In both [HYDRA_V2_5_BASELINE_INVENTORY.md](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/HYDRA_V2_5_BASELINE_INVENTORY.md) (`HYDRA-V2.5-INV-001`) and [HYDRA_V2_5_PERFORMANCE_RECONCILIATION.md](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/HYDRA_V2_5_PERFORMANCE_RECONCILIATION.md) (`HYDRA-V2.5-REC-003`), preserved `6d8fae8` as the immutable historical baseline inception commit.
+     - Replaced fragile point-in-time commit head headers with direct references to the Release Manifest Index and documented the full governance transition chain: `6d8fae8` $\rightarrow$ `aa8dd8d` $\rightarrow$ `2f82ea2` $\rightarrow$ `e9a1a04` (REC-008) $\rightarrow$ `6e19e22` (REC-009) $\rightarrow$ Current Commit (REC-010).
+  3. **Cryptographic Git Blob Verification Across Full Lineage:**
+     - Verified that all frozen research assets remain 100% byte-for-byte identical across all six commits (`6d8fae8`, `aa8dd8d`, `2f82ea2`, `e9a1a04`, `6e19e22`, and current HEAD):
+       - `v2_4_3_lightgbm_frozen_model.joblib`: Git blob `ca5cf2990decade03a05964ef513d277cacee71e` (SHA-256 `6f4a85bb...`)
+       - `v2_4_3_scaler_frozen.joblib`: Git blob `091edda5c8ebed415642b1e6bbe8c0e7573fd720` (SHA-256 `fa26c99c...`)
+       - `v2_4_3_feature_columns.json`: Git blob `507eef1ab0d0ed9cb91a786d0d8f03b40a2a1fd2` (SHA-256 `b7bed6a3...`)
+       - `v2_4_3_forward_market_data.parquet`: Git blob `e9edbd391050781f8c498fccaf3f4f434ca967c8` (SHA-256 `4a5cf250...`)
+       - `v2_5_run_provenance_manifest.json`: Git blob `9f518055c58be77081e6619a2fc680f80972628a` (SHA-256 `83f3ef7a...`)
+  4. **Trade Ledger Accounting & Event Semantics Reaffirmation:**
+     - Reconfirmed Trade 19 semantics: `status` = `OPEN_MARKED_TO_MARKET`, `is_winner` = `NULL`, `is_profitable_at_mark` = `True`, all 7 exit fields strictly `NULL`.
+     - Terminal equity balance verified: $\text{Cash (\$164.53)} + 3 \times \text{Mark (\$341.27)} = \mathbf{\$1,188.34}$ ($0.00 discrepancy).
+  5. **Unabridged Test & Lint Verification:**
+     - 18/18 targeted tests passed in 25.49s (`test_v2_5_phase_2_reconciliation.py` + `test_prospective_pipeline_remediation.py`).
+     - 326/326 full repository test suite passed (`pytest backend/tests`).
+     - Static code analysis: `ruff check backend` passes with **0 errors**.
+  6. **Deployment Gate & Quantitative Realism:**
+     - Qualifying prospective closed trades remain at **0 / 50**.
+     - All model-risk gates remain failed (Brier −2.45%, ECE 0.0816, AUC 0.48–0.52, DSR failed, benchmark underperformance).
+     - Operational status: **RESEARCH-ONLY**. Real-money capital deployment: **STRICT NO-GO**.
 

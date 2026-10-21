@@ -1,0 +1,146 @@
+{
+  "document_id": "HYDRA-V2.5-REL-010-JSON",
+  "document_title": "HYDRA V2.5 Machine-Readable Release Manifest & Governance Index",
+  "release_certification": "HYDRA-V2.5-REC-010",
+  "release_date": "2026-10-21",
+  "operational_status": "RESEARCH_ONLY",
+  "real_money_deployment": "STRICT_NO_GO",
+  "git_repository": "https://github.com/dhruvin0041/quantitative-trading-platform.git",
+  "git_branch": "main",
+  "commit_lineage": [
+    {
+      "commit_sha": "6d8fae8ca95d577786d6eb79e794f22625abbca6",
+      "short_sha": "6d8fae8",
+      "role": "Baseline Inception Head",
+      "scope": "Initial V2.4.4 optimization, baseline evaluation, Phase 2.1 inception snapshot"
+    },
+    {
+      "commit_sha": "aa8dd8d22fe0ed29a75410c79559a320e20960b4",
+      "short_sha": "aa8dd8d",
+      "role": "Phase 3 Remediation Head",
+      "scope": "Remediated prospective pipeline feature schema (31 features) and standardized valuation timestamps"
+    },
+    {
+      "commit_sha": "2f82ea2506e30b8e7b9bf049db21dd66c4bc9050",
+      "short_sha": "2f82ea2",
+      "role": "Phase 2.1 Event Semantics Head",
+      "scope": "Purified open position event semantics; removed exit proceeds from open position Trade 19"
+    },
+    {
+      "commit_sha": "e9a1a04d2091c52b7ba40986756620ca735e5804",
+      "short_sha": "e9a1a04",
+      "role": "REC-008 Release Certification Head",
+      "scope": "Purified open position win semantics (is_profitable_at_mark=True, is_winner=NULL)"
+    },
+    {
+      "commit_sha": "6e19e225917cd97a3c2170ac271b8909f2f6ea6a",
+      "short_sha": "6e19e22",
+      "role": "REC-009 Governance Alignment Head",
+      "scope": "Aligned historical baseline document cross-references to REC-008 release certification"
+    },
+    {
+      "commit_sha": "HEAD",
+      "short_sha": "HEAD",
+      "role": "REC-010 Definitive Release Certification",
+      "scope": "Established standalone Release Index architecture, decoupled historical headers, verified full test suite"
+    }
+  ],
+  "frozen_artifacts_register": {
+    "backend/artifacts/research/v2_4_3_lightgbm_frozen_model.joblib": {
+      "git_blob_id": "ca5cf2990decade03a05964ef513d277cacee71e",
+      "sha256": "6f4a85bbab000554d61741652a9646680102d270693f4f23d05585797547536d",
+      "size_bytes": 653548,
+      "status": "INVARIANT"
+    },
+    "backend/artifacts/research/v2_4_3_scaler_frozen.joblib": {
+      "git_blob_id": "091edda5c8ebed415642b1e6bbe8c0e7573fd720",
+      "sha256": "fa26c99c062aa442604726ede16de3862eb3846b59354f2fd88d39608b8e3a41",
+      "size_bytes": 879,
+      "status": "INVARIANT"
+    },
+    "backend/artifacts/research/v2_4_3_feature_columns.json": {
+      "git_blob_id": "507eef1ab0d0ed9cb91a786d0d8f03b40a2a1fd2",
+      "sha256": "b7bed6a3fdffaf3b1d62485fa59276c2f85cf0ec646c2ef267feeef7a822267a",
+      "size_bytes": 340,
+      "status": "INVARIANT"
+    },
+    "backend/artifacts/research/v2_4_3_forward_market_data.parquet": {
+      "git_blob_id": "e9edbd391050781f8c498fccaf3f4f434ca967c8",
+      "sha256": "4a5cf250f0e32facaf4509a04ec05d17d4d741300c9281befe5181b7fcba2d35",
+      "size_bytes": 13858,
+      "status": "INVARIANT"
+    },
+    "backend/artifacts/research/v2_5_run_provenance_manifest.json": {
+      "git_blob_id": "9f518055c58be77081e6619a2fc680f80972628a",
+      "sha256": "83f3ef7ac75ca2f765acc5fb57723ba105c17c7beadc909d99a59fd2bd5763bc",
+      "size_bytes": 2752,
+      "status": "INVARIANT"
+    },
+    "backend/artifacts/research/phase_3d_oof_predictions.joblib": {
+      "git_blob_id": "9d03ac8985ca03afd86f10f93326456523afd3ea",
+      "sha256": "d85d5243743027c2e6849016acd79e89a4a70813ed3ff731c7e2ada97cee4c2b",
+      "size_bytes": 25660,
+      "status": "INVARIANT"
+    },
+    "backend/artifacts/research/phase_3e_nested_calibrated_predictions.joblib": {
+      "git_blob_id": "c93fca8256e052e26f50e0df3c463c86bf98551d",
+      "sha256": "1e257def5ce0d89657b241d9a58c56efd8ec92ec985fd3c273a0b208d76b7d32",
+      "size_bytes": 25660,
+      "status": "INVARIANT"
+    },
+    "backend/artifacts/research/workstream_1_pinned_development_dataset.joblib": {
+      "git_blob_id": "408fc0938c4f8d12fe0f741a954ff17ab75eaeda",
+      "sha256": "e764c60cb390d11756ec59745629985a20e1ab5afde2ac6d87c01fbd0fc1dc05",
+      "size_bytes": 134845,
+      "status": "INVARIANT"
+    }
+  },
+  "trade_ledger_reconciliation": {
+    "total_trades": 19,
+    "closed_trades": 18,
+    "open_trades": 1,
+    "trade_19_semantics": {
+      "trade_id": 19,
+      "status": "OPEN_MARKED_TO_MARKET",
+      "is_winner": null,
+      "is_profitable_at_mark": true,
+      "exit_timestamp": null,
+      "exit_fill_price": null,
+      "exit_shares": null,
+      "exit_fees": null,
+      "exit_gross_proceeds": null,
+      "exit_net_proceeds": null,
+      "cash_after_exit": null,
+      "terminal_mark_price": 341.27,
+      "terminal_valuation_timestamp_ny": "2026-10-13 16:00:00 America/New_York",
+      "open_shares_held": 3,
+      "open_market_value": 1023.81,
+      "terminal_cash": 164.53,
+      "portfolio_equity": 1188.34,
+      "arithmetic_check": "164.53 + (3 * 341.27) = 1188.34",
+      "arithmetic_discrepancy": 0.0
+    }
+  },
+  "benchmark_summary": {
+    "archived_baseline_equity": 1188.34,
+    "archived_baseline_return_pct": 18.83,
+    "deterministic_replacement_equity": 1192.02,
+    "deterministic_replacement_return_pct": 19.20,
+    "aapl_buy_and_hold_return_pct": 38.08,
+    "underperformance_bps": -1925
+  },
+  "model_risk_gates": {
+    "brier_skill_score": -0.0245,
+    "expected_calibration_error": 0.0816,
+    "out_of_sample_auc_range": [0.48, 0.52],
+    "deflated_sharpe_ratio_status": "FAILED",
+    "alpha_skill_established": false
+  },
+  "prospective_validation_milestone": {
+    "target_closed_trades": 50,
+    "qualifying_prospective_closed_trades": 0,
+    "retrospective_demonstration_sessions": 5,
+    "retrospective_demonstration_dates": ["2026-10-14", "2026-10-15", "2026-10-16", "2026-10-19", "2026-10-20"],
+    "retrospective_demonstration_qualification": "DOES_NOT_COUNT_TOWARD_PROSPECTIVE_MILESTONE"
+  }
+}
