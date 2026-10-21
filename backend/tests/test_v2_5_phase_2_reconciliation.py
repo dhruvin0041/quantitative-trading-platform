@@ -523,4 +523,11 @@ def test_open_marked_position_rejects_exit_proceeds_and_execution_fills():
         assert float(row["open_market_value"]) > 0
         assert round(float(row["terminal_mark_price"]) * int(row["open_shares_held"]), 2) == round(float(row["open_market_value"]), 2)
 
+        # Confirm open position leaves is_winner null until closure and uses is_profitable_at_mark
+        assert pd.isna(row["is_winner"]) or row["is_winner"] == "" or str(row["is_winner"]).strip() == "", (
+            f"Trade {row['trade_id']} is OPEN_MARKED_TO_MARKET but has non-null is_winner = {row['is_winner']}"
+        )
+        assert row["is_profitable_at_mark"] is True or str(row["is_profitable_at_mark"]).lower() == "true"
+
+
 

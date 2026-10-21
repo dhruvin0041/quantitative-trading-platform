@@ -198,3 +198,37 @@
      - Confirmed `run_prospective_validation.py` contains zero brokerage API keys, zero order routing, and enforces `fill_label='MODELED_PAPER_FILL_NOT_BROKERAGE'`.
   5. **Model-Risk Gate Governance:**
      - All model-risk gates remain failed (Brier -2.45%, ECE 0.0816, AUC 0.48-0.52, DSR failed). Real-money live trading remains **STRICT NO-GO**.
+
+---
+
+## Remediation Entry 008: Forensic Audit Remediation — Open Position Win Semantics, Baseline Document Labeling & Commit Verification (October 21, 2026 06:45 UTC)
+- **Problem Identified (REC-007 Forensic Review):**
+  1. **Trade 19 `is_winner` Semantic Ambiguity:** In `HYDRA_V2_5_TRADE_LEDGER.csv`, Trade 19 (`OPEN_MARKED_TO_MARKET`) carried `is_winner = True`, creating a risk that downstream win-rate calculations would count an unrealized position as a completed winning trade.
+  2. **Baseline Document Versioning Clarity:** Baseline inventory (`HYDRA-V2.5-INV-001`) and reconciliation (`HYDRA-V2.5-REC-003`) identified `6d8fae8` as authoritative without explicitly labeling themselves as historical inception baselines, risking confusion with the current remediated state.
+  3. **Commit-to-Commit File Hash Preservation:** Direct cryptographic comparison between commits (`aa8dd8d` and `2f82ea2`) was needed to prove byte-for-byte identity of all frozen research assets.
+  4. **Execution Safety Statement Precision:** The claim that live order routing is "architecturally impossible" across the entire repository needed narrower, legally defensible scoping tied to the audited prospective scripts and adapters.
+- **Root Cause Isolated & Remediated:**
+  1. **Purification of Win-Rate Semantics for Open Positions:**
+     - Updated [HYDRA_V2_5_TRADE_LEDGER.csv](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/HYDRA_V2_5_TRADE_LEDGER.csv) and [backend/reports/HYDRA_V2_5_TRADE_LEDGER.csv](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/reports/HYDRA_V2_5_TRADE_LEDGER.csv):
+       - Cleared `is_winner = NULL` for open position Trade 19 until formal liquidation.
+       - Added explicit column `is_profitable_at_mark = True` for Trade 19 (and `NULL` for closed trades).
+     - Enhanced regression test `test_open_marked_position_rejects_exit_proceeds_and_execution_fills` in [test_v2_5_phase_2_reconciliation.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/tests/test_v2_5_phase_2_reconciliation.py) to assert `is_winner` is empty and `is_profitable_at_mark` is `True` on all open marked positions.
+  2. **Historical Baseline Inception Labeling:**
+     - Explicitly labeled [HYDRA_V2_5_BASELINE_INVENTORY.md](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/HYDRA_V2_5_BASELINE_INVENTORY.md) as "Historical Baseline Inception Record" (`6d8fae8`) with explicit cross-references to the current remediated Git commit.
+     - Explicitly labeled [HYDRA_V2_5_PERFORMANCE_RECONCILIATION.md](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/HYDRA_V2_5_PERFORMANCE_RECONCILIATION.md) as "Historical Phase 2.1 Inception Record" (`6d8fae8`).
+  3. **Git Commit-to-Commit Cryptographic Blob Verification:**
+     - Ran `git ls-tree aa8dd8d` and `git ls-tree 2f82ea2` on `backend/artifacts/research/`. All Git blob object IDs match 100%:
+       - `v2_4_3_feature_columns.json`: `507eef1ab0d0ed9cb91a786d0d8f03b40a2a1fd2`
+       - `v2_4_3_forward_market_data.parquet`: `e9edbd391050781f8c498fccaf3f4f434ca967c8`
+       - `v2_4_3_lightgbm_frozen_model.joblib`: `ca5cf2990decade03a05964ef513d277cacee71e`
+       - `v2_4_3_scaler_frozen.joblib`: `091edda5c8ebed415642b1e6bbe8c0e7573fd720`
+       - `v2_5_run_provenance_manifest.json`: `9f518055c58be77081e6619a2fc680f80972628a`
+     - SHA-256 disk digests remain unchanged: LightGBM `6f4a85bb...`, Scaler `fa26c99c...`, Features `b7bed6a3...`.
+  4. **Narrowed Execution Safety Certification:**
+     - Verified that the audited prospective script `run_prospective_validation.py` uses the fixed `fill_label='MODELED_PAPER_FILL_NOT_BROKERAGE'` label and contains no identified brokerage-routing path.
+     - Verified that an exhaustive audit of `backend/execution/` reveals only `MockPaperBroker` (which manages simulated orders in local JSON/SQLite) and zero live broker client integrations (Alpaca, IBKR, FIX).
+  5. **Unabridged Test Verification:**
+     - Targeted tests: 18/18 passed in 26.39s (`test_v2_5_phase_2_reconciliation.py` + `test_prospective_pipeline_remediation.py`).
+     - Full repository suite: 326/326 passed in 70.15s (`pytest backend/tests`).
+     - Code quality: `ruff check backend` 0 errors.
+  6. **Deployment Gate:** Real-money live trading remains **STRICT NO-GO**. Prospective closed trades: **0 / 50**.

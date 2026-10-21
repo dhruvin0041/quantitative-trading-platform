@@ -1,8 +1,9 @@
 # HYDRA V2.5 — Institutional Baseline System Inventory & Forensic Audit
 
-**Document ID:** `HYDRA-V2.5-INV-001`  
-**Date:** October 16, 2026  
-**Authoritative Commit:** `6d8fae8` on branch `main`  
+**Document ID:** `HYDRA-V2.5-INV-001` (Historical Baseline Inception Record)  
+**Date of Baseline Snapshot:** October 16, 2026  
+**Baseline Inception Commit:** `6d8fae8` on branch `main`  
+**Current Authoritative Remediated Commit:** `2f82ea2` (Refer to `HYDRA_V2_5_REMEDIATION_LOG.md` Entry 007 and REC-007)  
 **Corpus / Repository:** `dhruvin0041/quantitative-trading-platform`  
 **Audit Scope:** Complete system architecture, data lineage, artifact provenance, discrepancy reconciliation, test coverage, and prioritized remediation roadmap.  
 **Operational Status:** **RESEARCH-ONLY. Real-Money Capital Deployment STRICTLY BLOCKED.**
