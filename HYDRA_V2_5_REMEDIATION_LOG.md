@@ -165,3 +165,36 @@
   4. **Institutional Model-Risk Gate Adherence:**
      - Acknowledged that passing software remediation does not equal predictive validity. Negative Brier Skill Score (-2.45%), ECE (0.0816), weak OOS AUC (0.48-0.52), and selection-bias failure remain active research blockers.
      - Real-money capital deployment remains **STRICT NO-GO**.
+
+---
+
+## Remediation Entry 007: REC-006 Institutional Audit Remediation — Artifact Identity, Trade Ledger Event Purification & Prospective Provenance (October 21, 2026 06:15 UTC)
+- **Problem Identified (REC-006 Review):**
+  1. **P0 (Frozen Artifact Hash Discrepancy):** The narrative text of REC-006 reported hashes `ebf3d2f9...` for `v2_4_3_scaler_frozen.joblib` and `16b47c94...` for `v2_4_3_feature_columns.json`, contradicting earlier reported digests (`fa26c99c...` and `b7bed6a3...`).
+  2. **P0 (Trade Ledger Event Semantics Contamination):** Trade 19 (`OPEN_MARKED_TO_MARKET`) still held non-null exit execution values: `exit_fill_price = 341.27`, `exit_shares = 3`, and `exit_gross_proceeds = 1023.81`, improperly mixing liquidation proceeds with an open mark-to-market position.
+  3. **P1 (Prospective Provenance of Forward Demonstration):** The five-session demonstration (`2026-10-14` to `2026-10-20`) was executed across recent finalized candles in a verification harness; the audit record required explicit clarification that this was an operational capability proof, not historical wall-clock prospective capture at 16:00 ET on those dates.
+  4. **P1 (Commit-Bound Evidence Bundle):** Full commit and parent hashes, diff, test reports, and non-brokerage execution proofs needed to be formally assembled.
+- **Root Cause Isolated & Remediated:**
+  1. **Artifact Identity & Hash Reconciliation (P0):**
+     - Computed SHA-256 digests directly from all files on disk at commit `aa8dd8d`:
+       - `backend/artifacts/research/v2_4_3_lightgbm_frozen_model.joblib`: `6f4a85bbab000554d61741652a9646680102d270693f4f23d05585797547536d` (653,548 bytes) — **Consistent**.
+       - `backend/artifacts/research/v2_4_3_scaler_frozen.joblib`: `fa26c99c062aa442604726ede16de3862eb3846b59354f2fd88d39608b8e3a41` (879 bytes) — **Consistent with Phase 2.1 manifest**.
+       - `backend/artifacts/research/v2_4_3_feature_columns.json`: `b7bed6a3fdffaf3b1d62485fa59276c2f85cf0ec646c2ef267feeef7a822267a` (340 bytes) — **Consistent with Phase 2.1 manifest**.
+     - Isolated the source of discrepancy: strings `ebf3d2f9...` and `16b47c94...` were an assistant narrative reporting typo in the chat text. No on-disk files ever had those hashes, and no artifacts were retrained or replaced.
+     - Documented architectural duality:
+       - **Research Baseline (V2.4.3 / V2.4.4):** 13 scale-invariant features (Set B) scaled by `v2_4_3_scaler_frozen.joblib` (`fa26c99c...`).
+       - **Production Prospective Daemon (V2.3 / V3.0):** 31 features defined in `kept_features.json` (`0503f8ad...`) scaled by `latest_scaler.joblib` (`15ba081e...`), feeding the 33-state DQN (`27 tabular + 3 DL + 3 XGB`).
+  2. **Purification of Trade Ledger Event Semantics (P0):**
+     - Updated [HYDRA_V2_5_TRADE_LEDGER.csv](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/HYDRA_V2_5_TRADE_LEDGER.csv) and [backend/reports/HYDRA_V2_5_TRADE_LEDGER.csv](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/reports/HYDRA_V2_5_TRADE_LEDGER.csv):
+       - Cleared all exit fields for Trade 19 (`exit_timestamp`, `exit_fill_price`, `exit_shares`, `exit_fees`, `exit_gross_proceeds`, `exit_net_proceeds`, `cash_after_exit` = `NULL`).
+       - Added explicit, dedicated terminal valuation mark column `terminal_mark_price` = `341.27` alongside `terminal_valuation_timestamp_ny` = `2026-10-13 16:00:00 America/New_York`, `open_shares_held` = `3`, and `open_market_value` = `1023.81`.
+     - Added dedicated regression test `test_open_marked_position_rejects_exit_proceeds_and_execution_fills` in [test_v2_5_phase_2_reconciliation.py](file:///d:/DataScience/Projects/Data_Science_Projects/Stock_Indicator/backend/tests/test_v2_5_phase_2_reconciliation.py), which strictly rejects any exit values on open marked positions.
+  3. **Forward Demonstration Provenance Clarification (P1):**
+     - Explicitly documented that the 5 post-terminal sessions were an operational pipeline replay across recent finalized daily candles to demonstrate schema alignment and parent-child hash chaining.
+     - Validated that the prospective closed trades milestone counter remains strictly at **0 / 50**.
+  4. **Commit-Bound Evidence & Safety Verification (P1):**
+     - Base commit: `6d8fae8ca95d577786d6eb79e794f22625abbca6`.
+     - Remediated commit: `aa8dd8d22fe0ed29a75410c79559a320e20960b4` on branch `main`.
+     - Confirmed `run_prospective_validation.py` contains zero brokerage API keys, zero order routing, and enforces `fill_label='MODELED_PAPER_FILL_NOT_BROKERAGE'`.
+  5. **Model-Risk Gate Governance:**
+     - All model-risk gates remain failed (Brier -2.45%, ECE 0.0816, AUC 0.48-0.52, DSR failed). Real-money live trading remains **STRICT NO-GO**.

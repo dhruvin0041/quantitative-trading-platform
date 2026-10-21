@@ -179,12 +179,17 @@ def test_trade_ledger_terminal_cash_and_equity_continuity():
         assert float(t19["cash_after_entry"]) == 164.53
         assert pd.isna(t19["cash_after_exit"]) or t19["cash_after_exit"] == ""
         assert pd.isna(t19["exit_timestamp"]) or t19["exit_timestamp"] == ""
+        assert pd.isna(t19["exit_fill_price"]) or t19["exit_fill_price"] == ""
+        assert pd.isna(t19["exit_shares"]) or t19["exit_shares"] == ""
+        assert pd.isna(t19["exit_fees"]) or t19["exit_fees"] == ""
+        assert pd.isna(t19["exit_gross_proceeds"]) or t19["exit_gross_proceeds"] == ""
+        assert pd.isna(t19["exit_net_proceeds"]) or t19["exit_net_proceeds"] == ""
         assert t19["terminal_valuation_timestamp_ny"] == "2026-10-13 16:00:00 America/New_York"
+        assert float(t19["terminal_mark_price"]) == 341.27
         assert float(t19["terminal_cash"]) == 164.53
         assert int(t19["open_shares_held"]) == 3
         assert float(t19["open_market_value"]) == 1023.81
         assert float(t19["portfolio_equity"]) == 1188.34
-        assert float(t19["exit_fill_price"]) == 341.27
         assert float(t19["entry_shares"]) == 3
 
 
@@ -365,9 +370,15 @@ def test_first_principles_transaction_accounting_recalculation():
             assert abs(running_cash - reported_equity) <= 0.01
 
         elif status == "OPEN_MARKED_TO_MARKET":
-            # For open trade, no exit proceeds exist
+            # For open trade, no exit proceeds or execution fills exist
+            assert pd.isna(row["exit_timestamp"]) or row["exit_timestamp"] == ""
+            assert pd.isna(row["exit_fill_price"]) or row["exit_fill_price"] == ""
+            assert pd.isna(row["exit_shares"]) or row["exit_shares"] == ""
+            assert pd.isna(row["exit_fees"]) or row["exit_fees"] == ""
+            assert pd.isna(row["exit_gross_proceeds"]) or row["exit_gross_proceeds"] == ""
+            assert pd.isna(row["exit_net_proceeds"]) or row["exit_net_proceeds"] == ""
             assert pd.isna(row["cash_after_exit"]) or row["cash_after_exit"] == ""
-            terminal_price = float(row["exit_fill_price"])
+            terminal_price = float(row["terminal_mark_price"])
             assert terminal_price == 341.27
 
             # Recalculate open market value
@@ -476,4 +487,40 @@ def test_cryptographic_run_provenance_manifest_integrity():
             assert row["signal_log_sha256"] == crypto["run2_multiasset_log_sha256"]
         elif run_id == "RUN-FROZEN-NEW-ARTIFACT":
             assert row["model_sha256"] == crypto["frozen_model_sha256"]
+
+
+def test_open_marked_position_rejects_exit_proceeds_and_execution_fills():
+    """
+    Audit-006 Mandate: Reject exit proceeds, execution fills, or liquidation fees
+    for any position with status OPEN_MARKED_TO_MARKET. Ensure strict separation
+    between actual exit executions and terminal mark-to-market valuations.
+    """
+    ledger_path = ROOT_DIR / "HYDRA_V2_5_TRADE_LEDGER.csv"
+    df_ledger = pd.read_csv(ledger_path)
+    open_positions = df_ledger[df_ledger["status"] == "OPEN_MARKED_TO_MARKET"]
+    assert len(open_positions) > 0, "No open marked position found in ledger"
+
+    exit_fields = [
+        "exit_timestamp",
+        "exit_fill_price",
+        "exit_shares",
+        "exit_fees",
+        "exit_gross_proceeds",
+        "exit_net_proceeds",
+        "cash_after_exit",
+    ]
+
+    for _, row in open_positions.iterrows():
+        for field in exit_fields:
+            val = row[field]
+            assert pd.isna(val) or val == "" or str(val).strip() == "", (
+                f"Trade {row['trade_id']} is OPEN_MARKED_TO_MARKET but contains non-null exit field '{field}' = {val}"
+            )
+        # Confirm terminal mark fields are properly populated
+        assert not pd.isna(row["terminal_valuation_timestamp_ny"])
+        assert float(row["terminal_mark_price"]) > 0
+        assert int(row["open_shares_held"]) > 0
+        assert float(row["open_market_value"]) > 0
+        assert round(float(row["terminal_mark_price"]) * int(row["open_shares_held"]), 2) == round(float(row["open_market_value"]), 2)
+
 
