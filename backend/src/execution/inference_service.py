@@ -749,6 +749,11 @@ class InferenceService:
                 cur_adx = (
                     float(adx_s.iloc[i]) if pd.notna(adx_s.iloc[i]) else 20.0
                 )
+                prev_rsi = (
+                    float(rsi_s.iloc[i - 1])
+                    if i > 0 and pd.notna(rsi_s.iloc[i - 1])
+                    else cur_rsi
+                )
 
                 # Local price action pivot detection (strictly causal, using t-2 and t-1)
                 is_bearish_candle = False
@@ -778,12 +783,16 @@ class InferenceService:
                 # 2. Bullish Price Action Confirmation
                 bullish_candle = bool((cur_c >= cur_o) or (cur_c > cur_l + 0.4 * (cur_h - cur_l)))
 
-                # 3. Tactical Dip Reversal in Bull Regime (pullback to EMA21 or oversold RSI with bullish confirmation)
+                # 3. Tactical Quantitative Dip Reversal in Macro Bull Regime (Connors RSI Oversold Capitulation & Mean Reversion)
                 is_dip_reversal = bool(
                     macro_bull
-                    and (cur_rsi <= 48.0 or cur_l <= cur_ema21 * 1.015)
-                    and bullish_candle
-                    and (dir_buy >= 0.45 and p_buy >= 0.20)
+                    and (
+                        (cur_rsi <= 33.0)
+                        or (cur_rsi <= 38.0 and bullish_candle)
+                        or (prev_rsi <= 38.0 and bullish_candle)
+                        or (cur_l <= cur_ema21 * 0.93 and bullish_candle and cur_rsi <= 45.0)
+                    )
+                    and p_buy >= 0.16
                 )
 
                 # 4. Momentum / Trend Continuation in Bull Regime
@@ -814,7 +823,7 @@ class InferenceService:
 
                 if is_ml_buy or is_continuation or is_dip_reversal:
                     raw_signal = "BUY"
-                    conf = max(p_buy, min(1.0, dir_buy * 0.80))
+                    conf = max(p_buy, min(1.0, dir_buy * 0.80), 0.70 if is_dip_reversal else 0.50)
                 elif is_ml_sell:
                     raw_signal = "SELL"
                     conf = max(p_sell, min(1.0, dir_sell * 0.80))
