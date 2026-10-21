@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { API_KEY, getBaseUrl } from '@/lib/config';
 
 export type AgentStreamStatus = 'idle' | 'streaming' | 'completed' | 'error';
 
@@ -101,9 +102,10 @@ export function useAgentStream() {
     setErrorMsg(null);
 
     try {
-      const response = await fetch(`http://localhost:8000/predict/agentic/stream?ticker=${ticker}&mock=${mock}`, {
+      const baseUrl = getBaseUrl();
+      const response = await fetch(`${baseUrl}/predict/agentic/stream?ticker=${ticker}&mock=${mock}`, {
         headers: {
-          'X-API-Key': 'hydra-secure-key-2026',
+          'X-API-Key': API_KEY,
         },
         signal: controller.signal
       });
