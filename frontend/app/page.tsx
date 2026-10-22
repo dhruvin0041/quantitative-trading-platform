@@ -34,7 +34,7 @@ export default function HydraTerminal() {
   const [isDebugModalOpen, setDebugModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('CONSENSUS');
   const [API_URL] = useState(getBaseUrl());
-  const UNIVERSAL_TICKERS = useMemo(() => ["AAPL", "NVDA", "MSFT", "AMZN", "SPY"], []);
+  const UNIVERSAL_TICKERS = useMemo(() => ["AAPL", "NVDA", "MSFT", "AMZN", "META", "GOOGL", "TSLA", "AMD"], []);
 
   useEffect(() => {
     fetch(`${API_URL}/active_ticker`, { headers: { "X-API-Key": API_KEY } })
@@ -54,10 +54,13 @@ export default function HydraTerminal() {
       .catch(() => {
         setUniverse([
           { ticker: "AAPL", name: "Apple Inc.", price: 0, pct_change: 0, market: 'us' },
-          { ticker: "NVDA", name: "NVIDIA", price: 0, pct_change: 0, market: 'us' },
+          { ticker: "NVDA", name: "NVIDIA Corp.", price: 0, pct_change: 0, market: 'us' },
           { ticker: "MSFT", name: "Microsoft Corp.", price: 0, pct_change: 0, market: 'us' },
           { ticker: "AMZN", name: "Amazon.com Inc.", price: 0, pct_change: 0, market: 'us' },
-          { ticker: "SPY", name: "SPDR S&P 500 ETF", price: 0, pct_change: 0, market: 'us' }
+          { ticker: "META", name: "Meta Platforms Inc.", price: 0, pct_change: 0, market: 'us' },
+          { ticker: "GOOGL", name: "Alphabet Inc.", price: 0, pct_change: 0, market: 'us' },
+          { ticker: "TSLA", name: "Tesla Inc.", price: 0, pct_change: 0, market: 'us' },
+          { ticker: "AMD", name: "Advanced Micro Devices", price: 0, pct_change: 0, market: 'us' },
         ]);
       });
   }, [API_URL]);

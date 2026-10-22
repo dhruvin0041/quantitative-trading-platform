@@ -1420,6 +1420,12 @@ class InferenceService:
     async def get_prediction(self, ticker, config, metadata):
         import uuid
 
+        ticker = ticker.upper()
+        if hasattr(self.mm, "ensure_ticker_loaded"):
+            self.mm.ensure_ticker_loaded(ticker)
+        if getattr(self.mm, "model_calibrator", None) is not None:
+            self.model_calibrator = self.mm.model_calibrator
+
         signal_id = f"SIG_{datetime.now().strftime('%Y%m%d%H%M%S')}_{ticker}_{str(uuid.uuid4())[:8]}"
 
         # 1. Fetch live data

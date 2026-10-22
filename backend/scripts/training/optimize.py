@@ -228,7 +228,15 @@ def run_optuna_optimization(ticker, n_trials=50, start="2016-01-01", end="2024-1
     with open(output_path, "w") as f:
         json.dump(best_config, f, indent=4)
     print(f"Results saved to {output_path}")
-    return True
+
+    # Also save to ticker namespaced directory
+    ticker_model_dir = BACKEND_DIR / "artifacts" / "models" / ticker
+    ticker_model_dir.mkdir(parents=True, exist_ok=True)
+    with open(ticker_model_dir / "optimized_params.json", "w") as f:
+        json.dump(best_config, f, indent=4)
+    print(f"Results also saved to {ticker_model_dir / 'optimized_params.json'}")
+
+    return best_config
 
 
 if __name__ == "__main__":

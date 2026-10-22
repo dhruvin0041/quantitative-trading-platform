@@ -79,7 +79,10 @@ class ModelManager:
         self.ppo_agent = None
         self.meta_ensemble = None
         self.scaler = None
+        self.model_calibrator = None
         self.accuracies = {}
+        self.current_ticker = "AAPL"
+        self._ticker_models: dict = {}
 
     def load_all_models(self):
         configure_tensorflow_gpu()
@@ -100,7 +103,149 @@ class ModelManager:
         self._load_dqn()
         self._load_ppo()
         self._load_meta_ensemble()
-        logger.info("All models loaded into ModelManager.")
+        self._load_calibrator()
+
+        # Initialize cache with active ticker
+        active_ticker = self._resolve_active_ticker()
+        self.ensure_ticker_loaded(active_ticker)
+        logger.info("All models loaded into ModelManager (Active Ticker: %s).", self.current_ticker)
+
+    def _resolve_active_ticker(self) -> str:
+        try:
+            from pathlib import Path
+            p = Path("configs/active_ticker.json")
+            if not p.exists():
+                p = Path(__file__).resolve().parent.parent.parent / "configs" / "active_ticker.json"
+            if p.exists():
+                with open(p, "r") as f:
+                    return json.load(f).get("ticker", "AAPL").upper()
+        except Exception:
+            pass
+        return "AAPL"
+
+    def _load_calibrator(self):
+        for cp in ["artifacts/model_calibrator.joblib", "backend/artifacts/model_calibrator.joblib"]:
+            p = Path(cp)
+            if not p.exists():
+                p = Path(__file__).resolve().parent.parent.parent / "artifacts" / "model_calibrator.joblib"
+            if p.exists():
+                try:
+                    from src.models.regime.calibration import ModelCalibrator
+                    self.model_calibrator = ModelCalibrator.load(str(p))
+                    logger.info("Loaded model calibrator from %s", p)
+                    break
+                except Exception as e:
+                    logger.debug("Could not load calibrator from %s: %s", p, e)
+
+    def ensure_ticker_loaded(self, ticker: str) -> dict:
+        """
+        Dynamically loads and switches active model weights to the specified ticker.
+        Maintains an in-RAM cache so switching between tickers is instant (<5ms).
+        If ticker-namespaced models do not exist on disk, falls back cleanly to the
+        institutional baseline models.
+        """
+        ticker = ticker.upper()
+        if ticker in self._ticker_models:
+            bundle = self._ticker_models[ticker]
+            self._activate_bundle(ticker, bundle)
+            return bundle
+
+        backend_dir = Path(__file__).resolve().parent.parent.parent
+        candidate_dirs = [
+            Path("artifacts") / "models" / ticker,
+            backend_dir / "artifacts" / "models" / ticker,
+        ]
+        ticker_dir = None
+        for td in candidate_dirs:
+            if td.exists() and (td / "xgb_ensemble.json").exists():
+                ticker_dir = td
+                break
+
+        if ticker_dir is not None:
+            try:
+                logger.info("Loading asset-specific models for %s from %s", ticker, ticker_dir)
+                xgb_path = ticker_dir / "xgb_ensemble.json"
+                lgbm_path = ticker_dir / "lgbm_agent.joblib"
+                scaler_path = ticker_dir / "latest_scaler.joblib"
+                cal_path = ticker_dir / "model_calibrator.joblib"
+                acc_path = ticker_dir / "accuracies.json"
+
+                xgb_m = None
+                if xgb_path.exists():
+                    xgb_m = xgb.XGBClassifier()
+                    raw_bytes = xgb_path.read_bytes()
+                    xgb_m.load_model(bytearray(raw_bytes))
+                    setattr(xgb_m, "_artifact_hash", hashlib.sha256(raw_bytes).hexdigest())
+                    setattr(xgb_m, "_artifact_source_path", str(xgb_path))
+
+                lgbm_m = None
+                if lgbm_path.exists():
+                    lgbm_m = joblib.load(str(lgbm_path))
+
+                scaler_m = None
+                if scaler_path.exists():
+                    raw_bytes = scaler_path.read_bytes()
+                    scaler_m = joblib.load(io.BytesIO(raw_bytes))
+                    setattr(scaler_m, "_artifact_hash", hashlib.sha256(raw_bytes).hexdigest())
+                    setattr(scaler_m, "_artifact_source_path", str(scaler_path))
+
+                cal_m = None
+                if cal_path.exists():
+                    try:
+                        from src.models.regime.calibration import ModelCalibrator
+                        cal_m = ModelCalibrator.load(str(cal_path))
+                    except Exception as e:
+                        logger.debug("Could not load calibrator for %s: %s", ticker, e)
+
+                acc_dict = dict(self.accuracies)
+                if acc_path.exists():
+                    try:
+                        with open(acc_path, "r") as f:
+                            acc_dict.update(json.load(f))
+                    except Exception:
+                        pass
+
+                bundle = {
+                    "xgb": xgb_m if xgb_m is not None else self.xgb_model,
+                    "lgbm": lgbm_m if lgbm_m is not None else self.lgbm_model,
+                    "scaler": scaler_m if scaler_m is not None else self.scaler,
+                    "calibrator": cal_m if cal_m is not None else self.model_calibrator,
+                    "accuracies": acc_dict,
+                }
+                self._ticker_models[ticker] = bundle
+                self._activate_bundle(ticker, bundle)
+                logger.info("Successfully loaded and cached dedicated models for %s", ticker)
+                return bundle
+            except Exception as e:
+                logger.warning("Error loading dedicated models for %s: %s. Using default models.", ticker, e)
+
+        # Fallback to current baseline models
+        bundle = {
+            "xgb": self.xgb_model,
+            "lgbm": self.lgbm_model,
+            "scaler": self.scaler,
+            "calibrator": self.model_calibrator,
+            "accuracies": self.accuracies,
+        }
+        self._ticker_models[ticker] = bundle
+        self._activate_bundle(ticker, bundle)
+        return bundle
+
+    def _activate_bundle(self, ticker: str, bundle: dict):
+        self.current_ticker = ticker
+        if bundle.get("xgb") is not None:
+            self.xgb_model = bundle["xgb"]
+        if bundle.get("lgbm") is not None:
+            self.lgbm_model = bundle["lgbm"]
+        if bundle.get("scaler") is not None:
+            self.scaler = bundle["scaler"]
+        if bundle.get("calibrator") is not None:
+            self.model_calibrator = bundle["calibrator"]
+        if bundle.get("accuracies"):
+            self.accuracies = bundle["accuracies"]
+
+    def get_models_for_ticker(self, ticker: str) -> dict:
+        return self.ensure_ticker_loaded(ticker)
 
     def train_core_classifiers(self, df: pd.DataFrame, target_col="target_signal"):
         """

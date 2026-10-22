@@ -141,6 +141,8 @@ backend/artifacts/*.pkl
 backend/artifacts/*.db*
 backend/artifacts/v2_0/
 backend/artifacts/v2_1/
+backend/artifacts/models/*/*.joblib
+backend/artifacts/models/*/*.json
 backend/data/*
 !backend/data/snapshots/
 

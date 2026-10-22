@@ -436,6 +436,9 @@ async def get_prediction(ticker: str = "AAPL"):
     if ticker.upper() == "UNIVERSAL":
         ticker = "AAPL"
 
+    # Switch ModelManager to dedicated asset-specific weights
+    model_manager.ensure_ticker_loaded(ticker)
+
     # Identify Market Metadata
     metadata = None
     for m_id, m_dict in UNIVERSES_METADATA.items():

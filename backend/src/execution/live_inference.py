@@ -504,7 +504,21 @@ def fetch_live_data(ticker, config, version: Optional[str] = None):
         )
 
     scaler = None
-    if version and version.upper().startswith("V3"):
+    # 1. Prioritize dedicated ticker-namespaced scaler
+    for tsp in [
+        f"artifacts/models/{ticker}/latest_scaler.joblib",
+        f"backend/artifacts/models/{ticker}/latest_scaler.joblib",
+    ]:
+        p_tsp = Path(tsp)
+        if p_tsp.exists():
+            try:
+                scaler = joblib.load(p_tsp)
+                break
+            except Exception:
+                pass
+
+    # 2. Check universal V3 scaler if version is V3
+    if scaler is None and version and version.upper().startswith("V3"):
         for sp in [
             "artifacts/v3/latest_scaler.joblib",
             "backend/artifacts/v3/latest_scaler.joblib",
@@ -515,8 +529,19 @@ def fetch_live_data(ticker, config, version: Optional[str] = None):
                     break
                 except Exception:
                     pass
+
+    # 3. Fallback to standard baseline scaler
     if scaler is None:
-        scaler = joblib.load("artifacts/latest_scaler.joblib")
+        for root_sp in ["artifacts/latest_scaler.joblib", "backend/artifacts/latest_scaler.joblib"]:
+            if Path(root_sp).exists():
+                try:
+                    scaler = joblib.load(root_sp)
+                    break
+                except Exception:
+                    pass
+
+    if scaler is None:
+        raise FileNotFoundError(f"No valid scaler found for {ticker} in models/{ticker}/ or root artifacts.")
     time_steps = config["data"]["time_steps"]
 
     recent_data = df_filtered.tail(time_steps).values

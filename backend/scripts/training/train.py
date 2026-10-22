@@ -636,29 +636,39 @@ def train_ticker_pipeline(
         json.dump(acc_data, f, indent=4)
     logger.info(f"Updated empirical test accuracies in {accuracies_path}: XGB={xgb_test_acc:.4f}, LGBM={lgbm_test_acc:.4f}")
 
-    # Update manifest model hashes if manifest exists
-    manifest_v24_path = artifacts_dir / "frozen_strategy_manifest_v2.4.json"
-    if manifest_v24_path.exists():
-        try:
-            with open(manifest_v24_path, "r") as f:
-                manifest_v24 = json.load(f)
-            manifest_v24["model_hashes"]["xgb_ensemble.json"] = compute_sha256(artifacts_dir / "xgb_ensemble.json")
-            manifest_v24["model_hashes"]["lgbm_agent.joblib"] = compute_sha256(artifacts_dir / "lgbm_agent.joblib")
-            manifest_v24["model_hashes"]["latest_scaler.joblib"] = compute_sha256(artifacts_dir / "latest_scaler.joblib")
-            manifest_v24["model_hashes"]["model_calibrator.joblib"] = compute_sha256(artifacts_dir / "model_calibrator.joblib")
-            if (configs_dir / f"optimized_params_{ticker}.json").exists():
-                manifest_v24["config_hashes"][f"optimized_params_{ticker}.json"] = compute_sha256(configs_dir / f"optimized_params_{ticker}.json")
-            if (configs_dir / "kept_features.json").exists():
-                manifest_v24["config_hashes"]["kept_features.json"] = compute_sha256(configs_dir / "kept_features.json")
-            with open(manifest_v24_path, "w") as f:
-                json.dump(manifest_v24, f, indent=4)
-        except Exception as e:
-            logger.warning(f"Could not refresh manifest hashes: {e}")
+    # Save to Ticker-Namespaced Model Directory (Isolated multi-ticker storage)
+    ticker_model_dir = artifacts_dir / "models" / ticker
+    ticker_model_dir.mkdir(parents=True, exist_ok=True)
+
+    xgb_model.save_model(str(ticker_model_dir / "xgb_ensemble.json"))
+    joblib.dump(lgbm_model, ticker_model_dir / "lgbm_agent.joblib")
+    joblib.dump(scaler, ticker_model_dir / "latest_scaler.joblib")
+    calibrator.save(str(ticker_model_dir / "model_calibrator.joblib"))
+
+    with open(ticker_model_dir / "accuracies.json", "w") as f:
+        json.dump(acc_data, f, indent=4)
+
+    ticker_opt_file = configs_dir / f"optimized_params_{ticker}.json"
+    if ticker_opt_file.exists():
+        import shutil
+        shutil.copy2(ticker_opt_file, ticker_model_dir / "optimized_params.json")
+
+    logger.info(f"Saved dedicated ticker models to {ticker_model_dir}")
 
     total_time = time.time() - pipeline_start
     logger.info("=================================================================")
     logger.info(f"HYDRA V3.0 TRAINING PIPELINE COMPLETE FOR {ticker} ({total_time:.2f}s)")
     logger.info("=================================================================")
+
+    return {
+        "ticker": ticker,
+        "xgb_train_acc": float(xgb_train_acc),
+        "xgb_test_acc": float(xgb_test_acc),
+        "lgbm_train_acc": float(lgbm_train_acc),
+        "lgbm_test_acc": float(lgbm_test_acc),
+        "duration_sec": round(total_time, 2),
+        "model_dir": str(ticker_model_dir),
+    }
 
 
 def main():
