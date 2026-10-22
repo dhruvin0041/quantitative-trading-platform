@@ -149,15 +149,9 @@ backend/data/*
 # Allow specific verified production models for institutional baseline
 !backend/artifacts/lgbm_agent.joblib
 !backend/artifacts/xgb_ensemble.json
-!backend/artifacts/latest_fusion_weights.weights.h5
 !backend/artifacts/latest_scaler.joblib
-!backend/artifacts/dqn_model.pth
 !backend/artifacts/model_calibrator.joblib
-!backend/artifacts/meta_ensemble.joblib
-!backend/artifacts/tft_quantile_weights.weights.h5
 !backend/artifacts/frozen_strategy_manifest*.json
-!backend/artifacts/v2_3/
-!backend/artifacts/v3/
 !backend/artifacts/research/
 
 # Allow versioned immutable snapshot fixtures
