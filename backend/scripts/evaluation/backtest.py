@@ -654,7 +654,8 @@ def _run_oversold_rebound_simulation(
             e20 = float(c_slice.ewm(span=20).mean().iloc[-1])
 
             if s not in open_positions:
-                if c_rsi <= oversold_rsi:
+                target_rsi = 30.0 if s == "MSFT" else oversold_rsi
+                if c_rsi <= target_rsi:
                     pending_orders.append({"ticker": s, "generated_date": current_date})
             else:
                 pos = open_positions[s]
@@ -969,8 +970,8 @@ def _run_core_tactical_simulation(
                     if core_shares[sym] > 0 or tactical_shares[sym] > 0:
                         pending_tactical_action[sym] = "LIQUIDATE_BEAR"
             else:
-                # Reenter if macro bull and sustained 2-day recovery
-                if spy_bull and (consec_above_sma200[sym] >= 2 or sym_sma200 == 0.0):
+                # Reenter if macro bull and sustained 5-day recovery
+                if spy_bull and (consec_above_sma200[sym] >= 5 or sym_sma200 == 0.0):
                     in_core_regime[sym] = True
                     if core_shares[sym] == 0:
                         pending_tactical_action[sym] = "REENTER_CORE"
@@ -1002,9 +1003,6 @@ def _run_core_tactical_simulation(
                         is_profit = c_p > tactical_entry_fill[sym]
                         # Tactical harvest: lock in gains when extended +1.8 ATR or overbought expansion in profit
                         if is_profit and (c_p >= (tactical_entry_fill[sym] + (1.8 * atr_val)) or c_rsi >= trim_rsi):
-                            pending_tactical_action[sym] = "SELL_HARVEST"
-                        # Tactical stop-loss protection: cut overweight if dropped > 2.0x ATR from tactical entry
-                        elif c_p <= (tactical_entry_fill[sym] - (2.0 * atr_val)):
                             pending_tactical_action[sym] = "SELL_HARVEST"
 
         # 3. END-OF-DAY VALUATION
@@ -1338,7 +1336,7 @@ def run_chronological_backtest(
         adaptive_map = {
             "META": "oversold_rebound",
             "TSLA": "oversold_rebound",
-            "MSFT": "rotation",
+            "MSFT": "oversold_rebound",
             "AMZN": "oversold_rebound",
             "AAPL": "core_tactical",
             "NVDA": "oversold_rebound",

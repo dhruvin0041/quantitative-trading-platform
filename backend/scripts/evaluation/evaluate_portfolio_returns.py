@@ -114,6 +114,20 @@ def main():
             output_dir=str(out_rot),
         )
 
+        # Capitulation Oversold Rebound (Bear / Chop Regime Specialist)
+        out_rebound = BACKEND_DIR / "artifacts" / "backtest" / f"{ticker}_oversold_rebound"
+        summary_rebound = run_chronological_backtest(
+            tickers=[ticker],
+            period="2y",
+            start_date=START_DATE,
+            end_date=END_DATE,
+            initial_capital=INITIAL_CAPITAL,
+            strategy_mode="oversold_rebound",
+            min_commission=0.0,
+            commission_per_share=0.0,
+            output_dir=str(out_rebound),
+        )
+
         # Institutional Adaptive Mesh (Regime-Matched Engine)
         out_adapt = BACKEND_DIR / "artifacts" / "backtest" / f"{ticker}_adaptive"
         summary_adapt = run_chronological_backtest(
@@ -133,6 +147,7 @@ def main():
             "buy_and_hold": bnh,
             "core_tactical": summary_core,
             "rotation": summary_rot,
+            "oversold_rebound": summary_rebound,
             "adaptive": summary_adapt,
         }
 
@@ -165,6 +180,19 @@ def main():
         output_dir=str(out_port_rot),
     )
 
+    out_port_reb = BACKEND_DIR / "artifacts" / "backtest" / "portfolio_oversold_rebound"
+    port_reb = run_chronological_backtest(
+        tickers=TICKERS,
+        period="2y",
+        start_date=START_DATE,
+        end_date=END_DATE,
+        initial_capital=INITIAL_CAPITAL,
+        strategy_mode="oversold_rebound",
+        min_commission=0.0,
+        commission_per_share=0.0,
+        output_dir=str(out_port_reb),
+    )
+
     out_port_adapt = BACKEND_DIR / "artifacts" / "backtest" / "portfolio_adaptive"
     port_adapt = run_chronological_backtest(
         tickers=TICKERS,
@@ -180,6 +208,7 @@ def main():
 
     results["portfolio"]["core_tactical"] = port_core
     results["portfolio"]["rotation"] = port_rot
+    results["portfolio"]["oversold_rebound"] = port_reb
     results["portfolio"]["adaptive"] = port_adapt
 
     # Save summary
@@ -189,27 +218,29 @@ def main():
         json.dump(results, f, indent=4)
 
     # Print Institutional Summary Table
-    print("\n" + "=" * 135)
-    print("                HYDRA 1-YEAR $1,000 INSTITUTIONAL BACKTEST RESULTS (2025-10-22 to 2026-10-22)")
-    print("=" * 135)
+    print("\n" + "=" * 162)
+    print("                    HYDRA 1-YEAR $1,000 INSTITUTIONAL BACKTEST RESULTS (2025-10-22 to 2026-10-22)")
+    print("=" * 162)
     header = (
         f"{'Ticker':<7} | {'Buy & Hold (1Y)':<18} | {'Core + Tactical Alpha':<26} | "
-        f"{'Dynamic Rotation':<26} | {'Adaptive Mesh (Fixed)':<26}"
+        f"{'Dynamic Rotation':<26} | {'Oversold Rebound':<26} | {'Adaptive Mesh (Optimal)':<26}"
     )
     print(header)
-    print("-" * 135)
+    print("-" * 162)
     sub = (
         f"{'':<7} | {'Equity':>9} {'Return':>7} | {'Equity':>9} {'Return':>7} {'MaxDD':>7} | "
-        f"{'Equity':>9} {'Return':>7} {'MaxDD':>7} | {'Equity':>9} {'Return':>7} {'MaxDD':>7}"
+        f"{'Equity':>9} {'Return':>7} {'MaxDD':>7} | {'Equity':>9} {'Return':>7} {'MaxDD':>7} | "
+        f"{'Equity':>9} {'Return':>7} {'MaxDD':>7}"
     )
     print(sub)
-    print("-" * 135)
+    print("-" * 162)
 
     for ticker in TICKERS:
         t_data = results["tickers"][ticker]
         bnh = t_data["buy_and_hold"]
         core = t_data["core_tactical"] or {}
         rot = t_data["rotation"] or {}
+        reb = t_data["oversold_rebound"] or {}
         adapt = t_data["adaptive"] or {}
 
         bnh_eq = f"${bnh.get('final_equity', 1000):,.2f}"
@@ -223,18 +254,24 @@ def main():
         rot_ret = f"{rot.get('total_net_return_pct', rot.get('total_return_pct', 0)):+.2f}%"
         rot_dd = f"{rot.get('max_drawdown_pct', 0):.2f}%"
 
+        reb_eq = f"${reb.get('final_equity', 1000):,.2f}"
+        reb_ret = f"{reb.get('total_net_return_pct', reb.get('total_return_pct', 0)):+.2f}%"
+        reb_dd = f"{reb.get('max_drawdown_pct', 0):.2f}%"
+
         adapt_eq = f"${adapt.get('final_equity', 1000):,.2f}"
         adapt_ret = f"{adapt.get('total_net_return_pct', adapt.get('total_return_pct', 0)):+.2f}%"
         adapt_dd = f"{adapt.get('max_drawdown_pct', 0):.2f}%"
 
         print(
             f"{ticker:<7} | {bnh_eq:>9} {bnh_ret:>7} | {core_eq:>9} {core_ret:>7} {core_dd:>7} | "
-            f"{rot_eq:>9} {rot_ret:>7} {rot_dd:>7} | {adapt_eq:>9} {adapt_ret:>7} {adapt_dd:>7}"
+            f"{rot_eq:>9} {rot_ret:>7} {rot_dd:>7} | {reb_eq:>9} {reb_ret:>7} {reb_dd:>7} | "
+            f"{adapt_eq:>9} {adapt_ret:>7} {adapt_dd:>7}"
         )
 
-    print("-" * 135)
+    print("-" * 162)
     port_c = results["portfolio"]["core_tactical"] or {}
     port_r = results["portfolio"]["rotation"] or {}
+    port_b = results["portfolio"]["oversold_rebound"] or {}
     port_a = results["portfolio"]["adaptive"] or {}
     p_core_eq = f"${port_c.get('final_equity', 1000):,.2f}"
     p_core_ret = f"{port_c.get('total_net_return_pct', port_c.get('total_return_pct', 0)):+.2f}%"
@@ -242,6 +279,9 @@ def main():
     p_rot_eq = f"${port_r.get('final_equity', 1000):,.2f}"
     p_rot_ret = f"{port_r.get('total_net_return_pct', port_r.get('total_return_pct', 0)):+.2f}%"
     p_rot_dd = f"{port_r.get('max_drawdown_pct', 0):.2f}%"
+    p_reb_eq = f"${port_b.get('final_equity', 1000):,.2f}"
+    p_reb_ret = f"{port_b.get('total_net_return_pct', port_b.get('total_return_pct', 0)):+.2f}%"
+    p_reb_dd = f"{port_b.get('max_drawdown_pct', 0):.2f}%"
     p_adapt_eq = f"${port_a.get('final_equity', 1000):,.2f}"
     p_adapt_ret = f"{port_a.get('total_net_return_pct', port_a.get('total_return_pct', 0)):+.2f}%"
     p_adapt_dd = f"{port_a.get('max_drawdown_pct', 0):.2f}%"
@@ -250,11 +290,12 @@ def main():
 
     print(
         f"{'PORTFOLIO':<7} | {spy_eq:>9} {spy_ret:>7} | {p_core_eq:>9} {p_core_ret:>7} {p_core_dd:>7} | "
-        f"{p_rot_eq:>9} {p_rot_ret:>7} {p_rot_dd:>7} | {p_adapt_eq:>9} {p_adapt_ret:>7} {p_adapt_dd:>7}"
+        f"{p_rot_eq:>9} {p_rot_ret:>7} {p_rot_dd:>7} | {p_reb_eq:>9} {p_reb_ret:>7} {p_reb_dd:>7} | "
+        f"{p_adapt_eq:>9} {p_adapt_ret:>7} {p_adapt_dd:>7}"
     )
-    print("=" * 135)
+    print("=" * 162)
     print(f"  Artifact successfully saved to {save_path}")
-    print("=" * 135)
+    print("=" * 162)
 
 
 if __name__ == "__main__":

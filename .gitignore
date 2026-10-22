@@ -144,6 +144,8 @@ backend/artifacts/v2_0/
 backend/artifacts/v2_1/
 backend/artifacts/models/*/*.joblib
 backend/artifacts/models/*/*.json
+backend/artifacts/features/
+backend/artifacts/test_meta/
 backend/data/*
 !backend/data/snapshots/
 
