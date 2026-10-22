@@ -837,10 +837,12 @@ def _run_core_tactical_simulation(
                     if (c_rsi <= dip_rsi or dir_b >= 0.60) and not lgbm_veto and not is_leveraged[sym]:
                         pending_tactical_action[sym] = "BUY_OVERWEIGHT"
                     elif is_leveraged[sym]:
-                        if (c_rsi >= trim_rsi or lgbm_veto):
+                        is_profit = c_p > tactical_entry_fill[sym]
+                        # Tactical harvest: lock in gains when extended +1.8 ATR or overbought expansion in profit
+                        if is_profit and (c_p >= (tactical_entry_fill[sym] + (1.8 * atr_val)) or c_rsi >= trim_rsi):
                             pending_tactical_action[sym] = "SELL_HARVEST"
-                        # Tactical stop-loss protection: cut overweight if dropped > 1.8x ATR from tactical entry
-                        elif c_p <= (tactical_entry_fill[sym] - (1.8 * atr_val)):
+                        # Tactical stop-loss protection: cut overweight if dropped > 2.0x ATR from tactical entry
+                        elif c_p <= (tactical_entry_fill[sym] - (2.0 * atr_val)):
                             pending_tactical_action[sym] = "SELL_HARVEST"
 
         # 3. END-OF-DAY VALUATION

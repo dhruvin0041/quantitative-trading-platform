@@ -6,10 +6,10 @@
         "AAPL": {
             "buy_and_hold": {
                 "entry_price": 261.68,
-                "exit_price": 345.64,
-                "final_equity": 1320.82,
-                "net_profit": 320.82,
-                "net_return_pct": 32.08
+                "exit_price": 346.45,
+                "final_equity": 1323.93,
+                "net_profit": 323.93,
+                "net_return_pct": 32.39
             },
             "core_tactical": {
                 "strategy_mode": "core_tactical",
@@ -19,21 +19,21 @@
                 ],
                 "calendar_sessions": 251,
                 "initial_capital": 1000.0,
-                "final_equity": 1455.51,
-                "net_profit_dollar": 455.51,
-                "total_net_return_pct": 45.55,
+                "final_equity": 1357.81,
+                "net_profit_dollar": 357.81,
+                "total_net_return_pct": 35.78,
                 "start_date": "2025-10-22",
                 "end_date": "2026-10-22",
-                "cagr_pct": 45.77,
-                "annualized_vol_pct": 25.9,
-                "sharpe_ratio": 1.65,
-                "max_drawdown_pct": -15.3,
-                "calmar_ratio": 2.99,
+                "cagr_pct": 35.95,
+                "annualized_vol_pct": 25.13,
+                "sharpe_ratio": 1.41,
+                "max_drawdown_pct": -16.12,
+                "calmar_ratio": 2.23,
                 "closed_trades": 8,
                 "win_rate_pct": 75.0,
-                "profit_factor": 10.37,
-                "avg_trade_return_pct": 8.39,
-                "timestamp_utc": "2026-10-22T17:05:18.779414Z"
+                "profit_factor": 7.53,
+                "avg_trade_return_pct": 5.74,
+                "timestamp_utc": "2026-10-22T18:11:24.961563Z"
             },
             "rotation": {
                 "strategy_mode": "rotation",
@@ -57,16 +57,16 @@
                 "win_rate_pct": 60.0,
                 "profit_factor": 4.99,
                 "avg_trade_return_pct": 0.68,
-                "timestamp_utc": "2026-10-22T17:05:19.524683Z"
+                "timestamp_utc": "2026-10-22T18:11:25.583083Z"
             }
         },
         "NVDA": {
             "buy_and_hold": {
                 "entry_price": 180.71,
-                "exit_price": 212.61,
-                "final_equity": 1176.55,
-                "net_profit": 176.55,
-                "net_return_pct": 17.65
+                "exit_price": 212.27,
+                "final_equity": 1174.67,
+                "net_profit": 174.67,
+                "net_return_pct": 17.47
             },
             "core_tactical": {
                 "strategy_mode": "core_tactical",
@@ -76,21 +76,21 @@
                 ],
                 "calendar_sessions": 251,
                 "initial_capital": 1000.0,
-                "final_equity": 1001.13,
-                "net_profit_dollar": 1.13,
-                "total_net_return_pct": 0.11,
+                "final_equity": 953.4,
+                "net_profit_dollar": -46.6,
+                "total_net_return_pct": -4.66,
                 "start_date": "2025-10-22",
                 "end_date": "2026-10-22",
-                "cagr_pct": 0.11,
-                "annualized_vol_pct": 42.46,
-                "sharpe_ratio": 0.23,
-                "max_drawdown_pct": -23.31,
-                "calmar_ratio": 0.0,
+                "cagr_pct": -4.68,
+                "annualized_vol_pct": 41.85,
+                "sharpe_ratio": 0.11,
+                "max_drawdown_pct": -24.62,
+                "calmar_ratio": -0.19,
                 "closed_trades": 11,
                 "win_rate_pct": 27.27,
-                "profit_factor": 1.0,
-                "avg_trade_return_pct": -1.36,
-                "timestamp_utc": "2026-10-22T17:05:20.407248Z"
+                "profit_factor": 0.79,
+                "avg_trade_return_pct": -2.2,
+                "timestamp_utc": "2026-10-22T18:11:26.199247Z"
             },
             "rotation": {
                 "strategy_mode": "rotation",
@@ -114,16 +114,16 @@
                 "win_rate_pct": 10.0,
                 "profit_factor": 0.0,
                 "avg_trade_return_pct": -4.44,
-                "timestamp_utc": "2026-10-22T17:05:20.948414Z"
+                "timestamp_utc": "2026-10-22T18:11:26.765380Z"
             }
         },
         "MSFT": {
             "buy_and_hold": {
                 "entry_price": 516.9,
-                "exit_price": 524.48,
-                "final_equity": 1014.67,
-                "net_profit": 14.67,
-                "net_return_pct": 1.47
+                "exit_price": 523.53,
+                "final_equity": 1012.83,
+                "net_profit": 12.83,
+                "net_return_pct": 1.28
             },
             "core_tactical": {
                 "strategy_mode": "core_tactical",
@@ -133,21 +133,21 @@
                 ],
                 "calendar_sessions": 251,
                 "initial_capital": 1000.0,
-                "final_equity": 963.27,
-                "net_profit_dollar": -36.73,
-                "total_net_return_pct": -3.67,
+                "final_equity": 977.53,
+                "net_profit_dollar": -22.47,
+                "total_net_return_pct": -2.25,
                 "start_date": "2025-10-22",
                 "end_date": "2026-10-22",
-                "cagr_pct": -3.69,
-                "annualized_vol_pct": 17.25,
-                "sharpe_ratio": -0.12,
-                "max_drawdown_pct": -19.44,
-                "calmar_ratio": -0.19,
-                "closed_trades": 8,
-                "win_rate_pct": 50.0,
-                "profit_factor": 0.77,
-                "avg_trade_return_pct": -0.33,
-                "timestamp_utc": "2026-10-22T17:05:21.837206Z"
+                "cagr_pct": -2.26,
+                "annualized_vol_pct": 16.92,
+                "sharpe_ratio": -0.04,
+                "max_drawdown_pct": -18.31,
+                "calmar_ratio": -0.12,
+                "closed_trades": 10,
+                "win_rate_pct": 60.0,
+                "profit_factor": 0.86,
+                "avg_trade_return_pct": 0.09,
+                "timestamp_utc": "2026-10-22T18:11:27.475092Z"
             },
             "rotation": {
                 "strategy_mode": "rotation",
@@ -171,16 +171,16 @@
                 "win_rate_pct": 44.44,
                 "profit_factor": 1.52,
                 "avg_trade_return_pct": 0.8,
-                "timestamp_utc": "2026-10-22T17:05:22.487809Z"
+                "timestamp_utc": "2026-10-22T18:11:27.984869Z"
             }
         },
         "AMZN": {
             "buy_and_hold": {
                 "entry_price": 219.3,
-                "exit_price": 251.41,
-                "final_equity": 1146.42,
-                "net_profit": 146.42,
-                "net_return_pct": 14.64
+                "exit_price": 249.94,
+                "final_equity": 1139.72,
+                "net_profit": 139.72,
+                "net_return_pct": 13.97
             },
             "core_tactical": {
                 "strategy_mode": "core_tactical",
@@ -190,21 +190,21 @@
                 ],
                 "calendar_sessions": 251,
                 "initial_capital": 1000.0,
-                "final_equity": 1014.56,
-                "net_profit_dollar": 14.56,
-                "total_net_return_pct": 1.46,
+                "final_equity": 1035.75,
+                "net_profit_dollar": 35.75,
+                "total_net_return_pct": 3.58,
                 "start_date": "2025-10-22",
                 "end_date": "2026-10-22",
-                "cagr_pct": 1.46,
-                "annualized_vol_pct": 40.44,
-                "sharpe_ratio": 0.25,
-                "max_drawdown_pct": -26.76,
-                "calmar_ratio": 0.05,
+                "cagr_pct": 3.59,
+                "annualized_vol_pct": 39.57,
+                "sharpe_ratio": 0.3,
+                "max_drawdown_pct": -27.33,
+                "calmar_ratio": 0.13,
                 "closed_trades": 8,
-                "win_rate_pct": 37.5,
-                "profit_factor": 1.11,
-                "avg_trade_return_pct": 0.76,
-                "timestamp_utc": "2026-10-22T17:05:23.281259Z"
+                "win_rate_pct": 50.0,
+                "profit_factor": 1.27,
+                "avg_trade_return_pct": 1.58,
+                "timestamp_utc": "2026-10-22T18:11:28.585087Z"
             },
             "rotation": {
                 "strategy_mode": "rotation",
@@ -228,16 +228,16 @@
                 "win_rate_pct": 30.0,
                 "profit_factor": 0.33,
                 "avg_trade_return_pct": -0.93,
-                "timestamp_utc": "2026-10-22T17:05:23.820574Z"
+                "timestamp_utc": "2026-10-22T18:11:29.130446Z"
             }
         },
         "META": {
             "buy_and_hold": {
                 "entry_price": 731.35,
-                "exit_price": 646.89,
-                "final_equity": 884.52,
-                "net_profit": -115.48,
-                "net_return_pct": -11.55
+                "exit_price": 645.25,
+                "final_equity": 882.27,
+                "net_profit": -117.73,
+                "net_return_pct": -11.77
             },
             "core_tactical": {
                 "strategy_mode": "core_tactical",
@@ -261,7 +261,7 @@
                 "win_rate_pct": 0.0,
                 "profit_factor": 0.0,
                 "avg_trade_return_pct": -7.16,
-                "timestamp_utc": "2026-10-22T17:05:24.490526Z"
+                "timestamp_utc": "2026-10-22T18:11:29.550548Z"
             },
             "rotation": {
                 "strategy_mode": "rotation",
@@ -285,16 +285,16 @@
                 "win_rate_pct": 25.0,
                 "profit_factor": 0.44,
                 "avg_trade_return_pct": -1.42,
-                "timestamp_utc": "2026-10-22T17:05:25.053326Z"
+                "timestamp_utc": "2026-10-22T18:11:29.988993Z"
             }
         },
         "GOOGL": {
             "buy_and_hold": {
                 "entry_price": 253.71,
-                "exit_price": 326.98,
-                "final_equity": 1288.79,
-                "net_profit": 288.79,
-                "net_return_pct": 28.88
+                "exit_price": 324.11,
+                "final_equity": 1277.48,
+                "net_profit": 277.48,
+                "net_return_pct": 27.75
             },
             "core_tactical": {
                 "strategy_mode": "core_tactical",
@@ -304,21 +304,21 @@
                 ],
                 "calendar_sessions": 251,
                 "initial_capital": 1000.0,
-                "final_equity": 1230.65,
-                "net_profit_dollar": 230.65,
-                "total_net_return_pct": 23.06,
+                "final_equity": 1235.14,
+                "net_profit_dollar": 235.14,
+                "total_net_return_pct": 23.51,
                 "start_date": "2025-10-22",
                 "end_date": "2026-10-22",
-                "cagr_pct": 23.17,
-                "annualized_vol_pct": 31.37,
+                "cagr_pct": 23.62,
+                "annualized_vol_pct": 31.86,
                 "sharpe_ratio": 0.86,
-                "max_drawdown_pct": -21.1,
+                "max_drawdown_pct": -21.44,
                 "calmar_ratio": 1.1,
-                "closed_trades": 12,
-                "win_rate_pct": 66.67,
-                "profit_factor": 3.17,
-                "avg_trade_return_pct": 2.03,
-                "timestamp_utc": "2026-10-22T17:05:25.923086Z"
+                "closed_trades": 10,
+                "win_rate_pct": 70.0,
+                "profit_factor": 3.21,
+                "avg_trade_return_pct": 2.66,
+                "timestamp_utc": "2026-10-22T18:11:30.612517Z"
             },
             "rotation": {
                 "strategy_mode": "rotation",
@@ -342,16 +342,16 @@
                 "win_rate_pct": 50.0,
                 "profit_factor": 0.46,
                 "avg_trade_return_pct": -0.76,
-                "timestamp_utc": "2026-10-22T17:05:26.432475Z"
+                "timestamp_utc": "2026-10-22T18:11:30.986552Z"
             }
         },
         "TSLA": {
             "buy_and_hold": {
                 "entry_price": 443.45,
-                "exit_price": 378.67,
-                "final_equity": 853.92,
-                "net_profit": -146.08,
-                "net_return_pct": -14.61
+                "exit_price": 377.98,
+                "final_equity": 852.35,
+                "net_profit": -147.65,
+                "net_return_pct": -14.76
             },
             "core_tactical": {
                 "strategy_mode": "core_tactical",
@@ -361,21 +361,21 @@
                 ],
                 "calendar_sessions": 251,
                 "initial_capital": 1000.0,
-                "final_equity": 683.25,
-                "net_profit_dollar": -316.75,
-                "total_net_return_pct": -31.67,
+                "final_equity": 659.79,
+                "net_profit_dollar": -340.21,
+                "total_net_return_pct": -34.02,
                 "start_date": "2025-10-22",
                 "end_date": "2026-10-22",
-                "cagr_pct": -31.78,
-                "annualized_vol_pct": 37.12,
-                "sharpe_ratio": -0.81,
-                "max_drawdown_pct": -39.96,
-                "calmar_ratio": -0.8,
-                "closed_trades": 10,
-                "win_rate_pct": 10.0,
-                "profit_factor": 0.06,
-                "avg_trade_return_pct": -4.92,
-                "timestamp_utc": "2026-10-22T17:05:27.136814Z"
+                "cagr_pct": -34.13,
+                "annualized_vol_pct": 38.65,
+                "sharpe_ratio": -0.86,
+                "max_drawdown_pct": -41.54,
+                "calmar_ratio": -0.82,
+                "closed_trades": 11,
+                "win_rate_pct": 27.27,
+                "profit_factor": 0.15,
+                "avg_trade_return_pct": -5.05,
+                "timestamp_utc": "2026-10-22T18:11:31.489397Z"
             },
             "rotation": {
                 "strategy_mode": "rotation",
@@ -399,16 +399,16 @@
                 "win_rate_pct": 53.57,
                 "profit_factor": 0.37,
                 "avg_trade_return_pct": -1.47,
-                "timestamp_utc": "2026-10-22T17:05:27.660162Z"
+                "timestamp_utc": "2026-10-22T18:11:31.802049Z"
             }
         },
         "AMD": {
             "buy_and_hold": {
                 "entry_price": 236.85,
-                "exit_price": 509.47,
-                "final_equity": 2151.02,
-                "net_profit": 1151.02,
-                "net_return_pct": 115.1
+                "exit_price": 510.01,
+                "final_equity": 2153.28,
+                "net_profit": 1153.28,
+                "net_return_pct": 115.33
             },
             "core_tactical": {
                 "strategy_mode": "core_tactical",
@@ -432,7 +432,7 @@
                 "win_rate_pct": 66.67,
                 "profit_factor": 8.26,
                 "avg_trade_return_pct": 36.7,
-                "timestamp_utc": "2026-10-22T17:05:28.614498Z"
+                "timestamp_utc": "2026-10-22T18:11:32.416519Z"
             },
             "rotation": {
                 "strategy_mode": "rotation",
@@ -456,7 +456,7 @@
                 "win_rate_pct": 100.0,
                 "profit_factor": 5.0,
                 "avg_trade_return_pct": 4.89,
-                "timestamp_utc": "2026-10-22T17:05:29.226908Z"
+                "timestamp_utc": "2026-10-22T18:11:32.911348Z"
             }
         }
     },
@@ -476,21 +476,21 @@
             ],
             "calendar_sessions": 251,
             "initial_capital": 1000.0,
-            "final_equity": 1143.28,
-            "net_profit_dollar": 143.28,
-            "total_net_return_pct": 14.33,
+            "final_equity": 1128.32,
+            "net_profit_dollar": 128.32,
+            "total_net_return_pct": 12.83,
             "start_date": "2025-10-22",
             "end_date": "2026-10-22",
-            "cagr_pct": 14.39,
-            "annualized_vol_pct": 23.31,
-            "sharpe_ratio": 0.74,
-            "max_drawdown_pct": -16.01,
-            "calmar_ratio": 0.9,
-            "closed_trades": 64,
-            "win_rate_pct": 42.19,
-            "profit_factor": 1.81,
-            "avg_trade_return_pct": 1.64,
-            "timestamp_utc": "2026-10-22T17:05:31.616155Z"
+            "cagr_pct": 12.89,
+            "annualized_vol_pct": 23.56,
+            "sharpe_ratio": 0.68,
+            "max_drawdown_pct": -16.89,
+            "calmar_ratio": 0.76,
+            "closed_trades": 65,
+            "win_rate_pct": 47.69,
+            "profit_factor": 1.65,
+            "avg_trade_return_pct": 1.24,
+            "timestamp_utc": "2026-10-22T18:11:35.148402Z"
         },
         "rotation": {
             "strategy_mode": "rotation",
@@ -521,17 +521,17 @@
             "win_rate_pct": 20.0,
             "profit_factor": 0.14,
             "avg_trade_return_pct": -3.02,
-            "timestamp_utc": "2026-10-22T17:05:34.065574Z"
+            "timestamp_utc": "2026-10-22T18:11:37.595596Z"
         }
     },
     "benchmarks": {
         "SPY": {
             "entry_price": 664.83,
-            "exit_price": 762.71,
-            "final_equity": 1147.23,
-            "net_profit": 147.23,
-            "net_return_pct": 14.72
+            "exit_price": 762.44,
+            "final_equity": 1146.82,
+            "net_profit": 146.82,
+            "net_return_pct": 14.68
         }
     },
-    "timestamp_utc": "2026-10-22T17:05:17.163882Z"
+    "timestamp_utc": "2026-10-22T18:11:23.655171Z"
 }
