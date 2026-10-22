@@ -39,37 +39,44 @@ interface StoredStreamState {
   executionResult?: ExecutionResult;
 }
 
-function getInitialStoredState(): StoredStreamState | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      return JSON.parse(stored) as StoredStreamState;
-    }
-  } catch {
-    // ignore localStorage read failure
-  }
-  return null;
-}
-
 export function useAgentStream() {
-  const [streamStatus, setStreamStatus] = useState<AgentStreamStatus>(() => {
-    const initial = getInitialStoredState();
-    if (initial?.streamStatus === 'completed' || initial?.streamStatus === 'error') {
-      return initial.streamStatus;
-    }
-    return 'idle';
-  });
-  const [analystReports, setAnalystReports] = useState<AnalystReports>(() => getInitialStoredState()?.analystReports || {});
-  const [debateHistory, setDebateHistory] = useState<DebateTurn[]>(() => getInitialStoredState()?.debateHistory || []);
-  const [tradeProposal, setTradeProposal] = useState<TradeProposal>(() => getInitialStoredState()?.tradeProposal || {});
-  const [riskAssessment, setRiskAssessment] = useState<RiskAssessment>(() => getInitialStoredState()?.riskAssessment || {});
-  const [executionResult, setExecutionResult] = useState<ExecutionResult>(() => getInitialStoredState()?.executionResult || {});
+  const [streamStatus, setStreamStatus] = useState<AgentStreamStatus>('idle');
+  const [analystReports, setAnalystReports] = useState<AnalystReports>({});
+  const [debateHistory, setDebateHistory] = useState<DebateTurn[]>([]);
+  const [tradeProposal, setTradeProposal] = useState<TradeProposal>({});
+  const [riskAssessment, setRiskAssessment] = useState<RiskAssessment>({});
+  const [executionResult, setExecutionResult] = useState<ExecutionResult>({});
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isHydrated, setIsHydrated] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Save to local storage when state changes
+  // Restore from localStorage only after initial client mount to guarantee exact SSR/client match
   useEffect(() => {
+    queueMicrotask(() => {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored) as StoredStreamState;
+          if (parsed.streamStatus === 'completed' || parsed.streamStatus === 'error') {
+            setStreamStatus(parsed.streamStatus);
+          }
+          if (parsed.analystReports) setAnalystReports(parsed.analystReports);
+          if (parsed.debateHistory) setDebateHistory(parsed.debateHistory);
+          if (parsed.tradeProposal) setTradeProposal(parsed.tradeProposal);
+          if (parsed.riskAssessment) setRiskAssessment(parsed.riskAssessment);
+          if (parsed.executionResult) setExecutionResult(parsed.executionResult);
+        }
+      } catch {
+        // ignore localStorage read failure
+      } finally {
+        setIsHydrated(true);
+      }
+    });
+  }, []);
+
+  // Save to local storage when state changes after initial hydration
+  useEffect(() => {
+    if (!isHydrated) return;
     if (streamStatus !== 'idle' || Object.keys(analystReports).length > 0) {
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
@@ -84,7 +91,7 @@ export function useAgentStream() {
         // ignore localStorage write failure
       }
     }
-  }, [streamStatus, analystReports, debateHistory, tradeProposal, riskAssessment, executionResult]);
+  }, [isHydrated, streamStatus, analystReports, debateHistory, tradeProposal, riskAssessment, executionResult]);
 
   const startStream = useCallback(async (ticker: string, mock: boolean = false) => {
     if (abortControllerRef.current) {
