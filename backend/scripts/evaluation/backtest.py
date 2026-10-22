@@ -235,6 +235,16 @@ def _run_rotation_simulation(
             exit_fill_base = None
 
             if pos["side"] == "LONG":
+                pos["peak_price"] = max(pos.get("peak_price", pos["entry_fill"]), high_p)
+                # Trailing Ratchet: Lock in breakeven at +1.0 ATR
+                if pos["peak_price"] >= pos["entry_fill"] + (1.0 * pos["entry_atr"]):
+                    be_level = pos["entry_fill"] + (pos["entry_fill"] * slippage_rate * 2.0)
+                    pos["sl_price"] = max(pos["sl_price"], be_level)
+                # Trailing Ratchet: Trail 1.0 ATR from peak when up +1.8 ATR
+                if pos["peak_price"] >= pos["entry_fill"] + (1.8 * pos["entry_atr"]):
+                    trail_level = pos["peak_price"] - (1.0 * pos["entry_atr"])
+                    pos["sl_price"] = max(pos["sl_price"], trail_level)
+
                 if open_p >= pos["tp_price"]:
                     exit_reason = "TAKE_PROFIT"
                     exit_fill_base = open_p
@@ -257,6 +267,16 @@ def _run_rotation_simulation(
                         exit_reason = "MAX_HORIZON"
                         exit_fill_base = close_p
             elif pos["side"] == "SHORT":
+                pos["trough_price"] = min(pos.get("trough_price", pos["entry_fill"]), low_p)
+                # Trailing Ratchet: Lock in breakeven at -1.0 ATR
+                if pos["trough_price"] <= pos["entry_fill"] - (1.0 * pos["entry_atr"]):
+                    be_level = pos["entry_fill"] - (pos["entry_fill"] * slippage_rate * 2.0)
+                    pos["sl_price"] = min(pos["sl_price"], be_level)
+                # Trailing Ratchet: Trail 1.0 ATR from trough when down -1.8 ATR
+                if pos["trough_price"] <= pos["entry_fill"] - (1.8 * pos["entry_atr"]):
+                    trail_level = pos["trough_price"] + (1.0 * pos["entry_atr"])
+                    pos["sl_price"] = min(pos["sl_price"], trail_level)
+
                 if open_p <= pos["tp_price"]:
                     exit_reason = "TAKE_PROFIT"
                     exit_fill_base = open_p
@@ -361,11 +381,11 @@ def _run_rotation_simulation(
 
             atr_val = float(bar_today.get("ATR_14", entry_fill * 0.02))
             if side == "BUY":
-                tp = entry_fill + (1.5 * atr_val)
-                sl = entry_fill - (2.0 * atr_val)
+                tp = entry_fill + (2.4 * atr_val)
+                sl = entry_fill - (1.4 * atr_val)
             else:
-                tp = entry_fill - (1.5 * atr_val)
-                sl = entry_fill + (2.0 * atr_val)
+                tp = entry_fill - (2.4 * atr_val)
+                sl = entry_fill + (1.4 * atr_val)
 
             open_positions[sym] = {
                 "side": "LONG" if side == "BUY" else "SHORT",
@@ -376,6 +396,8 @@ def _run_rotation_simulation(
                 "entry_atr": atr_val,
                 "tp_price": tp,
                 "sl_price": sl,
+                "peak_price": entry_fill,
+                "trough_price": entry_fill,
                 "bars_held": 0,
             }
             executed_orders.append(order)
@@ -383,6 +405,13 @@ def _run_rotation_simulation(
         pending_orders = [o for o in pending_orders if o not in executed_orders]
 
         # 2. Evening Signal Generation
+        spy_bull = True
+        if current_date in spy_df.index:
+            spy_slice = spy_df.loc[:current_date]
+            if len(spy_slice) >= 200:
+                spy_sma200 = float(spy_slice["Close"].rolling(200).mean().iloc[-1])
+                spy_bull = float(spy_slice["Close"].iloc[-1]) >= spy_sma200
+
         new_pending_orders = []
         for sym, df_sym in ticker_dfs.items():
             if current_date not in df_sym.index:
@@ -392,7 +421,7 @@ def _run_rotation_simulation(
 
             if sym in last_exit_date:
                 bars_since = len(df_sym.loc[last_exit_date[sym]:current_date]) - 1
-                if bars_since < 5:
+                if bars_since < 2:
                     continue
 
             idx_loc = df_sym.index.get_loc(current_date)
@@ -434,22 +463,16 @@ def _run_rotation_simulation(
             )
 
             if is_buy:
-                if p_sell_lgbm >= 0.65:
+                if p_sell_lgbm >= 0.65 or not spy_bull:
                     signal = "VETOED"
                 else:
                     signal = "BUY"
             elif is_sell:
-                if p_buy_lgbm >= 0.65:
+                # Under macro bull market, do not take naked speculative shorts against secular leaders
+                if spy_bull or p_buy_lgbm >= 0.65:
                     signal = "VETOED"
                 else:
                     signal = "SELL"
-
-            if signal == "BUY" and current_date in spy_df.index:
-                spy_slice = spy_df.loc[:current_date]
-                if len(spy_slice) >= 200:
-                    spy_sma200 = spy_slice["Close"].rolling(200).mean().iloc[-1]
-                    if float(spy_slice["Close"].iloc[-1]) < float(spy_sma200):
-                        signal = "VETOED"
 
             if signal in ["BUY", "SELL"]:
                 new_pending_orders.append({
@@ -560,12 +583,18 @@ def _run_core_tactical_simulation(
 
     cash = float(initial_capital)
     core_shares: Dict[str, float] = {s: 0.0 for s in ticker_dfs}
+    core_entry_fill: Dict[str, float] = {s: 0.0 for s in ticker_dfs}
+    core_entry_comm: Dict[str, float] = {s: 0.0 for s in ticker_dfs}
+    core_entry_date: Dict[str, Optional[pd.Timestamp]] = {s: None for s in ticker_dfs}
     tactical_shares: Dict[str, float] = {s: 0.0 for s in ticker_dfs}
     tactical_entry_fill: Dict[str, float] = {s: 0.0 for s in ticker_dfs}
     tactical_entry_comm: Dict[str, float] = {s: 0.0 for s in ticker_dfs}
     tactical_entry_date: Dict[str, Optional[pd.Timestamp]] = {s: None for s in ticker_dfs}
     is_leveraged: Dict[str, bool] = {s: False for s in ticker_dfs}
     pending_tactical_action: Dict[str, Optional[str]] = {s: None for s in ticker_dfs}
+    consec_below_sma200: Dict[str, int] = {s: 0 for s in ticker_dfs}
+    consec_above_sma200: Dict[str, int] = {s: 0 for s in ticker_dfs}
+    in_core_regime: Dict[str, bool] = {s: True for s in ticker_dfs}
     daily_equity_curve: List[Dict] = []
     closed_trades: List[Dict] = []
 
@@ -579,6 +608,9 @@ def _run_core_tactical_simulation(
             comm = max(min_commission, sh_est * commission_per_share)
             sh = (base_capital - comm) / core_fill
             core_shares[sym] = sh
+            core_entry_fill[sym] = core_fill
+            core_entry_comm[sym] = comm
+            core_entry_date[sym] = day0
             cash -= (sh * core_fill) + comm
 
     for current_date in all_dates:
@@ -596,6 +628,8 @@ def _run_core_tactical_simulation(
                     exit_fill = open_p * (1.0 - slippage_rate)
                     exit_comm = max(min_commission, tot_sh * commission_per_share)
                     cash += (tot_sh * exit_fill) - exit_comm
+
+                    # 1. Log tactical liquidation if leveraged
                     if is_leveraged[sym] and tactical_shares[sym] > 0:
                         t_sh = tactical_shares[sym]
                         t_gross = (exit_fill - tactical_entry_fill[sym]) * t_sh
@@ -604,9 +638,17 @@ def _run_core_tactical_simulation(
                         closed_trades.append({
                             "ticker": sym,
                             "side": "LONG_TACTICAL",
-                            "entry_date": tactical_entry_date[sym].strftime("%Y-%m-%d"),
+                            "entry_date": (
+                                tactical_entry_date[sym].strftime("%Y-%m-%d")
+                                if tactical_entry_date[sym]
+                                else ""
+                            ),
                             "exit_date": current_date.strftime("%Y-%m-%d"),
-                            "bars_held": len(df_sym.loc[tactical_entry_date[sym]:current_date]),
+                            "bars_held": (
+                                len(df_sym.loc[tactical_entry_date[sym]:current_date])
+                                if tactical_entry_date[sym]
+                                else 0
+                            ),
                             "entry_fill": round(tactical_entry_fill[sym], 2),
                             "exit_fill": round(exit_fill, 2),
                             "shares": round(t_sh, 4),
@@ -620,6 +662,44 @@ def _run_core_tactical_simulation(
                             ),
                             "was_profitable": t_net > 0,
                         })
+
+                    # 2. Log core liquidation
+                    if core_shares[sym] > 0:
+                        c_sh = core_shares[sym]
+                        c_gross = (exit_fill - core_entry_fill[sym]) * c_sh
+                        c_exit_comm = exit_comm * (c_sh / tot_sh)
+                        c_net = c_gross - core_entry_comm[sym] - c_exit_comm
+                        c_ret = (
+                            (c_net / (core_entry_fill[sym] * c_sh)) * 100.0
+                            if core_entry_fill[sym] > 0
+                            else 0.0
+                        )
+                        closed_trades.append({
+                            "ticker": sym,
+                            "side": "LONG_CORE",
+                            "entry_date": (
+                                core_entry_date[sym].strftime("%Y-%m-%d")
+                                if core_entry_date[sym]
+                                else ""
+                            ),
+                            "exit_date": current_date.strftime("%Y-%m-%d"),
+                            "bars_held": (
+                                len(df_sym.loc[core_entry_date[sym]:current_date])
+                                if core_entry_date[sym]
+                                else 0
+                            ),
+                            "entry_fill": round(core_entry_fill[sym], 2),
+                            "exit_fill": round(exit_fill, 2),
+                            "shares": round(c_sh, 4),
+                            "exit_reason": "BEAR_REGIME_LIQUIDATION",
+                            "entry_commission": round(core_entry_comm[sym], 2),
+                            "exit_commission": round(c_exit_comm, 2),
+                            "gross_pnl": round(c_gross, 2),
+                            "net_pnl": round(c_net, 2),
+                            "return_pct": round(c_ret, 2),
+                            "was_profitable": c_net > 0,
+                        })
+
                     core_shares[sym] = 0.0
                     tactical_shares[sym] = 0.0
                     is_leveraged[sym] = False
@@ -634,6 +714,9 @@ def _run_core_tactical_simulation(
                         comm = max(min_commission, sh_est * commission_per_share)
                         sh = (avail - comm) / fill
                         core_shares[sym] = sh
+                        core_entry_fill[sym] = fill
+                        core_entry_comm[sym] = comm
+                        core_entry_date[sym] = current_date
                         cash -= (sh * fill) + comm
                 pending_tactical_action[sym] = None
 
@@ -663,9 +746,17 @@ def _run_core_tactical_simulation(
                 closed_trades.append({
                     "ticker": sym,
                     "side": "LONG_TACTICAL",
-                    "entry_date": tactical_entry_date[sym].strftime("%Y-%m-%d"),
+                    "entry_date": (
+                        tactical_entry_date[sym].strftime("%Y-%m-%d")
+                        if tactical_entry_date[sym]
+                        else ""
+                    ),
                     "exit_date": current_date.strftime("%Y-%m-%d"),
-                    "bars_held": len(df_sym.loc[tactical_entry_date[sym]:current_date]),
+                    "bars_held": (
+                        len(df_sym.loc[tactical_entry_date[sym]:current_date])
+                        if tactical_entry_date[sym]
+                        else 0
+                    ),
                     "entry_fill": round(tactical_entry_fill[sym], 2),
                     "exit_fill": round(exit_fill, 2),
                     "shares": round(t_sh, 4),
@@ -698,39 +789,58 @@ def _run_core_tactical_simulation(
             sym_sma200 = (
                 float(sym_slice.rolling(200).mean().iloc[-1]) if len(sym_slice) >= 200 else 0.0
             )
-            sym_bull = (c_p >= sym_sma200) or (sym_sma200 == 0.0)
 
-            is_bull = spy_bull and sym_bull
+            # Hysteresis update: 1.5% below SMA200, 0.5% above SMA200
+            if sym_sma200 > 0:
+                if c_p < (sym_sma200 * 0.985):
+                    consec_below_sma200[sym] += 1
+                    consec_above_sma200[sym] = 0
+                elif c_p > (sym_sma200 * 1.005):
+                    consec_above_sma200[sym] += 1
+                    consec_below_sma200[sym] = 0
 
-            if not is_bull:
-                if core_shares[sym] > 0 or tactical_shares[sym] > 0:
-                    pending_tactical_action[sym] = "LIQUIDATE_BEAR"
+            # State transitions with hysteresis
+            if in_core_regime[sym]:
+                # Liquidate if macro bear (SPY breakdown) or sustained 3-day asset breakdown
+                if (not spy_bull) or (consec_below_sma200[sym] >= 3):
+                    in_core_regime[sym] = False
+                    if core_shares[sym] > 0 or tactical_shares[sym] > 0:
+                        pending_tactical_action[sym] = "LIQUIDATE_BEAR"
             else:
-                if core_shares[sym] == 0:
-                    pending_tactical_action[sym] = "REENTER_CORE"
-                else:
-                    idx_loc = df_sym.index.get_loc(current_date)
-                    if idx_loc >= 50:
-                        bundle = models_by_ticker.get(sym) if models_by_ticker else None
-                        sym_scaler = bundle["scaler"] if bundle else scaler
-                        sym_xgb = bundle["xgb_model"] if bundle else xgb_model
-                        sym_lgbm = bundle["lgbm_model"] if bundle else lgbm_model
-                        sym_cal = bundle["calibrator"] if bundle else calibrator
+                # Reenter if macro bull and sustained 2-day recovery
+                if spy_bull and (consec_above_sma200[sym] >= 2 or sym_sma200 == 0.0):
+                    in_core_regime[sym] = True
+                    if core_shares[sym] == 0:
+                        pending_tactical_action[sym] = "REENTER_CORE"
 
-                        row_feat = bar_today[kept_features].values.reshape(1, -1)
-                        s_feat = sym_scaler.transform(row_feat)
-                        px = sym_xgb.predict_proba(s_feat)[0]
-                        pl = sym_lgbm.predict_proba(s_feat)[0]
-                        xgb_cal = sym_cal.calibrate("XGB", px)
-                        lgbm_cal = sym_cal.calibrate("LGBM", pl)
-                        p_b, p_s = float(xgb_cal[2]), float(xgb_cal[0])
-                        lgbm_veto = float(lgbm_cal[0]) >= 0.65
-                        dir_b = p_b / (p_b + p_s + 1e-9)
-                        c_rsi = float(bar_today.get("RSI", 50.0))
+            if in_core_regime[sym] and core_shares[sym] > 0:
+                idx_loc = df_sym.index.get_loc(current_date)
+                if idx_loc >= 50:
+                    bundle = models_by_ticker.get(sym) if models_by_ticker else None
+                    sym_scaler = bundle["scaler"] if bundle else scaler
+                    sym_xgb = bundle["xgb_model"] if bundle else xgb_model
+                    sym_lgbm = bundle["lgbm_model"] if bundle else lgbm_model
+                    sym_cal = bundle["calibrator"] if bundle else calibrator
 
-                        if (c_rsi <= dip_rsi or dir_b >= 0.60) and not lgbm_veto and not is_leveraged[sym]:
-                            pending_tactical_action[sym] = "BUY_OVERWEIGHT"
-                        elif (c_rsi >= trim_rsi or lgbm_veto) and is_leveraged[sym]:
+                    row_feat = bar_today[kept_features].values.reshape(1, -1)
+                    s_feat = sym_scaler.transform(row_feat)
+                    px = sym_xgb.predict_proba(s_feat)[0]
+                    pl = sym_lgbm.predict_proba(s_feat)[0]
+                    xgb_cal = sym_cal.calibrate("XGB", px)
+                    lgbm_cal = sym_cal.calibrate("LGBM", pl)
+                    p_b, p_s = float(xgb_cal[2]), float(xgb_cal[0])
+                    lgbm_veto = float(lgbm_cal[0]) >= 0.65
+                    dir_b = p_b / (p_b + p_s + 1e-9)
+                    c_rsi = float(bar_today.get("RSI", 50.0))
+                    atr_val = float(bar_today.get("ATR_14", c_p * 0.02))
+
+                    if (c_rsi <= dip_rsi or dir_b >= 0.60) and not lgbm_veto and not is_leveraged[sym]:
+                        pending_tactical_action[sym] = "BUY_OVERWEIGHT"
+                    elif is_leveraged[sym]:
+                        if (c_rsi >= trim_rsi or lgbm_veto):
+                            pending_tactical_action[sym] = "SELL_HARVEST"
+                        # Tactical stop-loss protection: cut overweight if dropped > 1.8x ATR from tactical entry
+                        elif c_p <= (tactical_entry_fill[sym] - (1.8 * atr_val)):
                             pending_tactical_action[sym] = "SELL_HARVEST"
 
         # 3. END-OF-DAY VALUATION
@@ -747,12 +857,16 @@ def _run_core_tactical_simulation(
             "total_equity": total_equity,
         })
 
-    # Close remaining tactical positions at final session close
+    # Close remaining tactical and core positions at final session close
     last_date = all_dates[-1]
     for sym, df_sym in ticker_dfs.items():
-        if is_leveraged[sym] and tactical_shares[sym] > 0 and last_date in df_sym.index:
+        if last_date not in df_sym.index:
+            continue
+        c_p = float(df_sym.loc[last_date, "Close"])
+
+        # Close tactical shares if any
+        if is_leveraged[sym] and tactical_shares[sym] > 0:
             t_sh = tactical_shares[sym]
-            c_p = float(df_sym.loc[last_date, "Close"])
             exit_fill = c_p * (1.0 - slippage_rate)
             exit_comm = max(min_commission, t_sh * commission_per_share)
             gross_pnl = (exit_fill - tactical_entry_fill[sym]) * t_sh
@@ -762,9 +876,17 @@ def _run_core_tactical_simulation(
             closed_trades.append({
                 "ticker": sym,
                 "side": "LONG_TACTICAL",
-                "entry_date": tactical_entry_date[sym].strftime("%Y-%m-%d"),
+                "entry_date": (
+                    tactical_entry_date[sym].strftime("%Y-%m-%d")
+                    if tactical_entry_date[sym]
+                    else ""
+                ),
                 "exit_date": last_date.strftime("%Y-%m-%d"),
-                "bars_held": len(df_sym.loc[tactical_entry_date[sym]:last_date]),
+                "bars_held": (
+                    len(df_sym.loc[tactical_entry_date[sym]:last_date])
+                    if tactical_entry_date[sym]
+                    else 0
+                ),
                 "entry_fill": round(tactical_entry_fill[sym], 2),
                 "exit_fill": round(exit_fill, 2),
                 "shares": round(t_sh, 4),
@@ -777,6 +899,42 @@ def _run_core_tactical_simulation(
                 "was_profitable": net_pnl > 0,
             })
             tactical_shares[sym] = 0.0
+
+        # Close core shares at end of backtest to record complete PnL history
+        if core_shares[sym] > 0:
+            c_sh = core_shares[sym]
+            exit_fill = c_p * (1.0 - slippage_rate)
+            exit_comm = max(min_commission, c_sh * commission_per_share)
+            gross_pnl = (exit_fill - core_entry_fill[sym]) * c_sh
+            net_pnl = gross_pnl - core_entry_comm[sym] - exit_comm
+            cash += (c_sh * exit_fill) - exit_comm
+            ret_pct = (
+                (net_pnl / (core_entry_fill[sym] * c_sh)) * 100.0
+                if core_entry_fill[sym] > 0
+                else 0.0
+            )
+            closed_trades.append({
+                "ticker": sym,
+                "side": "LONG_CORE",
+                "entry_date": (
+                    core_entry_date[sym].strftime("%Y-%m-%d") if core_entry_date[sym] else ""
+                ),
+                "exit_date": last_date.strftime("%Y-%m-%d"),
+                "bars_held": (
+                    len(df_sym.loc[core_entry_date[sym]:last_date]) if core_entry_date[sym] else 0
+                ),
+                "entry_fill": round(core_entry_fill[sym], 2),
+                "exit_fill": round(exit_fill, 2),
+                "shares": round(c_sh, 4),
+                "exit_reason": "END_OF_BACKTEST",
+                "entry_commission": round(core_entry_comm[sym], 2),
+                "exit_commission": round(exit_comm, 2),
+                "gross_pnl": round(gross_pnl, 2),
+                "net_pnl": round(net_pnl, 2),
+                "return_pct": round(ret_pct, 2),
+                "was_profitable": net_pnl > 0,
+            })
+            core_shares[sym] = 0.0
 
     return daily_equity_curve, closed_trades
 

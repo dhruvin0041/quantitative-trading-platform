@@ -38,29 +38,7 @@ def clean_training_artifacts(ticker=None, all_tickers=False):
     - If all_tickers is True or (ticker is None and global clean): purges all ticker models in
       artifacts/models/ and multi-asset training summaries.
     """
-    files = [
-        "artifacts/xgb_ensemble.json",
-        "artifacts/meta_model.joblib",
-        "artifacts/meta_ensemble.joblib",
-        "artifacts/model_calibrator.joblib",
-        "artifacts/latest_scaler.joblib",
-        "artifacts/latest_fusion_weights.weights.h5",
-        "artifacts/best_fusion_weights.weights.h5",
-        "artifacts/tft_quantile_weights.weights.h5",
-        "artifacts/dqn_model.pth",
-        "artifacts/lgbm_agent.joblib",
-        "artifacts/macro_kill_switch.joblib",
-        "artifacts/calibrator.joblib",
-        "artifacts/xgb_calibrator.joblib",
-        "artifacts/lgbm_calibrator.joblib",
-        "artifacts/X_train_tabular.joblib",
-        "artifacts/y_train_sig.joblib",
-        "artifacts/X_val_tabular.joblib",
-        "artifacts/y_val_sig.joblib",
-        "artifacts/best_lgbm_params.json",
-        "artifacts/best_xgb_params.json",
-        "configs/active_ticker.json",
-    ]
+    files = []
 
     if ticker:
         t = ticker.upper()
@@ -72,17 +50,41 @@ def clean_training_artifacts(ticker=None, all_tickers=False):
                 print(f"  [CLEANED DIRECTORY] artifacts/models/{t}/")
             except Exception as e:
                 print(f"  [ERROR] Could not remove artifacts/models/{t}/: {e}")
-    elif all_tickers:
-        files.append("artifacts/multi_ticker_training_summary.json")
-        models_dir = BACKEND_DIR / "artifacts" / "models"
-        if models_dir.exists():
-            for item in models_dir.iterdir():
-                if item.is_dir():
-                    try:
-                        shutil.rmtree(item)
-                        print(f"  [CLEANED DIRECTORY] {item.relative_to(BACKEND_DIR)}")
-                    except Exception as e:
-                        print(f"  [ERROR] Could not remove {item}: {e}")
+    else:
+        files = [
+            "artifacts/xgb_ensemble.json",
+            "artifacts/meta_model.joblib",
+            "artifacts/meta_ensemble.joblib",
+            "artifacts/model_calibrator.joblib",
+            "artifacts/latest_scaler.joblib",
+            "artifacts/latest_fusion_weights.weights.h5",
+            "artifacts/best_fusion_weights.weights.h5",
+            "artifacts/tft_quantile_weights.weights.h5",
+            "artifacts/dqn_model.pth",
+            "artifacts/lgbm_agent.joblib",
+            "artifacts/macro_kill_switch.joblib",
+            "artifacts/calibrator.joblib",
+            "artifacts/xgb_calibrator.joblib",
+            "artifacts/lgbm_calibrator.joblib",
+            "artifacts/X_train_tabular.joblib",
+            "artifacts/y_train_sig.joblib",
+            "artifacts/X_val_tabular.joblib",
+            "artifacts/y_val_sig.joblib",
+            "artifacts/best_lgbm_params.json",
+            "artifacts/best_xgb_params.json",
+            "configs/active_ticker.json",
+        ]
+        if all_tickers:
+            files.append("artifacts/multi_ticker_training_summary.json")
+            models_dir = BACKEND_DIR / "artifacts" / "models"
+            if models_dir.exists():
+                for item in models_dir.iterdir():
+                    if item.is_dir():
+                        try:
+                            shutil.rmtree(item)
+                            print(f"  [CLEANED DIRECTORY] {item.relative_to(BACKEND_DIR)}")
+                        except Exception as e:
+                            print(f"  [ERROR] Could not remove {item}: {e}")
 
     print(f"--- Cleaning Training Artifacts (Ticker: {ticker}, All Tickers: {all_tickers}) ---")
     for f in files:
@@ -108,29 +110,7 @@ def clean_optimization_artifacts(ticker=None, universal=False, all_tickers=False
         f"--- Cleaning Optimization Artifacts (Ticker: {ticker}, Universal: {universal}, All Tickers: {all_tickers}) ---"
     )
 
-    # Generic artifacts
-    files = [
-        "artifacts/xgb_ensemble.json",
-        "artifacts/meta_ensemble.joblib",
-        "artifacts/model_calibrator.joblib",
-        "artifacts/latest_scaler.joblib",
-        "artifacts/latest_fusion_weights.weights.h5",
-        "artifacts/best_fusion_weights.weights.h5",
-        "artifacts/tft_quantile_weights.weights.h5",
-        "artifacts/dqn_model.pth",
-        "artifacts/lgbm_agent.joblib",
-        "artifacts/best_xgb_params.json",
-        "artifacts/best_lgbm_params.json",
-        "artifacts/v3/xgb_ensemble.json",
-        "artifacts/v3/lgbm_agent.joblib",
-        "artifacts/v3/latest_scaler.joblib",
-        "artifacts/v3/model_calibrator.joblib",
-        "artifacts/v3/kept_features.json",
-        "configs/best_xgb_params.json",
-        "configs/best_lgbm_params.json",
-        "configs/best_catboost_params.json",
-        "configs/best_rf_params.json",
-    ]
+    files = []
 
     # Target specific ticker or universal files
     if ticker:
@@ -138,6 +118,30 @@ def clean_optimization_artifacts(ticker=None, universal=False, all_tickers=False
         files.append(f"configs/optimized_params_{t}.json")
         files.append(f"optuna_studies/{t}.db")
         files.append(f"artifacts/models/{t}/optimized_params.json")
+    else:
+        # Generic artifacts only when cleaning globally/universally
+        files = [
+            "artifacts/xgb_ensemble.json",
+            "artifacts/meta_ensemble.joblib",
+            "artifacts/model_calibrator.joblib",
+            "artifacts/latest_scaler.joblib",
+            "artifacts/latest_fusion_weights.weights.h5",
+            "artifacts/best_fusion_weights.weights.h5",
+            "artifacts/tft_quantile_weights.weights.h5",
+            "artifacts/dqn_model.pth",
+            "artifacts/lgbm_agent.joblib",
+            "artifacts/best_xgb_params.json",
+            "artifacts/best_lgbm_params.json",
+            "artifacts/v3/xgb_ensemble.json",
+            "artifacts/v3/lgbm_agent.joblib",
+            "artifacts/v3/latest_scaler.joblib",
+            "artifacts/v3/model_calibrator.joblib",
+            "artifacts/v3/kept_features.json",
+            "configs/best_xgb_params.json",
+            "configs/best_lgbm_params.json",
+            "configs/best_catboost_params.json",
+            "configs/best_rf_params.json",
+        ]
 
     if universal or all_tickers:
         files.append("configs/optimized_params_UNIVERSAL.json")

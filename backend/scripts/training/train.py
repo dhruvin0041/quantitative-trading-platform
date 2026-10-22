@@ -60,8 +60,8 @@ logger = logging.getLogger("TrainSpecificTicker")
 
 WARMUP_BARS = 119
 LABEL_HORIZON = 10
-TP_ATR_MULT = 2.5
-SL_ATR_MULT = 1.5
+TP_ATR_MULT = 2.0
+SL_ATR_MULT = 2.0
 
 
 def compute_sha256(file_path: Path) -> str:
@@ -262,17 +262,17 @@ def run_ticker_optimization(
 
     # 1. XGBoost Objective (Expanded Regularization & Tree Structure)
     def objective_xgb(trial):
-        n_est = trial.suggest_int("n_estimators", 150, 600, step=50)
-        max_d = trial.suggest_int("max_depth", 3, 8)
-        lr = trial.suggest_float("learning_rate", 0.01, 0.12, log=True)
-        sub = trial.suggest_float("subsample", 0.60, 0.95)
-        col = trial.suggest_float("colsample_bytree", 0.50, 0.95)
+        n_est = trial.suggest_int("n_estimators", 150, 400, step=50)
+        max_d = trial.suggest_int("max_depth", 2, 4)
+        lr = trial.suggest_float("learning_rate", 0.01, 0.08, log=True)
+        sub = trial.suggest_float("subsample", 0.65, 0.95)
+        col = trial.suggest_float("colsample_bytree", 0.50, 0.90)
         col_lvl = trial.suggest_float("colsample_bylevel", 0.50, 1.00)
-        min_cw = trial.suggest_float("min_child_weight", 1.0, 10.0, log=True)
-        gamma = trial.suggest_float("gamma", 0.0, 5.0)
-        reg_a = trial.suggest_float("reg_alpha", 1e-4, 10.0, log=True)
-        reg_l = trial.suggest_float("reg_lambda", 1e-3, 20.0, log=True)
-        max_b = trial.suggest_categorical("max_bin", [128, 256, 512])
+        min_cw = trial.suggest_float("min_child_weight", 2.0, 15.0, log=True)
+        gamma = trial.suggest_float("gamma", 0.5, 5.0)
+        reg_a = trial.suggest_float("reg_alpha", 0.5, 15.0, log=True)
+        reg_l = trial.suggest_float("reg_lambda", 0.5, 20.0, log=True)
+        max_b = trial.suggest_categorical("max_bin", [128, 256])
 
         scores = []
         for i in range(1, 4):
@@ -315,18 +315,18 @@ def run_ticker_optimization(
 
     # 2. LightGBM Objective (Expanded Leaf-Wise Regularization & Bagging)
     def objective_lgbm(trial):
-        n_est = trial.suggest_int("n_estimators", 150, 600, step=50)
-        lr = trial.suggest_float("learning_rate", 0.01, 0.12, log=True)
-        max_d = trial.suggest_int("max_depth", 3, 9)
-        num_l = trial.suggest_int("num_leaves", 15, 127)
-        min_cs = trial.suggest_int("min_child_samples", 10, 80)
-        min_sg = trial.suggest_float("min_split_gain", 0.0, 2.0)
-        sub = trial.suggest_float("subsample", 0.60, 0.95)
+        n_est = trial.suggest_int("n_estimators", 150, 400, step=50)
+        lr = trial.suggest_float("learning_rate", 0.01, 0.08, log=True)
+        max_d = trial.suggest_int("max_depth", 2, 4)
+        num_l = trial.suggest_int("num_leaves", 7, 31)
+        min_cs = trial.suggest_int("min_child_samples", 20, 80)
+        min_sg = trial.suggest_float("min_split_gain", 0.1, 2.0)
+        sub = trial.suggest_float("subsample", 0.65, 0.95)
         sub_f = trial.suggest_int("subsample_freq", 1, 7)
-        col = trial.suggest_float("colsample_bytree", 0.50, 0.95)
-        reg_a = trial.suggest_float("reg_alpha", 1e-4, 10.0, log=True)
-        reg_l = trial.suggest_float("reg_lambda", 1e-3, 20.0, log=True)
-        max_b = trial.suggest_categorical("max_bin", [128, 256, 512])
+        col = trial.suggest_float("colsample_bytree", 0.50, 0.90)
+        reg_a = trial.suggest_float("reg_alpha", 0.5, 15.0, log=True)
+        reg_l = trial.suggest_float("reg_lambda", 0.5, 20.0, log=True)
+        max_b = trial.suggest_categorical("max_bin", [128, 256])
 
         scores = []
         for i in range(1, 4):

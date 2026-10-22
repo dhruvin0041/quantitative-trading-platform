@@ -158,10 +158,52 @@ def main():
     with open(save_path, "w") as f:
         json.dump(results, f, indent=4)
 
-    print("\n" + "=" * 80)
-    print("  1-YEAR $1,000 BACKTEST COMPLETE - ALL 8 TICKERS")
-    print(f"  Artifact saved to {save_path}")
-    print("=" * 80)
+    # Print Institutional Summary Table
+    print("\n" + "=" * 105)
+    print("       HYDRA 1-YEAR $1,000 INSTITUTIONAL BACKTEST RESULTS (2025-10-22 to 2026-10-22)")
+    print("=" * 105)
+    header = f"{'Ticker':<7} | {'Buy & Hold (1Y)':<18} | {'Core + Tactical Alpha':<28} | {'Dynamic Triple Barrier Rotation':<28}"
+    print(header)
+    print("-" * 105)
+    sub = f"{'':<7} | {'Equity':>9} {'Return':>7} | {'Equity':>9} {'Return':>7} {'MaxDD':>8} | {'Equity':>9} {'Return':>7} {'MaxDD':>8}"
+    print(sub)
+    print("-" * 105)
+
+    for ticker in TICKERS:
+        t_data = results["tickers"][ticker]
+        bnh = t_data["buy_and_hold"]
+        core = t_data["core_tactical"] or {}
+        rot = t_data["rotation"] or {}
+
+        bnh_eq = f"${bnh.get('final_equity', 1000):,.2f}"
+        bnh_ret = f"{bnh.get('net_return_pct', 0):+.2f}%"
+
+        core_eq = f"${core.get('final_equity', 1000):,.2f}"
+        core_ret = f"{core.get('total_net_return_pct', core.get('total_return_pct', 0)):+.2f}%"
+        core_dd = f"{core.get('max_drawdown_pct', 0):.2f}%"
+
+        rot_eq = f"${rot.get('final_equity', 1000):,.2f}"
+        rot_ret = f"{rot.get('total_net_return_pct', rot.get('total_return_pct', 0)):+.2f}%"
+        rot_dd = f"{rot.get('max_drawdown_pct', 0):.2f}%"
+
+        print(f"{ticker:<7} | {bnh_eq:>9} {bnh_ret:>7} | {core_eq:>9} {core_ret:>7} {core_dd:>8} | {rot_eq:>9} {rot_ret:>7} {rot_dd:>8}")
+
+    print("-" * 105)
+    port_c = results["portfolio"]["core_tactical"] or {}
+    port_r = results["portfolio"]["rotation"] or {}
+    p_core_eq = f"${port_c.get('final_equity', 1000):,.2f}"
+    p_core_ret = f"{port_c.get('total_net_return_pct', port_c.get('total_return_pct', 0)):+.2f}%"
+    p_core_dd = f"{port_c.get('max_drawdown_pct', 0):.2f}%"
+    p_rot_eq = f"${port_r.get('final_equity', 1000):,.2f}"
+    p_rot_ret = f"{port_r.get('total_net_return_pct', port_r.get('total_return_pct', 0)):+.2f}%"
+    p_rot_dd = f"{port_r.get('max_drawdown_pct', 0):.2f}%"
+    spy_ret = f"{spy_bnh.get('net_return_pct', 0):+.2f}%"
+    spy_eq = f"${spy_bnh.get('final_equity', 1000):,.2f}"
+
+    print(f"{'PORTFOLIO':<7} | {spy_eq:>9} {spy_ret:>7} | {p_core_eq:>9} {p_core_ret:>7} {p_core_dd:>8} | {p_rot_eq:>9} {p_rot_ret:>7} {p_rot_dd:>8}")
+    print("=" * 105)
+    print(f"  Artifact successfully saved to {save_path}")
+    print("=" * 105)
 
 
 if __name__ == "__main__":
