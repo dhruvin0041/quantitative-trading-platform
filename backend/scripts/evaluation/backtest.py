@@ -1115,7 +1115,7 @@ def run_chronological_backtest(
     snapshot_dir: Optional[str] = None,
     use_snapshots: bool = False,
     strategy_mode: str = "rotation",
-    leverage: float = 1.40,
+    leverage: float = 1.00,
     dip_rsi: float = 35.0,
     trim_rsi: float = 65.0,
 ) -> Optional[Dict]:
@@ -1615,7 +1615,7 @@ if __name__ == "__main__":
         help="Strategy mode: rotation, core_tactical, oversold_rebound, or adaptive (regime-matched mesh)",
     )
     parser.add_argument(
-        "--leverage", type=float, default=1.40, help="Tactical overweight leverage multiplier"
+        "--leverage", type=float, default=1.00, help="Tactical equity multiplier (default 1.00 = unleveraged cash account)"
     )
     parser.add_argument(
         "--dip-rsi", type=float, default=35.0, help="RSI oversold threshold for tactical entry"

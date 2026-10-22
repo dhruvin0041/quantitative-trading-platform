@@ -2,7 +2,8 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(".").resolve()))
+backend_dir = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(backend_dir))
 
 import yfinance as yf
 
@@ -20,7 +21,6 @@ from src.execution.signal_journal import SignalJournal
 from src.execution.smart_router import PredictiveSmartRouter
 from src.models.model_loader import ModelManager
 
-backend_dir = Path(".").resolve()
 config = load_config()
 
 kf_path = backend_dir / "configs" / "kept_features.json"

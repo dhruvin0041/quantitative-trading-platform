@@ -144,6 +144,7 @@ async def run_full_verification():
         print(f"      Tactical Rationale: {res.get('tactical_rationale')[:85]}...")
 
         assert res.get("strategy_mode") == expected_strat, f"Strategy mode mismatch for {sym}: {res.get('strategy_mode')} != {expected_strat}"
+        assert res.get("target_exposure") <= 1.00, f"Leverage violation for {sym}: target_exposure {res.get('target_exposure')} > 1.00x"
         assert res.get("current_price") > 0, f"Invalid live price for {sym}"
         assert res.get("signal") in ["BUY", "SELL", "HOLD", "VETOED"], f"Invalid signal: {res.get('signal')}"
 

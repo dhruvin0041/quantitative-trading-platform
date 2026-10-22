@@ -1893,12 +1893,12 @@ class InferenceService:
                     f"Capital protected in 100% Cash protective state."
                 )
             elif (c_rsi <= 35.0 or dir_b >= 0.60) and not lgbm_veto:
-                tactical_action = "TACTICAL_OVERWEIGHT_BUY"
-                target_exposure = 1.40
+                tactical_action = "TACTICAL_ACCUMULATION_BUY"
+                target_exposure = 1.00
                 tactical_rationale = (
-                    f"Macro Bull intact. Tactical entry triggered: RSI={c_rsi:.1f} <= 35 or "
+                    f"Macro Bull intact. Tactical accumulation entry triggered: RSI={c_rsi:.1f} <= 35 or "
                     f"ML conviction dir_buy={dir_b:.2f} >= 0.60 (LGBM veto P_sell={lgbm_p_sell:.2f} < 0.65). "
-                    f"Overweight exposure to 1.40x leverage."
+                    f"Full 1.00x spot cash equity allocation (zero leverage, zero margin)."
                 )
             elif (c_rsi >= 65.0 or lgbm_veto):
                 tactical_action = "TACTICAL_HARVEST_SELL"
@@ -1906,7 +1906,7 @@ class InferenceService:
                 tactical_rationale = (
                     f"Macro Bull intact. Tactical harvest triggered: RSI={c_rsi:.1f} >= 65 or "
                     f"LGBM risk veto={lgbm_veto} (P_sell={lgbm_p_sell:.2f} >= 0.65). "
-                    f"Harvest tactical overweights back to 1.0x Core equity."
+                    f"Standard 1.00x spot cash equity allocation."
                 )
             else:
                 tactical_action = "HOLD_CORE_1.0X"
@@ -1914,7 +1914,7 @@ class InferenceService:
                 tactical_rationale = (
                     f"Macro Bull intact (Close {curr_close:.2f} >= SMA200 {sma_200:.2f}, "
                     f"SPY {curr_spy_close:.2f} >= SMA200 {spy_sma_200:.2f}). "
-                    f"Maintaining 1.0x Core long exposure. RSI={c_rsi:.1f} in neutral channel."
+                    f"Maintaining 1.00x spot equity exposure (unleveraged cash account)."
                 )
 
         macro_filter_data = {
