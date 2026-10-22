@@ -17,15 +17,17 @@ export const TradeCard: React.FC<TradeCardProps> = ({ data, currency }) => {
     : (data.signal || "HOLD");
   const confidence = data.confidence_score || 0;
   
-  // Assume some mock data or derived data for sizing if not present
-  // In a real system, these would come from the backend's Kelly sizing algorithm
   const entryPrice = data.current_price || 0;
   const targetPrice = data.projections?.ceiling || entryPrice * 1.05;
-  const stopLoss = entryPrice * 0.95;
+  const tpStopLoss = typeof data.trade_parameters?.stop_loss === 'number'
+    ? data.trade_parameters.stop_loss
+    : entryPrice * 0.95;
+  const stopLoss = tpStopLoss;
   const ev = (targetPrice - entryPrice) * 0.6 - (entryPrice - stopLoss) * 0.4;
-  const rr = Math.abs((targetPrice - entryPrice) / (entryPrice - stopLoss));
-  const recommendedShares = 15; // Mock
-  const kellyFraction = 0.12; // Mock
+  const rr = Math.abs((targetPrice - entryPrice) / Math.max(0.01, entryPrice - stopLoss));
+  const dynamicAlloc = data.dynamic_sizing ? `${data.dynamic_sizing.allocation_pct}% Capital` : null;
+  const recommendedShares = dynamicAlloc || "100% Capital";
+  const kellyFraction = data.dynamic_sizing?.half_kelly_fraction ?? 0.38;
 
   const isVetoed = data.execution_authority?.structural_regime?.includes('VETOED') || false;
 
@@ -84,6 +86,21 @@ export const TradeCard: React.FC<TradeCardProps> = ({ data, currency }) => {
           </div>
           <span className="text-[10px] font-mono bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded">
             LOCKED
+          </span>
+        </div>
+      )}
+
+      {/* PRE-EARNINGS & BINARY EVENT SHIELD BANNER */}
+      {data.earnings_shield?.is_blackout && (
+        <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-2 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-amber-400" />
+            <span className="text-[11px] font-bold text-amber-400 uppercase tracking-widest">
+              Pre-Earnings Shield Active
+            </span>
+          </div>
+          <span className="text-[10px] font-mono bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded font-bold">
+            {data.earnings_shield.nearest_earnings_date ? `EPS ${data.earnings_shield.nearest_earnings_date}` : '48-72h LOCK'}
           </span>
         </div>
       )}
@@ -150,10 +167,14 @@ export const TradeCard: React.FC<TradeCardProps> = ({ data, currency }) => {
         <div className="flex flex-col p-4">
           <div className="flex items-center gap-2 mb-2">
             <Wallet className="w-4 h-4 text-muted-foreground" />
-            <span className="text-[11px] font-bold text-muted-foreground uppercase">Position Size</span>
+            <span className="text-[11px] font-bold text-muted-foreground uppercase">Target Allocation</span>
           </div>
-          <span className="text-[20px] font-black text-foreground mb-1">{recommendedShares} Shares</span>
-          <span className="text-[11px] font-mono text-muted-foreground">Kelly Frac: {kellyFraction.toFixed(2)}</span>
+          <span className="text-[20px] font-black text-foreground mb-1">{recommendedShares}</span>
+          <span className="text-[11px] font-mono text-muted-foreground">
+            {data.dynamic_sizing
+              ? `VIX ${data.dynamic_sizing.vix_basis.toFixed(1)} • ${data.dynamic_sizing.regime_label}`
+              : `Kelly Frac: ${kellyFraction.toFixed(2)}`}
+          </span>
         </div>
         <div className="flex flex-col p-4">
           <div className="flex items-center gap-2 mb-2">

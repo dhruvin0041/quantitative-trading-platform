@@ -11,6 +11,7 @@ import joblib
 import numpy as np
 import pandas as pd
 
+from src.data_ingestion.corporate_calendar import CorporateCalendarGate
 from src.data_ingestion.nlp_processor import NewsTokenizer
 from src.data_ingestion.technical_indicators import clean_multiindex_columns
 from src.execution.asset_intelligence import (
@@ -36,6 +37,7 @@ from src.execution.live_inference import (
 from src.execution.risk_manager import (
     InstitutionalRiskArbitrator,
     calculate_beta,
+    calculate_dynamic_volatility_sizing,
     detect_stampede_risk,
     get_position_sizing,
 )
@@ -698,6 +700,11 @@ class InferenceService:
                 if "ADX" in df_feat.columns
                 else pd.Series(20.0, index=valid_indices)
             )
+            vix_s = (
+                df_feat["VIX_Level"].reindex(valid_indices).ffill()
+                if "VIX_Level" in df_feat.columns
+                else pd.Series(18.0, index=valid_indices)
+            )
 
             intended_bars = len(valid_indices)
             bars_processed = 0
@@ -715,6 +722,13 @@ class InferenceService:
                     if hasattr(v_idx, "strftime")
                     else str(v_idx)
                 )
+
+                # Pre-Earnings Shield Check
+                earnings_status = CorporateCalendarGate.check_earnings_proximity(
+                    ticker, bar_time, blackout_days_before=3, blackout_days_after=1
+                )
+                is_near_earnings = earnings_status.get("is_blackout", False)
+
                 prob_vec = all_probs[i]
                 if self.model_calibrator is not None:
                     prob_vec = self.model_calibrator.calibrate("XGB", prob_vec)
@@ -748,6 +762,11 @@ class InferenceService:
                 )
                 cur_adx = (
                     float(adx_s.iloc[i]) if pd.notna(adx_s.iloc[i]) else 20.0
+                )
+                cur_vix = (
+                    float(vix_s.iloc[i])
+                    if pd.notna(vix_s.iloc[i]) and float(vix_s.iloc[i]) > 0
+                    else 18.0
                 )
                 prev_rsi = (
                     float(rsi_s.iloc[i - 1])
@@ -837,6 +856,10 @@ class InferenceService:
                     )
                     # Profit-Based Volatility Compression: Accelerate ratchet when in deep profit (> 10%) with elevated RSI
                     mult = 2.4 if (unrealized_p >= 0.10 and cur_rsi > 70.0) else 3.8
+                    # Pre-Earnings Shield: Tighten stop on active long if earnings announcement within 72h to protect gains from overnight gaps
+                    if is_near_earnings:
+                        mult = min(mult, 1.8 if unrealized_p >= 0.05 else 2.5)
+
                     new_stop = peak_price - (mult * cur_atr) if peak_price > 0 else 0.0
                     trailing_stop = max(trailing_stop, new_stop)
 
@@ -852,11 +875,14 @@ class InferenceService:
                             raw_signal = "HOLD"
                             conf = float(prob_vec[1])
 
-                # 8. Macro Filter at bar t (Zero lookahead)
+                # 8. Macro Filter at bar t & Pre-Earnings Blackout Gate (Zero lookahead)
                 short_ok = bool((cur_c < cur_sma200) or (cur_spy < cur_spy_macro))
                 sell_allowed = True if current_pos == "LONG" else short_ok
 
                 if raw_signal == "BUY" and not macro_bull:
+                    filtered_signal = "HOLD"
+                elif raw_signal == "BUY" and is_near_earnings:
+                    # Pre-Earnings Shield: Block new BUY entries within 72h of earnings release
                     filtered_signal = "HOLD"
                 elif raw_signal == "SELL" and not sell_allowed:
                     filtered_signal = "HOLD"
@@ -888,6 +914,16 @@ class InferenceService:
                     last_trade_price = cur_c
                     peak_price = cur_c
                     trailing_stop = peak_price - (3.8 * cur_atr)
+
+                    # Dynamic Volatility Position Sizing (Half-Kelly / Volatility Scaling)
+                    sizing_data = calculate_dynamic_volatility_sizing(
+                        vix=cur_vix,
+                        p_buy=p_buy,
+                        is_dip_reversal=is_dip_reversal,
+                        is_macro_bull=macro_bull,
+                    )
+                    target_alloc = sizing_data["target_allocation"]
+
                     if orig_idx + 1 < len(df):
                         next_idx = df.index[orig_idx + 1]
                         exec_target = (
@@ -923,6 +959,11 @@ class InferenceService:
                             "execution_timestamp": exec_time_str,
                             "execution_price": round(exec_price, 2),
                             "signal_state": "CONFIRMED",
+                            "target_allocation": target_alloc,
+                            "position_size_pct": f"{sizing_data['allocation_pct']}%",
+                            "sizing_regime": sizing_data["regime_label"],
+                            "sizing_rationale": sizing_data["sizing_rationale"],
+                            "earnings_shield": earnings_status,
                         },
                     })
 
@@ -971,6 +1012,9 @@ class InferenceService:
                             "execution_timestamp": exec_time_str,
                             "execution_price": round(exec_price, 2),
                             "signal_state": "CONFIRMED",
+                            "target_allocation": 0.0,
+                            "position_size_pct": "0%",
+                            "earnings_shield": earnings_status,
                         },
                     })
 
@@ -1737,6 +1781,23 @@ class InferenceService:
             and self.paper_engine.positions[ticker].get("shares", 0) > 0
         )
 
+        # Corporate Calendar Gate: Pre-Earnings & Binary Event Shield
+        earnings_proximity = CorporateCalendarGate.check_earnings_proximity(
+            ticker=ticker,
+            current_date=ticker_df_risk.index[-1] if not ticker_df_risk.empty else datetime.now(),
+            blackout_days_before=3,
+            blackout_days_after=1,
+        )
+
+        # Dynamic Volatility Position Sizing (Half-Kelly / Volatility Scaling Engine)
+        cur_vix = float(tech_snapshot.get("VIX", 18.0)) if pd.notna(tech_snapshot.get("VIX")) else 18.0
+        dynamic_sizing = calculate_dynamic_volatility_sizing(
+            vix=cur_vix,
+            p_buy=p_b,
+            is_dip_reversal=is_dip_reversal,
+            is_macro_bull=base_long,
+        )
+
         # Signal Suppression logic
         final_signal = pre_signal
         signal_note = None
@@ -1746,6 +1807,16 @@ class InferenceService:
         elif agreement_data.get("is_vetoed"):
             final_signal = "HOLD"
             signal_note = agreement_data.get("veto_reason", "Vetoed by secondary model risk gate")
+        elif pre_signal == "BUY" and earnings_proximity.get("is_blackout", False):
+            # Pre-Earnings Shield: Block new BUY entries within 48-72h of earnings release
+            final_signal = "HOLD"
+            days_to_e = earnings_proximity.get("days_to_earnings")
+            e_date = earnings_proximity.get("nearest_earnings_date")
+            signal_note = (
+                f"Suppressed by Pre-Earnings Shield: Earnings release scheduled within "
+                f"{days_to_e if days_to_e is not None else '48-72'} days ({e_date}). "
+                f"New BUY entries blocked to eliminate binary overnight gap risk."
+            )
         elif pre_signal == "BUY" and not long_allowed:
             final_signal = "HOLD"
             signal_note = (
@@ -1799,8 +1870,23 @@ class InferenceService:
             volatility=recent_vol,
         )
         trade_construction["tactical_action"] = tactical_action
-        trade_construction["target_exposure"] = target_exposure
+        trade_construction["target_exposure"] = dynamic_sizing["target_allocation"]
+        trade_construction["target_allocation"] = dynamic_sizing["target_allocation"]
+        trade_construction["position_size_pct"] = f"{dynamic_sizing['allocation_pct']}%"
+        trade_construction["sizing_regime"] = dynamic_sizing["regime_label"]
+        trade_construction["sizing_rationale"] = dynamic_sizing["sizing_rationale"]
+        trade_construction["earnings_shield"] = earnings_proximity
         trade_construction["strategy_mode"] = "CORE_TACTICAL_ALPHA"
+
+        # Pre-Earnings Ratchet Tightening on Active Positions
+        if earnings_proximity.get("is_blackout", False):
+            tightened_stop = round(current_price - (1.8 * float(tech_snapshot.get("ATR", current_price * 0.02))), 2)
+            existing_stop = float(trade_construction.get("stop_loss", 0.0))
+            trade_construction["stop_loss"] = max(existing_stop, tightened_stop)
+            trade_construction["notes"] = (
+                f"Pre-Earnings Shield Active: Stop tightened to 1.8 ATR (${tightened_stop}) "
+                f"ahead of earnings announcement on {earnings_proximity.get('nearest_earnings_date')}."
+            )
 
         # Phase 2: Final Execution Authority
         auth_data = self.execution_authority.determine_execution_state(
@@ -1843,8 +1929,11 @@ class InferenceService:
             # Core + Tactical Alpha Telemetry
             "strategy_mode": "CORE_TACTICAL_ALPHA",
             "tactical_action": tactical_action,
-            "target_exposure": target_exposure,
+            "target_exposure": dynamic_sizing["target_allocation"],
             "tactical_rationale": tactical_rationale,
+            # Pre-Earnings Shield & Dynamic Sizing Telemetry
+            "earnings_shield": earnings_proximity,
+            "dynamic_sizing": dynamic_sizing,
             # Phase 3: Semantic Separation
             "structural_regime": regime_detailed,
             "signal_bias": forecast_data["forecast_bias"],
@@ -1922,12 +2011,8 @@ class InferenceService:
                 "var_95": float(risk_profile.get("var_95", beta * 1.5)),
                 "cvar": float(risk_profile.get("cvar", beta * 2.0)),
                 "beta": float(beta),
-                "kelly_fraction": float(risk_profile.get("raw_fraction", 0.0)),
-                "target_size": float(
-                    target_exposure
-                    if target_exposure is not None
-                    else risk_profile.get("raw_fraction", 0.0)
-                ),
+                "kelly_fraction": float(dynamic_sizing["half_kelly_fraction"]),
+                "target_size": float(dynamic_sizing["target_allocation"]),
                 "max_drawdown": float(risk_profile.get("max_drawdown", 0.0)),
                 "institutional_risk_index": 0.0,
                 "risk_regime": "STABLE",
@@ -2029,6 +2114,11 @@ class InferenceService:
                     "execution_timestamp": exec_time,
                     "execution_price": exec_price,
                     "signal_state": "CONFIRMED",
+                    "target_allocation": dynamic_sizing["target_allocation"],
+                    "position_size_pct": f"{dynamic_sizing['allocation_pct']}%",
+                    "sizing_regime": dynamic_sizing["regime_label"],
+                    "sizing_rationale": dynamic_sizing["sizing_rationale"],
+                    "earnings_shield": earnings_proximity,
                 },
             )
 
@@ -2054,8 +2144,10 @@ class InferenceService:
         # Preserve the causal fields after package_chart_data update
         response_data["strategy_mode"] = "CORE_TACTICAL_ALPHA"
         response_data["tactical_action"] = tactical_action
-        response_data["target_exposure"] = target_exposure
+        response_data["target_exposure"] = dynamic_sizing["target_allocation"]
         response_data["tactical_rationale"] = tactical_rationale
+        response_data["earnings_shield"] = earnings_proximity
+        response_data["dynamic_sizing"] = dynamic_sizing
         response_data["signal"] = confirmed_signal
         response_data["signal_state"] = signal_state
         response_data["is_bar_forming"] = is_bar_forming

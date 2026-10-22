@@ -189,3 +189,61 @@ class InstitutionalRiskArbitrator:
             }
         }
 
+
+def calculate_dynamic_volatility_sizing(
+    vix: float,
+    p_buy: float,
+    is_dip_reversal: bool = False,
+    is_macro_bull: bool = True,
+    historical_win_rate: float = 0.58,
+    historical_rr: float = 2.8,
+) -> dict:
+    """
+    Dynamic Volatility Position Sizing (Half-Kelly & Volatility-Scaling Engine).
+    Scales target capital allocation (0.0 to 1.0) dynamically between:
+    - Calm, High-Conviction Bull Trend (VIX < 18, P(BUY) >= 0.60): 100% Capital (1.00x)
+    - Moderate Volatility (18 <= VIX <= 22): 75% to 85% Capital (0.75x to 0.85x)
+    - Turbulent Regime / Panic Dip Reversal (VIX > 22 or Capitulation Dip): 50% to 70% Capital (0.50x to 0.70x)
+    - Extreme Crisis / Black Swan Turbulence (VIX > 28): 50% Defensive Floor (0.50x)
+    """
+    vix_val = float(vix) if pd.notna(vix) and vix > 0 else 18.0
+    prob_buy = float(p_buy) if pd.notna(p_buy) else 0.50
+
+    # Half-Kelly baseline reference
+    full_kelly = historical_win_rate - ((1.0 - historical_win_rate) / max(0.5, historical_rr))
+    half_kelly = max(0.25, full_kelly * 0.5)
+
+    # Dynamic Volatility & Conviction Scaling
+    if vix_val < 18.0 and prob_buy >= 0.60 and is_macro_bull:
+        allocation = 1.00
+        regime_label = "CALM_HIGH_CONVICTION"
+        rationale = f"Calm market with high directional conviction (VIX={vix_val:.1f} < 18, P_buy={prob_buy:.2f} >= 0.60): 100% Full Sizing."
+    elif vix_val > 28.0:
+        allocation = 0.50
+        regime_label = "HIGH_TURBULENCE_DEFENSIVE"
+        rationale = f"Elevated market fear (VIX={vix_val:.1f} > 28): 50% Defensive Sizing to minimize dollar variance."
+    elif vix_val > 22.0 or is_dip_reversal:
+        # Scale between 50% and 70% based on conviction
+        allocation = 0.70 if prob_buy >= 0.40 else 0.50
+        regime_label = "TURBULENT_DIP_REVERSAL"
+        rationale = f"Turbulent regime / Panic dip (VIX={vix_val:.1f}, Dip={is_dip_reversal}): {int(allocation * 100)}% Risk-Managed Sizing."
+    elif 18.0 <= vix_val <= 22.0:
+        allocation = 0.85 if prob_buy >= 0.60 else 0.75
+        regime_label = "MODERATE_VOLATILITY_STANDARD"
+        rationale = f"Moderate volatility (VIX={vix_val:.1f}): {int(allocation * 100)}% Standard Allocation."
+    else:
+        allocation = 1.00 if prob_buy >= 0.60 else 0.75
+        regime_label = "NOMINAL_EQUITY"
+        rationale = f"Nominal baseline allocation: {int(allocation * 100)}% Capital."
+
+    return {
+        "target_allocation": float(round(allocation, 2)),
+        "target_exposure": float(round(allocation, 2)),
+        "allocation_pct": int(allocation * 100),
+        "vix_basis": float(round(vix_val, 2)),
+        "half_kelly_fraction": float(round(half_kelly, 3)),
+        "regime_label": regime_label,
+        "sizing_rationale": rationale,
+    }
+
+

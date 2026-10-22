@@ -142,6 +142,25 @@ export interface ModelWeight {
   recent_accuracy: number;
 }
 
+export interface EarningsShieldData {
+  is_blackout: boolean;
+  days_to_earnings: number | null;
+  nearest_earnings_date: string | null;
+  earnings_shield_active: boolean;
+  action: 'PRE_EARNINGS_BLACKOUT' | 'POST_EARNINGS_DIGESTION' | 'NORMAL' | string;
+  message: string;
+}
+
+export interface DynamicSizingData {
+  target_allocation: number;
+  target_exposure: number;
+  allocation_pct: number;
+  vix_basis: number;
+  half_kelly_fraction: number;
+  regime_label: string;
+  sizing_rationale: string;
+}
+
 export interface ChartData {
   ticker: string;
   current_price: number;
@@ -151,6 +170,10 @@ export interface ChartData {
   uncertainty_score?: number;
   sentiment_score?: number;
   signal_note?: string | null;
+
+  // Pre-Earnings & Dynamic Sizing
+  earnings_shield?: EarningsShieldData;
+  dynamic_sizing?: DynamicSizingData;
   
   // Causal Signal States and Timing Mandate
   signal_state?: 'CONFIRMED' | 'PROVISIONAL' | 'HOLD' | 'NO_SIGNAL';

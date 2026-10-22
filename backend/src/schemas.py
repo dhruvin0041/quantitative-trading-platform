@@ -248,6 +248,13 @@ class PredictResponse(BaseModel):
     target_exposure: Optional[float] = None
     tactical_rationale: Optional[str] = None
 
+    # Pre-Earnings & Binary Event Shield
+    earnings_shield: Optional[Dict[str, Any]] = None
+
+    # Dynamic Volatility Position Sizing (Half-Kelly / Volatility Scaling)
+    dynamic_sizing: Optional[Dict[str, Any]] = None
+
+
 
 class UniverseStockItem(BaseModel):
     ticker: str

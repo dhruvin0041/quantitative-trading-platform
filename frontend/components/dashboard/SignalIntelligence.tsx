@@ -45,9 +45,11 @@ export function SignalIntelligence({ data }: SignalIntelligenceProps) {
   // Risk Agent
   const isVetoed = executionStatus.includes("VETO") || finalDecision === "VETOED";
   const riskDecision = isVetoed ? "VETOED" : "APPROVED";
-  const targetAllocationPercent = risk?.target_size != null
-    ? (risk.target_size > 2.0 ? risk.target_size : risk.target_size * 100).toFixed(1) + '%'
-    : '0.0%';
+  const targetAllocationPercent = data.dynamic_sizing
+    ? `${data.dynamic_sizing.allocation_pct}%`
+    : (risk?.target_size != null
+      ? (risk.target_size > 2.0 ? risk.target_size : risk.target_size * 100).toFixed(1) + '%'
+      : '0.0%');
   const structuralRegime = execution_authority?.structural_regime || data.structural_regime || "NEUTRAL";
 
   return (
@@ -86,6 +88,53 @@ export function SignalIntelligence({ data }: SignalIntelligenceProps) {
           </div>
         </div>
       </div>
+
+      {/* PRE-EARNINGS & BINARY EVENT SHIELD ALERT */}
+      {data.earnings_shield?.is_blackout && (
+        <div className="flex items-start gap-3 p-4 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400">
+          <ShieldAlert className="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-400" />
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-2">
+              <span className="text-[12px] font-black uppercase tracking-wider text-amber-400">
+                Pre-Earnings & Binary Event Shield Active
+              </span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold">
+                {data.earnings_shield.nearest_earnings_date ? `EPS ${data.earnings_shield.nearest_earnings_date}` : '48-72h Window'}
+              </span>
+            </div>
+            <p className="text-[12px] text-amber-200/90 leading-relaxed">
+              {data.earnings_shield.message}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* DYNAMIC VOLATILITY POSITION SIZING */}
+      {data.dynamic_sizing && (
+        <div className="flex items-start gap-3 p-4 rounded-lg bg-card border border-border">
+          <Target className="w-5 h-5 flex-shrink-0 text-primary mt-0.5" />
+          <div className="flex flex-col gap-1 w-full">
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] font-bold uppercase tracking-wider text-foreground">
+                Dynamic Volatility Position Sizing ({data.dynamic_sizing.allocation_pct}% Capital)
+              </span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-primary/10 text-primary font-bold">
+                {data.dynamic_sizing.regime_label}
+              </span>
+            </div>
+            <p className="text-[12px] text-muted-foreground leading-relaxed">
+              {data.dynamic_sizing.sizing_rationale}
+            </p>
+            <div className="flex items-center gap-4 text-[11px] font-mono text-muted-foreground mt-1">
+              <span>VIX Basis: <strong className="text-foreground">{data.dynamic_sizing.vix_basis.toFixed(1)}</strong></span>
+              <span>•</span>
+              <span>Half-Kelly Fraction: <strong className="text-foreground">{(data.dynamic_sizing.half_kelly_fraction * 100).toFixed(1)}%</strong></span>
+              <span>•</span>
+              <span>Target Exposure: <strong className="text-foreground">{data.dynamic_sizing.target_allocation.toFixed(2)}x</strong></span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* INSTITUTIONAL VOTE MATRIX */}
       <div className="flex flex-col p-5 rounded-lg bg-card border border-border">
