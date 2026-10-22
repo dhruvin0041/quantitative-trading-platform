@@ -2,70 +2,112 @@ HYDRA INSTITUTIONAL QUANT PLATFORM: ZERO-STATE INITIALIZATION GUIDE
 ================================================================================
 
 This guide defines the authoritative zero-state procedure for initializing,
-optimizing, retraining, and launching the HYDRA Quantitative Trading Platform.
+optimizing, retraining, and launching the HYDRA Multi-Asset Quantitative Trading Platform.
 
-TRAINING SPECIFICATIONS & UPGRADES:
-- Feature Matrix: 31 Institutional Indicators (27 baseline + Keltner Position,
-  Hull Moving Average Slope, Connors RSI, and Chaikin Money Flow Divergence).
-- Historical Date Window: First trading session of 2015 (2015-01-01) to current date.
-- Chronological Split: 75% strictly for training, 25% for testing/validation.
-- Warmup Protocol: First 119 warmup bars discarded to initialize 120-bar rolling z-scores.
-- Dynamic Triple Barrier: Dynamic volatility take-profit, stop-loss, and holding horizons
+PLATFORM SPECIFICATIONS & ARCHITECTURE (SOTA 2026):
+- Supported Universe: 8 Institutional Assets (AAPL, NVDA, MSFT, AMZN, META, GOOGL, TSLA, AMD).
+- Namespaced Model Storage: Each ticker has dedicated isolated weights stored in:
+    backend/artifacts/models/{TICKER}/
+      ├── xgb_ensemble.json       (Gradient boosted tree model)
+      ├── lgbm_agent.joblib       (LightGBM classifier)
+      ├── latest_scaler.joblib    (StandardScaler fitted strictly on 75% train partition)
+      ├── model_calibrator.joblib (Isotonic probability calibrator fitted on 25% test)
+      ├── accuracies.json         (Empirical out-of-sample directional accuracies)
+      └── optimized_params.json   (Bayesian-optimized hyperparameters)
+- Dynamic Rolling Window: Automatically rolls forward trailing 8 years up to today
+  (configured in backend/configs/training_window_config.json). Zero manual date flags needed.
+- Chronological Split: 75% strictly for training, 25% for out-of-sample test/validation.
+- Warmup Protocol: First 119 daily bars discarded to initialize 120-bar rolling z-scores.
+- Feature Matrix: 31 Institutional Indicators (Keltner Position, Hull Moving Average Slope,
+  Connors RSI, Chaikin Money Flow Divergence, cross-asset macro SPY and VIX volatility).
+- Dynamic Triple Barrier: Volatility-adjusted take-profit, stop-loss, and holding horizons
   with boundary horizon truncation (zero forward lookahead bias into test partitions).
 
 PREREQUISITES:
 - Python 3.10+ (Windows PowerShell)
 - Node.js 20+
+- Active backend virtual environment (.\venv\Scripts\activate)
 - Valid API_KEY in backend/.env (matching frontend/.env.local)
 
 --------------------------------------------------------------------------------
 STEP 0: ENVIRONMENT ACTIVATION
 --------------------------------------------------------------------------------
 In your root terminal:
-> cd backend
+> cd d:\DataScience\Projects\Data_Science_Projects\Stock_Indicator\backend
 > .\venv\Scripts\activate   # Ensure virtual environment is active
 > $env:PYTHONPATH='.'
 
 --------------------------------------------------------------------------------
-STEP 1: ZERO-STATE PURGE (RESET ALL NEURAL PATHWAYS & WEIGHTS)
+STEP 1: ZERO-STATE PURGE (CLEAN SYSTEM ARTIFACTS)
 --------------------------------------------------------------------------------
-Purges stale models, scalers, caches, and test databases:
+Purges stale models, scalers, caches, and test databases across the workspace:
 > python scripts/ops/clean_artifacts.py --full --universal
 
 --------------------------------------------------------------------------------
-STEP 2: RUN TRAINING & OPTIMIZATION (CHOOSE MODE A OR B)
+STEP 2: RUN TRAINING & OPTIMIZATION (CHOOSE OPTION 1, 2, OR 3)
+--------------------------------------------------------------------------------
+*Note: All commands automatically compute dynamic trailing 8-year dates up to today.
+You do NOT need to specify --start or --end.*
+
+OPTION 1: ONE-CLICK MASTER RUNNER FOR ALL 8 TICKERS (RECOMMENDED)
+Sequentially trains isolated models for all 8 universe tickers (AAPL, NVDA, MSFT, 
+AMZN, META, GOOGL, TSLA, AMD) and outputs a multi-asset performance matrix:
+
+• Train All 8 Tickers with Existing Optimal Hyperparameters (~3 to 5 minutes total):
+> python scripts/training/train_all.py
+
+• Train All 8 Tickers WITH Full Bayesian Optuna Optimization (50 trials per ticker):
+> python scripts/training/train_all.py --optimize --trials 50
+
 --------------------------------------------------------------------------------
 
-MODE A: UNIVERSAL MULTI-ASSET RETRAINING (RECOMMENDED)
-Pooled training across AAPL, NVDA, MSFT, AMZN, and SPY. Eliminates single-asset
-distribution shift and produces a single unified ensemble serving all assets.
+OPTION 2: DEDICATED INDIVIDUAL TICKER RUNNERS
+Run the dedicated script for any single asset you want to update:
 
-• With 250 Bayesian Optuna trials (Optimization + Model Training):
-> python scripts/training/train_universal.py --trials 250
+• Apple:
+> python scripts/training/train_aapl.py
 
-• Skip Optimization (Train immediately using existing/default optimal parameters):
-> python scripts/training/train_universal.py --skip-optimization
+• NVIDIA:
+> python scripts/training/train_nvda.py
+
+• Microsoft:
+> python scripts/training/train_msft.py
+
+• Amazon:
+> python scripts/training/train_amzn.py
+
+• Meta:
+> python scripts/training/train_meta.py
+
+• Alphabet / Google:
+> python scripts/training/train_googl.py
+
+• Tesla:
+> python scripts/training/train_tsla.py
+
+• AMD:
+> python scripts/training/train_amd.py
+
+*Add --optimize --trials 50 to any script above to optimize hyperparameters before training.*
 
 --------------------------------------------------------------------------------
 
-MODE B: SINGLE-TICKER ISOLATED RETRAINING
-Tailored specifically to one individual stock (e.g., AAPL, NVDA, RELIANCE.NS).
+OPTION 3: DEDICATED HYPERPARAMETER OPTIMIZATION RUNNERS
+When re-tuning hyperparameter spaces (ATR multipliers, tree depths, regularization):
 
-• With 250 Bayesian Optuna trials (Optimization + Model Training):
-> python scripts/training/train.py --ticker AAPL --trials 250
+• Master Multi-Ticker Optimizer (Optimizes all 8 tickers sequentially):
+> python scripts/training/optimize_all.py --trials 50
 
-• Skip Optimization (Train immediately using existing/default optimal parameters):
-> python scripts/training/train.py --ticker AAPL --skip-optimization
-
-*Note: You can pass custom dates if needed:
-> python scripts/training/train.py --ticker NVDA --start 2015-01-01 --trials 250
+• Single Ticker Optimizer:
+> python scripts/training/optimize_nvda.py --trials 50
+> python scripts/training/optimize_aapl.py --trials 50
 
 --------------------------------------------------------------------------------
 STEP 3: INSTITUTIONAL QUALITY & INTEGRITY GATE
 --------------------------------------------------------------------------------
 Verify that zero formatting errors exist and all institutional tests pass green:
 > ruff check .
-> pytest tests
+> pytest tests/test_auto_date_window.py tests/test_temporal_split_and_firewall.py tests/test_core_tactical_strategy.py
 
 --------------------------------------------------------------------------------
 STEP 4: LAUNCH BACKEND INFERENCE SERVICE
@@ -73,14 +115,19 @@ STEP 4: LAUNCH BACKEND INFERENCE SERVICE
 Starts the institutional FastAPI mesh on http://localhost:8000:
 > python main.py
 
+The backend features dynamic ModelManager caching: as soon as a user selects
+NVDA, AAPL, MSFT, etc., on the frontend, the backend dynamically loads that ticker's
+isolated weights from backend/artifacts/models/{TICKER}/ and caches them in memory.
+
 --------------------------------------------------------------------------------
 STEP 5: LAUNCH INSTITUTIONAL COMMAND CENTER (FRONTEND)
 --------------------------------------------------------------------------------
 In a separate terminal:
-> cd frontend
+> cd d:\DataScience\Projects\Data_Science_Projects\Stock_Indicator\frontend
 > npm run dev
 
 ================================================================================
-SYSTEM READY: Visit http://localhost:3000 to monitor real-time signals,
-supply-chain risk proxies, and causal replay charts.
+SYSTEM READY:
+Visit http://localhost:3000 to monitor real-time multi-agent signals, dynamic supply
+chain risk proxies, causal replay charts, and switch seamlessly between tickers.
 ================================================================================
