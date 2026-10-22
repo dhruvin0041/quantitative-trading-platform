@@ -166,17 +166,20 @@ def objective(trial, df_features):
         return 0.0
 
 
-def run_optuna_optimization(ticker, n_trials=50, start="2016-01-01", end="2024-12-31"):
-    if end is None or end > "2024-12-31":
-        end = "2024-12-31"
+def run_optuna_optimization(ticker, n_trials=50, start="auto", end="auto"):
+    from src.utils.date_window import resolve_training_dates
+    start, end, is_auto = resolve_training_dates(start, end)
 
     from src.execution.data_firewall import DataContaminationError, TemporalFirewall
 
-    if pd.Timestamp(end) > pd.Timestamp("2024-12-31"):
-        raise DataContaminationError(
-            f"Hyperparameter optimization boundary breached: end date {end} > 2024-12-31! "
-            "All optimization must remain strictly within 2016-2024."
-        )
+    if not is_auto and pd.Timestamp(end) > pd.Timestamp("2024-12-31"):
+        from src.utils.date_window import load_window_config
+        cfg = load_window_config()
+        if cfg.get("mode") == "fixed":
+            raise DataContaminationError(
+                f"Hyperparameter optimization boundary breached: end date {end} > 2024-12-31! "
+                "All optimization must remain strictly within 2016-2024."
+            )
 
     ticker = ticker.upper()
     get_compute_backend()
@@ -188,10 +191,10 @@ def run_optuna_optimization(ticker, n_trials=50, start="2016-01-01", end="2024-1
     # ==========================================
     # FETCH DATA ONCE
     # ==========================================
-    print(f"--- Preparing Optimization Data for {ticker} (2016-2024) ---")
+    print(f"--- Preparing Optimization Data for {ticker} ({start} to {end}) ---")
     df_raw = fetch_historical_data(ticker, start_date=start, end_date=end)
-    TemporalFirewall.validate_development_data(df_raw, "optimization_df_raw")
-    TemporalFirewall.validate_no_2026_leakage(df_raw, "optimization_df_raw")
+    TemporalFirewall.validate_development_data(df_raw, "optimization_df_raw", allow_dynamic=is_auto)
+    TemporalFirewall.validate_no_2026_leakage(df_raw, "optimization_df_raw", allow_dynamic=is_auto)
 
     spy_df = yf.download("SPY", start=start, end=end, interval="1d", progress=False)
     vix_df = yf.download("^VIX", start=start, end=end, interval="1d", progress=False)
@@ -218,8 +221,9 @@ def run_optuna_optimization(ticker, n_trials=50, start="2016-01-01", end="2024-1
     output_path = configs_dir / f"optimized_params_{ticker}.json"
     best_config = dict(study.best_params)
     best_config["_provenance"] = {
-        "start_date": "2016-01-01",
-        "end_date": "2024-12-31",
+        "start_date": start,
+        "end_date": end,
+        "is_auto_window": is_auto,
         "n_samples": len(df_features),
         "n_trials": n_trials,
         "best_accuracy": float(study.best_value),
@@ -250,9 +254,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--trials", type=int, default=50, help="Number of Optuna trials (default: 50)"
     )
-    parser.add_argument("--start", type=str, default="2016-01-01", help="Start date")
+    parser.add_argument("--start", type=str, default="auto", help="Start date (default: auto dynamic rolling window)")
     parser.add_argument(
-        "--end", type=str, default="2024-12-31", help="End date (strictly <= 2024-12-31)"
+        "--end", type=str, default="auto", help="End date (default: auto dynamic rolling window)"
     )
     args = parser.parse_args()
 

@@ -33,14 +33,14 @@ def main():
     parser.add_argument(
         "--start",
         type=str,
-        default="2016-01-01",
-        help="Start date for training data (default: 2016-01-01)",
+        default="auto",
+        help="Start date for optimization data (default: auto dynamic rolling window)",
     )
     parser.add_argument(
         "--end",
         type=str,
-        default="2024-12-31",
-        help="End date for training data (default: 2024-12-31)",
+        default="auto",
+        help="End date for optimization data (default: auto dynamic rolling window)",
     )
     args = parser.parse_args()
 

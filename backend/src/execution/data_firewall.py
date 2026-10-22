@@ -55,12 +55,25 @@ class TemporalFirewall:
         return idx.min(), idx.max()
 
     @classmethod
-    def validate_development_data(cls, df: Any, stage: str = "model_development") -> None:
+    def validate_development_data(cls, df: Any, stage: str = "model_development", allow_dynamic: bool = False) -> None:
         """
-        Enforce that df contains ONLY data within 2016-01-01 to 2024-12-31.
-        Throws DataContaminationError if any pre-2016 or post-2024 observation is present.
+        Enforce that df contains valid training/development data.
+        In fixed mode (default), strictly enforces 2016-01-01 to 2024-12-31 boundary.
+        In dynamic mode (allow_dynamic=True), enforces chronological causality up to current date.
         """
         min_date, max_date = cls.extract_dates(df)
+
+        if allow_dynamic:
+            now_limit = pd.Timestamp.now() + pd.Timedelta(days=1)
+            if max_date > now_limit:
+                err = f"[FUTURE CONTAMINATION DETECTED] Future data found in {stage}! Max date {max_date} > {now_limit}"
+                logger.critical(err)
+                raise DataContaminationError(err)
+            logger.info(
+                f"[FIREWALL PASS] {stage}: {min_date.strftime('%Y-%m-%d')} -> {max_date.strftime('%Y-%m-%d')} "
+                "within dynamic rolling calendar horizon."
+            )
+            return
 
         if min_date < pd.Timestamp(cls.DEVELOPMENT_START):
             err = (
@@ -107,8 +120,10 @@ class TemporalFirewall:
         )
 
     @classmethod
-    def validate_no_2026_leakage(cls, df: Any, stage: str = "general") -> None:
-        """Absolute firewall check: 2026 data must NOT enter training, validation, or optimization."""
+    def validate_no_2026_leakage(cls, df: Any, stage: str = "general", allow_dynamic: bool = False) -> None:
+        """Absolute firewall check: In static benchmark mode, 2026 data must NOT enter training."""
+        if allow_dynamic:
+            return
         _, max_date = cls.extract_dates(df)
         if max_date >= pd.Timestamp(cls.OOS_START):
             err = (

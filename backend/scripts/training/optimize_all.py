@@ -19,6 +19,7 @@ os.environ["TF_USE_LEGACY_KERAS"] = "1"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
 from scripts.training.optimize import run_optuna_optimization
+from src.utils.date_window import resolve_training_dates
 
 INSTITUTIONAL_UNIVERSE = [
     "AAPL",
@@ -35,17 +36,18 @@ INSTITUTIONAL_UNIVERSE = [
 def run_optimize_all(
     tickers=None,
     trials: int = 50,
-    start_date: str = "2016-01-01",
-    end_date: str = "2024-12-31",
+    start_date: str = "auto",
+    end_date: str = "auto",
 ):
     if tickers is None:
         tickers = INSTITUTIONAL_UNIVERSE
 
+    start_date, end_date, is_auto = resolve_training_dates(start_date, end_date)
     total_start = time.time()
     print("================================================================================")
     print("      HYDRA INSTITUTIONAL MULTI-TICKER BAYESIAN OPTIMIZATION RUNNER")
     print(f" Universe ({len(tickers)} assets): {', '.join(tickers)}")
-    print(f" Historical Range: {start_date} to {end_date}")
+    print(f" Historical Range: {start_date} to {end_date} (Auto-Rolling: {is_auto})")
     print(f" Optuna Trials per Asset: {trials}")
     print("================================================================================")
 
@@ -141,14 +143,14 @@ def main():
     parser.add_argument(
         "--start",
         type=str,
-        default="2016-01-01",
-        help="Start date for optimization data (default: 2016-01-01)",
+        default="auto",
+        help="Start date for optimization data (default: auto dynamic rolling window)",
     )
     parser.add_argument(
         "--end",
         type=str,
-        default="2024-12-31",
-        help="End date for optimization data (default: 2024-12-31)",
+        default="auto",
+        help="End date for optimization data (default: auto dynamic rolling window)",
     )
     args = parser.parse_args()
 

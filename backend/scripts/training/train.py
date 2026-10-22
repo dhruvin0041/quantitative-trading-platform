@@ -20,7 +20,6 @@ import json
 import logging
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -53,6 +52,7 @@ from src.execution.live_inference import (
     add_upgraded_features,
 )
 from src.models.regime.calibration import ModelCalibrator
+from src.utils.date_window import resolve_training_dates
 from src.utils.gpu_utils import get_lightgbm_gpu_params, get_xgboost_gpu_params
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -160,8 +160,8 @@ def load_ticker_params(ticker: str, model_type: Optional[str] = None) -> Dict[st
 
 def prepare_ticker_data(
     ticker: str,
-    start_date: str = "2015-01-01",
-    end_date: str = None,
+    start_date: str = "auto",
+    end_date: Optional[str] = "auto",
     opt_params: Dict = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
@@ -170,8 +170,7 @@ def prepare_ticker_data(
     partitions into 75% Train and 25% Test chronologically,
     and applies dynamic triple barrier labeling with boundary horizon truncation.
     """
-    if end_date is None:
-        end_date = datetime.now().strftime("%Y-%m-%d")
+    start_date, end_date, _ = resolve_training_dates(start_date, end_date)
 
     if opt_params is None:
         opt_params = load_ticker_params(ticker)
@@ -426,8 +425,8 @@ def train_ticker_pipeline(
     ticker: str = "AAPL",
     trials: int = 50,
     skip_optimization: bool = False,
-    start_date: str = "2015-01-01",
-    end_date: str = None,
+    start_date: str = "auto",
+    end_date: Optional[str] = "auto",
 ):
     """
     Unified Single-Ticker Training Pipeline.
@@ -436,10 +435,11 @@ def train_ticker_pipeline(
     and updates active ticker and strategy manifest.
     """
     ticker = ticker.upper()
+    start_date, end_date, _ = resolve_training_dates(start_date, end_date)
     pipeline_start = time.time()
     logger.info("=================================================================")
     logger.info(f"HYDRA V3.0 SINGLE-TICKER ENGINE: ZERO-STATE EXECUTION [{ticker}]")
-    logger.info(f"Date Window: {start_date} to {end_date or 'today'}")
+    logger.info(f"Date Window: {start_date} to {end_date}")
     logger.info("Split: 75% Train / 25% Test | Features: 31 Institutional Indicators")
     logger.info("=================================================================")
 
@@ -671,6 +671,10 @@ def train_ticker_pipeline(
     }
 
 
+# Institutional backward compatibility alias
+train_ticker = train_ticker_pipeline
+
+
 def main():
     parser = argparse.ArgumentParser(description="Unified Asset-Specific Training Pipeline")
     parser.add_argument(
@@ -695,14 +699,14 @@ def main():
     parser.add_argument(
         "--start",
         type=str,
-        default="2015-01-01",
-        help="Start date for training data (default: 2015-01-01)",
+        default="auto",
+        help="Start date for training data (default: auto rolling window)",
     )
     parser.add_argument(
         "--end",
         type=str,
-        default=None,
-        help="End date for training data (default: today's date)",
+        default="auto",
+        help="End date for training data (default: auto rolling window)",
     )
     args = parser.parse_args()
 

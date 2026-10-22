@@ -1,0 +1,10 @@
+{
+    "mode": "auto_rolling",
+    "rolling_years": 8,
+    "train_split_ratio": 0.75,
+    "test_split_ratio": 0.25,
+    "warmup_bars": 119,
+    "fixed_start": "2016-01-01",
+    "fixed_end": "2024-12-31",
+    "description": "Automatic dynamic rolling window. Set mode to 'auto_rolling' to automatically advance dates with calendar progression, or 'fixed' for fixed benchmark backtesting."
+}
