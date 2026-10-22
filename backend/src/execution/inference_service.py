@@ -15,6 +15,7 @@ from src.data_ingestion.corporate_calendar import CorporateCalendarGate
 from src.data_ingestion.nlp_processor import NewsTokenizer
 from src.data_ingestion.technical_indicators import clean_multiindex_columns
 from src.execution.asset_intelligence import (
+    ADAPTIVE_MESH_MAP,
     AdaptiveWeightingEngine,
     AssetProfileEngine,
     MultiTimeframeEngine,
@@ -867,104 +868,123 @@ class InferenceService:
                 dir_buy = p_buy / denom
                 dir_sell = p_sell / denom
 
-                # 1. Macro Regime Check (SPY 200 SMA + Ticker 200 SMA institutional benchmark)
-                cur_spy_macro = (
-                    float(spy_sma200_s.iloc[i])
-                    if pd.notna(spy_sma200_s.iloc[i])
-                    else cur_spy
-                )
-                macro_bull = bool((cur_c >= cur_sma200) and (cur_spy >= cur_spy_macro))
-                is_bull_trend = bool((cur_ema9 >= cur_ema21 * 0.998) and (cur_c >= cur_sma200))
+                ticker_sub_mode = ADAPTIVE_MESH_MAP.get(ticker.upper(), "core_tactical")
+                if ticker_sub_mode == "oversold_rebound":
+                    target_rsi = 30.0 if ticker.upper() == "MSFT" else 38.0
+                    raw_signal = "HOLD"
+                    conf = float(prob_vec[1])
+                    macro_bull = bool(cur_c >= cur_sma200)
+                    is_dip_reversal = True
+                    if current_pos != "LONG":
+                        if cur_rsi <= target_rsi:
+                            raw_signal = "BUY"
+                            conf = max(0.85, float(p_buy))
+                    else:
+                        hit_tp = (cur_c >= cur_ema21) or (cur_rsi >= 55.0)
+                        hit_sl = bool(last_trade_price > 0 and cur_c <= (last_trade_price - (2.0 * cur_atr)))
+                        if hit_tp or hit_sl:
+                            raw_signal = "SELL"
+                            conf = 0.85
 
-                # 2. Bullish Price Action Confirmation
-                bullish_candle = bool((cur_c >= cur_o) or (cur_c > cur_l + 0.4 * (cur_h - cur_l)))
-
-                # 3. Tactical Quantitative Dip Reversal in Macro Bull Regime (Connors RSI Oversold Capitulation & Mean Reversion)
-                is_dip_reversal = bool(
-                    macro_bull
-                    and (
-                        (cur_rsi <= 33.0)
-                        or (cur_rsi <= 38.0 and bullish_candle)
-                        or (prev_rsi <= 38.0 and bullish_candle)
-                        or (cur_l <= cur_ema21 * 0.93 and bullish_candle and cur_rsi <= 45.0)
-                    )
-                    and p_buy >= 0.16
-                )
-
-                # 4. Momentum / Trend Continuation in Bull Regime
-                is_continuation = bool(
-                    macro_bull
-                    and is_bull_trend
-                    and (cur_c >= cur_ema9 * 0.995)
-                    and (dir_buy >= 0.52 and p_buy >= 0.25 and p_buy > p_sell)
-                )
-
-                # 5. Pure High-Conviction ML Signal
-                is_ml_buy = bool(
-                    (p_buy >= 0.55 and p_buy > p_sell)
-                    or (dir_buy >= 0.60 and p_buy >= 0.28 and p_buy > p_sell)
-                )
-
-                # 6. ML Sell / Bearish Pressure Signal
-                if macro_bull:
-                    is_ml_sell = bool(p_sell >= 0.55 and p_sell > p_buy)
+                    if raw_signal == "BUY" and is_near_earnings:
+                        filtered_signal = "HOLD"
+                    else:
+                        filtered_signal = raw_signal
                 else:
-                    is_ml_sell = bool(
-                        (p_sell >= 0.58 and p_sell > p_buy)
-                        or (dir_sell >= 0.62 and p_sell >= 0.30 and p_sell > p_buy)
+                    # 1. Macro Regime Check (SPY 200 SMA + Ticker 200 SMA institutional benchmark)
+                    cur_spy_macro = (
+                        float(spy_sma200_s.iloc[i])
+                        if pd.notna(spy_sma200_s.iloc[i])
+                        else cur_spy
+                    )
+                    macro_bull = bool((cur_c >= cur_sma200) and (cur_spy >= cur_spy_macro))
+                    is_bull_trend = bool((cur_ema9 >= cur_ema21 * 0.998) and (cur_c >= cur_sma200))
+
+                    # 2. Bullish Price Action Confirmation
+                    bullish_candle = bool((cur_c >= cur_o) or (cur_c > cur_l + 0.4 * (cur_h - cur_l)))
+
+                    # 3. Tactical Quantitative Dip Reversal in Macro Bull Regime (Connors RSI Oversold Capitulation & Mean Reversion)
+                    is_dip_reversal = bool(
+                        macro_bull
+                        and (
+                            (cur_rsi <= 33.0)
+                            or (cur_rsi <= 38.0 and bullish_candle)
+                            or (prev_rsi <= 38.0 and bullish_candle)
+                            or (cur_l <= cur_ema21 * 0.93 and bullish_candle and cur_rsi <= 45.0)
+                        )
+                        and p_buy >= 0.16
                     )
 
-                raw_signal = "HOLD"
-                conf = float(prob_vec[1])
-
-                if is_ml_buy or is_continuation or is_dip_reversal:
-                    raw_signal = "BUY"
-                    conf = max(p_buy, min(1.0, dir_buy * 0.80), 0.70 if is_dip_reversal else 0.50)
-                elif is_ml_sell:
-                    raw_signal = "SELL"
-                    conf = max(p_sell, min(1.0, dir_sell * 0.80))
-
-                # 7. Position-Aware Dynamic Risk Exits for Active Longs (Adaptive Monotonic Chandelier Ratchet & Overbought Climax)
-                if current_pos == "LONG":
-                    unrealized_p = (
-                        (cur_c - last_trade_price) / (last_trade_price + 1e-9)
-                        if last_trade_price > 0
-                        else 0.0
+                    # 4. Momentum / Trend Continuation in Bull Regime
+                    is_continuation = bool(
+                        macro_bull
+                        and is_bull_trend
+                        and (cur_c >= cur_ema9 * 0.995)
+                        and (dir_buy >= 0.52 and p_buy >= 0.25 and p_buy > p_sell)
                     )
-                    # Profit-Based Volatility Compression: Accelerate ratchet when in deep profit (> 10%) with elevated RSI
-                    mult = 2.4 if (unrealized_p >= 0.10 and cur_rsi > 70.0) else 3.8
-                    # Pre-Earnings Shield: Tighten stop on active long if earnings announcement within 72h to protect gains from overnight gaps
-                    if is_near_earnings:
-                        mult = min(mult, 1.8 if unrealized_p >= 0.05 else 2.5)
 
-                    new_stop = peak_price - (mult * cur_atr) if peak_price > 0 else 0.0
-                    trailing_stop = max(trailing_stop, new_stop)
+                    # 5. Pure High-Conviction ML Signal
+                    is_ml_buy = bool(
+                        (p_buy >= 0.55 and p_buy > p_sell)
+                        or (dir_buy >= 0.60 and p_buy >= 0.28 and p_buy > p_sell)
+                    )
 
-                    hit_trailing = bool(cur_c < trailing_stop)
-                    hit_climax = bool(cur_rsi > 82.0 and is_bearish_candle)
+                    # 6. ML Sell / Bearish Pressure Signal
+                    if macro_bull:
+                        is_ml_sell = bool(p_sell >= 0.55 and p_sell > p_buy)
+                    else:
+                        is_ml_sell = bool(
+                            (p_sell >= 0.58 and p_sell > p_buy)
+                            or (dir_sell >= 0.62 and p_sell >= 0.30 and p_sell > p_buy)
+                        )
 
-                    if hit_trailing or hit_climax:
+                    raw_signal = "HOLD"
+                    conf = float(prob_vec[1])
+
+                    if is_ml_buy or is_continuation or is_dip_reversal:
+                        raw_signal = "BUY"
+                        conf = max(p_buy, min(1.0, dir_buy * 0.80), 0.70 if is_dip_reversal else 0.50)
+                    elif is_ml_sell:
                         raw_signal = "SELL"
-                        conf = 0.85
-                    elif macro_bull and is_bull_trend:
-                        # In confirmed macro bull trend above trailing stop, hold through minor fluctuations unless strong conviction sell
-                        if raw_signal == "SELL" and not hit_trailing and not hit_climax and p_sell < 0.60:
-                            raw_signal = "HOLD"
-                            conf = float(prob_vec[1])
+                        conf = max(p_sell, min(1.0, dir_sell * 0.80))
 
-                # 8. Macro Filter at bar t & Pre-Earnings Blackout Gate (Zero lookahead)
-                short_ok = bool((cur_c < cur_sma200) or (cur_spy < cur_spy_macro))
-                sell_allowed = True if current_pos == "LONG" else short_ok
+                    # 7. Position-Aware Dynamic Risk Exits for Active Longs (Adaptive Monotonic Chandelier Ratchet & Overbought Climax)
+                    if current_pos == "LONG":
+                        unrealized_p = (
+                            (cur_c - last_trade_price) / (last_trade_price + 1e-9)
+                            if last_trade_price > 0
+                            else 0.0
+                        )
+                        mult = 2.4 if (unrealized_p >= 0.10 and cur_rsi > 70.0) else 3.8
+                        if is_near_earnings:
+                            mult = min(mult, 1.8 if unrealized_p >= 0.05 else 2.5)
 
-                if raw_signal == "BUY" and not macro_bull:
-                    filtered_signal = "HOLD"
-                elif raw_signal == "BUY" and is_near_earnings:
-                    # Pre-Earnings Shield: Block new BUY entries within 72h of earnings release
-                    filtered_signal = "HOLD"
-                elif raw_signal == "SELL" and not sell_allowed:
-                    filtered_signal = "HOLD"
-                else:
-                    filtered_signal = raw_signal
+                        new_stop = peak_price - (mult * cur_atr) if peak_price > 0 else 0.0
+                        trailing_stop = max(trailing_stop, new_stop)
+
+                        hit_trailing = bool(cur_c < trailing_stop)
+                        hit_climax = bool(cur_rsi > 82.0 and is_bearish_candle)
+
+                        if hit_trailing or hit_climax:
+                            raw_signal = "SELL"
+                            conf = 0.85
+                        elif macro_bull and is_bull_trend:
+                            if raw_signal == "SELL" and not hit_trailing and not hit_climax and p_sell < 0.60:
+                                raw_signal = "HOLD"
+                                conf = float(prob_vec[1])
+
+                    # 8. Macro Filter at bar t & Pre-Earnings Blackout Gate (Zero lookahead)
+                    short_ok = bool((cur_c < cur_sma200) or (cur_spy < cur_spy_macro))
+                    sell_allowed = True if current_pos == "LONG" else short_ok
+
+                    if raw_signal == "BUY" and not macro_bull:
+                        filtered_signal = "HOLD"
+                    elif raw_signal == "BUY" and is_near_earnings:
+                        filtered_signal = "HOLD"
+                    elif raw_signal == "SELL" and not sell_allowed:
+                        filtered_signal = "HOLD"
+                    else:
+                        filtered_signal = raw_signal
 
                 # 9. Price-Aware Adaptive Cooldown
                 bars_since_trade = i - last_trade_idx
@@ -1803,7 +1823,8 @@ class InferenceService:
             curr_close, curr_spy_close = current_price, 1.0, 1.0
             base_long = True
 
-        # Macro Core + Tactical Alpha Strategy Engine
+        # Adaptive Mesh Strategy Engine
+        ticker_sub_mode = ADAPTIVE_MESH_MAP.get(ticker.upper(), "core_tactical")
         c_rsi = float(tech_snapshot.get("RSI", 50.0))
         lgbm_p_sell = float(lgbm_preds_raw[0])
         lgbm_veto = bool(lgbm_p_sell >= 0.65)
@@ -1811,38 +1832,90 @@ class InferenceService:
         p_s = float(xgb_preds_raw[0])
         dir_b = p_b / (p_b + p_s + 1e-9)
 
-        if not base_long:
-            tactical_action = "BEAR_REGIME_LIQUIDATION"
-            target_exposure = 0.0
-            tactical_rationale = (
-                f"Macro breakdown: Underlying ({curr_close:.2f} vs SMA200 {sma_200:.2f}) "
-                f"or SPY ({curr_spy_close:.2f} vs SMA200 {spy_sma_200:.2f}) below trend barrier. "
-                f"Capital protected in 100% Cash protective state."
-            )
-        elif (c_rsi <= 35.0 or dir_b >= 0.60) and not lgbm_veto:
-            tactical_action = "TACTICAL_OVERWEIGHT_BUY"
-            target_exposure = 1.40
-            tactical_rationale = (
-                f"Macro Bull intact. Tactical entry triggered: RSI={c_rsi:.1f} <= 35 or "
-                f"ML conviction dir_buy={dir_b:.2f} >= 0.60 (LGBM veto P_sell={lgbm_p_sell:.2f} < 0.65). "
-                f"Overweight exposure to 1.40x leverage."
-            )
-        elif (c_rsi >= 65.0 or lgbm_veto):
-            tactical_action = "TACTICAL_HARVEST_SELL"
-            target_exposure = 1.00
-            tactical_rationale = (
-                f"Macro Bull intact. Tactical harvest triggered: RSI={c_rsi:.1f} >= 65 or "
-                f"LGBM risk veto={lgbm_veto} (P_sell={lgbm_p_sell:.2f} >= 0.65). "
-                f"Harvest tactical overweights back to 1.0x Core equity."
-            )
+        if ticker_sub_mode == "oversold_rebound":
+            target_rsi = 30.0 if ticker.upper() == "MSFT" else 38.0
+            cur_ema20 = float(tech_snapshot.get("EMA_20", curr_close))
+            c_atr = float(tech_snapshot.get("ATR", curr_close * 0.02))
+            last_entry = float(self.paper_engine.positions.get(ticker, {}).get("avg_entry_price", curr_close)) if is_long_exit else curr_close
+            long_allowed = True
+
+            if not is_long_exit:
+                if c_rsi <= target_rsi:
+                    pre_signal = "BUY"
+                    tactical_action = "CAPITULATION_REBOUND_BUY"
+                    target_exposure = 1.00
+                    tactical_rationale = (
+                        f"Adaptive Mesh (Oversold Rebound): Capitulation entry triggered! "
+                        f"RSI={c_rsi:.1f} <= {target_rsi:.1f}. Deploying 1.0x long exposure for mean-reversion recovery."
+                    )
+                else:
+                    pre_signal = "HOLD"
+                    tactical_action = "CASH_DEFENSE_100%"
+                    target_exposure = 0.00
+                    tactical_rationale = (
+                        f"Adaptive Mesh (Oversold Rebound): 100% Cash Defense active. "
+                        f"RSI={c_rsi:.1f} > {target_rsi:.1f} entry threshold. Capital sheltered from drawdown."
+                    )
+            else:
+                hit_tp = (curr_close >= cur_ema20) or (c_rsi >= 55.0)
+                hit_sl = bool(last_entry > 0 and curr_close <= last_entry - (2.0 * c_atr))
+                if hit_tp:
+                    pre_signal = "SELL"
+                    tactical_action = "REBOUND_PROFIT_HARVEST_SELL"
+                    target_exposure = 0.00
+                    tactical_rationale = (
+                        f"Adaptive Mesh (Oversold Rebound): Profit Target reached (Close {curr_close:.2f} >= 20 EMA {cur_ema20:.2f} or RSI {c_rsi:.1f} >= 55.0). "
+                        f"Harvesting gains to 100% Cash."
+                    )
+                elif hit_sl:
+                    pre_signal = "SELL"
+                    tactical_action = "REBOUND_STOP_LOSS_SELL"
+                    target_exposure = 0.00
+                    tactical_rationale = (
+                        f"Adaptive Mesh (Oversold Rebound): Stop Loss triggered (Close {curr_close:.2f} <= -2.0 ATR cut). "
+                        f"Exiting to 100% Cash."
+                    )
+                else:
+                    pre_signal = "HOLD"
+                    tactical_action = "HOLD_REBOUND_LONG"
+                    target_exposure = 1.00
+                    tactical_rationale = (
+                        f"Adaptive Mesh (Oversold Rebound): Holding active rebound trade (Entry: {last_entry:.2f}). "
+                        f"Awaiting 20 EMA ({cur_ema20:.2f}) or RSI 55."
+                    )
         else:
-            tactical_action = "HOLD_CORE_1.0X"
-            target_exposure = 1.00
-            tactical_rationale = (
-                f"Macro Bull intact (Close {curr_close:.2f} >= SMA200 {sma_200:.2f}, "
-                f"SPY {curr_spy_close:.2f} >= SMA200 {spy_sma_200:.2f}). "
-                f"Maintaining 1.0x Core long exposure. RSI={c_rsi:.1f} in neutral channel."
-            )
+            if not base_long:
+                tactical_action = "BEAR_REGIME_LIQUIDATION"
+                target_exposure = 0.0
+                tactical_rationale = (
+                    f"Macro breakdown: Underlying ({curr_close:.2f} vs SMA200 {sma_200:.2f}) "
+                    f"or SPY ({curr_spy_close:.2f} vs SMA200 {spy_sma_200:.2f}) below trend barrier. "
+                    f"Capital protected in 100% Cash protective state."
+                )
+            elif (c_rsi <= 35.0 or dir_b >= 0.60) and not lgbm_veto:
+                tactical_action = "TACTICAL_OVERWEIGHT_BUY"
+                target_exposure = 1.40
+                tactical_rationale = (
+                    f"Macro Bull intact. Tactical entry triggered: RSI={c_rsi:.1f} <= 35 or "
+                    f"ML conviction dir_buy={dir_b:.2f} >= 0.60 (LGBM veto P_sell={lgbm_p_sell:.2f} < 0.65). "
+                    f"Overweight exposure to 1.40x leverage."
+                )
+            elif (c_rsi >= 65.0 or lgbm_veto):
+                tactical_action = "TACTICAL_HARVEST_SELL"
+                target_exposure = 1.00
+                tactical_rationale = (
+                    f"Macro Bull intact. Tactical harvest triggered: RSI={c_rsi:.1f} >= 65 or "
+                    f"LGBM risk veto={lgbm_veto} (P_sell={lgbm_p_sell:.2f} >= 0.65). "
+                    f"Harvest tactical overweights back to 1.0x Core equity."
+                )
+            else:
+                tactical_action = "HOLD_CORE_1.0X"
+                target_exposure = 1.00
+                tactical_rationale = (
+                    f"Macro Bull intact (Close {curr_close:.2f} >= SMA200 {sma_200:.2f}, "
+                    f"SPY {curr_spy_close:.2f} >= SMA200 {spy_sma_200:.2f}). "
+                    f"Maintaining 1.0x Core long exposure. RSI={c_rsi:.1f} in neutral channel."
+                )
 
         macro_filter_data = {
             "underlying_close": round(curr_close, 2),
@@ -1982,7 +2055,11 @@ class InferenceService:
         trade_construction["sizing_regime"] = dynamic_sizing["regime_label"]
         trade_construction["sizing_rationale"] = dynamic_sizing["sizing_rationale"]
         trade_construction["earnings_shield"] = earnings_proximity
-        trade_construction["strategy_mode"] = "CORE_TACTICAL_ALPHA"
+        trade_construction["strategy_mode"] = (
+            "OVERSOLD_REBOUND"
+            if ticker_sub_mode == "oversold_rebound"
+            else "CORE_TACTICAL_ALPHA"
+        )
 
         # Pre-Earnings Ratchet Tightening on Active Positions
         if earnings_proximity.get("is_blackout", False):
@@ -2032,10 +2109,10 @@ class InferenceService:
             "confidence_score": round(calibrated_prob, 1),
             "uncertainty_score": round(uncertainty * 100, 1),
             "signal_note": signal_note,
-            # Core + Tactical Alpha Telemetry
-            "strategy_mode": "CORE_TACTICAL_ALPHA",
+            # Adaptive Mesh Strategy Telemetry
+            "strategy_mode": "OVERSOLD_REBOUND" if ticker_sub_mode == "oversold_rebound" else "CORE_TACTICAL_ALPHA",
             "tactical_action": tactical_action,
-            "target_exposure": dynamic_sizing["target_allocation"],
+            "target_exposure": target_exposure if ticker_sub_mode == "oversold_rebound" else dynamic_sizing["target_allocation"],
             "tactical_rationale": tactical_rationale,
             # Pre-Earnings Shield & Dynamic Sizing Telemetry
             "earnings_shield": earnings_proximity,
@@ -2248,9 +2325,17 @@ class InferenceService:
         response_data["signal_id"] = signal_id
 
         # Preserve the causal fields after package_chart_data update
-        response_data["strategy_mode"] = "CORE_TACTICAL_ALPHA"
+        response_data["strategy_mode"] = (
+            "OVERSOLD_REBOUND"
+            if ticker_sub_mode == "oversold_rebound"
+            else "CORE_TACTICAL_ALPHA"
+        )
         response_data["tactical_action"] = tactical_action
-        response_data["target_exposure"] = dynamic_sizing["target_allocation"]
+        response_data["target_exposure"] = (
+            target_exposure
+            if ticker_sub_mode == "oversold_rebound"
+            else dynamic_sizing["target_allocation"]
+        )
         response_data["tactical_rationale"] = tactical_rationale
         response_data["earnings_shield"] = earnings_proximity
         response_data["dynamic_sizing"] = dynamic_sizing

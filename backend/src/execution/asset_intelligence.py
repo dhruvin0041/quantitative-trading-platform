@@ -305,3 +305,16 @@ class AssetExpectancyFilter:
                     f"Expectancy approved: Trailing {self.lookback_days}d PF {trailing_pf:.2f} >= {self.suspension_threshold:.2f} ({count} trades)",
                 )
 
+
+ADAPTIVE_MESH_MAP: Dict[str, str] = {
+    "META": "oversold_rebound",
+    "TSLA": "oversold_rebound",
+    "MSFT": "oversold_rebound",
+    "AMZN": "oversold_rebound",
+    "NVDA": "oversold_rebound",
+    "AAPL": "core_tactical",
+    "GOOGL": "core_tactical",
+    "AMD": "core_tactical",
+}
+
+
