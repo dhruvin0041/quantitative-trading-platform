@@ -152,6 +152,10 @@ def fetch_and_prepare_data(
         if cache_file.exists():
             try:
                 df = pd.read_parquet(cache_file)
+                from src.execution.live_inference import FEATURE_COLUMNS_V30
+                if any(col not in df.columns for col in FEATURE_COLUMNS_V30):
+                    df = add_upgraded_features(df, spy_df, vix_df)
+                    df = df.loc[:, ~df.columns.duplicated()].copy()
                 logger.info("Loaded cached feature dataset for %s (%d rows)", ticker, len(df))
                 return df
             except Exception as e:
@@ -204,6 +208,7 @@ def _run_rotation_simulation(
     xgb_model: Any,
     lgbm_model: Any,
     calibrator: Any,
+    models_by_ticker: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> tuple[List[Dict], List[Dict]]:
     cash = float(initial_capital)
     open_positions: Dict[str, Dict] = {}
@@ -396,13 +401,20 @@ def _run_rotation_simulation(
 
             current_row = df_sym.iloc[idx_loc]
             row_features = current_row[kept_features].values.reshape(1, -1)
-            scaled_features = scaler.transform(row_features)
 
-            xgb_raw = xgb_model.predict_proba(scaled_features)[0]
-            lgbm_raw = lgbm_model.predict_proba(scaled_features)[0]
+            bundle = models_by_ticker.get(sym) if models_by_ticker else None
+            sym_scaler = bundle["scaler"] if bundle else scaler
+            sym_xgb = bundle["xgb_model"] if bundle else xgb_model
+            sym_lgbm = bundle["lgbm_model"] if bundle else lgbm_model
+            sym_cal = bundle["calibrator"] if bundle else calibrator
 
-            xgb_cal = calibrator.calibrate("XGB", xgb_raw)
-            lgbm_cal = calibrator.calibrate("LGBM", lgbm_raw)
+            scaled_features = sym_scaler.transform(row_features)
+
+            xgb_raw = sym_xgb.predict_proba(scaled_features)[0]
+            lgbm_raw = sym_lgbm.predict_proba(scaled_features)[0]
+
+            xgb_cal = sym_cal.calibrate("XGB", xgb_raw)
+            lgbm_cal = sym_cal.calibrate("LGBM", lgbm_raw)
 
             signal = "HOLD"
             p_buy_xgb = xgb_cal[2]
@@ -522,6 +534,7 @@ def _run_core_tactical_simulation(
     xgb_model: Any,
     lgbm_model: Any,
     calibrator: Any,
+    models_by_ticker: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> tuple[List[Dict], List[Dict]]:
     """
     ML-Enhanced Core + Tactical Alpha Simulation Engine:
@@ -687,12 +700,18 @@ def _run_core_tactical_simulation(
                 else:
                     idx_loc = df_sym.index.get_loc(current_date)
                     if idx_loc >= 50:
+                        bundle = models_by_ticker.get(sym) if models_by_ticker else None
+                        sym_scaler = bundle["scaler"] if bundle else scaler
+                        sym_xgb = bundle["xgb_model"] if bundle else xgb_model
+                        sym_lgbm = bundle["lgbm_model"] if bundle else lgbm_model
+                        sym_cal = bundle["calibrator"] if bundle else calibrator
+
                         row_feat = bar_today[kept_features].values.reshape(1, -1)
-                        s_feat = scaler.transform(row_feat)
-                        px = xgb_model.predict_proba(s_feat)[0]
-                        pl = lgbm_model.predict_proba(s_feat)[0]
-                        xgb_cal = calibrator.calibrate("XGB", px)
-                        lgbm_cal = calibrator.calibrate("LGBM", pl)
+                        s_feat = sym_scaler.transform(row_feat)
+                        px = sym_xgb.predict_proba(s_feat)[0]
+                        pl = sym_lgbm.predict_proba(s_feat)[0]
+                        xgb_cal = sym_cal.calibrate("XGB", px)
+                        lgbm_cal = sym_cal.calibrate("LGBM", pl)
                         p_b, p_s = float(xgb_cal[2]), float(xgb_cal[0])
                         lgbm_veto = float(lgbm_cal[0]) >= 0.65
                         dir_b = p_b / (p_b + p_s + 1e-9)
@@ -754,6 +773,8 @@ def _run_core_tactical_simulation(
 def run_chronological_backtest(
     tickers: Optional[List[str]] = None,
     period: str = "2y",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     initial_capital: float = 100000.0,
     allocation_per_trade: float = 0.10,
     slippage_bps: float = 5.0,
@@ -780,6 +801,9 @@ def run_chronological_backtest(
         resolved_snapshot_dir = Path(snapshot_dir) if snapshot_dir else (BACKEND_DIR / "data" / "snapshots")
         resolved_snapshot_dir.mkdir(parents=True, exist_ok=True)
 
+    if tickers is None or len(tickers) == 0:
+        tickers = ["AAPL", "NVDA", "MSFT", "AMZN", "META", "GOOGL", "TSLA", "AMD"]
+
     primary_ticker = tickers[0] if (tickers and len(tickers) == 1) else None
     ticker_model_dir = (artifacts_dir / "models" / primary_ticker) if primary_ticker else None
 
@@ -800,7 +824,7 @@ def run_chronological_backtest(
         logger.error("Missing required production artifacts: %s", missing)
         return None
 
-    # Load artifacts
+    # Load default artifacts
     with open(features_path, "r") as f:
         kept_features = json.load(f)
 
@@ -819,8 +843,34 @@ def run_chronological_backtest(
     elif hasattr(calibrator_obj, "calibrators"):
         calibrator = calibrator_obj
 
-    if tickers is None or len(tickers) == 0:
-        tickers = ["AAPL", "MSFT", "NVDA", "AMZN"]
+    # Load dedicated per-ticker model bundles
+    models_by_ticker: Dict[str, Dict[str, Any]] = {}
+    for t in tickers:
+        t_dir = artifacts_dir / "models" / t
+        if t_dir.exists() and (t_dir / "xgb_ensemble.json").exists():
+            try:
+                t_scaler = joblib.load(t_dir / "latest_scaler.joblib")
+                t_xgb = xgb.XGBClassifier()
+                t_xgb.load_model(str(t_dir / "xgb_ensemble.json"))
+                t_lgbm = joblib.load(t_dir / "lgbm_agent.joblib")
+                t_cal_obj = joblib.load(t_dir / "model_calibrator.joblib")
+                t_cal = ModelCalibrator()
+                if isinstance(t_cal_obj, dict):
+                    t_cal.calibrators = t_cal_obj
+                elif hasattr(t_cal_obj, "calibrators"):
+                    t_cal = t_cal_obj
+                models_by_ticker[t] = {
+                    "scaler": t_scaler,
+                    "xgb_model": t_xgb,
+                    "lgbm_model": t_lgbm,
+                    "calibrator": t_cal,
+                }
+                logger.info("Loaded dedicated models for %s from %s", t, t_dir.name)
+            except Exception as e:
+                logger.warning("Could not load dedicated model for %s: %s", t, e)
+
+    if len(tickers) == 1 and allocation_per_trade <= 0.25:
+        allocation_per_trade = 1.0
 
     # Pre-fetch or load benchmark data
     spy_df: Optional[pd.DataFrame] = None
@@ -900,6 +950,17 @@ def run_chronological_backtest(
         # Fall back to sorted union if intersection is sparse
         all_dates = sorted(list(set.union(*[set(df.index) for df in ticker_dfs.values()])))
 
+    if start_date:
+        start_ts = pd.Timestamp(start_date)
+        all_dates = [d for d in all_dates if d >= start_ts]
+    if end_date:
+        end_ts = pd.Timestamp(end_date)
+        all_dates = [d for d in all_dates if d <= end_ts]
+
+    if not all_dates:
+        logger.error("No trading sessions found within the specified date range (%s to %s).", start_date, end_date)
+        return None
+
     logger.info(
         "Starting chronological simulation: %d assets across %d calendar sessions (%s to %s)...",
         len(ticker_dfs),
@@ -926,6 +987,7 @@ def run_chronological_backtest(
             xgb_model=xgb_model,
             lgbm_model=lgbm_model,
             calibrator=calibrator,
+            models_by_ticker=models_by_ticker,
         )
     else:
         daily_equity_curve, closed_trades = _run_rotation_simulation(
@@ -942,6 +1004,7 @@ def run_chronological_backtest(
             xgb_model=xgb_model,
             lgbm_model=lgbm_model,
             calibrator=calibrator,
+            models_by_ticker=models_by_ticker,
         )
 
     # Calculate Portfolio Performance Statistics
@@ -1029,7 +1092,10 @@ def run_chronological_backtest(
         "calendar_sessions": n_days,
         "initial_capital": initial_capital,
         "final_equity": round(final_equity, 2),
+        "net_profit_dollar": round(final_equity - initial_capital, 2),
         "total_net_return_pct": round(total_return_pct, 2),
+        "start_date": all_dates[0].strftime("%Y-%m-%d"),
+        "end_date": all_dates[-1].strftime("%Y-%m-%d"),
         "cagr_pct": round(cagr_pct, 2),
         "annualized_vol_pct": round(ann_vol_pct, 2),
         "sharpe_ratio": round(sharpe, 2),
@@ -1056,9 +1122,12 @@ def run_chronological_backtest(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="HYDRA Chronological Multi-Asset Backtest")
-    parser.add_argument("--ticker", type=str, help="Specific ticker to backtest")
+    parser.add_argument("--ticker", type=str, help="Specific ticker to backtest (or 'all')")
+    parser.add_argument("--tickers", type=str, help="Comma-separated list of tickers (e.g. AAPL,NVDA,MSFT or 'all')")
     parser.add_argument("--period", type=str, default="2y", help="Historical period (e.g. 1y, 2y, 5y)")
-    parser.add_argument("--capital", type=float, default=100000.0, help="Initial portfolio capital")
+    parser.add_argument("--start-date", type=str, help="Optional start date (YYYY-MM-DD)")
+    parser.add_argument("--end-date", type=str, help="Optional end date (YYYY-MM-DD)")
+    parser.add_argument("--capital", type=float, default=1000.0, help="Initial portfolio capital")
     parser.add_argument(
         "--strategy-mode",
         type=str,
@@ -1075,16 +1144,35 @@ if __name__ == "__main__":
     parser.add_argument(
         "--trim-rsi", type=float, default=65.0, help="RSI overbought threshold for tactical exit"
     )
+    parser.add_argument("--min-commission", type=float, default=0.00, help="Minimum commission per trade")
+    parser.add_argument("--commission-per-share", type=float, default=0.00, help="Commission per share")
     parser.add_argument("--output", type=str, default="backtest_results", help="Output directory")
     parser.add_argument("--use-snapshots", action="store_true", help="Use local immutable market snapshots")
     parser.add_argument("--snapshot-dir", type=str, help="Path to immutable snapshot directory")
     args = parser.parse_args()
 
-    target_tickers = [args.ticker.upper()] if args.ticker else ["AAPL", "MSFT", "NVDA", "AMZN"]
+    all_universe = ["AAPL", "NVDA", "MSFT", "AMZN", "META", "GOOGL", "TSLA", "AMD"]
+    if args.tickers:
+        if args.tickers.lower() == "all":
+            target_tickers = all_universe
+        else:
+            target_tickers = [t.strip().upper() for t in args.tickers.split(",") if t.strip()]
+    elif args.ticker:
+        if args.ticker.lower() == "all":
+            target_tickers = all_universe
+        else:
+            target_tickers = [args.ticker.upper()]
+    else:
+        target_tickers = all_universe
+
     run_chronological_backtest(
         tickers=target_tickers,
         period=args.period,
+        start_date=args.start_date,
+        end_date=args.end_date,
         initial_capital=args.capital,
+        min_commission=args.min_commission,
+        commission_per_share=args.commission_per_share,
         output_dir=args.output,
         use_snapshots=args.use_snapshots,
         snapshot_dir=args.snapshot_dir,

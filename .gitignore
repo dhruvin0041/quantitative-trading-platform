@@ -121,6 +121,7 @@ backend/charts/
 backend/backtest_results.png
 backend/backtest_results/
 backtest_results/
+backend/artifacts/backtest/
 data/
 
 # ==============================================================================

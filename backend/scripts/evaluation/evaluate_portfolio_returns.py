@@ -1,0 +1,168 @@
+"""
+Evaluate Portfolio 1-Year Net Returns ($1,000 Investment)
+==========================================================
+Executes chronological historical backtests across all 8 institutional tickers
+(AAPL, NVDA, MSFT, AMZN, META, GOOGL, TSLA, AMD) and the combined portfolio
+from 2025-10-22 to 2026-10-22 (exactly 1 year / 251 trading days).
+Compares HYDRA Core + Tactical Alpha, Dynamic Triple Barrier Rotation, and Buy & Hold.
+"""
+
+import json
+import logging
+import sys
+from datetime import datetime
+from pathlib import Path
+
+import pandas as pd
+import yfinance as yf
+
+# Add backend directory to sys.path
+BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
+from scripts.evaluation.backtest import run_chronological_backtest
+
+logging.basicConfig(level=logging.WARNING, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger("Portfolio1YBacktest")
+
+TICKERS = ["AAPL", "NVDA", "MSFT", "AMZN", "META", "GOOGL", "TSLA", "AMD"]
+START_DATE = "2025-10-22"
+END_DATE = "2026-10-22"
+INITIAL_CAPITAL = 1000.0
+
+
+def compute_buy_and_hold(ticker: str, start_date: str, end_date: str, capital: float) -> dict:
+    """Computes buy-and-hold performance from start_date Open to end_date Close."""
+    try:
+        df = yf.download(ticker, start=start_date, end=pd.Timestamp(end_date) + pd.Timedelta(days=1), progress=False)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+        if df.empty or len(df) < 5:
+            return {"final_equity": capital, "net_return_pct": 0.0, "net_profit": 0.0}
+
+        entry_price = float(df.iloc[0]["Open"])
+        exit_price = float(df.iloc[-1]["Close"])
+        shares = capital / entry_price
+        final_equity = shares * exit_price
+        net_return_pct = ((final_equity / capital) - 1.0) * 100.0
+        return {
+            "entry_price": round(entry_price, 2),
+            "exit_price": round(exit_price, 2),
+            "final_equity": round(final_equity, 2),
+            "net_profit": round(final_equity - capital, 2),
+            "net_return_pct": round(net_return_pct, 2),
+        }
+    except Exception as e:
+        logger.error(f"Error computing buy and hold for {ticker}: {e}")
+        return {"final_equity": capital, "net_return_pct": 0.0, "net_profit": 0.0}
+
+
+def main():
+    print("=" * 80)
+    print("  HYDRA 1-YEAR $1,000 INSTITUTIONAL BACKTEST EVALUATION")
+    print(f"  Window: {START_DATE} to {END_DATE} (Exactly 1 Year)")
+    print(f"  Capital per asset / portfolio: ${INITIAL_CAPITAL:,.2f}")
+    print("=" * 80)
+
+    results = {
+        "start_date": START_DATE,
+        "end_date": END_DATE,
+        "initial_capital_per_asset": INITIAL_CAPITAL,
+        "tickers": {},
+        "portfolio": {},
+        "benchmarks": {},
+        "timestamp_utc": datetime.utcnow().isoformat() + "Z",
+    }
+
+    # 1. SPY Benchmark
+    spy_bnh = compute_buy_and_hold("SPY", START_DATE, END_DATE, INITIAL_CAPITAL)
+    results["benchmarks"]["SPY"] = spy_bnh
+    print(f"\n[BENCHMARK] SPY 1Y Buy & Hold: ${INITIAL_CAPITAL:,.2f} -> ${spy_bnh['final_equity']:,.2f} ({spy_bnh['net_return_pct']:+.2f}%)")
+
+    # 2. Individual Tickers Evaluation
+    for ticker in TICKERS:
+        print(f"\n--> Running Backtest for {ticker} ($1,000 Capital)...")
+        bnh = compute_buy_and_hold(ticker, START_DATE, END_DATE, INITIAL_CAPITAL)
+
+        # Core + Tactical Alpha
+        out_core = BACKEND_DIR / "artifacts" / "backtest" / f"{ticker}_core_tactical"
+        summary_core = run_chronological_backtest(
+            tickers=[ticker],
+            period="2y",
+            start_date=START_DATE,
+            end_date=END_DATE,
+            initial_capital=INITIAL_CAPITAL,
+            strategy_mode="core_tactical",
+            min_commission=0.0,
+            commission_per_share=0.0,
+            output_dir=str(out_core),
+        )
+
+        # Dynamic Triple Barrier Rotation
+        out_rot = BACKEND_DIR / "artifacts" / "backtest" / f"{ticker}_rotation"
+        summary_rot = run_chronological_backtest(
+            tickers=[ticker],
+            period="2y",
+            start_date=START_DATE,
+            end_date=END_DATE,
+            initial_capital=INITIAL_CAPITAL,
+            allocation_per_trade=1.0,
+            strategy_mode="rotation",
+            min_commission=0.0,
+            commission_per_share=0.0,
+            output_dir=str(out_rot),
+        )
+
+        results["tickers"][ticker] = {
+            "buy_and_hold": bnh,
+            "core_tactical": summary_core,
+            "rotation": summary_rot,
+        }
+
+    # 3. Combined Multi-Asset 8-Ticker Portfolio ($1,000 Total Capital)
+    print("\n--> Running Combined 8-Ticker Portfolio Backtest ($1,000 Total Capital)...")
+    out_port_core = BACKEND_DIR / "artifacts" / "backtest" / "portfolio_core_tactical"
+    port_core = run_chronological_backtest(
+        tickers=TICKERS,
+        period="2y",
+        start_date=START_DATE,
+        end_date=END_DATE,
+        initial_capital=INITIAL_CAPITAL,
+        strategy_mode="core_tactical",
+        min_commission=0.0,
+        commission_per_share=0.0,
+        output_dir=str(out_port_core),
+    )
+
+    out_port_rot = BACKEND_DIR / "artifacts" / "backtest" / "portfolio_rotation"
+    port_rot = run_chronological_backtest(
+        tickers=TICKERS,
+        period="2y",
+        start_date=START_DATE,
+        end_date=END_DATE,
+        initial_capital=INITIAL_CAPITAL,
+        allocation_per_trade=0.25,
+        strategy_mode="rotation",
+        min_commission=0.0,
+        commission_per_share=0.0,
+        output_dir=str(out_port_rot),
+    )
+
+    results["portfolio"]["core_tactical"] = port_core
+    results["portfolio"]["rotation"] = port_rot
+
+    # Save summary
+    save_path = BACKEND_DIR / "artifacts" / "1year_backtest_results_1000usd.json"
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(save_path, "w") as f:
+        json.dump(results, f, indent=4)
+
+    print("\n" + "=" * 80)
+    print("  1-YEAR $1,000 BACKTEST COMPLETE - ALL 8 TICKERS")
+    print(f"  Artifact saved to {save_path}")
+    print("=" * 80)
+
+
+if __name__ == "__main__":
+    main()
