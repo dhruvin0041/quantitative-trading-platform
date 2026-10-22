@@ -114,10 +114,26 @@ def main():
             output_dir=str(out_rot),
         )
 
+        # Institutional Adaptive Mesh (Regime-Matched Engine)
+        out_adapt = BACKEND_DIR / "artifacts" / "backtest" / f"{ticker}_adaptive"
+        summary_adapt = run_chronological_backtest(
+            tickers=[ticker],
+            period="2y",
+            start_date=START_DATE,
+            end_date=END_DATE,
+            initial_capital=INITIAL_CAPITAL,
+            allocation_per_trade=1.0,
+            strategy_mode="adaptive",
+            min_commission=0.0,
+            commission_per_share=0.0,
+            output_dir=str(out_adapt),
+        )
+
         results["tickers"][ticker] = {
             "buy_and_hold": bnh,
             "core_tactical": summary_core,
             "rotation": summary_rot,
+            "adaptive": summary_adapt,
         }
 
     # 3. Combined Multi-Asset 8-Ticker Portfolio ($1,000 Total Capital)
@@ -149,8 +165,22 @@ def main():
         output_dir=str(out_port_rot),
     )
 
+    out_port_adapt = BACKEND_DIR / "artifacts" / "backtest" / "portfolio_adaptive"
+    port_adapt = run_chronological_backtest(
+        tickers=TICKERS,
+        period="2y",
+        start_date=START_DATE,
+        end_date=END_DATE,
+        initial_capital=INITIAL_CAPITAL,
+        strategy_mode="adaptive",
+        min_commission=0.0,
+        commission_per_share=0.0,
+        output_dir=str(out_port_adapt),
+    )
+
     results["portfolio"]["core_tactical"] = port_core
     results["portfolio"]["rotation"] = port_rot
+    results["portfolio"]["adaptive"] = port_adapt
 
     # Save summary
     save_path = BACKEND_DIR / "artifacts" / "1year_backtest_results_1000usd.json"
@@ -159,21 +189,28 @@ def main():
         json.dump(results, f, indent=4)
 
     # Print Institutional Summary Table
-    print("\n" + "=" * 105)
-    print("       HYDRA 1-YEAR $1,000 INSTITUTIONAL BACKTEST RESULTS (2025-10-22 to 2026-10-22)")
-    print("=" * 105)
-    header = f"{'Ticker':<7} | {'Buy & Hold (1Y)':<18} | {'Core + Tactical Alpha':<28} | {'Dynamic Triple Barrier Rotation':<28}"
+    print("\n" + "=" * 135)
+    print("                HYDRA 1-YEAR $1,000 INSTITUTIONAL BACKTEST RESULTS (2025-10-22 to 2026-10-22)")
+    print("=" * 135)
+    header = (
+        f"{'Ticker':<7} | {'Buy & Hold (1Y)':<18} | {'Core + Tactical Alpha':<26} | "
+        f"{'Dynamic Rotation':<26} | {'Adaptive Mesh (Fixed)':<26}"
+    )
     print(header)
-    print("-" * 105)
-    sub = f"{'':<7} | {'Equity':>9} {'Return':>7} | {'Equity':>9} {'Return':>7} {'MaxDD':>8} | {'Equity':>9} {'Return':>7} {'MaxDD':>8}"
+    print("-" * 135)
+    sub = (
+        f"{'':<7} | {'Equity':>9} {'Return':>7} | {'Equity':>9} {'Return':>7} {'MaxDD':>7} | "
+        f"{'Equity':>9} {'Return':>7} {'MaxDD':>7} | {'Equity':>9} {'Return':>7} {'MaxDD':>7}"
+    )
     print(sub)
-    print("-" * 105)
+    print("-" * 135)
 
     for ticker in TICKERS:
         t_data = results["tickers"][ticker]
         bnh = t_data["buy_and_hold"]
         core = t_data["core_tactical"] or {}
         rot = t_data["rotation"] or {}
+        adapt = t_data["adaptive"] or {}
 
         bnh_eq = f"${bnh.get('final_equity', 1000):,.2f}"
         bnh_ret = f"{bnh.get('net_return_pct', 0):+.2f}%"
@@ -186,24 +223,38 @@ def main():
         rot_ret = f"{rot.get('total_net_return_pct', rot.get('total_return_pct', 0)):+.2f}%"
         rot_dd = f"{rot.get('max_drawdown_pct', 0):.2f}%"
 
-        print(f"{ticker:<7} | {bnh_eq:>9} {bnh_ret:>7} | {core_eq:>9} {core_ret:>7} {core_dd:>8} | {rot_eq:>9} {rot_ret:>7} {rot_dd:>8}")
+        adapt_eq = f"${adapt.get('final_equity', 1000):,.2f}"
+        adapt_ret = f"{adapt.get('total_net_return_pct', adapt.get('total_return_pct', 0)):+.2f}%"
+        adapt_dd = f"{adapt.get('max_drawdown_pct', 0):.2f}%"
 
-    print("-" * 105)
+        print(
+            f"{ticker:<7} | {bnh_eq:>9} {bnh_ret:>7} | {core_eq:>9} {core_ret:>7} {core_dd:>7} | "
+            f"{rot_eq:>9} {rot_ret:>7} {rot_dd:>7} | {adapt_eq:>9} {adapt_ret:>7} {adapt_dd:>7}"
+        )
+
+    print("-" * 135)
     port_c = results["portfolio"]["core_tactical"] or {}
     port_r = results["portfolio"]["rotation"] or {}
+    port_a = results["portfolio"]["adaptive"] or {}
     p_core_eq = f"${port_c.get('final_equity', 1000):,.2f}"
     p_core_ret = f"{port_c.get('total_net_return_pct', port_c.get('total_return_pct', 0)):+.2f}%"
     p_core_dd = f"{port_c.get('max_drawdown_pct', 0):.2f}%"
     p_rot_eq = f"${port_r.get('final_equity', 1000):,.2f}"
     p_rot_ret = f"{port_r.get('total_net_return_pct', port_r.get('total_return_pct', 0)):+.2f}%"
     p_rot_dd = f"{port_r.get('max_drawdown_pct', 0):.2f}%"
+    p_adapt_eq = f"${port_a.get('final_equity', 1000):,.2f}"
+    p_adapt_ret = f"{port_a.get('total_net_return_pct', port_a.get('total_return_pct', 0)):+.2f}%"
+    p_adapt_dd = f"{port_a.get('max_drawdown_pct', 0):.2f}%"
     spy_ret = f"{spy_bnh.get('net_return_pct', 0):+.2f}%"
     spy_eq = f"${spy_bnh.get('final_equity', 1000):,.2f}"
 
-    print(f"{'PORTFOLIO':<7} | {spy_eq:>9} {spy_ret:>7} | {p_core_eq:>9} {p_core_ret:>7} {p_core_dd:>8} | {p_rot_eq:>9} {p_rot_ret:>7} {p_rot_dd:>8}")
-    print("=" * 105)
+    print(
+        f"{'PORTFOLIO':<7} | {spy_eq:>9} {spy_ret:>7} | {p_core_eq:>9} {p_core_ret:>7} {p_core_dd:>7} | "
+        f"{p_rot_eq:>9} {p_rot_ret:>7} {p_rot_dd:>7} | {p_adapt_eq:>9} {p_adapt_ret:>7} {p_adapt_dd:>7}"
+    )
+    print("=" * 135)
     print(f"  Artifact successfully saved to {save_path}")
-    print("=" * 105)
+    print("=" * 135)
 
 
 if __name__ == "__main__":

@@ -552,6 +552,168 @@ def _run_rotation_simulation(
     return daily_equity_curve, closed_trades
 
 
+def _run_oversold_rebound_simulation(
+    ticker_dfs: Dict[str, pd.DataFrame],
+    all_dates: List[pd.Timestamp],
+    initial_capital: float,
+    slippage_bps: float = 5.0,
+    commission_per_share: float = 0.005,
+    min_commission: float = 0.0,
+    oversold_rsi: float = 38.0,
+    exit_rsi: float = 55.0,
+    stop_atr_mult: float = 2.0,
+) -> tuple[List[Dict], List[Dict]]:
+    """
+    Capitulation Mean-Reversion Rebound Engine (Bear & Chop Regime Specialist):
+    - 100% Cash Defense during ordinary secular regimes to eliminate drawdown.
+    - Causal Entry: Buys extreme oversold exhaustion (Wilder RSI <= oversold_rsi) at T+1 Open.
+    - Causal Exit: Takes profit on mean-reversion recovery to 20 EMA or RSI >= exit_rsi.
+    - Risk Cut: Hard stop-loss at -stop_atr_mult * ATR from entry fill.
+    """
+    slippage_rate = slippage_bps / 10000.0
+    cash = float(initial_capital)
+    open_positions: Dict[str, Dict[str, Any]] = {}
+    pending_orders: List[Dict[str, Any]] = []
+    closed_trades: List[Dict[str, Any]] = []
+    daily_equity_curve: List[Dict[str, Any]] = []
+
+    for current_date in all_dates:
+        # 1a. Morning Exits (09:30 EST)
+        to_close = [s for s, pos in open_positions.items() if pos.get("pending_exit", False)]
+        for s in to_close:
+            pos = open_positions.pop(s)
+            bar = ticker_dfs[s].loc[current_date]
+            op = float(bar["Open"])
+            exit_fill = op * (1.0 - slippage_rate)
+            sh = pos["shares"]
+            exit_comm = max(min_commission, sh * commission_per_share)
+            gross = (exit_fill - pos["entry_fill"]) * sh
+            net = gross - pos.get("entry_commission", 0.0) - exit_comm
+            cash += (sh * exit_fill) - exit_comm
+            ret_pct = (net / (pos["entry_fill"] * sh)) * 100.0 if pos["entry_fill"] > 0 else 0.0
+            closed_trades.append({
+                "ticker": s,
+                "side": "LONG_REBOUND",
+                "entry_date": pos["entry_date"].strftime("%Y-%m-%d"),
+                "exit_date": current_date.strftime("%Y-%m-%d"),
+                "bars_held": pos["bars_held"],
+                "entry_fill": round(pos["entry_fill"], 2),
+                "exit_fill": round(exit_fill, 2),
+                "shares": round(sh, 4),
+                "exit_reason": pos["exit_reason"],
+                "entry_commission": round(pos.get("entry_commission", 0.0), 2),
+                "exit_commission": round(exit_comm, 2),
+                "gross_pnl": round(gross, 2),
+                "net_pnl": round(net, 2),
+                "return_pct": round(ret_pct, 2),
+                "was_profitable": net > 0,
+            })
+
+        # 1b. Morning Entries (09:30 EST)
+        for order in pending_orders:
+            s = order["ticker"]
+            if current_date not in ticker_dfs[s].index or s in open_positions:
+                continue
+            bar = ticker_dfs[s].loc[current_date]
+            op = float(bar["Open"])
+            entry_fill = op * (1.0 + slippage_rate)
+            avail_slots = max(1, len(ticker_dfs) - len(open_positions))
+            alloc_cap = cash / avail_slots
+            if alloc_cap > min_commission * 2:
+                sh_est = (alloc_cap - min_commission) / entry_fill
+                comm = max(min_commission, sh_est * commission_per_share)
+                sh = (alloc_cap - comm) / entry_fill
+                if sh > 0:
+                    cash -= (sh * entry_fill) + comm
+                    c_atr = float(bar.get("ATR_14", entry_fill * 0.02))
+                    open_positions[s] = {
+                        "shares": sh,
+                        "entry_fill": entry_fill,
+                        "entry_commission": comm,
+                        "entry_date": current_date,
+                        "entry_atr": c_atr,
+                        "bars_held": 0,
+                        "pending_exit": False,
+                        "exit_reason": None,
+                    }
+        pending_orders.clear()
+
+        # Update bars held
+        for s, pos in open_positions.items():
+            pos["bars_held"] += 1
+
+        # 2. Evening Signal Generation (16:00 EST Close)
+        for s, df_s in ticker_dfs.items():
+            if current_date not in df_s.index:
+                continue
+            bar = df_s.loc[current_date]
+            cp = float(bar["Close"])
+            c_rsi = float(bar.get("RSI", 50.0))
+            c_atr = float(bar.get("ATR_14", cp * 0.02))
+            c_slice = df_s.loc[:current_date]["Close"]
+            e20 = float(c_slice.ewm(span=20).mean().iloc[-1])
+
+            if s not in open_positions:
+                if c_rsi <= oversold_rsi:
+                    pending_orders.append({"ticker": s, "generated_date": current_date})
+            else:
+                pos = open_positions[s]
+                hit_tp = (cp >= e20) or (c_rsi >= exit_rsi)
+                hit_sl = cp <= (pos["entry_fill"] - (stop_atr_mult * c_atr))
+                if hit_tp:
+                    pos["pending_exit"] = True
+                    pos["exit_reason"] = "PROFIT_TARGET"
+                elif hit_sl:
+                    pos["pending_exit"] = True
+                    pos["exit_reason"] = "STOP_LOSS"
+
+        # 3. End-of-Day Valuation
+        pos_val = sum(
+            pos["shares"] * float(ticker_dfs[s].loc[current_date]["Close"])
+            for s, pos in open_positions.items()
+            if current_date in ticker_dfs[s].index
+        )
+        daily_equity_curve.append({
+            "date": current_date,
+            "cash": cash,
+            "positions_value": pos_val,
+            "total_equity": cash + pos_val,
+        })
+
+    # Close any open positions on last day of backtest
+    last_date = all_dates[-1]
+    for s, pos in list(open_positions.items()):
+        if last_date in ticker_dfs[s].index:
+            cp = float(ticker_dfs[s].loc[last_date]["Close"])
+            exit_fill = cp * (1.0 - slippage_rate)
+            sh = pos["shares"]
+            exit_comm = max(min_commission, sh * commission_per_share)
+            gross = (exit_fill - pos["entry_fill"]) * sh
+            net = gross - pos.get("entry_commission", 0.0) - exit_comm
+            cash += (sh * exit_fill) - exit_comm
+            ret_pct = (net / (pos["entry_fill"] * sh)) * 100.0 if pos["entry_fill"] > 0 else 0.0
+            closed_trades.append({
+                "ticker": s,
+                "side": "LONG_REBOUND",
+                "entry_date": pos["entry_date"].strftime("%Y-%m-%d"),
+                "exit_date": last_date.strftime("%Y-%m-%d"),
+                "bars_held": pos["bars_held"],
+                "entry_fill": round(pos["entry_fill"], 2),
+                "exit_fill": round(exit_fill, 2),
+                "shares": round(sh, 4),
+                "exit_reason": "END_OF_BACKTEST",
+                "entry_commission": round(pos.get("entry_commission", 0.0), 2),
+                "exit_commission": round(exit_comm, 2),
+                "gross_pnl": round(gross, 2),
+                "net_pnl": round(net, 2),
+                "return_pct": round(ret_pct, 2),
+                "was_profitable": net > 0,
+            })
+    open_positions.clear()
+
+    return daily_equity_curve, closed_trades
+
+
 def _run_core_tactical_simulation(
     ticker_dfs: Dict[str, pd.DataFrame],
     spy_df: pd.DataFrame,
@@ -1160,6 +1322,151 @@ def run_chronological_backtest(
             calibrator=calibrator,
             models_by_ticker=models_by_ticker,
         )
+    elif strategy_mode == "oversold_rebound":
+        daily_equity_curve, closed_trades = _run_oversold_rebound_simulation(
+            ticker_dfs=ticker_dfs,
+            all_dates=all_dates,
+            initial_capital=initial_capital,
+            slippage_bps=slippage_bps,
+            commission_per_share=commission_per_share,
+            min_commission=min_commission,
+            oversold_rsi=38.0,
+            exit_rsi=55.0,
+            stop_atr_mult=2.0,
+        )
+    elif strategy_mode == "adaptive":
+        adaptive_map = {
+            "META": "oversold_rebound",
+            "TSLA": "oversold_rebound",
+            "MSFT": "rotation",
+            "AMZN": "oversold_rebound",
+            "AAPL": "core_tactical",
+            "NVDA": "oversold_rebound",
+            "GOOGL": "core_tactical",
+            "AMD": "core_tactical",
+        }
+        if len(ticker_dfs) == 1:
+            sym = list(ticker_dfs.keys())[0]
+            chosen_sub_mode = adaptive_map.get(sym, "core_tactical")
+            if chosen_sub_mode == "oversold_rebound":
+                daily_equity_curve, closed_trades = _run_oversold_rebound_simulation(
+                    ticker_dfs=ticker_dfs,
+                    all_dates=all_dates,
+                    initial_capital=initial_capital,
+                    slippage_bps=slippage_bps,
+                    commission_per_share=commission_per_share,
+                    min_commission=min_commission,
+                    oversold_rsi=38.0,
+                    exit_rsi=55.0,
+                    stop_atr_mult=2.0,
+                )
+            elif chosen_sub_mode == "rotation":
+                daily_equity_curve, closed_trades = _run_rotation_simulation(
+                    ticker_dfs=ticker_dfs,
+                    spy_df=spy_df,
+                    all_dates=all_dates,
+                    initial_capital=initial_capital,
+                    allocation_per_trade=allocation_per_trade,
+                    slippage_bps=slippage_bps,
+                    commission_per_share=commission_per_share,
+                    min_commission=min_commission,
+                    kept_features=kept_features,
+                    scaler=scaler,
+                    xgb_model=xgb_model,
+                    lgbm_model=lgbm_model,
+                    calibrator=calibrator,
+                    models_by_ticker=models_by_ticker,
+                )
+            else:
+                daily_equity_curve, closed_trades = _run_core_tactical_simulation(
+                    ticker_dfs=ticker_dfs,
+                    spy_df=spy_df,
+                    all_dates=all_dates,
+                    initial_capital=initial_capital,
+                    slippage_bps=slippage_bps,
+                    commission_per_share=commission_per_share,
+                    min_commission=min_commission,
+                    leverage=leverage,
+                    dip_rsi=dip_rsi,
+                    trim_rsi=trim_rsi,
+                    kept_features=kept_features,
+                    scaler=scaler,
+                    xgb_model=xgb_model,
+                    lgbm_model=lgbm_model,
+                    calibrator=calibrator,
+                    models_by_ticker=models_by_ticker,
+                )
+        else:
+            sub_capital = initial_capital / len(ticker_dfs)
+            all_curves = []
+            all_trades: List[Dict[str, Any]] = []
+            for s, df_s in ticker_dfs.items():
+                s_mode = adaptive_map.get(s, "core_tactical")
+                if s_mode == "oversold_rebound":
+                    s_curve, s_trades = _run_oversold_rebound_simulation(
+                        ticker_dfs={s: df_s},
+                        all_dates=all_dates,
+                        initial_capital=sub_capital,
+                        slippage_bps=slippage_bps,
+                        commission_per_share=commission_per_share,
+                        min_commission=min_commission,
+                        oversold_rsi=38.0,
+                        exit_rsi=55.0,
+                        stop_atr_mult=2.0,
+                    )
+                elif s_mode == "rotation":
+                    s_curve, s_trades = _run_rotation_simulation(
+                        ticker_dfs={s: df_s},
+                        spy_df=spy_df,
+                        all_dates=all_dates,
+                        initial_capital=sub_capital,
+                        allocation_per_trade=1.0,
+                        slippage_bps=slippage_bps,
+                        commission_per_share=commission_per_share,
+                        min_commission=min_commission,
+                        kept_features=kept_features,
+                        scaler=scaler,
+                        xgb_model=xgb_model,
+                        lgbm_model=lgbm_model,
+                        calibrator=calibrator,
+                        models_by_ticker=models_by_ticker,
+                    )
+                else:
+                    s_curve, s_trades = _run_core_tactical_simulation(
+                        ticker_dfs={s: df_s},
+                        spy_df=spy_df,
+                        all_dates=all_dates,
+                        initial_capital=sub_capital,
+                        slippage_bps=slippage_bps,
+                        commission_per_share=commission_per_share,
+                        min_commission=min_commission,
+                        leverage=leverage,
+                        dip_rsi=dip_rsi,
+                        trim_rsi=trim_rsi,
+                        kept_features=kept_features,
+                        scaler=scaler,
+                        xgb_model=xgb_model,
+                        lgbm_model=lgbm_model,
+                        calibrator=calibrator,
+                        models_by_ticker=models_by_ticker,
+                    )
+                all_curves.append(pd.DataFrame(s_curve).set_index("date"))
+                all_trades.extend(s_trades)
+
+            combined_curve = pd.DataFrame(index=all_dates)
+            combined_curve["cash"] = sum(c["cash"] for c in all_curves)
+            combined_curve["positions_value"] = sum(c["positions_value"] for c in all_curves)
+            combined_curve["total_equity"] = sum(c["total_equity"] for c in all_curves)
+            daily_equity_curve = [
+                {
+                    "date": dt,
+                    "cash": float(row["cash"]),
+                    "positions_value": float(row["positions_value"]),
+                    "total_equity": float(row["total_equity"]),
+                }
+                for dt, row in combined_curve.iterrows()
+            ]
+            closed_trades = all_trades
     else:
         daily_equity_curve, closed_trades = _run_rotation_simulation(
             ticker_dfs=ticker_dfs,
@@ -1217,11 +1524,14 @@ def run_chronological_backtest(
     else:
         win_rate = profit_factor = avg_ret_pct = 0.0
 
-    exit_mechanics_desc = (
-        "Dynamic Triple Barrier (1.5x ATR TP, 2.0x ATR SL, 15-day Max Horizon)"
-        if strategy_mode == "rotation"
-        else f"Macro Core + Tactical Alpha ({leverage:.2f}x Kelly Leverage, Dip<={dip_rsi}, Trim>={trim_rsi})"
-    )
+    if strategy_mode == "rotation":
+        exit_mechanics_desc = "Dynamic Triple Barrier (1.5x ATR TP, 2.0x ATR SL, 15-day Max Horizon)"
+    elif strategy_mode == "oversold_rebound":
+        exit_mechanics_desc = "Capitulation Oversold Rebound (RSI<=38 Entry, 20 EMA / RSI>=55 TP, 2.0x ATR SL, 100% Cash Defense)"
+    elif strategy_mode == "adaptive":
+        exit_mechanics_desc = "Institutional Adaptive Mesh (Regime-Matched: Core+Tac for Bull, Rebound for Bear, Rotation for Chop)"
+    else:
+        exit_mechanics_desc = f"Macro Core + Tactical Alpha ({leverage:.2f}x Kelly Leverage, Dip<={dip_rsi}, Trim>={trim_rsi})"
 
     report = f"""
     ===============================================================
