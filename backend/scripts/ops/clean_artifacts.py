@@ -30,8 +30,14 @@ def clean_cache():
                     pass
 
 
-def clean_training_artifacts():
-    """Deletes models and scalers but KEEPS optimized parameters."""
+def clean_training_artifacts(ticker=None, all_tickers=False):
+    """
+    Deletes models and scalers.
+    - If ticker is specified: purges that ticker's isolated directory backend/artifacts/models/{ticker}/
+      as well as ticker-specific scalers.
+    - If all_tickers is True or (ticker is None and global clean): purges all ticker models in
+      artifacts/models/ and multi-asset training summaries.
+    """
     files = [
         "artifacts/xgb_ensemble.json",
         "artifacts/meta_model.joblib",
@@ -59,9 +65,31 @@ def clean_training_artifacts():
         "artifacts/v3/model_calibrator.joblib",
         "artifacts/v3/kept_features.json",
         "configs/active_ticker.json",
-        "configs/kept_features.json",
     ]
-    print("--- Cleaning Training Artifacts ---")
+
+    if ticker:
+        t = ticker.upper()
+        files.append(f"artifacts/scaler_{t}.joblib")
+        ticker_dir = BACKEND_DIR / "artifacts" / "models" / t
+        if ticker_dir.exists():
+            try:
+                shutil.rmtree(ticker_dir)
+                print(f"  [CLEANED DIRECTORY] artifacts/models/{t}/")
+            except Exception as e:
+                print(f"  [ERROR] Could not remove artifacts/models/{t}/: {e}")
+    elif all_tickers:
+        files.append("artifacts/multi_ticker_training_summary.json")
+        models_dir = BACKEND_DIR / "artifacts" / "models"
+        if models_dir.exists():
+            for item in models_dir.iterdir():
+                if item.is_dir():
+                    try:
+                        shutil.rmtree(item)
+                        print(f"  [CLEANED DIRECTORY] {item.relative_to(BACKEND_DIR)}")
+                    except Exception as e:
+                        print(f"  [ERROR] Could not remove {item}: {e}")
+
+    print(f"--- Cleaning Training Artifacts (Ticker: {ticker}, All Tickers: {all_tickers}) ---")
     for f in files:
         target = _resolve_path(f)
         if target.exists():
@@ -73,10 +101,16 @@ def clean_training_artifacts():
     clean_cache()
 
 
-def clean_optimization_artifacts(ticker=None, universal=False):
-    """Deletes models and specific Optuna databases/configs to force a fresh search."""
+def clean_optimization_artifacts(ticker=None, universal=False, all_tickers=False):
+    """
+    Deletes optimization artifacts, studies, and parameter files.
+    - If ticker is specified: removes configs/optimized_params_{ticker}.json,
+      optuna_studies/{ticker}.db, and artifacts/models/{ticker}/optimized_params.json.
+    - If universal or all_tickers: removes all ticker optimization parameter files,
+      multi-ticker optimization summary, and optuna databases.
+    """
     print(
-        f"--- Cleaning Optimization Artifacts (Ticker: {ticker}, Universal: {universal}) ---"
+        f"--- Cleaning Optimization Artifacts (Ticker: {ticker}, Universal: {universal}, All Tickers: {all_tickers}) ---"
     )
 
     # Generic artifacts
@@ -104,12 +138,32 @@ def clean_optimization_artifacts(ticker=None, universal=False):
     ]
 
     # Target specific ticker or universal files
-    if universal:
+    if ticker:
+        t = ticker.upper()
+        files.append(f"configs/optimized_params_{t}.json")
+        files.append(f"optuna_studies/{t}.db")
+        files.append(f"artifacts/models/{t}/optimized_params.json")
+
+    if universal or all_tickers:
         files.append("configs/optimized_params_UNIVERSAL.json")
         files.append("optuna_studies/UNIVERSAL.db")
-    elif ticker:
-        files.append(f"configs/optimized_params_{ticker}.json")
-        files.append(f"optuna_studies/{ticker}.db")
+        files.append("artifacts/multi_ticker_optimization_summary.json")
+
+        # Clean all per-ticker optimized_params in configs/ and artifacts/models/
+        configs_dir = BACKEND_DIR / "configs"
+        if configs_dir.exists():
+            for p in configs_dir.glob("optimized_params_*.json"):
+                files.append(str(p.relative_to(BACKEND_DIR)))
+
+        optuna_dir = BACKEND_DIR / "optuna_studies"
+        if optuna_dir.exists():
+            for p in optuna_dir.glob("*.db"):
+                files.append(str(p.relative_to(BACKEND_DIR)))
+
+        models_dir = BACKEND_DIR / "artifacts" / "models"
+        if models_dir.exists():
+            for p in models_dir.glob("*/optimized_params.json"):
+                files.append(str(p.relative_to(BACKEND_DIR)))
 
     for f in files:
         target = _resolve_path(f)
@@ -155,21 +209,31 @@ def main(argv=None):
         "--full", action="store_true", help="Enforce full institutional zero-state"
     )
     parser.add_argument(
-        "--ticker", type=str, default=None, help="Stock ticker symbol"
+        "--ticker", type=str, default=None, help="Stock ticker symbol (purges only this ticker)"
     )
     parser.add_argument(
-        "--universal", action="store_true", help="Clean universal artifacts"
+        "--all-tickers", action="store_true", help="Purge artifacts across all tickers in universe"
+    )
+    parser.add_argument(
+        "--universal", action="store_true", help="Clean universal artifacts and all ticker models"
     )
     args = parser.parse_args(argv)
 
     if args.full:
         clean_data_state()
 
-    if args.ticker or args.universal:
-        clean_optimization_artifacts(ticker=args.ticker, universal=args.universal)
+    is_all = args.universal or args.all_tickers or args.full
 
-    # Default behavior for manual execution
-    clean_training_artifacts()
+    if args.ticker:
+        clean_optimization_artifacts(ticker=args.ticker)
+        clean_training_artifacts(ticker=args.ticker)
+    elif is_all:
+        clean_optimization_artifacts(all_tickers=True, universal=True)
+        clean_training_artifacts(all_tickers=True)
+    else:
+        # Default manual run without flags cleans root training artifacts and all ticker models
+        clean_training_artifacts(all_tickers=True)
+
     print("\n>>> System artifacts cleaned. <<<")
     if args.full:
         print(">>> Institutional Zero-State Protocol Enforced. <<<")

@@ -453,10 +453,10 @@ def train_ticker_pipeline(
     # Step 1: Clean Artifacts
     logger.info(f"\n[1/5] Cleaning system artifacts for {ticker}...")
     if skip_optimization:
-        clean_training_artifacts()
+        clean_training_artifacts(ticker=ticker)
     else:
         clean_optimization_artifacts(ticker=ticker)
-        clean_training_artifacts()
+        clean_training_artifacts(ticker=ticker)
 
     # Step 2: Data Ingestion & Partitioning
     logger.info(f"\n[2/5] Building 75% Train and 25% Test datasets for {ticker}...")

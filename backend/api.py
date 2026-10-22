@@ -201,8 +201,21 @@ except Exception as e:
     logger.warning(f"Could not load optimized parameters for {active_ticker}: {e}")
 
 kf_path = CONFIGS_DIR / "kept_features.json"
-with open(kf_path, "r") as f:
-    kept_features_list = json.load(f)
+if kf_path.exists():
+    try:
+        with open(kf_path, "r") as f:
+            kept_features_list = json.load(f)
+    except Exception:
+        from src.execution.live_inference import FEATURE_COLUMNS_V30
+        kept_features_list = FEATURE_COLUMNS_V30
+else:
+    from src.execution.live_inference import FEATURE_COLUMNS_V30
+    kept_features_list = FEATURE_COLUMNS_V30
+    try:
+        with open(kf_path, "w") as f:
+            json.dump(kept_features_list, f, indent=4)
+    except Exception:
+        pass
 
 config["data"]["num_features"] = len(kept_features_list)
 

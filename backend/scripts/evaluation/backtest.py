@@ -780,10 +780,19 @@ def run_chronological_backtest(
         resolved_snapshot_dir = Path(snapshot_dir) if snapshot_dir else (BACKEND_DIR / "data" / "snapshots")
         resolved_snapshot_dir.mkdir(parents=True, exist_ok=True)
 
-    scaler_path = artifacts_dir / "latest_scaler.joblib"
-    xgb_path = artifacts_dir / "xgb_ensemble.json"
-    lgbm_path = artifacts_dir / "lgbm_agent.joblib"
-    calibrator_path = artifacts_dir / "model_calibrator.joblib"
+    primary_ticker = tickers[0] if (tickers and len(tickers) == 1) else None
+    ticker_model_dir = (artifacts_dir / "models" / primary_ticker) if primary_ticker else None
+
+    if ticker_model_dir and (ticker_model_dir / "xgb_ensemble.json").exists():
+        scaler_path = ticker_model_dir / "latest_scaler.joblib"
+        xgb_path = ticker_model_dir / "xgb_ensemble.json"
+        lgbm_path = ticker_model_dir / "lgbm_agent.joblib"
+        calibrator_path = ticker_model_dir / "model_calibrator.joblib"
+    else:
+        scaler_path = artifacts_dir / "latest_scaler.joblib"
+        xgb_path = artifacts_dir / "xgb_ensemble.json"
+        lgbm_path = artifacts_dir / "lgbm_agent.joblib"
+        calibrator_path = artifacts_dir / "model_calibrator.joblib"
     features_path = configs_dir / "kept_features.json"
 
     if not all(p.exists() for p in [scaler_path, xgb_path, lgbm_path, calibrator_path, features_path]):
