@@ -422,12 +422,23 @@ def _run_rotation_simulation(
             p_sell_lgbm = lgbm_cal[0]
             p_buy_lgbm = lgbm_cal[2]
 
-            if p_buy_xgb >= 0.60:
+            denom = p_buy_xgb + p_sell_xgb + 1e-9
+            dir_buy = p_buy_xgb / denom
+            dir_sell = p_sell_xgb / denom
+
+            is_buy = (p_buy_xgb >= 0.50 and p_buy_xgb > p_sell_xgb) or (
+                dir_buy >= 0.58 and p_buy_xgb >= 0.28 and p_buy_xgb > p_sell_xgb
+            )
+            is_sell = (p_sell_xgb >= 0.50 and p_sell_xgb > p_buy_xgb) or (
+                dir_sell >= 0.58 and p_sell_xgb >= 0.28 and p_sell_xgb > p_buy_xgb
+            )
+
+            if is_buy:
                 if p_sell_lgbm >= 0.65:
                     signal = "VETOED"
                 else:
                     signal = "BUY"
-            elif p_sell_xgb >= 0.60:
+            elif is_sell:
                 if p_buy_lgbm >= 0.65:
                     signal = "VETOED"
                 else:

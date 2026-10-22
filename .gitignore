@@ -153,9 +153,13 @@ backend/data/*
 !backend/artifacts/latest_scaler.joblib
 !backend/artifacts/model_calibrator.joblib
 !backend/artifacts/frozen_strategy_manifest*.json
+!backend/artifacts/1year_backtest_results_1000usd.json
+!backend/artifacts/v2_4/
+!backend/artifacts/v3/
 !backend/artifacts/research/
 
 # Allow versioned immutable snapshot fixtures
 !backend/data/snapshots/
 !backend/data/snapshots/*.parquet
 !backend/data/snapshots/*.json
+

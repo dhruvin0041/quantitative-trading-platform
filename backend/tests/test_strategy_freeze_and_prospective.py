@@ -233,6 +233,18 @@ class TestStrategyFreezeAndProspective(unittest.TestCase):
                     full_path = matches[0]
             baseline_manifest["code_hashes"][rel_path] = raw_gov.compute_file_hash(full_path)
 
+        for rel_path in baseline_manifest.get("config_hashes", {}):
+            full_path = raw_gov.backend_dir / "configs" / rel_path
+            if not full_path.exists():
+                full_path = raw_gov.backend_dir / rel_path
+            if full_path.exists():
+                baseline_manifest["config_hashes"][rel_path] = raw_gov.compute_file_hash(full_path)
+
+        for rel_path in baseline_manifest.get("model_hashes", {}):
+            full_path = raw_gov.backend_dir / "artifacts" / rel_path
+            if full_path.exists():
+                baseline_manifest["model_hashes"][rel_path] = raw_gov.compute_file_hash(full_path)
+
         valid_path = os.path.join(self.temp_dir, "valid_manifest.json")
         with open(valid_path, "w") as f:
             json.dump(baseline_manifest, f)

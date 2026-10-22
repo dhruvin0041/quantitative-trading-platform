@@ -59,11 +59,6 @@ def clean_training_artifacts(ticker=None, all_tickers=False):
         "artifacts/y_val_sig.joblib",
         "artifacts/best_lgbm_params.json",
         "artifacts/best_xgb_params.json",
-        "artifacts/v3/xgb_ensemble.json",
-        "artifacts/v3/lgbm_agent.joblib",
-        "artifacts/v3/latest_scaler.joblib",
-        "artifacts/v3/model_calibrator.joblib",
-        "artifacts/v3/kept_features.json",
         "configs/active_ticker.json",
     ]
 
