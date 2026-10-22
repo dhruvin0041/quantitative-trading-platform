@@ -1610,9 +1610,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--strategy-mode",
         type=str,
-        default="rotation",
-        choices=["rotation", "core_tactical"],
-        help="Strategy mode: rotation (fixed barrier) or core_tactical (ML core + tactical alpha)",
+        default="adaptive",
+        choices=["rotation", "core_tactical", "oversold_rebound", "adaptive"],
+        help="Strategy mode: rotation, core_tactical, oversold_rebound, or adaptive (regime-matched mesh)",
     )
     parser.add_argument(
         "--leverage", type=float, default=1.40, help="Tactical overweight leverage multiplier"
