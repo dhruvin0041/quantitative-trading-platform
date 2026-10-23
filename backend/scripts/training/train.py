@@ -101,11 +101,16 @@ def load_ticker_params(ticker: str, model_type: Optional[str] = None) -> Dict[st
         try:
             with open(param_path, "r") as f:
                 data = json.load(f)
-                if model_type and model_type.lower() in data:
-                    logger.info(f"Loaded {model_type} parameters for {ticker} from {param_path}")
-                    return data[model_type.lower()]
-                logger.info(f"Loaded optimized parameters from {param_path}")
-                return data.get("best_params", data)
+                if model_type:
+                    m_key = model_type.lower()
+                    if m_key in data and isinstance(data[m_key], dict):
+                        logger.info(f"Loaded {model_type} parameters for {ticker} from {param_path}")
+                        return data[m_key]
+                    if "best_params" in data and isinstance(data["best_params"], dict):
+                        return data["best_params"]
+                    return data
+                logger.info(f"Loaded optimized parameters for {ticker} from {param_path}")
+                return data
         except Exception as e:
             logger.warning(f"Could not parse {param_path}: {e}")
 
@@ -119,41 +124,56 @@ def load_ticker_params(ticker: str, model_type: Optional[str] = None) -> Dict[st
             except Exception as e:
                 logger.warning(f"Could not parse {model_file}: {e}")
 
+    # Institutional anti-overfitting regularized defaults
     if model_type and model_type.lower() == "lgbm":
         return {
+            "boosting_type": "gbdt",
+            "extra_trees": True,
+            "max_depth": 3,
+            "num_leaves": 7,
+            "n_estimators": 130,
+            "learning_rate": 0.03,
+            "min_child_samples": 40,
+            "min_split_gain": 0.1,
+            "subsample": 0.80,
+            "subsample_freq": 1,
+            "colsample_bytree": 0.70,
+            "reg_alpha": 1.0,
+            "reg_lambda": 5.0,
+            "max_bin": 256,
             "tp_atr_multiplier": TP_ATR_MULT,
             "sl_atr_multiplier": SL_ATR_MULT,
             "horizon": LABEL_HORIZON,
-            "n_estimators": 350,
-            "learning_rate": 0.03,
-            "max_depth": 5,
-            "num_leaves": 31,
-            "min_child_samples": 25,
-            "min_split_gain": 0.01,
-            "subsample": 0.85,
-            "subsample_freq": 1,
-            "colsample_bytree": 0.85,
-            "reg_alpha": 0.05,
-            "reg_lambda": 1.0,
-            "max_bin": 256,
         }
 
+    if model_type and model_type.lower() == "xgb":
+        return {
+            "n_estimators": 140,
+            "max_depth": 3,
+            "grow_policy": "depthwise",
+            "learning_rate": 0.03,
+            "subsample": 0.70,
+            "colsample_bytree": 0.60,
+            "colsample_bylevel": 0.70,
+            "min_child_weight": 10.0,
+            "gamma": 1.2,
+            "reg_alpha": 2.0,
+            "reg_lambda": 10.0,
+            "max_bin": 256,
+            "tp_atr_multiplier": TP_ATR_MULT,
+            "sl_atr_multiplier": SL_ATR_MULT,
+            "horizon": LABEL_HORIZON,
+        }
+
+    xgb_default = load_ticker_params(ticker, model_type="xgb")
+    lgbm_default = load_ticker_params(ticker, model_type="lgbm")
     return {
         "tp_atr_multiplier": TP_ATR_MULT,
         "sl_atr_multiplier": SL_ATR_MULT,
         "horizon": LABEL_HORIZON,
-        "n_estimators": 350,
-        "max_depth": 4,
-        "learning_rate": 0.03,
-        "subsample": 0.85,
-        "colsample_bytree": 0.85,
-        "colsample_bylevel": 0.85,
-        "min_child_weight": 3.0,
-        "gamma": 0.1,
-        "reg_alpha": 0.05,
-        "reg_lambda": 1.0,
-        "max_bin": 256,
-        "num_leaves": 31,
+        "xgb": xgb_default,
+        "lgbm": lgbm_default,
+        "best_params": xgb_default,
     }
 
 
@@ -530,18 +550,16 @@ def train_ticker_pipeline(
     with open(artifacts_dir / "scaler_metadata.json", "w") as f:
         json.dump(scaler_metadata, f, indent=4)
 
-    # 1. XGBoost
+    # 1. XGBoost & LightGBM parameter resolution
     xgb_opt = load_ticker_params(ticker, model_type="xgb")
     lgbm_opt = load_ticker_params(ticker, model_type="lgbm")
     if opt_params and isinstance(opt_params, dict):
         if "xgb" in opt_params and isinstance(opt_params["xgb"], dict):
             xgb_opt.update(opt_params["xgb"])
-        else:
-            xgb_opt.update(opt_params)
+        elif "best_params" in opt_params and isinstance(opt_params["best_params"], dict):
+            xgb_opt.update(opt_params["best_params"])
         if "lgbm" in opt_params and isinstance(opt_params["lgbm"], dict):
             lgbm_opt.update(opt_params["lgbm"])
-        else:
-            lgbm_opt.update(opt_params)
 
     logger.info(f"Training XGBoost Model for {ticker} with Regularized Hyperparameters...")
     xgb_params = {
@@ -552,13 +570,13 @@ def train_ticker_pipeline(
         "max_leaves": int(xgb_opt.get("max_leaves", 0)),
         "grow_policy": str(xgb_opt.get("grow_policy", "depthwise")),
         "learning_rate": float(xgb_opt.get("learning_rate", 0.03)),
-        "subsample": float(xgb_opt.get("subsample", 0.85)),
-        "colsample_bytree": float(xgb_opt.get("colsample_bytree", 0.80)),
-        "colsample_bylevel": float(xgb_opt.get("colsample_bylevel", 0.80)),
-        "min_child_weight": float(xgb_opt.get("min_child_weight", 8.0)),
-        "gamma": float(xgb_opt.get("gamma", 1.0)),
-        "reg_alpha": float(xgb_opt.get("reg_alpha", 1.0)),
-        "reg_lambda": float(xgb_opt.get("reg_lambda", 5.0)),
+        "subsample": float(xgb_opt.get("subsample", 0.70)),
+        "colsample_bytree": float(xgb_opt.get("colsample_bytree", 0.60)),
+        "colsample_bylevel": float(xgb_opt.get("colsample_bylevel", 0.70)),
+        "min_child_weight": float(xgb_opt.get("min_child_weight", 10.0)),
+        "gamma": float(xgb_opt.get("gamma", 1.2)),
+        "reg_alpha": float(xgb_opt.get("reg_alpha", 2.0)),
+        "reg_lambda": float(xgb_opt.get("reg_lambda", 10.0)),
         "max_bin": int(xgb_opt.get("max_bin", 256)),
         "random_state": 42,
         "eval_metric": "mlogloss",
@@ -581,9 +599,9 @@ def train_ticker_pipeline(
         "learning_rate": float(lgbm_opt.get("learning_rate", 0.03)),
         "max_depth": int(lgbm_opt.get("max_depth", 3)),
         "num_leaves": int(lgbm_opt.get("num_leaves", 7)),
-        "extra_trees": bool(lgbm_opt.get("extra_trees", False)),
-        "path_smooth": float(lgbm_opt.get("path_smooth", 0.0)),
-        "min_child_samples": int(lgbm_opt.get("min_child_samples", 45)),
+        "extra_trees": bool(lgbm_opt.get("extra_trees", True)),
+        "path_smooth": float(lgbm_opt.get("path_smooth", 1.0)),
+        "min_child_samples": int(lgbm_opt.get("min_child_samples", 40)),
         "min_split_gain": float(lgbm_opt.get("min_split_gain", 0.1)),
         "subsample": float(lgbm_opt.get("subsample", 0.80)),
         "subsample_freq": int(lgbm_opt.get("subsample_freq", 1)),
