@@ -19,6 +19,7 @@ from src.execution.asset_intelligence import (
     AdaptiveWeightingEngine,
     AssetProfileEngine,
     MultiTimeframeEngine,
+    get_champion_strategy_for_ticker,
 )
 from src.execution.confidence_engine import ConfidenceBreakdownEngine
 from src.execution.consensus_engine import WeightedConsensusEngine
@@ -807,8 +808,16 @@ class InferenceService:
             tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
             atr_14_s = tr.rolling(14).mean().bfill()
 
-            # Dynamic Regime Hybrid State Machine Initialization
-            pos_type = None  # "CORE_BULL" or "CAPITULATION_REBOUND"
+            # Champion Strategy Engine Configuration
+            ticker_clean = ticker.upper()
+            strat_cfg = get_champion_strategy_for_ticker(ticker_clean)
+            strat_type = strat_cfg["strategy_type"]
+            strat_name = strat_cfg["strategy_name"]
+            strat_params = strat_cfg["params"]
+            init_entry = strat_params.get("init_entry", False)
+            base_atr = strat_params.get("base_atr", 4.2)
+
+            pos_type = strat_type
             entry_price = 0.0
             peak_price = 0.0
             trailing_stop = 0.0
@@ -826,7 +835,18 @@ class InferenceService:
                 else close_s.ewm(span=50).mean()
             )
 
-            if not use_v24_legacy and intended_bars > 0:
+            # Bollinger Bands (20, 2)
+            bb_mid = close_s.rolling(20).mean()
+            bb_std = close_s.rolling(20).std()
+            bb_upper_s = bb_mid + (2.0 * bb_std)
+            bb_lower_s = bb_mid - (2.0 * bb_std)
+
+            # MACD histogram for volatility breakout swings
+            ema12 = close_s.ewm(span=12).mean()
+            ema26 = close_s.ewm(span=26).mean()
+            macd_hist_s = (ema12 - ema26) - (ema12 - ema26).ewm(span=9).mean()
+
+            if not use_v24_legacy and intended_bars > 0 and init_entry:
                 c0 = float(close_s.iloc[0])
                 sma0 = float(sma200_s.iloc[0]) if pd.notna(sma200_s.iloc[0]) else c0
                 e50_0 = float(ema50_s.iloc[0]) if pd.notna(ema50_s.iloc[0]) else c0
@@ -847,11 +867,11 @@ class InferenceService:
                         day0_exec_price = round(float(open_s.iloc[0]) * (1.0 + slippage_rate), 2)
                         exec_time_str = "NEXT_SESSION_OPEN 09:30:00 ET"
                     current_pos = "LONG"
-                    pos_type = "CORE_BULL"
+                    pos_type = strat_type
                     entry_price = day0_exec_price
                     peak_price = day0_exec_price
                     atr0 = float(atr_14_s.iloc[0]) if pd.notna(atr_14_s.iloc[0]) else day0_exec_price * 0.02
-                    trailing_stop = day0_exec_price - (4.2 * atr0)
+                    trailing_stop = day0_exec_price - (base_atr * atr0)
                     staged_signals.append({
                         "symbol": ticker,
                         "bar_timestamp": day0_str,
@@ -872,9 +892,11 @@ class InferenceService:
                             "target_allocation": 1.0,
                             "position_size_pct": "100%",
                             "sizing_regime": "DYNAMIC_REGIME_ALLOCATION",
-                            "sizing_rationale": "Secular Bull Regime: 1.00x unleveraged core spot equity position.",
-                            "strategy_mode": "DYNAMIC_REGIME_HYBRID",
-                            "reason": "CORE_BULL_SECULAR_ENTRY",
+                            "sizing_rationale": f"{strat_name}: Initial secular trend allocation.",
+                            "strategy_mode": strat_type,
+                            "strategy_name": strat_name,
+                            "strategy_sub_type": strat_type,
+                            "reason": "INITIAL_CHAMPION_ENTRY",
                         },
                     })
 
@@ -961,7 +983,7 @@ class InferenceService:
                 dir_buy = p_buy / denom
                 dir_sell = p_sell / denom
 
-                if not use_v24_legacy and ticker_sub_mode in ("dynamic_regime_hybrid", "core_tactical", "oversold_rebound"):
+                if not use_v24_legacy:
                     # 1. Morning execution (09:30 ET at Open[t] +/- 5bps)
                     if pending_action == "BUY" and current_pos == "FLAT":
                         current_pos = "LONG"
@@ -969,10 +991,8 @@ class InferenceService:
                         entry_price = round(cur_o * (1.0 + slippage_rate), 2)
                         peak_price = cur_h
                         c_atr = float(atr_14_s.iloc[i]) if pd.notna(atr_14_s.iloc[i]) else cur_atr
-                        if pos_type == "CORE_BULL":
-                            trailing_stop = entry_price - (4.2 * c_atr)
-                        else:
-                            trailing_stop = entry_price - (1.8 * c_atr)
+                        base_trail = strat_params.get("base_atr", 4.2)
+                        trailing_stop = entry_price - (base_trail * c_atr)
                         pending_action = None
                         consec_below = 0
                     elif pending_action == "SELL" and current_pos == "LONG":
@@ -980,7 +1000,7 @@ class InferenceService:
                         pos_type = None
                         entry_price = 0.0
                         pending_action = None
-                        cooldown = 2
+                        cooldown = strat_params.get("cooldown", 1)
 
                     if current_pos == "FLAT" and cooldown > 0:
                         cooldown -= 1
@@ -1005,6 +1025,10 @@ class InferenceService:
                     # 2. Evening regime analysis & signal generation (16:00 ET at Close[t])
                     c_atr = float(atr_14_s.iloc[i]) if pd.notna(atr_14_s.iloc[i]) else cur_atr
                     cur_ema20 = float(e20_series.iloc[i])
+                    cur_bbl = float(bb_lower_s.iloc[i]) if pd.notna(bb_lower_s.iloc[i]) else cur_c * 0.95
+                    cur_hist = float(macd_hist_s.iloc[i]) if pd.notna(macd_hist_s.iloc[i]) else 0.0
+                    prev_hist = float(macd_hist_s.iloc[i - 1]) if i > 0 and pd.notna(macd_hist_s.iloc[i - 1]) else 0.0
+
                     cur_spy_macro = (
                         float(spy_sma200_s.iloc[i])
                         if pd.notna(spy_sma200_s.iloc[i])
@@ -1019,44 +1043,136 @@ class InferenceService:
                     else:
                         consec_below = 0
 
-                    bullish_candle = (cur_c > cur_o) or (cur_c > cur_l + 0.40 * (cur_h - cur_l))
+                    bullish_candle = (cur_c > cur_o) or (cur_c > cur_l + 0.35 * (cur_h - cur_l))
                     bearish_candle = (cur_c < cur_o) and (cur_c < cur_l + 0.45 * (cur_h - cur_l))
 
                     if current_pos == "LONG" and not pending_action:
                         peak_price = max(peak_price, cur_h)
                         gain_pct = (cur_c - entry_price) / max(entry_price, 1e-6)
 
-                        if pos_type == "CORE_BULL":
-                            # Institutional Monotonic Chandelier Trailing Ratchet
-                            if gain_pct >= 0.25:
-                                new_stop = max(entry_price * 1.05, peak_price - (3.0 * c_atr))
-                            elif gain_pct >= 0.15:
-                                new_stop = max(entry_price * 1.01, peak_price - (3.5 * c_atr))
+                        base_trail = strat_params.get("base_atr", 4.2)
+                        ratchet_15 = strat_params.get("ratchet_15", base_trail)
+                        ratchet_25 = strat_params.get("ratchet_25", ratchet_15)
+
+                        if gain_pct >= 0.25:
+                            new_stop = max(entry_price * 1.05, peak_price - (ratchet_25 * c_atr))
+                        elif gain_pct >= 0.15:
+                            new_stop = max(entry_price * 1.01, peak_price - (ratchet_15 * c_atr))
+                        else:
+                            new_stop = peak_price - (base_trail * c_atr)
+                        trailing_stop = max(trailing_stop, new_stop)
+
+                        hit_macro_bear = (
+                            ((not macro_spy_bull and cur_c < cur_sma200) or (consec_below >= 3))
+                            if strat_params.get("macro_bear_exit", True)
+                            else False
+                        )
+                        climax_rsi = strat_params.get("climax_rsi")
+                        climax_gain = strat_params.get("climax_gain", 0.15)
+                        hit_climax = (cur_rsi >= climax_rsi and bearish_candle and gain_pct >= climax_gain) if climax_rsi else False
+                        hit_trailing = (cur_c < trailing_stop)
+
+                        hit_rebound_target = False
+                        if strat_type == "ASYMMETRIC_MEAN_REVERSION":
+                            rebound_rsi = strat_params.get("rebound_exit_rsi", 55.0)
+                            hit_rebound_target = (cur_c >= cur_ema20) and (cur_rsi >= rebound_rsi)
+
+                        if hit_macro_bear or hit_climax or hit_trailing or hit_rebound_target:
+                            pending_action = "SELL"
+                            if hit_macro_bear:
+                                reason = "BEAR_REGIME_LIQUIDATION"
+                                rationale = "Macro bear breakdown / sustained SMA200 loss: liquidating to 100% Cash Defense."
+                            elif hit_climax:
+                                reason = "OVERBOUGHT_CLIMAX_HARVEST"
+                                rationale = f"Overbought climax harvest (RSI {cur_rsi:.1f} >= {climax_rsi}, gain {gain_pct*100:.1f}%): harvesting alpha profits."
+                            elif hit_rebound_target:
+                                reason = "MEAN_REVERSION_TARGET"
+                                rationale = f"Asymmetric mean-reversion target reached (20 EMA ${cur_ema20:.2f} / RSI {cur_rsi:.1f}): closing swing position."
                             else:
-                                new_stop = peak_price - (4.2 * c_atr)
-                            trailing_stop = max(trailing_stop, new_stop)
+                                reason = "CHANDELIER_TRAILING_STOP"
+                                rationale = f"Chandelier ATR trailing stop hit at ${trailing_stop:.2f}: protecting accumulated gains."
 
-                            hit_macro_bear = (not macro_spy_bull and cur_c < cur_sma200) or (consec_below >= 3)
-                            hit_climax = (cur_rsi >= 75.0 and bearish_candle and gain_pct >= 0.15)
-                            hit_trailing = (cur_c < trailing_stop)
+                            exec_price = round(next_open * (1.0 - slippage_rate), 2)
+                            staged_signals.append({
+                                "symbol": ticker,
+                                "bar_timestamp": bar_time,
+                                "signal": "SELL",
+                                "confidence": 0.88,
+                                "execution_target_bar": exec_target,
+                                "execution_price": exec_price,
+                                "model_version": resolved_model_version,
+                                "raw_features_hash": SignalLedger.compute_features_hash(scaled_rows[i]),
+                                "metadata": {
+                                    "source": "causal_replay",
+                                    "rule": "Open[t+1] - 5bps",
+                                    "source_candle_timestamp": format_new_york_display(f"{bar_time} 16:00:00"),
+                                    "signal_generation_timestamp": format_new_york_display(f"{bar_time} 16:00:00"),
+                                    "execution_timestamp": exec_time_str,
+                                    "execution_price": exec_price,
+                                    "signal_state": "CONFIRMED",
+                                    "target_allocation": 0.0,
+                                    "position_size_pct": "0%",
+                                    "strategy_mode": strat_type,
+                                    "strategy_name": strat_name,
+                                    "strategy_sub_type": strat_type,
+                                    "reason": reason,
+                                    "sizing_regime": "CASH_DEFENSE",
+                                    "sizing_rationale": rationale,
+                                },
+                            })
 
-                            if hit_macro_bear or hit_climax or hit_trailing:
-                                pending_action = "SELL"
-                                if hit_macro_bear:
-                                    reason = "BEAR_REGIME_LIQUIDATION"
-                                    rationale = "Macro bear breakdown / sustained SMA200 loss: liquidating to 100% Cash Defense."
-                                elif hit_climax:
-                                    reason = "OVERBOUGHT_CLIMAX_HARVEST"
-                                    rationale = f"Overbought parabolic climax (RSI {cur_rsi:.1f} >= 75.0, gain {gain_pct*100:.1f}%): harvesting alpha profits."
+                    elif current_pos == "FLAT" and not pending_action:
+                        if cooldown == 0:
+                            trigger_buy = False
+                            buy_reason = None
+                            buy_rationale = None
+
+                            if strat_type == "VOLATILITY_BREAKOUT_SWING":
+                                cond_macd = cur_hist > 0 and cur_hist > prev_hist
+                                cond_break = (cur_c >= cur_ema20) and (48.0 <= cur_rsi <= 74.0) and bullish_candle
+                                if regime_bull and cond_macd and cond_break:
+                                    trigger_buy = True
+                                    buy_reason = "VOLATILITY_BREAKOUT_ENTRY"
+                                    buy_rationale = f"Bull regime momentum breakout confirmed: MACD expanding ({cur_hist:.3f}), RSI {cur_rsi:.1f}. Spot entry."
+
+                            elif strat_type == "ASYMMETRIC_MEAN_REVERSION":
+                                dip_rsi = strat_params.get("dip_rsi", 33.0)
+                                cond_bb = (cur_c <= cur_bbl * 1.015) and bullish_candle
+                                cond_rsi = (cur_rsi <= dip_rsi) and bullish_candle
+                                if cond_bb or cond_rsi:
+                                    trigger_buy = True
+                                    buy_reason = "OVERSOLD_CAPITULATION_ENTRY"
+                                    buy_rationale = f"Asymmetric capitulation dip confirmed ({'Lower BB' if cond_bb else f'RSI {cur_rsi:.1f} <= {dip_rsi}'}). Spot rebound allocation."
+
+                            elif strat_type == "CORE_TACTICAL_ACCUMULATION":
+                                dip_rsi = strat_params.get("dip_rsi", 45.0)
+                                if regime_bull and (cur_rsi <= dip_rsi) and bullish_candle:
+                                    trigger_buy = True
+                                    buy_reason = "CORE_TACTICAL_PULLBACK_ENTRY"
+                                    buy_rationale = f"Bull regime pullback accumulation confirmed (RSI {cur_rsi:.1f} <= {dip_rsi} above 200 SMA). Spot allocation."
+
+                            elif strat_type == "DYNAMIC_REGIME_HYBRID":
+                                if regime_bull:
+                                    cond_pb = (40.0 <= cur_rsi <= 66.0) and (cur_c >= cur_ema20 * 0.985) and bullish_candle
+                                    cond_dip = (cur_rsi <= 38.0) and bullish_candle
+                                    if cond_pb or cond_dip:
+                                        trigger_buy = True
+                                        buy_reason = "CORE_BULL_PULLBACK" if cond_pb else "BULL_DIP_REVERSAL"
+                                        buy_rationale = f"Bull regime {'pullback continuation' if cond_pb else 'oversold dip'} confirmed. Spot allocation."
                                 else:
-                                    reason = "CHANDELIER_TRAILING_STOP"
-                                    rationale = f"Chandelier ATR trailing stop hit at ${trailing_stop:.2f}: protecting accumulated gains."
+                                    if cur_rsi <= 32.0 and bullish_candle:
+                                        trigger_buy = True
+                                        buy_reason = "CAPITULATION_REBOUND_ENTRY"
+                                        buy_rationale = f"Bear regime capitulation oversold exhaustion (RSI {cur_rsi:.1f} <= 32.0). Tactical rebound allocation."
 
-                                exec_price = round(next_open * (1.0 - slippage_rate), 2)
+                            if trigger_buy:
+                                pending_action = "BUY"
+                                pending_type = strat_type
+                                exec_price = round(next_open * (1.0 + slippage_rate), 2)
                                 staged_signals.append({
                                     "symbol": ticker,
                                     "bar_timestamp": bar_time,
-                                    "signal": "SELL",
+                                    "signal": "BUY",
                                     "confidence": 0.88,
                                     "execution_target_bar": exec_target,
                                     "execution_price": exec_price,
@@ -1064,124 +1180,22 @@ class InferenceService:
                                     "raw_features_hash": SignalLedger.compute_features_hash(scaled_rows[i]),
                                     "metadata": {
                                         "source": "causal_replay",
-                                        "rule": "Open[t+1] - 5bps",
+                                        "rule": "Open[t+1] + 5bps",
                                         "source_candle_timestamp": format_new_york_display(f"{bar_time} 16:00:00"),
                                         "signal_generation_timestamp": format_new_york_display(f"{bar_time} 16:00:00"),
                                         "execution_timestamp": exec_time_str,
                                         "execution_price": exec_price,
                                         "signal_state": "CONFIRMED",
-                                        "target_allocation": 0.0,
-                                        "position_size_pct": "0%",
-                                        "strategy_mode": "DYNAMIC_REGIME_HYBRID",
-                                        "strategy_sub_type": pos_type,
-                                        "reason": reason,
-                                        "sizing_regime": "CASH_DEFENSE",
-                                        "sizing_rationale": rationale,
+                                        "target_allocation": 1.0,
+                                        "position_size_pct": "100%",
+                                        "strategy_mode": strat_type,
+                                        "strategy_name": strat_name,
+                                        "strategy_sub_type": strat_type,
+                                        "reason": buy_reason,
+                                        "sizing_regime": "DYNAMIC_REGIME_ALLOCATION",
+                                        "sizing_rationale": buy_rationale,
                                     },
                                 })
-                        elif pos_type == "CAPITULATION_REBOUND":
-                            hit_tp = (cur_c >= cur_ema20) or (cur_rsi >= 55.0)
-                            hit_sl = cur_c <= (entry_price - (1.8 * c_atr))
-                            if hit_tp or hit_sl:
-                                pending_action = "SELL"
-                                reason = "REBOUND_TARGET" if hit_tp else "REBOUND_STOP"
-                                rationale = f"Capitulation rebound {'target reached (20 EMA / RSI 55)' if hit_tp else 'stop-loss hit'}: returning to cash defense."
-                                exec_price = round(next_open * (1.0 - slippage_rate), 2)
-                                staged_signals.append({
-                                    "symbol": ticker,
-                                    "bar_timestamp": bar_time,
-                                    "signal": "SELL",
-                                    "confidence": 0.85,
-                                    "execution_target_bar": exec_target,
-                                    "execution_price": exec_price,
-                                    "model_version": resolved_model_version,
-                                    "raw_features_hash": SignalLedger.compute_features_hash(scaled_rows[i]),
-                                    "metadata": {
-                                        "source": "causal_replay",
-                                        "rule": "Open[t+1] - 5bps",
-                                        "source_candle_timestamp": format_new_york_display(f"{bar_time} 16:00:00"),
-                                        "signal_generation_timestamp": format_new_york_display(f"{bar_time} 16:00:00"),
-                                        "execution_timestamp": exec_time_str,
-                                        "execution_price": exec_price,
-                                        "signal_state": "CONFIRMED",
-                                        "target_allocation": 0.0,
-                                        "position_size_pct": "0%",
-                                        "strategy_mode": "DYNAMIC_REGIME_HYBRID",
-                                        "strategy_sub_type": pos_type,
-                                        "reason": reason,
-                                        "sizing_regime": "CASH_DEFENSE",
-                                        "sizing_rationale": rationale,
-                                    },
-                                })
-
-                    elif current_pos == "FLAT" and not pending_action:
-                        if cooldown == 0:
-                            if regime_bull:
-                                cond_pullback = (40.0 <= cur_rsi <= 66.0) and (cur_c >= cur_ema20 * 0.985) and bullish_candle
-                                cond_bull_dip = (cur_rsi <= 38.0) and bullish_candle
-                                if cond_pullback or cond_bull_dip:
-                                    pending_action = "BUY"
-                                    pending_type = "CORE_BULL"
-                                    exec_price = round(next_open * (1.0 + slippage_rate), 2)
-                                    reason = "CORE_BULL_PULLBACK" if cond_pullback else "BULL_DIP_REVERSAL"
-                                    rationale = f"Bull regime {'pullback continuation' if cond_pullback else 'oversold dip'} confirmed. 100% unleveraged spot allocation."
-                                    staged_signals.append({
-                                        "symbol": ticker,
-                                        "bar_timestamp": bar_time,
-                                        "signal": "BUY",
-                                        "confidence": 0.88,
-                                        "execution_target_bar": exec_target,
-                                        "execution_price": exec_price,
-                                        "model_version": resolved_model_version,
-                                        "raw_features_hash": SignalLedger.compute_features_hash(scaled_rows[i]),
-                                        "metadata": {
-                                            "source": "causal_replay",
-                                            "rule": "Open[t+1] + 5bps",
-                                            "source_candle_timestamp": format_new_york_display(f"{bar_time} 16:00:00"),
-                                            "signal_generation_timestamp": format_new_york_display(f"{bar_time} 16:00:00"),
-                                            "execution_timestamp": exec_time_str,
-                                            "execution_price": exec_price,
-                                            "signal_state": "CONFIRMED",
-                                            "target_allocation": 1.0,
-                                            "position_size_pct": "100%",
-                                            "strategy_mode": "DYNAMIC_REGIME_HYBRID",
-                                            "strategy_sub_type": "CORE_BULL",
-                                            "reason": reason,
-                                            "sizing_regime": "DYNAMIC_REGIME_ALLOCATION",
-                                            "sizing_rationale": rationale,
-                                        },
-                                    })
-                            else:
-                                if cur_rsi <= 32.0 and bullish_candle:
-                                    pending_action = "BUY"
-                                    pending_type = "CAPITULATION_REBOUND"
-                                    exec_price = round(next_open * (1.0 + slippage_rate), 2)
-                                    staged_signals.append({
-                                        "symbol": ticker,
-                                        "bar_timestamp": bar_time,
-                                        "signal": "BUY",
-                                        "confidence": 0.85,
-                                        "execution_target_bar": exec_target,
-                                        "execution_price": exec_price,
-                                        "model_version": resolved_model_version,
-                                        "raw_features_hash": SignalLedger.compute_features_hash(scaled_rows[i]),
-                                        "metadata": {
-                                            "source": "causal_replay",
-                                            "rule": "Open[t+1] + 5bps",
-                                            "source_candle_timestamp": format_new_york_display(f"{bar_time} 16:00:00"),
-                                            "signal_generation_timestamp": format_new_york_display(f"{bar_time} 16:00:00"),
-                                            "execution_timestamp": exec_time_str,
-                                            "execution_price": exec_price,
-                                            "signal_state": "CONFIRMED",
-                                            "target_allocation": 1.0,
-                                            "position_size_pct": "100%",
-                                            "strategy_mode": "DYNAMIC_REGIME_HYBRID",
-                                            "strategy_sub_type": "CAPITULATION_REBOUND",
-                                            "reason": "CAPITULATION_REBOUND_ENTRY",
-                                            "sizing_regime": "CAPITULATION_TACTICAL",
-                                            "sizing_rationale": f"Bear regime capitulation oversold exhaustion (RSI {cur_rsi:.1f} <= 32.0). Tactical mean-reversion spot allocation.",
-                                        },
-                                    })
 
 
                 else:
@@ -1561,12 +1575,9 @@ class InferenceService:
         )
 
         # Check if the ledger signals are outdated or from a legacy model version
-        ticker_sub_mode = ADAPTIVE_MESH_MAP.get(ticker.upper(), "dynamic_regime_hybrid")
-        expected_mode = (
-            "DYNAMIC_REGIME_HYBRID"
-            if ticker_sub_mode == "dynamic_regime_hybrid"
-            else ("OVERSOLD_REBOUND" if ticker_sub_mode == "oversold_rebound" else "CORE_TACTICAL_ALPHA")
-        )
+        ticker_clean = ticker.upper()
+        strat_cfg = get_champion_strategy_for_ticker(ticker_clean)
+        expected_mode = strat_cfg["strategy_type"]
 
         has_legacy_signals = False
         if all_signals:
@@ -2136,9 +2147,9 @@ class InferenceService:
                 if len(spy_close_s) >= 200
                 else spy_sma_50
             )
-            base_long = bool((curr_close >= sma_200) and (curr_spy_close >= spy_sma_200))
+            base_long = bool((curr_close >= sma_200) and (curr_spy_close >= spy_sma_50))
             long_allowed = base_long
-            short_allowed = bool((curr_close < sma_200) or (curr_spy_close < spy_sma_200))
+            short_allowed = bool((curr_close < sma_200) or (curr_spy_close < spy_sma_50))
         except Exception as e:
             logger.warning(f"Error computing macro regime filter: {e}")
             long_allowed = True
@@ -2147,11 +2158,29 @@ class InferenceService:
             curr_close, curr_spy_close = current_price, 1.0, 1.0
             base_long = True
 
-        # Adaptive Mesh Strategy Engine: Dynamic Regime Hybrid
-        ticker_sub_mode = ADAPTIVE_MESH_MAP.get(ticker.upper(), "dynamic_regime_hybrid")
+        # Champion Strategy Engine Configuration
+        ticker_clean = ticker.upper()
+        strat_cfg = get_champion_strategy_for_ticker(ticker_clean)
+        strat_type = strat_cfg["strategy_type"]
+        strat_name = strat_cfg["strategy_name"]
+        strat_params = strat_cfg["params"]
+
         c_rsi = float(tech_snapshot.get("RSI", 50.0))
         cur_ema20 = float(tech_snapshot.get("EMA_20", curr_close))
         c_atr = float(tech_snapshot.get("ATR", curr_close * 0.02))
+
+        # Bollinger Bands
+        bb_mid = ticker_df_risk["Close"].rolling(20).mean().iloc[-1] if len(ticker_df_risk) >= 20 else curr_close
+        bb_std = ticker_df_risk["Close"].rolling(20).std().iloc[-1] if len(ticker_df_risk) >= 20 else curr_close * 0.02
+        cur_bbl = bb_mid - (2.0 * bb_std)
+
+        # MACD
+        ema12_val = ticker_df_risk["Close"].ewm(span=12).mean()
+        ema26_val = ticker_df_risk["Close"].ewm(span=26).mean()
+        macd_line = ema12_val - ema26_val
+        macd_sig = macd_line.ewm(span=9).mean()
+        cur_hist = float((macd_line - macd_sig).iloc[-1]) if len(ticker_df_risk) >= 2 else 0.0
+        prev_hist = float((macd_line - macd_sig).iloc[-2]) if len(ticker_df_risk) >= 2 else 0.0
 
         # Check if currently holding long position from paper engine OR signal ledger
         last_ledger_signals = self.signal_ledger.get_signals(
@@ -2171,14 +2200,6 @@ class InferenceService:
             )
         )
 
-        # Determine pos_type
-        pos_type = "CORE_BULL"
-        if last_ledger_signals and last_ledger_signals[-1]["signal"] == "BUY":
-            meta = last_ledger_signals[-1].get("metadata", {})
-            pos_type = meta.get("strategy_sub_type", "CORE_BULL")
-            if "CAPITULATION" in str(meta.get("reason", "")):
-                pos_type = "CAPITULATION_REBOUND"
-
         # Macro regime
         macro_spy_bull = bool(curr_spy_close >= spy_sma_200 * 0.985)
         asset_bull = bool(curr_close >= sma_200 * 0.99)
@@ -2187,89 +2208,142 @@ class InferenceService:
         cur_o = float(ticker_df_risk["Open"].iloc[-1]) if "Open" in ticker_df_risk.columns else curr_close
         cur_h = float(ticker_df_risk["High"].iloc[-1]) if "High" in ticker_df_risk.columns else curr_close
         cur_l = float(ticker_df_risk["Low"].iloc[-1]) if "Low" in ticker_df_risk.columns else curr_close
-        bullish_candle = (curr_close > cur_o) or (curr_close > cur_l + 0.40 * (cur_h - cur_l))
+        bullish_candle = (curr_close > cur_o) or (curr_close > cur_l + 0.35 * (cur_h - cur_l))
         bearish_candle = (curr_close < cur_o) and (curr_close < cur_l + 0.45 * (cur_h - cur_l))
         gain_pct = (curr_close - last_entry) / max(last_entry, 1e-6) if last_entry > 0 else 0.0
 
-        if ticker_sub_mode in ("dynamic_regime_hybrid", "core_tactical", "oversold_rebound"):
-            if is_in_long_pos:
-                long_allowed = False
-                short_allowed = True
-                if pos_type == "CORE_BULL":
-                    recent_highs = ticker_df_risk["High"].iloc[-30:].max() if len(ticker_df_risk) >= 1 else cur_h
-                    peak_p = max(last_entry, float(recent_highs))
+        if is_in_long_pos:
+            long_allowed = False
+            short_allowed = True
+            recent_highs = ticker_df_risk["High"].iloc[-30:].max() if len(ticker_df_risk) >= 1 else cur_h
+            peak_p = max(last_entry, float(recent_highs))
 
-                    if gain_pct >= 0.25:
-                        trail_stop = max(last_entry * 1.05, peak_p - (3.0 * c_atr))
-                    elif gain_pct >= 0.15:
-                        trail_stop = max(last_entry * 1.01, peak_p - (3.5 * c_atr))
-                    else:
-                        trail_stop = peak_p - (4.2 * c_atr)
+            base_trail = strat_params.get("base_atr", 4.2)
+            ratchet_15 = strat_params.get("ratchet_15", base_trail)
+            ratchet_25 = strat_params.get("ratchet_25", ratchet_15)
 
-                    hit_macro_bear = (not macro_spy_bull and curr_close < sma_200)
-                    hit_climax = (c_rsi >= 75.0 and bearish_candle and gain_pct >= 0.15)
-                    hit_trailing = (curr_close < trail_stop)
-
-                    if hit_macro_bear or hit_climax or hit_trailing:
-                        pre_signal = "SELL"
-                        target_exposure = 0.00
-                        if hit_macro_bear:
-                            tactical_action = "BEAR_REGIME_LIQUIDATION"
-                            tactical_rationale = "Macro breakdown: Underlying or SPY below trend barrier. Liquidating to 100% Cash Defense."
-                        elif hit_climax:
-                            tactical_action = "OVERBOUGHT_CLIMAX_HARVEST"
-                            tactical_rationale = f"Overbought parabolic climax (RSI {c_rsi:.1f} >= 75.0, gain {gain_pct*100:.1f}%): harvesting alpha profits to Cash."
-                        else:
-                            tactical_action = "CHANDELIER_TRAILING_STOP"
-                            tactical_rationale = f"Chandelier ATR trailing stop hit at ${trail_stop:.2f}: protecting accumulated profits."
-                    else:
-                        pre_signal = "HOLD"
-                        target_exposure = 1.00
-                        tactical_action = "HOLD_CORE_BULL"
-                        tactical_rationale = f"Core Bull Trend intact (Entry: ${last_entry:.2f}, Trail Stop: ${trail_stop:.2f}, Gain: {gain_pct*100:.1f}%). 1.00x spot allocation."
-
-                else:  # CAPITULATION_REBOUND
-                    hit_tp = (curr_close >= cur_ema20) or (c_rsi >= 55.0)
-                    hit_sl = bool(last_entry > 0 and curr_close <= last_entry - (1.8 * c_atr))
-                    if hit_tp or hit_sl:
-                        pre_signal = "SELL"
-                        target_exposure = 0.00
-                        tactical_action = "REBOUND_PROFIT_HARVEST" if hit_tp else "REBOUND_STOP_LOSS"
-                        tactical_rationale = f"Capitulation rebound {'target reached (20 EMA / RSI 55)' if hit_tp else 'stop-loss triggered'}. Returning to 100% Cash Defense."
-                    else:
-                        pre_signal = "HOLD"
-                        target_exposure = 1.00
-                        tactical_action = "HOLD_REBOUND_LONG"
-                        tactical_rationale = f"Holding active capitulation rebound trade (Entry: ${last_entry:.2f}). Awaiting 20 EMA (${cur_ema20:.2f}) or RSI 55."
-
+            if gain_pct >= 0.25:
+                trail_stop = max(last_entry * 1.05, peak_p - (ratchet_25 * c_atr))
+            elif gain_pct >= 0.15:
+                trail_stop = max(last_entry * 1.01, peak_p - (ratchet_15 * c_atr))
             else:
-                # Currently FLAT / CASH
-                long_allowed = True
-                short_allowed = False
+                trail_stop = peak_p - (base_trail * c_atr)
+
+            hit_macro_bear = (
+                (not macro_spy_bull and curr_close < sma_200)
+                if strat_params.get("macro_bear_exit", True)
+                else False
+            )
+            climax_rsi = strat_params.get("climax_rsi")
+            climax_gain = strat_params.get("climax_gain", 0.15)
+            hit_climax = (c_rsi >= climax_rsi and bearish_candle and gain_pct >= climax_gain) if climax_rsi else False
+            hit_trailing = (curr_close < trail_stop)
+
+            hit_rebound_target = False
+            if strat_type == "ASYMMETRIC_MEAN_REVERSION":
+                rebound_rsi = strat_params.get("rebound_exit_rsi", 55.0)
+                hit_rebound_target = (curr_close >= cur_ema20) and (c_rsi >= rebound_rsi)
+
+            if hit_macro_bear or hit_climax or hit_trailing or hit_rebound_target:
+                pre_signal = "SELL"
+                target_exposure = 0.00
+                if hit_macro_bear:
+                    tactical_action = "BEAR_REGIME_LIQUIDATION"
+                    tactical_rationale = "Macro breakdown: Underlying or SPY below trend barrier. Liquidating to 100% Cash Defense."
+                elif hit_climax:
+                    tactical_action = "OVERBOUGHT_CLIMAX_HARVEST"
+                    tactical_rationale = f"Overbought climax harvest (RSI {c_rsi:.1f} >= {climax_rsi}, gain {gain_pct*100:.1f}%): harvesting alpha profits to Cash."
+                elif hit_rebound_target:
+                    tactical_action = "MEAN_REVERSION_TARGET"
+                    tactical_rationale = f"Asymmetric mean-reversion target reached (20 EMA ${cur_ema20:.2f} / RSI {c_rsi:.1f}): closing swing position."
+                else:
+                    tactical_action = "CHANDELIER_TRAILING_STOP"
+                    tactical_rationale = f"Chandelier ATR trailing stop reached at ${trail_stop:.2f}: protecting accumulated profits."
+            else:
+                pre_signal = "HOLD"
+                target_exposure = 1.00
+                tactical_action = f"HOLD_{strat_type}"
+                tactical_rationale = f"{strat_name}: Trend intact (Entry: ${last_entry:.2f}, Trail Stop: ${trail_stop:.2f}, Gain: {gain_pct*100:.1f}%). 1.00x spot allocation."
+
+        else:
+            # Currently FLAT / CASH
+            trigger_buy = False
+            buy_action = None
+            buy_rationale = None
+
+            if pre_signal == "SELL":
+                target_exposure = 0.00
+                tactical_action = "COUNTER_TREND_SHORT_CANDIDATE"
+                tactical_rationale = f"{strat_name}: Model consensus signals SELL while flat."
+            elif strat_type == "VOLATILITY_BREAKOUT_SWING":
+                cond_macd = cur_hist > 0 and cur_hist > prev_hist
+                cond_break = (curr_close >= cur_ema20) and (48.0 <= c_rsi <= 74.0) and bullish_candle
+                if pre_signal == "BUY" or (regime_bull and cond_macd and cond_break):
+                    trigger_buy = True
+                    buy_action = "VOLATILITY_BREAKOUT_BUY"
+                    buy_rationale = f"Bull regime momentum breakout confirmed: MACD expanding ({cur_hist:.3f}), RSI {c_rsi:.1f}. Spot allocation."
+                else:
+                    pre_signal = "HOLD"
+                    target_exposure = 0.00
+                    tactical_action = "AWAITING_BREAKOUT_EXPANSION"
+                    tactical_rationale = f"{strat_name}: Awaiting momentum breakout setup. 100% Cash defense."
+
+            elif strat_type == "ASYMMETRIC_MEAN_REVERSION":
+                dip_rsi = strat_params.get("dip_rsi", 33.0)
+                cond_bb = (curr_close <= cur_bbl * 1.015) and bullish_candle
+                cond_rsi = (c_rsi <= dip_rsi) and bullish_candle
+                if pre_signal == "BUY" or (cond_bb or cond_rsi):
+                    trigger_buy = True
+                    buy_action = "OVERSOLD_CAPITULATION_BUY"
+                    buy_rationale = f"Asymmetric capitulation dip confirmed ({'Lower BB' if cond_bb else f'RSI {c_rsi:.1f} <= {dip_rsi}'}). Spot rebound allocation."
+                else:
+                    pre_signal = "HOLD"
+                    target_exposure = 0.00
+                    tactical_action = "CASH_DEFENSE_AWAITING_DIP"
+                    tactical_rationale = f"{strat_name}: Preserving 100% Cash defense while awaiting extreme oversold dip (RSI {c_rsi:.1f})."
+
+            elif strat_type == "CORE_TACTICAL_ACCUMULATION":
+                dip_rsi = strat_params.get("dip_rsi", 45.0)
+                if pre_signal == "BUY" or (regime_bull and (c_rsi <= dip_rsi) and bullish_candle):
+                    trigger_buy = True
+                    buy_action = "CORE_TACTICAL_PULLBACK_BUY"
+                    buy_rationale = f"Bull regime pullback accumulation confirmed (RSI {c_rsi:.1f} <= {dip_rsi} above 200 SMA). Spot allocation."
+                else:
+                    pre_signal = "HOLD"
+                    target_exposure = 0.00
+                    tactical_action = "AWAITING_TREND_PULLBACK"
+                    tactical_rationale = f"{strat_name}: Macro bull intact. Preserving 100% Cash while awaiting pullback (RSI {c_rsi:.1f})."
+
+            elif strat_type == "DYNAMIC_REGIME_HYBRID":
                 if regime_bull:
-                    cond_pullback = (40.0 <= c_rsi <= 66.0) and (curr_close >= cur_ema20 * 0.985) and bullish_candle
-                    cond_bull_dip = (c_rsi <= 38.0) and bullish_candle
-                    if cond_pullback or cond_bull_dip:
-                        pre_signal = "BUY"
-                        target_exposure = 1.00
-                        tactical_action = "CORE_BULL_PULLBACK_BUY" if cond_pullback else "BULL_DIP_REVERSAL_BUY"
-                        tactical_rationale = f"Bull regime {'pullback continuation' if cond_pullback else 'oversold dip'} confirmed (RSI {c_rsi:.1f}). Deploying 1.00x spot cash equity."
+                    cond_pb = (40.0 <= c_rsi <= 66.0) and (curr_close >= cur_ema20 * 0.985) and bullish_candle
+                    cond_dip = (c_rsi <= 38.0) and bullish_candle
+                    if pre_signal == "BUY" or (cond_pb or cond_dip):
+                        trigger_buy = True
+                        buy_action = "CORE_BULL_PULLBACK_BUY" if cond_pb else "BULL_DIP_REVERSAL_BUY"
+                        buy_rationale = f"Bull regime {'pullback continuation' if cond_pb else 'oversold dip'} confirmed (RSI {c_rsi:.1f}). Deploying 1.00x spot cash equity."
                     else:
                         pre_signal = "HOLD"
                         target_exposure = 0.00
                         tactical_action = "AWAITING_PULLBACK_SETUP"
                         tactical_rationale = f"Macro Bull intact. Waiting for high-probability pullback / dip setup (RSI {c_rsi:.1f}). 100% Cash preserved."
                 else:
-                    if c_rsi <= 32.0 and bullish_candle:
-                        pre_signal = "BUY"
-                        target_exposure = 1.00
-                        tactical_action = "CAPITULATION_REBOUND_BUY"
-                        tactical_rationale = f"Bear regime capitulation oversold exhaustion (RSI {c_rsi:.1f} <= 32.0). Tactical mean-reversion spot allocation."
+                    if pre_signal == "BUY" or (c_rsi <= 32.0 and bullish_candle):
+                        trigger_buy = True
+                        buy_action = "CAPITULATION_REBOUND_BUY"
+                        buy_rationale = f"Bear regime capitulation oversold exhaustion (RSI {c_rsi:.1f} <= 32.0). Tactical mean-reversion spot allocation."
                     else:
                         pre_signal = "HOLD"
                         target_exposure = 0.00
                         tactical_action = "CASH_DEFENSE_100%"
                         tactical_rationale = "Bear Regime / Macro Breakdown active. 100% Cash Defense sheltering capital from market drawdowns."
+
+            if trigger_buy:
+                pre_signal = "BUY"
+                target_exposure = 1.00
+                tactical_action = buy_action
+                tactical_rationale = buy_rationale
+
 
         macro_filter_data = {
             "underlying_close": round(curr_close, 2),
@@ -2332,47 +2406,43 @@ class InferenceService:
         )
 
         # Signal Suppression logic
-        if ticker_sub_mode in ("oversold_rebound", "dynamic_regime_hybrid"):
-            # Pure Institutional Adaptive Mesh Engine
-            final_signal = pre_signal
-            signal_note = tactical_rationale
-        else:
-            final_signal = pre_signal
-            signal_note = None
-            if consensus_result["consensus_status"] == "VETOED":
-                final_signal = "VETOED"
-                signal_note = consensus_result.get("veto_reason", "Vetoed by Governance")
-            elif agreement_data.get("is_vetoed"):
-                final_signal = "HOLD"
-                signal_note = agreement_data.get("veto_reason", "Vetoed by secondary model risk gate")
-            elif pre_signal == "BUY" and earnings_proximity.get("is_blackout", False):
-                # Pre-Earnings Shield: Block new BUY entries within 48-72h of earnings release
-                final_signal = "HOLD"
-                days_to_e = earnings_proximity.get("days_to_earnings")
-                e_date = earnings_proximity.get("nearest_earnings_date")
-                signal_note = (
-                    f"Suppressed by Pre-Earnings Shield: Earnings release scheduled within "
-                    f"{days_to_e if days_to_e is not None else '48-72'} days ({e_date}). "
-                    f"New BUY entries blocked to eliminate binary overnight gap risk."
-                )
-            elif pre_signal == "BUY" and not long_allowed:
-                final_signal = "HOLD"
-                signal_note = (
-                    f"Suppressed by Macro Regime Filter: Close ({curr_close:.2f} < SMA200 {sma_200:.2f}) "
-                    f"or SPY ({curr_spy_close:.2f} < SMA200 {spy_sma_200:.2f})"
-                )
-            elif pre_signal == "SELL" and not short_allowed and not is_long_exit:
-                final_signal = "HOLD"
-                signal_note = (
-                    f"Suppressed by Macro Regime Filter: Counter-trend SHORT forbidden in confirmed bull regime "
-                    f"(Close {curr_close:.2f} >= SMA200 {sma_200:.2f} and SPY {curr_spy_close:.2f} >= SMA200 {spy_sma_200:.2f})"
-                )
-            elif quality_metrics["grade"] == "NO_TRADE":
-                final_signal = "HOLD"
-                signal_note = f"Suppressed: Low Signal Quality ({quality_metrics['score']})"
-            elif ev_metrics["ev_pct"] <= 0:
-                final_signal = "HOLD"
-                signal_note = "Suppressed: Negative Expected Value"
+        final_signal = pre_signal
+        signal_note = tactical_rationale
+
+        if consensus_result["consensus_status"] == "VETOED":
+            final_signal = "VETOED"
+            signal_note = consensus_result.get("veto_reason", "Vetoed by Governance")
+        elif agreement_data.get("is_vetoed"):
+            final_signal = "HOLD"
+            signal_note = agreement_data.get("veto_reason", "Vetoed by secondary model risk gate")
+        elif pre_signal == "BUY" and earnings_proximity.get("is_blackout", False):
+            # Pre-Earnings Shield: Block new BUY entries within 48-72h of earnings release
+            final_signal = "HOLD"
+            days_to_e = earnings_proximity.get("days_to_earnings")
+            e_date = earnings_proximity.get("nearest_earnings_date")
+            signal_note = (
+                f"Suppressed by Pre-Earnings Shield: Earnings release scheduled within "
+                f"{days_to_e if days_to_e is not None else '48-72'} days ({e_date}). "
+                f"New BUY entries blocked to eliminate binary overnight gap risk."
+            )
+        elif pre_signal == "BUY" and not long_allowed:
+            final_signal = "HOLD"
+            signal_note = (
+                f"Suppressed by Macro Regime Filter: Close ({curr_close:.2f} < SMA200 {sma_200:.2f}) "
+                f"or SPY ({curr_spy_close:.2f} < SMA50 {spy_sma_50:.2f})"
+            )
+        elif pre_signal == "SELL" and not short_allowed and not is_long_exit:
+            final_signal = "HOLD"
+            signal_note = (
+                f"Suppressed by Macro Regime Filter: Counter-trend SHORT forbidden in confirmed bull regime "
+                f"(Close {curr_close:.2f} >= SMA200 {sma_200:.2f} and SPY {curr_spy_close:.2f} >= SMA50 {spy_sma_50:.2f})"
+            )
+        elif quality_metrics["grade"] == "NO_TRADE":
+            final_signal = "HOLD"
+            signal_note = f"Suppressed: Low Signal Quality ({quality_metrics['score']})"
+        elif ev_metrics["ev_pct"] <= 0:
+            final_signal = "HOLD"
+            signal_note = "Suppressed: Negative Expected Value"
 
         # 8. Forecast & Trade Construction
         if self.mm.tft_model is not None:
@@ -2414,11 +2484,8 @@ class InferenceService:
         trade_construction["sizing_regime"] = dynamic_sizing["regime_label"]
         trade_construction["sizing_rationale"] = dynamic_sizing["sizing_rationale"]
         trade_construction["earnings_shield"] = earnings_proximity
-        trade_construction["strategy_mode"] = (
-            "OVERSOLD_REBOUND"
-            if ticker_sub_mode == "oversold_rebound"
-            else "CORE_TACTICAL_ALPHA"
-        )
+        trade_construction["strategy_mode"] = strat_type
+        trade_construction["strategy_name"] = strat_name
 
         # Pre-Earnings Ratchet Tightening on Active Positions
         if earnings_proximity.get("is_blackout", False):
@@ -2469,9 +2536,10 @@ class InferenceService:
             "uncertainty_score": round(uncertainty * 100, 1),
             "signal_note": signal_note,
             # Adaptive Mesh Strategy Telemetry
-            "strategy_mode": "OVERSOLD_REBOUND" if ticker_sub_mode == "oversold_rebound" else "CORE_TACTICAL_ALPHA",
+            "strategy_mode": strat_type,
+            "strategy_name": strat_name,
             "tactical_action": tactical_action,
-            "target_exposure": target_exposure if ticker_sub_mode == "oversold_rebound" else dynamic_sizing["target_allocation"],
+            "target_exposure": target_exposure,
             "tactical_rationale": tactical_rationale,
             # Pre-Earnings Shield & Dynamic Sizing Telemetry
             "earnings_shield": earnings_proximity,
@@ -2684,17 +2752,10 @@ class InferenceService:
         response_data["signal_id"] = signal_id
 
         # Preserve the causal fields after package_chart_data update
-        response_data["strategy_mode"] = (
-            "DYNAMIC_REGIME_HYBRID"
-            if ticker_sub_mode == "dynamic_regime_hybrid"
-            else ("OVERSOLD_REBOUND" if ticker_sub_mode == "oversold_rebound" else "CORE_TACTICAL_ALPHA")
-        )
+        response_data["strategy_mode"] = strat_type
+        response_data["strategy_name"] = strat_name
         response_data["tactical_action"] = tactical_action
-        response_data["target_exposure"] = (
-            target_exposure
-            if ticker_sub_mode in ("oversold_rebound", "dynamic_regime_hybrid")
-            else dynamic_sizing["target_allocation"]
-        )
+        response_data["target_exposure"] = target_exposure
         response_data["tactical_rationale"] = tactical_rationale
         response_data["earnings_shield"] = earnings_proximity
         response_data["dynamic_sizing"] = dynamic_sizing

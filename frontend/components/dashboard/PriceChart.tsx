@@ -299,6 +299,11 @@ export function PriceChart({ data, loading }: PriceChartProps) {
                 </span>
               </div>
               <span className="text-[11px] font-mono text-muted-foreground">Confidence: {marker.probability || Math.round((marker.confidence || 0) * 100)}%</span>
+              {(data?.strategy_name || data?.strategy_mode) && (
+                <span className="text-[10px] font-mono text-primary font-bold">
+                  Strategy: {data.strategy_name || data.strategy_mode}
+                </span>
+              )}
               {marker.source_candle_timestamp && (
                 <span className="text-[10px] font-mono text-muted-foreground">Source Bar: {marker.source_candle_timestamp}</span>
               )}
@@ -333,6 +338,16 @@ export function PriceChart({ data, loading }: PriceChartProps) {
       {(loading && !data) && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 backdrop-blur-md rounded-xl">
           <Skeleton className="w-full h-full bg-white/5" />
+        </div>
+      )}
+
+      {/* Champion Strategy Header Badge */}
+      {(data?.strategy_name || data?.strategy_mode) && (
+        <div className="absolute top-4 right-4 z-20 pointer-events-none flex items-center gap-2 bg-card/85 backdrop-blur-md px-3 py-1.5 rounded-lg border border-border shadow-md">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="text-[11px] font-mono font-bold text-foreground uppercase tracking-wider">
+            {data.strategy_name || data.strategy_mode}
+          </span>
         </div>
       )}
       

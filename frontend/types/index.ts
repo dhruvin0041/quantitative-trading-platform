@@ -175,6 +175,7 @@ export interface ChartData {
   earnings_shield?: EarningsShieldData;
   dynamic_sizing?: DynamicSizingData;
   strategy_mode?: string | null;
+  strategy_name?: string | null;
   tactical_action?: string | null;
   target_exposure?: number | null;
   

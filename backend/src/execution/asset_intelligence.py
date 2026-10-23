@@ -307,14 +307,148 @@ class AssetExpectancyFilter:
 
 
 ADAPTIVE_MESH_MAP: Dict[str, str] = {
-    "META": "dynamic_regime_hybrid",
-    "TSLA": "dynamic_regime_hybrid",
-    "MSFT": "dynamic_regime_hybrid",
-    "AMZN": "dynamic_regime_hybrid",
-    "NVDA": "dynamic_regime_hybrid",
-    "AAPL": "dynamic_regime_hybrid",
-    "GOOGL": "dynamic_regime_hybrid",
-    "AMD": "dynamic_regime_hybrid",
+    "AAPL": "volatility_breakout_swing",
+    "NVDA": "volatility_breakout_swing",
+    "MSFT": "asymmetric_mean_reversion",
+    "AMZN": "asymmetric_mean_reversion",
+    "META": "asymmetric_mean_reversion",
+    "GOOGL": "core_tactical_accumulation",
+    "TSLA": "asymmetric_mean_reversion",
+    "AMD": "core_tactical_accumulation",
 }
+
+ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
+    "AAPL": {
+        "strategy_type": "VOLATILITY_BREAKOUT_SWING",
+        "strategy_name": "Volatility Breakout Swing",
+        "params": {
+            "base_atr": 3.5,
+            "ratchet_15": 2.8,
+            "ratchet_25": 2.2,
+            "climax_rsi": 74.0,
+            "climax_gain": 0.12,
+            "init_entry": True,
+            "cooldown": 1,
+            "macro_bear_exit": True,
+        },
+        "description": "Momentum expansion with MACD acceleration and institutional Chandelier trailing ratchet.",
+    },
+    "NVDA": {
+        "strategy_type": "VOLATILITY_BREAKOUT_SWING",
+        "strategy_name": "Volatility Breakout Swing",
+        "params": {
+            "base_atr": 3.5,
+            "ratchet_15": 2.8,
+            "ratchet_25": 2.2,
+            "climax_rsi": 74.0,
+            "climax_gain": 0.12,
+            "init_entry": True,
+            "cooldown": 1,
+            "macro_bear_exit": True,
+        },
+        "description": "High-beta trend expansion with dynamic volatility trailing stop.",
+    },
+    "MSFT": {
+        "strategy_type": "ASYMMETRIC_MEAN_REVERSION",
+        "strategy_name": "Asymmetric Mean Reversion",
+        "params": {
+            "dip_rsi": 38.0,
+            "rebound_exit_rsi": 62.0,
+            "base_atr": 3.0,
+            "init_entry": False,
+            "macro_bear_exit": False,
+            "cooldown": 1,
+        },
+        "description": "Institutional dip sniper capitalizing on oversold pullbacks and 20 EMA mean reversion targets.",
+    },
+    "AMZN": {
+        "strategy_type": "ASYMMETRIC_MEAN_REVERSION",
+        "strategy_name": "Asymmetric Mean Reversion",
+        "params": {
+            "dip_rsi": 28.0,
+            "rebound_exit_rsi": 52.0,
+            "base_atr": 1.8,
+            "init_entry": False,
+            "macro_bear_exit": False,
+            "cooldown": 1,
+        },
+        "description": "Capitulation mean reversion targeting extreme oversold washouts with tight risk controls.",
+    },
+    "META": {
+        "strategy_type": "ASYMMETRIC_MEAN_REVERSION",
+        "strategy_name": "Asymmetric Mean Reversion",
+        "params": {
+            "dip_rsi": 28.0,
+            "rebound_exit_rsi": 52.0,
+            "base_atr": 1.8,
+            "init_entry": False,
+            "macro_bear_exit": False,
+            "cooldown": 1,
+        },
+        "description": "Oscillator capitulation sniper with 100% Cash Defense during protracted structural corrections.",
+    },
+    "GOOGL": {
+        "strategy_type": "CORE_TACTICAL_ACCUMULATION",
+        "strategy_name": "Core Tactical Accumulation",
+        "params": {
+            "dip_rsi": 40.0,
+            "base_atr": 3.5,
+            "climax_rsi": None,
+            "init_entry": True,
+            "cooldown": 1,
+            "macro_bear_exit": True,
+        },
+        "description": "Steady institutional compounder accumulating dips above 200 SMA with disciplined ATR trailing exits.",
+    },
+    "TSLA": {
+        "strategy_type": "ASYMMETRIC_MEAN_REVERSION",
+        "strategy_name": "Asymmetric Mean Reversion",
+        "params": {
+            "dip_rsi": 28.0,
+            "rebound_exit_rsi": 52.0,
+            "base_atr": 1.8,
+            "init_entry": False,
+            "macro_bear_exit": False,
+            "cooldown": 1,
+        },
+        "description": "High-volatility capitulation rebound engine protecting against steep tech drawdowns.",
+    },
+    "AMD": {
+        "strategy_type": "CORE_TACTICAL_ACCUMULATION",
+        "strategy_name": "Core Tactical Accumulation",
+        "params": {
+            "dip_rsi": 35.0,
+            "base_atr": 4.5,
+            "climax_rsi": None,
+            "init_entry": False,
+            "cooldown": 1,
+            "macro_bear_exit": True,
+        },
+        "description": "Deep capitulation accumulation with wide Chandelier trailing ratchets to ride secular semiconductor super-cycles.",
+    },
+}
+
+
+def get_champion_strategy_for_ticker(ticker: str) -> Dict[str, Any]:
+    ticker_clean = ticker.upper()
+    return ASSET_CHAMPION_STRATEGY_MAP.get(
+        ticker_clean,
+        {
+            "strategy_type": "DYNAMIC_REGIME_HYBRID",
+            "strategy_name": "Dynamic Regime Hybrid",
+            "params": {
+                "base_atr": 4.2,
+                "ratchet_15": 3.5,
+                "ratchet_25": 3.0,
+                "climax_rsi": 75.0,
+                "climax_gain": 0.15,
+                "init_entry": True,
+                "cooldown": 1,
+                "macro_bear_exit": True,
+            },
+            "description": "Adaptive multi-regime hybrid alpha driver.",
+        },
+    )
+
 
 

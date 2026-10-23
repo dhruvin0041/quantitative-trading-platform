@@ -60,9 +60,16 @@ export function SignalIntelligence({ data }: SignalIntelligenceProps) {
         "flex flex-col p-5 rounded-lg border",
         isVetoed ? "bg-negative/5 border-negative/20" : finalDecision === "BUY" ? "bg-positive/5 border-positive/20" : finalDecision === "SELL" ? "bg-negative/5 border-negative/20" : "bg-card border-border"
       )}>
-        <h3 className="text-[12px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2 mb-4">
-          <CheckCircle className="w-4 h-4" /> Final Execution Authority
-        </h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-[12px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 text-primary" /> Final Execution Authority
+          </h3>
+          {(data.strategy_name || data.strategy_mode) && (
+            <span className="text-[11px] font-mono px-2.5 py-1 rounded bg-primary/10 text-primary border border-primary/20 font-bold uppercase tracking-wider">
+              {data.strategy_name || data.strategy_mode}
+            </span>
+          )}
+        </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
           <div className="flex flex-col gap-1">
             <span className="text-[11px] font-bold text-muted-foreground uppercase">Consensus Signal</span>
