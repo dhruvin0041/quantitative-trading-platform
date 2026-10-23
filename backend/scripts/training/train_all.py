@@ -22,6 +22,7 @@ from scripts.training.train import train_ticker
 from src.utils.date_window import resolve_training_dates
 
 INSTITUTIONAL_UNIVERSE = [
+    # Core US Mega-Cap Tech
     "AAPL",
     "NVDA",
     "MSFT",
@@ -30,6 +31,18 @@ INSTITUTIONAL_UNIVERSE = [
     "GOOGL",
     "TSLA",
     "AMD",
+    # US Low-Beta / Defensives & Financials
+    "COST",
+    "WMT",
+    "JPM",
+    "LLY",
+    # India (NSE) Institutional Giants
+    "RELIANCE.NS",
+    "TCS.NS",
+    "ICICIBANK.NS",
+    "BHARTIARTL.NS",
+    "LT.NS",
+    "ITC.NS",
 ]
 
 
