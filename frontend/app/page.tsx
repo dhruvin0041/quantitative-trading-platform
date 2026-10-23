@@ -34,7 +34,19 @@ export default function HydraTerminal() {
   const [isDebugModalOpen, setDebugModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('CONSENSUS');
   const [API_URL] = useState(getBaseUrl());
-  const UNIVERSAL_TICKERS = useMemo(() => ["AAPL", "NVDA", "MSFT", "AMZN", "META", "GOOGL", "TSLA", "AMD"], []);
+  const TOP_US_TICKERS = useMemo(() => [
+    "AAPL", "NVDA", "MSFT", "AMZN", "META", "GOOGL", "TSLA", "AMD",
+    "COST", "WMT", "JPM", "LLY"
+  ], []);
+  const TOP_INDIA_TICKERS = useMemo(() => [
+    "RELIANCE.NS", "TCS.NS", "ICICIBANK.NS", "BHARTIARTL.NS", "LT.NS", "ITC.NS"
+  ], []);
+
+  const getBadgeForTicker = (t: string) => {
+    if (['AAPL', 'NVDA', 'LLY', 'RELIANCE.NS'].includes(t)) return 'SWING';
+    if (['TCS.NS'].includes(t)) return 'REBOUND';
+    return 'TACTICAL';
+  };
 
   useEffect(() => {
     fetch(`${API_URL}/active_ticker`, { headers: { "X-API-Key": API_KEY } })
@@ -53,6 +65,7 @@ export default function HydraTerminal() {
       .then(data => { if (data.universe) setUniverse(data.universe); })
       .catch(() => {
         setUniverse([
+          // US Top Universe
           { ticker: "AAPL", name: "Apple Inc.", price: 0, pct_change: 0, market: 'us' },
           { ticker: "NVDA", name: "NVIDIA Corp.", price: 0, pct_change: 0, market: 'us' },
           { ticker: "MSFT", name: "Microsoft Corp.", price: 0, pct_change: 0, market: 'us' },
@@ -61,6 +74,17 @@ export default function HydraTerminal() {
           { ticker: "GOOGL", name: "Alphabet Inc.", price: 0, pct_change: 0, market: 'us' },
           { ticker: "TSLA", name: "Tesla Inc.", price: 0, pct_change: 0, market: 'us' },
           { ticker: "AMD", name: "Advanced Micro Devices", price: 0, pct_change: 0, market: 'us' },
+          { ticker: "COST", name: "Costco Wholesale Corp.", price: 0, pct_change: 0, market: 'us' },
+          { ticker: "WMT", name: "Walmart Inc.", price: 0, pct_change: 0, market: 'us' },
+          { ticker: "JPM", name: "JPMorgan Chase & Co.", price: 0, pct_change: 0, market: 'us' },
+          { ticker: "LLY", name: "Eli Lilly and Company", price: 0, pct_change: 0, market: 'us' },
+          // India Top Universe
+          { ticker: "RELIANCE.NS", name: "Reliance Industries", price: 0, pct_change: 0, market: 'india' },
+          { ticker: "TCS.NS", name: "Tata Consultancy Services", price: 0, pct_change: 0, market: 'india' },
+          { ticker: "ICICIBANK.NS", name: "ICICI Bank Ltd.", price: 0, pct_change: 0, market: 'india' },
+          { ticker: "BHARTIARTL.NS", name: "Bharti Airtel Ltd.", price: 0, pct_change: 0, market: 'india' },
+          { ticker: "LT.NS", name: "Larsen & Toubro Ltd.", price: 0, pct_change: 0, market: 'india' },
+          { ticker: "ITC.NS", name: "ITC Ltd.", price: 0, pct_change: 0, market: 'india' },
         ]);
       });
   }, [API_URL]);
@@ -111,10 +135,11 @@ export default function HydraTerminal() {
 
   const filteredUniverse = useMemo(() => {
     const list = universe.filter(s => s.market === market);
-    if (market === 'us') {
+    const priorityList = market === 'us' ? TOP_US_TICKERS : market === 'india' ? TOP_INDIA_TICKERS : [];
+    if (priorityList.length > 0) {
       return [...list].sort((a, b) => {
-        const aIdx = UNIVERSAL_TICKERS.indexOf(a.ticker);
-        const bIdx = UNIVERSAL_TICKERS.indexOf(b.ticker);
+        const aIdx = priorityList.indexOf(a.ticker);
+        const bIdx = priorityList.indexOf(b.ticker);
         if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
         if (aIdx !== -1) return -1;
         if (bIdx !== -1) return 1;
@@ -122,7 +147,7 @@ export default function HydraTerminal() {
       });
     }
     return list;
-  }, [universe, market, UNIVERSAL_TICKERS]);
+  }, [universe, market, TOP_US_TICKERS, TOP_INDIA_TICKERS]);
 
   const handleStockSelect = (selectedTicker: string) => {
     setTicker(selectedTicker);
@@ -267,9 +292,9 @@ export default function HydraTerminal() {
                             <span className={cn("font-bold text-[13px]", ticker === stock.ticker ? "text-primary" : "text-foreground")}>
                               {stock.ticker}
                             </span>
-                            {UNIVERSAL_TICKERS.includes(stock.ticker) && (
+                            {(TOP_US_TICKERS.includes(stock.ticker) || TOP_INDIA_TICKERS.includes(stock.ticker)) && (
                               <span className="text-[9px] px-1.5 py-0.2 rounded bg-primary/15 text-primary font-mono uppercase font-bold tracking-wider border border-primary/20">
-                                {['AAPL', 'GOOGL', 'AMD'].includes(stock.ticker) ? 'TACTICAL' : 'REBOUND'}
+                                {getBadgeForTicker(stock.ticker)}
                               </span>
                             )}
                           </div>
@@ -277,7 +302,7 @@ export default function HydraTerminal() {
                         </div>
                       </td>
                       <td className="py-2.5 text-right font-mono text-[13px] text-foreground">
-                        {stock.price.toFixed(2)}
+                        {stock.market === 'india' ? '₹' : '$'}{stock.price.toFixed(2)}
                       </td>
                       <td className={cn(
                         "py-2.5 text-right font-mono text-[13px] font-bold",

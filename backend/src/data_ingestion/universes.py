@@ -109,6 +109,12 @@ UNIVERSES_METADATA = {
             "currency": "USD",
             "timezone": "America/New_York",
         },
+        "LLY": {
+            "name": "Eli Lilly and Company",
+            "exchange": "NYSE",
+            "currency": "USD",
+            "timezone": "America/New_York",
+        },
         "DIS": {
             "name": "Disney",
             "exchange": "NYSE",
