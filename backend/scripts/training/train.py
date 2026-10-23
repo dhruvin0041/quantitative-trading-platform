@@ -280,15 +280,21 @@ def run_ticker_optimization(
     # 1. XGBoost Objective (Expanded Regularization & Tree Structure)
     def objective_xgb(trial):
         n_est = trial.suggest_int("n_estimators", 80, 240, step=20)
-        max_d = trial.suggest_int("max_depth", 2, 4)
-        lr = trial.suggest_float("learning_rate", 0.015, 0.06, log=True)
-        sub = trial.suggest_float("subsample", 0.70, 0.95)
-        col = trial.suggest_float("colsample_bytree", 0.50, 0.85)
-        col_lvl = trial.suggest_float("colsample_bylevel", 0.50, 0.90)
-        min_cw = trial.suggest_float("min_child_weight", 4.0, 20.0, log=True)
-        gamma = trial.suggest_float("gamma", 0.5, 6.0)
-        reg_a = trial.suggest_float("reg_alpha", 0.5, 10.0, log=True)
-        reg_l = trial.suggest_float("reg_lambda", 2.0, 25.0, log=True)
+        grow_pol = trial.suggest_categorical("grow_policy", ["depthwise", "lossguide"])
+        if grow_pol == "lossguide":
+            max_d = 0
+            max_l = trial.suggest_int("max_leaves", 6, 12)
+        else:
+            max_d = trial.suggest_int("max_depth", 2, 4)
+            max_l = 0
+        lr = trial.suggest_float("learning_rate", 0.015, 0.05, log=True)
+        sub = trial.suggest_float("subsample", 0.65, 0.90)
+        col = trial.suggest_float("colsample_bytree", 0.55, 0.85)
+        col_lvl = trial.suggest_float("colsample_bylevel", 0.60, 0.90)
+        min_cw = trial.suggest_float("min_child_weight", 5.0, 18.0, log=True)
+        gamma = trial.suggest_float("gamma", 0.5, 5.0)
+        reg_a = trial.suggest_float("reg_alpha", 0.5, 8.0, log=True)
+        reg_l = trial.suggest_float("reg_lambda", 3.0, 20.0, log=True)
         max_b = trial.suggest_categorical("max_bin", [128, 256])
 
         scores = []
@@ -296,6 +302,8 @@ def run_ticker_optimization(
             clf = xgb.XGBClassifier(
                 n_estimators=n_est,
                 max_depth=max_d,
+                max_leaves=max_l,
+                grow_policy=grow_pol,
                 learning_rate=lr,
                 subsample=sub,
                 colsample_bytree=col,
@@ -320,16 +328,18 @@ def run_ticker_optimization(
     # 2. LightGBM Objective (Expanded Leaf-Wise Regularization & Bagging)
     def objective_lgbm(trial):
         n_est = trial.suggest_int("n_estimators", 80, 240, step=20)
-        lr = trial.suggest_float("learning_rate", 0.015, 0.06, log=True)
+        lr = trial.suggest_float("learning_rate", 0.015, 0.05, log=True)
         max_d = trial.suggest_int("max_depth", 2, 4)
         num_l = trial.suggest_int("num_leaves", 4, 15)
-        min_cs = trial.suggest_int("min_child_samples", 30, 90)
-        min_sg = trial.suggest_float("min_split_gain", 0.1, 2.0)
-        sub = trial.suggest_float("subsample", 0.70, 0.95)
-        sub_f = trial.suggest_int("subsample_freq", 1, 5)
-        col = trial.suggest_float("colsample_bytree", 0.50, 0.85)
-        reg_a = trial.suggest_float("reg_alpha", 0.5, 10.0, log=True)
-        reg_l = trial.suggest_float("reg_lambda", 2.0, 25.0, log=True)
+        extra_trees = trial.suggest_categorical("extra_trees", [False, True])
+        path_smooth = trial.suggest_float("path_smooth", 0.0, 2.0)
+        min_cs = trial.suggest_int("min_child_samples", 35, 85)
+        min_sg = trial.suggest_float("min_split_gain", 0.1, 1.5)
+        sub = trial.suggest_float("subsample", 0.65, 0.90)
+        sub_f = trial.suggest_int("subsample_freq", 1, 4)
+        col = trial.suggest_float("colsample_bytree", 0.55, 0.85)
+        reg_a = trial.suggest_float("reg_alpha", 0.5, 8.0, log=True)
+        reg_l = trial.suggest_float("reg_lambda", 3.0, 20.0, log=True)
         max_b = trial.suggest_categorical("max_bin", [128, 256])
 
         scores = []
@@ -339,6 +349,8 @@ def run_ticker_optimization(
                 learning_rate=lr,
                 max_depth=max_d,
                 num_leaves=num_l,
+                extra_trees=extra_trees,
+                path_smooth=path_smooth,
                 min_child_samples=min_cs,
                 min_split_gain=min_sg,
                 subsample=sub,
@@ -381,7 +393,11 @@ def run_ticker_optimization(
     best_xgb["tp_atr_multiplier"] = TP_ATR_MULT
     best_xgb["sl_atr_multiplier"] = SL_ATR_MULT
     best_xgb["horizon"] = LABEL_HORIZON
-    best_xgb["num_leaves"] = 31
+    if best_xgb.get("grow_policy") == "lossguide":
+        best_xgb["max_depth"] = 0
+    else:
+        best_xgb["max_leaves"] = 0
+        best_xgb["grow_policy"] = "depthwise"
 
     best_lgbm = study_lgbm.best_params
     best_lgbm["tp_atr_multiplier"] = TP_ATR_MULT
@@ -531,8 +547,10 @@ def train_ticker_pipeline(
     xgb_params = {
         "objective": "multi:softprob",
         "num_class": 3,
-        "n_estimators": int(xgb_opt.get("n_estimators", 150)),
+        "n_estimators": int(xgb_opt.get("n_estimators", 140)),
         "max_depth": int(xgb_opt.get("max_depth", 3)),
+        "max_leaves": int(xgb_opt.get("max_leaves", 0)),
+        "grow_policy": str(xgb_opt.get("grow_policy", "depthwise")),
         "learning_rate": float(xgb_opt.get("learning_rate", 0.03)),
         "subsample": float(xgb_opt.get("subsample", 0.85)),
         "colsample_bytree": float(xgb_opt.get("colsample_bytree", 0.80)),
@@ -559,15 +577,17 @@ def train_ticker_pipeline(
     lgbm_params = {
         "objective": "multiclass",
         "num_class": 3,
-        "n_estimators": int(lgbm_opt.get("n_estimators", 150)),
+        "n_estimators": int(lgbm_opt.get("n_estimators", 130)),
         "learning_rate": float(lgbm_opt.get("learning_rate", 0.03)),
         "max_depth": int(lgbm_opt.get("max_depth", 3)),
         "num_leaves": int(lgbm_opt.get("num_leaves", 7)),
-        "min_child_samples": int(lgbm_opt.get("min_child_samples", 50)),
+        "extra_trees": bool(lgbm_opt.get("extra_trees", False)),
+        "path_smooth": float(lgbm_opt.get("path_smooth", 0.0)),
+        "min_child_samples": int(lgbm_opt.get("min_child_samples", 45)),
         "min_split_gain": float(lgbm_opt.get("min_split_gain", 0.1)),
-        "subsample": float(lgbm_opt.get("subsample", 0.85)),
+        "subsample": float(lgbm_opt.get("subsample", 0.80)),
         "subsample_freq": int(lgbm_opt.get("subsample_freq", 1)),
-        "colsample_bytree": float(lgbm_opt.get("colsample_bytree", 0.80)),
+        "colsample_bytree": float(lgbm_opt.get("colsample_bytree", 0.70)),
         "reg_alpha": float(lgbm_opt.get("reg_alpha", 1.0)),
         "reg_lambda": float(lgbm_opt.get("reg_lambda", 5.0)),
         "max_bin": int(lgbm_opt.get("max_bin", 256)),
