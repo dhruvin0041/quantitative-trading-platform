@@ -174,6 +174,9 @@ export interface ChartData {
   // Pre-Earnings & Dynamic Sizing
   earnings_shield?: EarningsShieldData;
   dynamic_sizing?: DynamicSizingData;
+  strategy_mode?: string | null;
+  tactical_action?: string | null;
+  target_exposure?: number | null;
   
   // Causal Signal States and Timing Mandate
   signal_state?: 'CONFIRMED' | 'PROVISIONAL' | 'HOLD' | 'NO_SIGNAL';

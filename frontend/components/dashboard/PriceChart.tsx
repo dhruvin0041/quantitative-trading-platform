@@ -60,8 +60,9 @@ export function PriceChart({ data, loading }: PriceChartProps) {
       },
       timeScale: {
         borderColor: gridColor,
-        rightOffset: 5,
+        rightOffset: 6,
         minBarSpacing: 0.5,
+        fixLeftEdge: false,
         lockVisibleTimeRangeOnResize: false,
       },
       rightPriceScale: {
@@ -70,6 +71,7 @@ export function PriceChart({ data, loading }: PriceChartProps) {
           top: 0.08,
           bottom: 0.22,
         },
+        entireTextOnly: true,
       },
       width: chartContainerRef.current.clientWidth,
       height: chartContainerRef.current.clientHeight,
@@ -83,6 +85,8 @@ export function PriceChart({ data, loading }: PriceChartProps) {
       borderVisible: false,
       wickUpColor: buyColor,
       wickDownColor: sellColor,
+      lastValueVisible: true,
+      priceLineVisible: true,
     });
 
     volumeSeriesRef.current = chart.addSeries(HistogramSeries, {
@@ -97,15 +101,15 @@ export function PriceChart({ data, loading }: PriceChartProps) {
       visible: false,
     });
 
-    bbUpperSeriesRef.current = chart.addSeries(LineSeries, { color: supportLineColor, lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, autoscaleInfoProvider: () => null });
-    bbLowerSeriesRef.current = chart.addSeries(LineSeries, { color: supportLineColor, lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, autoscaleInfoProvider: () => null });
-    ribbonUpperSeriesRef.current = chart.addSeries(LineSeries, { color: maOrange, lineWidth: 1, crosshairMarkerVisible: false, autoscaleInfoProvider: () => null });
-    ribbonLowerSeriesRef.current = chart.addSeries(LineSeries, { color: maBlue, lineWidth: 1, crosshairMarkerVisible: false, autoscaleInfoProvider: () => null });
+    bbUpperSeriesRef.current = chart.addSeries(LineSeries, { color: supportLineColor, lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, autoscaleInfoProvider: () => null });
+    bbLowerSeriesRef.current = chart.addSeries(LineSeries, { color: supportLineColor, lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, autoscaleInfoProvider: () => null });
+    ribbonUpperSeriesRef.current = chart.addSeries(LineSeries, { color: maOrange, lineWidth: 1, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, autoscaleInfoProvider: () => null });
+    ribbonLowerSeriesRef.current = chart.addSeries(LineSeries, { color: maBlue, lineWidth: 1, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, autoscaleInfoProvider: () => null });
     // trailingStopSeriesRef.current = chart.addSeries(LineSeries, { color: '#FF5722', lineWidth: 2, lineStyle: 3, crosshairMarkerVisible: true, autoscaleInfoProvider: () => null });
 
-    forecastP90Ref.current = chart.addSeries(LineSeries, { color: isDark ? 'rgba(0, 230, 118, 0.6)' : 'rgba(29, 122, 58, 0.6)', lineWidth: 2, lineStyle: 2, crosshairMarkerVisible: true });
-    forecastP50Ref.current = chart.addSeries(LineSeries, { color: isDark ? 'rgba(79, 195, 247, 0.8)' : 'rgba(79, 195, 247, 0.8)', lineWidth: 2, lineStyle: 0, crosshairMarkerVisible: true });
-    forecastP10Ref.current = chart.addSeries(LineSeries, { color: isDark ? 'rgba(255, 82, 82, 0.6)' : 'rgba(192, 56, 10, 0.6)', lineWidth: 2, lineStyle: 2, crosshairMarkerVisible: true });
+    forecastP90Ref.current = chart.addSeries(LineSeries, { color: isDark ? 'rgba(0, 230, 118, 0.6)' : 'rgba(29, 122, 58, 0.6)', lineWidth: 2, lineStyle: 2, crosshairMarkerVisible: true, lastValueVisible: false, priceLineVisible: false });
+    forecastP50Ref.current = chart.addSeries(LineSeries, { color: isDark ? 'rgba(79, 195, 247, 0.8)' : 'rgba(79, 195, 247, 0.8)', lineWidth: 2, lineStyle: 0, crosshairMarkerVisible: true, lastValueVisible: false, priceLineVisible: false });
+    forecastP10Ref.current = chart.addSeries(LineSeries, { color: isDark ? 'rgba(255, 82, 82, 0.6)' : 'rgba(192, 56, 10, 0.6)', lineWidth: 2, lineStyle: 2, crosshairMarkerVisible: true, lastValueVisible: false, priceLineVisible: false });
 
     const resizeObserver = new ResizeObserver((entries) => {
       if (chartRef.current && entries.length > 0) {
@@ -116,7 +120,7 @@ export function PriceChart({ data, loading }: PriceChartProps) {
         });
         if (candleCountRef.current > 0) {
           chartRef.current.timeScale().setVisibleLogicalRange({
-            from: 0,
+            from: -3,
             to: candleCountRef.current + 4,
           });
         }
@@ -207,7 +211,7 @@ export function PriceChart({ data, loading }: PriceChartProps) {
         color: isBuy ? "#10B981" : "#EF4444",
         shape: (isBuy ? "arrowUp" : "arrowDown") as "arrowUp" | "arrowDown",
         text: isBuy ? "BUY" : "SELL",
-        size: 2,
+        size: 1.5,
       };
     });
 
@@ -238,7 +242,7 @@ export function PriceChart({ data, loading }: PriceChartProps) {
       requestAnimationFrame(() => {
         if (chartRef.current && candleCountRef.current > 0) {
           chartRef.current.timeScale().setVisibleLogicalRange({
-            from: 0,
+            from: -3,
             to: candleCountRef.current + 4,
           });
         }

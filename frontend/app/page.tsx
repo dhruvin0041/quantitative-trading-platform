@@ -137,6 +137,18 @@ export default function HydraTerminal() {
     return stock?.market === 'india' ? '₹' : '$';
   }, [universe, ticker]);
 
+  const strategyModeLabel = useMemo(() => {
+    const rawMode = chartData?.strategy_mode;
+    if (rawMode === 'OVERSOLD_REBOUND') return 'Adaptive Mesh · Oversold Rebound';
+    if (rawMode === 'CORE_TACTICAL_ALPHA') return 'Adaptive Mesh · Core Tactical';
+    if (UNIVERSAL_TICKERS.includes(ticker)) {
+      return ['AAPL', 'GOOGL', 'AMD'].includes(ticker)
+        ? 'Adaptive Mesh · Core Tactical'
+        : 'Adaptive Mesh · Oversold Rebound';
+    }
+    return null;
+  }, [chartData?.strategy_mode, ticker, UNIVERSAL_TICKERS]);
+
   // Extract Risk Metrics from chartData or default
   const portfolioVaR = chartData?.risk?.var_95 !== undefined && chartData?.risk?.var_95 !== null
     ? Number(chartData.risk.var_95)
@@ -256,8 +268,8 @@ export default function HydraTerminal() {
                               {stock.ticker}
                             </span>
                             {UNIVERSAL_TICKERS.includes(stock.ticker) && (
-                              <span className="text-[9px] px-1 py-0.2 rounded bg-primary/15 text-primary font-mono uppercase font-bold tracking-wider">
-                                UNIV
+                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-primary/15 text-primary font-mono uppercase font-bold tracking-wider border border-primary/20">
+                                {['AAPL', 'GOOGL', 'AMD'].includes(stock.ticker) ? 'TACTICAL' : 'REBOUND'}
                               </span>
                             )}
                           </div>
@@ -297,9 +309,9 @@ export default function HydraTerminal() {
               <div className="px-4 py-3 border-b border-border flex justify-between items-center bg-card shrink-0">
                  <div className="flex items-center gap-3">
                    <h2 className="text-[20px] font-bold">{ticker}</h2>
-                   {UNIVERSAL_TICKERS.includes(ticker) && (
-                     <span className="px-2 py-0.5 rounded bg-primary/15 text-primary text-[10px] font-mono font-bold tracking-wider uppercase">
-                       Universal Model
+                   {strategyModeLabel && (
+                     <span className="px-2 py-0.5 rounded bg-primary/15 text-primary text-[10px] font-mono font-bold tracking-wider uppercase border border-primary/25">
+                       {strategyModeLabel}
                      </span>
                    )}
                    <span className="text-[13px] text-muted-foreground hidden sm:inline">{chartData?.metadata?.name || ''}</span>
@@ -313,12 +325,14 @@ export default function HydraTerminal() {
                        "px-2.5 py-0.5 rounded text-[11px] font-black tracking-wider uppercase flex items-center gap-1.5",
                        chartData.signal === 'BUY' ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" :
                        chartData.signal === 'SELL' ? "bg-rose-500/20 text-rose-400 border border-rose-500/30" :
+                       chartData.signal === 'VETOED' ? "bg-amber-500/20 text-amber-400 border border-amber-500/30" :
                        "bg-muted text-muted-foreground border border-border"
                      )}>
                        <span className={cn(
                          "w-2 h-2 rounded-full",
                          chartData.signal === 'BUY' ? "bg-emerald-400 animate-pulse" :
-                         chartData.signal === 'SELL' ? "bg-rose-400 animate-pulse" : "bg-muted-foreground"
+                         chartData.signal === 'SELL' ? "bg-rose-400 animate-pulse" :
+                         chartData.signal === 'VETOED' ? "bg-amber-400" : "bg-muted-foreground"
                        )} />
                        {chartData.signal}
                        {chartData.confidence_score ? ` (${chartData.confidence_score.toFixed(0)}%)` : ''}
