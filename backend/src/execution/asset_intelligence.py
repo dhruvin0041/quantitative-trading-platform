@@ -307,14 +307,14 @@ class AssetExpectancyFilter:
 
 
 ADAPTIVE_MESH_MAP: Dict[str, str] = {
-    "META": "oversold_rebound",
-    "TSLA": "oversold_rebound",
-    "MSFT": "oversold_rebound",
-    "AMZN": "oversold_rebound",
-    "NVDA": "oversold_rebound",
-    "AAPL": "core_tactical",
-    "GOOGL": "core_tactical",
-    "AMD": "core_tactical",
+    "META": "dynamic_regime_hybrid",
+    "TSLA": "dynamic_regime_hybrid",
+    "MSFT": "dynamic_regime_hybrid",
+    "AMZN": "dynamic_regime_hybrid",
+    "NVDA": "dynamic_regime_hybrid",
+    "AAPL": "dynamic_regime_hybrid",
+    "GOOGL": "dynamic_regime_hybrid",
+    "AMD": "dynamic_regime_hybrid",
 }
 
 

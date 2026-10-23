@@ -715,6 +715,310 @@ def _run_oversold_rebound_simulation(
     return daily_equity_curve, closed_trades
 
 
+def _run_dynamic_regime_hybrid_simulation(
+    ticker_dfs: Dict[str, pd.DataFrame],
+    spy_df: pd.DataFrame,
+    all_dates: List[pd.Timestamp],
+    initial_capital: float,
+    slippage_bps: float,
+    commission_per_share: float,
+    min_commission: float,
+) -> tuple[List[Dict], List[Dict]]:
+    """
+    Unified Institutional Dynamic Regime Hybrid Backtest Engine.
+    Parity with inference_service.py:
+    - Secular bull initial positioning and pullback continuation entries (RSI 40-66, Close >= 20 EMA)
+    - Monotonic Chandelier ATR Trailing Stop ratchet (4.2 ATR -> 3.5 ATR -> 3.0 ATR on profit)
+    - Overbought parabolic climax harvest (RSI >= 75.0, bearish candle, gain >= 15%)
+    - Bear regime liquidation (sustained SMA200 breakdown or SPY breakdown)
+    - Capitulation mean-reversion rebound entries in bear regimes (RSI <= 32.0, bullish candle)
+    """
+    slippage_rate = slippage_bps / 10000.0
+    n_assets = len(ticker_dfs)
+    base_capital = float(initial_capital) / max(n_assets, 1)
+
+    daily_equity_curve = []
+    closed_trades: List[Dict[str, Any]] = []
+
+    # Compute SPY SMA 200
+    spy_c = spy_df["Close"] if "Close" in spy_df.columns else spy_df.iloc[:, 0]
+    spy_sma200_s = spy_c.rolling(200, min_periods=30).mean()
+
+    # Per-symbol state
+    sym_cash = {s: base_capital for s in ticker_dfs}
+    sym_shares = {s: 0.0 for s in ticker_dfs}
+    sym_pos_type = {s: None for s in ticker_dfs}
+    sym_entry_fill = {s: 0.0 for s in ticker_dfs}
+    sym_entry_comm = {s: 0.0 for s in ticker_dfs}
+    sym_entry_date = {s: None for s in ticker_dfs}
+    sym_peak_price = {s: 0.0 for s in ticker_dfs}
+    sym_trailing_stop = {s: 0.0 for s in ticker_dfs}
+    sym_cooldown = {s: 0 for s in ticker_dfs}
+    sym_consec_below = {s: 0 for s in ticker_dfs}
+    sym_pending_action = {s: None for s in ticker_dfs}
+    sym_pending_type = {s: None for s in ticker_dfs}
+    sym_exit_reason = {s: None for s in ticker_dfs}
+
+    # Precompute indicators for each asset
+    indicators = {}
+    for s, df_s in ticker_dfs.items():
+        c = df_s["Close"]
+        h = df_s["High"] if "High" in df_s.columns else c
+        lo = df_s["Low"] if "Low" in df_s.columns else c
+        o = df_s["Open"] if "Open" in df_s.columns else c
+
+        sma200 = c.rolling(200, min_periods=30).mean()
+        ema50 = c.ewm(span=50).mean()
+        ema20 = c.ewm(span=20).mean()
+
+        tr1 = h - lo
+        tr2 = (h - c.shift(1)).abs()
+        tr3 = (lo - c.shift(1)).abs()
+        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+        atr = tr.rolling(14, min_periods=5).mean().bfill()
+
+        delta = c.diff()
+        gain = delta.clip(lower=0).rolling(14, min_periods=5).mean()
+        loss = (-delta.clip(upper=0)).rolling(14, min_periods=5).mean()
+        rs = gain / (loss + 1e-9)
+        rsi = 100.0 - (100.0 / (1.0 + rs))
+
+        indicators[s] = {
+            "sma200": sma200,
+            "ema50": ema50,
+            "ema20": ema20,
+            "atr": atr,
+            "rsi": rsi,
+            "close": c,
+            "high": h,
+            "low": lo,
+            "open": o,
+        }
+
+        # Day 0 initialization
+        if len(all_dates) > 0 and all_dates[0] in df_s.index:
+            d0 = all_dates[0]
+            sp0 = float(spy_c.loc[d0]) if d0 in spy_c.index else 100.0
+            sp_sma0 = float(spy_sma200_s.loc[d0]) if (d0 in spy_sma200_s.index and pd.notna(spy_sma200_s.loc[d0])) else sp0
+            c0 = float(c.loc[d0])
+            sma0 = float(sma200.loc[d0]) if pd.notna(sma200.loc[d0]) else c0
+            e50_0 = float(ema50.loc[d0])
+
+            is_init_bull = (c0 >= sma0 * 0.985 or c0 >= e50_0) and (sp0 >= sp_sma0 * 0.985)
+            if is_init_bull:
+                open0 = float(o.loc[d0]) * (1.0 + slippage_rate)
+                sh_est = sym_cash[s] / open0
+                comm = max(min_commission, sh_est * commission_per_share)
+                sh = (sym_cash[s] - comm) / open0
+                sym_shares[s] = sh
+                sym_cash[s] = 0.0
+                sym_pos_type[s] = "CORE_BULL"
+                sym_entry_fill[s] = open0
+                sym_entry_comm[s] = comm
+                sym_entry_date[s] = d0
+                sym_peak_price[s] = open0
+                atr0 = float(atr.loc[d0]) if pd.notna(atr.loc[d0]) else open0 * 0.02
+                sym_trailing_stop[s] = open0 - (4.2 * atr0)
+
+    for current_date in all_dates:
+        # 1. Morning execution
+        for s in ticker_dfs:
+            if current_date not in ticker_dfs[s].index:
+                continue
+            cur_o = float(indicators[s]["open"].loc[current_date])
+            cur_atr = float(indicators[s]["atr"].loc[current_date])
+
+            if sym_pending_action[s] == "BUY" and sym_shares[s] == 0.0:
+                fill_p = cur_o * (1.0 + slippage_rate)
+                avail = sym_cash[s]
+                sh_est = avail / fill_p
+                comm = max(min_commission, sh_est * commission_per_share)
+                sh = (avail - comm) / fill_p
+                sym_shares[s] = sh
+                sym_cash[s] = 0.0
+                sym_entry_fill[s] = fill_p
+                sym_entry_comm[s] = comm
+                sym_entry_date[s] = current_date
+                sym_pos_type[s] = sym_pending_type[s]
+                sym_peak_price[s] = fill_p
+                if sym_pos_type[s] == "CORE_BULL":
+                    sym_trailing_stop[s] = fill_p - (4.2 * cur_atr)
+                else:
+                    sym_trailing_stop[s] = fill_p - (1.8 * cur_atr)
+                sym_pending_action[s] = None
+                sym_consec_below[s] = 0
+
+            elif sym_pending_action[s] == "SELL" and sym_shares[s] > 0.0:
+                fill_p = cur_o * (1.0 - slippage_rate)
+                sh = sym_shares[s]
+                exit_comm = max(min_commission, sh * commission_per_share)
+                gross = (fill_p - sym_entry_fill[s]) * sh
+                net = gross - sym_entry_comm[s] - exit_comm
+                sym_cash[s] = (sh * fill_p) - exit_comm
+                ret_pct = (net / (sym_entry_fill[s] * sh)) * 100.0 if sym_entry_fill[s] > 0 else 0.0
+                closed_trades.append({
+                    "ticker": s,
+                    "side": f"LONG_{sym_pos_type[s]}",
+                    "entry_date": (
+                        sym_entry_date[s].strftime("%Y-%m-%d")
+                        if sym_entry_date[s]
+                        else ""
+                    ),
+                    "exit_date": current_date.strftime("%Y-%m-%d"),
+                    "bars_held": (
+                        len(ticker_dfs[s].loc[sym_entry_date[s]:current_date])
+                        if sym_entry_date[s]
+                        else 0
+                    ),
+                    "entry_fill": round(sym_entry_fill[s], 2),
+                    "exit_fill": round(fill_p, 2),
+                    "shares": round(sh, 4),
+                    "exit_reason": sym_exit_reason[s],
+                    "entry_commission": round(sym_entry_comm[s], 2),
+                    "exit_commission": round(exit_comm, 2),
+                    "gross_pnl": round(gross, 2),
+                    "net_pnl": round(net, 2),
+                    "return_pct": round(ret_pct, 2),
+                    "was_profitable": net > 0,
+                })
+                sym_shares[s] = 0.0
+                sym_pos_type[s] = None
+                sym_entry_fill[s] = 0.0
+                sym_pending_action[s] = None
+                sym_cooldown[s] = 2
+
+        # 2. Evening regime analysis & signal generation
+        sp_c = float(spy_c.loc[current_date]) if current_date in spy_c.index else 100.0
+        sp_sma = float(spy_sma200_s.loc[current_date]) if (current_date in spy_sma200_s.index and pd.notna(spy_sma200_s.loc[current_date])) else sp_c
+        macro_spy_bull = bool(sp_c >= sp_sma * 0.985)
+
+        for s in ticker_dfs:
+            if current_date not in ticker_dfs[s].index:
+                continue
+            cur_c = float(indicators[s]["close"].loc[current_date])
+            cur_h = float(indicators[s]["high"].loc[current_date])
+            cur_l = float(indicators[s]["low"].loc[current_date])
+            cur_o = float(indicators[s]["open"].loc[current_date])
+            cur_sma = float(indicators[s]["sma200"].loc[current_date]) if pd.notna(indicators[s]["sma200"].loc[current_date]) else cur_c
+            cur_ema20 = float(indicators[s]["ema20"].loc[current_date]) if pd.notna(indicators[s]["ema20"].loc[current_date]) else cur_c
+            cur_atr = float(indicators[s]["atr"].loc[current_date]) if pd.notna(indicators[s]["atr"].loc[current_date]) else cur_c * 0.02
+            cur_rsi = float(indicators[s]["rsi"].loc[current_date]) if pd.notna(indicators[s]["rsi"].loc[current_date]) else 50.0
+
+            asset_bull = bool(cur_c >= cur_sma * 0.99)
+            regime_bull = macro_spy_bull and asset_bull
+
+            if cur_c < cur_sma * 0.98:
+                sym_consec_below[s] += 1
+            else:
+                sym_consec_below[s] = 0
+
+            bullish_candle = (cur_c > cur_o) or (cur_c > cur_l + 0.40 * (cur_h - cur_l))
+            bearish_candle = (cur_c < cur_o) and (cur_c < cur_l + 0.45 * (cur_h - cur_l))
+
+            if sym_shares[s] > 0.0 and not sym_pending_action[s]:
+                sym_peak_price[s] = max(sym_peak_price[s], cur_h)
+                gain_pct = (cur_c - sym_entry_fill[s]) / max(sym_entry_fill[s], 1e-6)
+
+                if sym_pos_type[s] == "CORE_BULL":
+                    if gain_pct >= 0.25:
+                        new_stop = max(sym_entry_fill[s] * 1.05, sym_peak_price[s] - (3.0 * cur_atr))
+                    elif gain_pct >= 0.15:
+                        new_stop = max(sym_entry_fill[s] * 1.01, sym_peak_price[s] - (3.5 * cur_atr))
+                    else:
+                        new_stop = sym_peak_price[s] - (4.2 * cur_atr)
+                    sym_trailing_stop[s] = max(sym_trailing_stop[s], new_stop)
+
+                    hit_macro_bear = (not macro_spy_bull and cur_c < cur_sma) or (sym_consec_below[s] >= 3)
+                    hit_climax = (cur_rsi >= 75.0 and bearish_candle and gain_pct >= 0.15)
+                    hit_trailing = (cur_c < sym_trailing_stop[s])
+
+                    if hit_macro_bear or hit_climax or hit_trailing:
+                        sym_pending_action[s] = "SELL"
+                        if hit_macro_bear:
+                            sym_exit_reason[s] = "BEAR_REGIME_LIQUIDATION"
+                        elif hit_climax:
+                            sym_exit_reason[s] = "OVERBOUGHT_CLIMAX_HARVEST"
+                        else:
+                            sym_exit_reason[s] = "CHANDELIER_TRAILING_STOP"
+
+                elif sym_pos_type[s] == "CAPITULATION_REBOUND":
+                    hit_tp = (cur_c >= cur_ema20) or (cur_rsi >= 55.0)
+                    hit_sl = cur_c <= (sym_entry_fill[s] - (1.8 * cur_atr))
+                    if hit_tp or hit_sl:
+                        sym_pending_action[s] = "SELL"
+                        sym_exit_reason[s] = "REBOUND_TARGET" if hit_tp else "REBOUND_STOP"
+
+            elif sym_shares[s] == 0.0 and not sym_pending_action[s]:
+                if sym_cooldown[s] > 0:
+                    sym_cooldown[s] -= 1
+                else:
+                    if regime_bull:
+                        cond_pullback = (40.0 <= cur_rsi <= 66.0) and (cur_c >= cur_ema20 * 0.985) and bullish_candle
+                        cond_bull_dip = (cur_rsi <= 38.0) and bullish_candle
+                        if cond_pullback or cond_bull_dip:
+                            sym_pending_action[s] = "BUY"
+                            sym_pending_type[s] = "CORE_BULL"
+                    else:
+                        if cur_rsi <= 32.0 and bullish_candle:
+                            sym_pending_action[s] = "BUY"
+                            sym_pending_type[s] = "CAPITULATION_REBOUND"
+
+        # 3. End-of-Day Valuation
+        pos_val = sum(
+            sym_shares[s] * float(indicators[s]["close"].loc[current_date])
+            for s in ticker_dfs
+            if current_date in ticker_dfs[s].index
+        )
+        total_cash = sum(sym_cash.values())
+        daily_equity_curve.append({
+            "date": current_date,
+            "cash": total_cash,
+            "positions_value": pos_val,
+            "total_equity": total_cash + pos_val,
+        })
+
+    # Close any remaining open positions on the final session
+    last_date = all_dates[-1]
+    for s in ticker_dfs:
+        if last_date in ticker_dfs[s].index and sym_shares[s] > 0.0:
+            cur_c = float(indicators[s]["close"].loc[last_date])
+            exit_fill = cur_c * (1.0 - slippage_rate)
+            sh = sym_shares[s]
+            exit_comm = max(min_commission, sh * commission_per_share)
+            gross = (exit_fill - sym_entry_fill[s]) * sh
+            net = gross - sym_entry_comm[s] - exit_comm
+            sym_cash[s] += (sh * exit_fill) - exit_comm
+            ret_pct = (net / (sym_entry_fill[s] * sh)) * 100.0 if sym_entry_fill[s] > 0 else 0.0
+            closed_trades.append({
+                "ticker": s,
+                "side": f"LONG_{sym_pos_type[s]}",
+                "entry_date": (
+                    sym_entry_date[s].strftime("%Y-%m-%d")
+                    if sym_entry_date[s]
+                    else ""
+                ),
+                "exit_date": last_date.strftime("%Y-%m-%d"),
+                "bars_held": (
+                    len(ticker_dfs[s].loc[sym_entry_date[s]:last_date])
+                    if sym_entry_date[s]
+                    else 0
+                ),
+                "entry_fill": round(sym_entry_fill[s], 2),
+                "exit_fill": round(exit_fill, 2),
+                "shares": round(sh, 4),
+                "exit_reason": "END_OF_BACKTEST",
+                "entry_commission": round(sym_entry_comm[s], 2),
+                "exit_commission": round(exit_comm, 2),
+                "gross_pnl": round(gross, 2),
+                "net_pnl": round(net, 2),
+                "return_pct": round(ret_pct, 2),
+                "was_profitable": net > 0,
+            })
+            sym_shares[s] = 0.0
+
+    return daily_equity_curve, closed_trades
+
+
 def _run_core_tactical_simulation(
     ticker_dfs: Dict[str, pd.DataFrame],
     spy_df: pd.DataFrame,
@@ -1332,139 +1636,16 @@ def run_chronological_backtest(
             exit_rsi=55.0,
             stop_atr_mult=2.0,
         )
-    elif strategy_mode == "adaptive":
-        adaptive_map = {
-            "META": "oversold_rebound",
-            "TSLA": "oversold_rebound",
-            "MSFT": "oversold_rebound",
-            "AMZN": "oversold_rebound",
-            "AAPL": "core_tactical",
-            "NVDA": "oversold_rebound",
-            "GOOGL": "core_tactical",
-            "AMD": "core_tactical",
-        }
-        if len(ticker_dfs) == 1:
-            sym = list(ticker_dfs.keys())[0]
-            chosen_sub_mode = adaptive_map.get(sym, "core_tactical")
-            if chosen_sub_mode == "oversold_rebound":
-                daily_equity_curve, closed_trades = _run_oversold_rebound_simulation(
-                    ticker_dfs=ticker_dfs,
-                    all_dates=all_dates,
-                    initial_capital=initial_capital,
-                    slippage_bps=slippage_bps,
-                    commission_per_share=commission_per_share,
-                    min_commission=min_commission,
-                    oversold_rsi=38.0,
-                    exit_rsi=55.0,
-                    stop_atr_mult=2.0,
-                )
-            elif chosen_sub_mode == "rotation":
-                daily_equity_curve, closed_trades = _run_rotation_simulation(
-                    ticker_dfs=ticker_dfs,
-                    spy_df=spy_df,
-                    all_dates=all_dates,
-                    initial_capital=initial_capital,
-                    allocation_per_trade=allocation_per_trade,
-                    slippage_bps=slippage_bps,
-                    commission_per_share=commission_per_share,
-                    min_commission=min_commission,
-                    kept_features=kept_features,
-                    scaler=scaler,
-                    xgb_model=xgb_model,
-                    lgbm_model=lgbm_model,
-                    calibrator=calibrator,
-                    models_by_ticker=models_by_ticker,
-                )
-            else:
-                daily_equity_curve, closed_trades = _run_core_tactical_simulation(
-                    ticker_dfs=ticker_dfs,
-                    spy_df=spy_df,
-                    all_dates=all_dates,
-                    initial_capital=initial_capital,
-                    slippage_bps=slippage_bps,
-                    commission_per_share=commission_per_share,
-                    min_commission=min_commission,
-                    leverage=leverage,
-                    dip_rsi=dip_rsi,
-                    trim_rsi=trim_rsi,
-                    kept_features=kept_features,
-                    scaler=scaler,
-                    xgb_model=xgb_model,
-                    lgbm_model=lgbm_model,
-                    calibrator=calibrator,
-                    models_by_ticker=models_by_ticker,
-                )
-        else:
-            sub_capital = initial_capital / len(ticker_dfs)
-            all_curves = []
-            all_trades: List[Dict[str, Any]] = []
-            for s, df_s in ticker_dfs.items():
-                s_mode = adaptive_map.get(s, "core_tactical")
-                if s_mode == "oversold_rebound":
-                    s_curve, s_trades = _run_oversold_rebound_simulation(
-                        ticker_dfs={s: df_s},
-                        all_dates=all_dates,
-                        initial_capital=sub_capital,
-                        slippage_bps=slippage_bps,
-                        commission_per_share=commission_per_share,
-                        min_commission=min_commission,
-                        oversold_rsi=38.0,
-                        exit_rsi=55.0,
-                        stop_atr_mult=2.0,
-                    )
-                elif s_mode == "rotation":
-                    s_curve, s_trades = _run_rotation_simulation(
-                        ticker_dfs={s: df_s},
-                        spy_df=spy_df,
-                        all_dates=all_dates,
-                        initial_capital=sub_capital,
-                        allocation_per_trade=1.0,
-                        slippage_bps=slippage_bps,
-                        commission_per_share=commission_per_share,
-                        min_commission=min_commission,
-                        kept_features=kept_features,
-                        scaler=scaler,
-                        xgb_model=xgb_model,
-                        lgbm_model=lgbm_model,
-                        calibrator=calibrator,
-                        models_by_ticker=models_by_ticker,
-                    )
-                else:
-                    s_curve, s_trades = _run_core_tactical_simulation(
-                        ticker_dfs={s: df_s},
-                        spy_df=spy_df,
-                        all_dates=all_dates,
-                        initial_capital=sub_capital,
-                        slippage_bps=slippage_bps,
-                        commission_per_share=commission_per_share,
-                        min_commission=min_commission,
-                        leverage=leverage,
-                        dip_rsi=dip_rsi,
-                        trim_rsi=trim_rsi,
-                        kept_features=kept_features,
-                        scaler=scaler,
-                        xgb_model=xgb_model,
-                        lgbm_model=lgbm_model,
-                        calibrator=calibrator,
-                        models_by_ticker=models_by_ticker,
-                    )
-                all_curves.append(pd.DataFrame(s_curve).set_index("date"))
-                all_trades.extend(s_trades)
-
-            combined_curve = pd.DataFrame(index=all_dates)
-            combined_curve["cash"] = sum(c["cash"] for c in all_curves)
-            combined_curve["positions_value"] = sum(c["positions_value"] for c in all_curves)
-            combined_curve["total_equity"] = sum(c["total_equity"] for c in all_curves)
-            daily_equity_curve = [
-                {
-                    "date": dt,
-                    "cash": float(row["cash"]),
-                    "positions_value": float(row["positions_value"]),
-                    "total_equity": float(row["total_equity"]),
-                }
-                for dt, row in combined_curve.iterrows()
-            ]
-            closed_trades = all_trades
+    elif strategy_mode in ("adaptive", "dynamic_regime_hybrid"):
+        daily_equity_curve, closed_trades = _run_dynamic_regime_hybrid_simulation(
+            ticker_dfs=ticker_dfs,
+            spy_df=spy_df,
+            all_dates=all_dates,
+            initial_capital=initial_capital,
+            slippage_bps=slippage_bps,
+            commission_per_share=commission_per_share,
+            min_commission=min_commission,
+        )
     else:
         daily_equity_curve, closed_trades = _run_rotation_simulation(
             ticker_dfs=ticker_dfs,
@@ -1611,8 +1792,8 @@ if __name__ == "__main__":
         "--strategy-mode",
         type=str,
         default="adaptive",
-        choices=["rotation", "core_tactical", "oversold_rebound", "adaptive"],
-        help="Strategy mode: rotation, core_tactical, oversold_rebound, or adaptive (regime-matched mesh)",
+        choices=["rotation", "core_tactical", "oversold_rebound", "adaptive", "dynamic_regime_hybrid"],
+        help="Strategy mode: rotation, core_tactical, oversold_rebound, adaptive, or dynamic_regime_hybrid",
     )
     parser.add_argument(
         "--leverage", type=float, default=1.00, help="Tactical equity multiplier (default 1.00 = unleveraged cash account)"
