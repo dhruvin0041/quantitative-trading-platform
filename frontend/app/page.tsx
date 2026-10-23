@@ -138,16 +138,16 @@ export default function HydraTerminal() {
   }, [universe, ticker]);
 
   const strategyModeLabel = useMemo(() => {
-    const rawMode = chartData?.strategy_mode;
-    if (rawMode === 'OVERSOLD_REBOUND') return 'Adaptive Mesh · Oversold Rebound';
-    if (rawMode === 'CORE_TACTICAL_ALPHA') return 'Adaptive Mesh · Core Tactical';
-    if (UNIVERSAL_TICKERS.includes(ticker)) {
-      return ['AAPL', 'GOOGL', 'AMD'].includes(ticker)
-        ? 'Adaptive Mesh · Core Tactical'
-        : 'Adaptive Mesh · Oversold Rebound';
+    const rawMode = chartData?.strategy_name || chartData?.strategy_mode;
+    if (rawMode) {
+      const clean = rawMode
+        .replace(/_/g, ' ')
+        .toLowerCase()
+        .replace(/\b\w/g, (c: string) => c.toUpperCase());
+      return `Adaptive Mesh · ${clean}`;
     }
-    return null;
-  }, [chartData?.strategy_mode, ticker, UNIVERSAL_TICKERS]);
+    return 'Adaptive Mesh · Multi-Agent Consensus';
+  }, [chartData?.strategy_name, chartData?.strategy_mode]);
 
   // Extract Risk Metrics from chartData or default
   const portfolioVaR = chartData?.risk?.var_95 !== undefined && chartData?.risk?.var_95 !== null

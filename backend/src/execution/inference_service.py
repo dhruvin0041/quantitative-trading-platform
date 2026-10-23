@@ -1000,7 +1000,7 @@ class InferenceService:
                         pos_type = None
                         entry_price = 0.0
                         pending_action = None
-                        cooldown = strat_params.get("cooldown", 1)
+                        cooldown = strat_params.get("cooldown", 3)
 
                     if current_pos == "FLAT" and cooldown > 0:
                         cooldown -= 1
@@ -1063,7 +1063,7 @@ class InferenceService:
                         trailing_stop = max(trailing_stop, new_stop)
 
                         hit_macro_bear = (
-                            ((not macro_spy_bull and cur_c < cur_sma200) or (consec_below >= 3))
+                            ((not macro_spy_bull and cur_c < cur_sma200) or (cur_c < cur_sma200 * 0.98) or (consec_below >= 3))
                             if strat_params.get("macro_bear_exit", True)
                             else False
                         )
@@ -1073,7 +1073,7 @@ class InferenceService:
                         hit_trailing = (cur_c < trailing_stop)
 
                         hit_rebound_target = False
-                        if strat_type == "ASYMMETRIC_MEAN_REVERSION":
+                        if strat_type == "ASYMMETRIC_MEAN_REVERSION" and pos_type == "CAPITULATION":
                             rebound_rsi = strat_params.get("rebound_exit_rsi", 55.0)
                             hit_rebound_target = (cur_c >= cur_ema20) and (cur_rsi >= rebound_rsi)
 
@@ -1128,42 +1128,64 @@ class InferenceService:
                             buy_rationale = None
 
                             if strat_type == "VOLATILITY_BREAKOUT_SWING":
-                                cond_macd = cur_hist > 0 and cur_hist > prev_hist
+                                cond_macd = cur_hist > 0 and cur_hist >= prev_hist
                                 cond_break = (cur_c >= cur_ema20) and (48.0 <= cur_rsi <= 74.0) and bullish_candle
                                 if regime_bull and cond_macd and cond_break:
                                     trigger_buy = True
+                                    pending_type = strat_type
                                     buy_reason = "VOLATILITY_BREAKOUT_ENTRY"
                                     buy_rationale = f"Bull regime momentum breakout confirmed: MACD expanding ({cur_hist:.3f}), RSI {cur_rsi:.1f}. Spot entry."
 
                             elif strat_type == "ASYMMETRIC_MEAN_REVERSION":
-                                dip_rsi = strat_params.get("dip_rsi", 33.0)
-                                cond_bb = (cur_c <= cur_bbl * 1.015) and bullish_candle
-                                cond_rsi = (cur_rsi <= dip_rsi) and bullish_candle
-                                if cond_bb or cond_rsi:
-                                    trigger_buy = True
-                                    buy_reason = "OVERSOLD_CAPITULATION_ENTRY"
-                                    buy_rationale = f"Asymmetric capitulation dip confirmed ({'Lower BB' if cond_bb else f'RSI {cur_rsi:.1f} <= {dip_rsi}'}). Spot rebound allocation."
+                                dip_rsi = strat_params.get("dip_rsi", 42.0)
+                                if regime_bull:
+                                    cond_pb = (cur_rsi <= dip_rsi) and bullish_candle
+                                    cond_break = (cur_c >= cur_ema20) and (cur_hist > 0) and (cur_hist >= prev_hist) and (48.0 <= cur_rsi <= 74.0) and bullish_candle
+                                    if cond_pb or cond_break:
+                                        trigger_buy = True
+                                        pending_type = strat_type
+                                        buy_reason = "TACTICAL_PULLBACK_ENTRY" if cond_pb else "VOLATILITY_BREAKOUT_ENTRY"
+                                        buy_rationale = f"Bull regime {'pullback accumulation' if cond_pb else 'momentum breakout'} confirmed (RSI {cur_rsi:.1f}). Spot allocation."
+                                else:
+                                    if cur_rsi <= 28.0 and bullish_candle and (cur_c > cur_l + 0.35 * (cur_h - cur_l)):
+                                        trigger_buy = True
+                                        pending_type = "CAPITULATION"
+                                        buy_reason = "CAPITULATION_REBOUND_ENTRY"
+                                        buy_rationale = f"Bear regime extreme oversold capitulation exhaustion (RSI {cur_rsi:.1f} <= 28.0). Tactical rebound allocation."
 
                             elif strat_type == "CORE_TACTICAL_ACCUMULATION":
                                 dip_rsi = strat_params.get("dip_rsi", 45.0)
-                                if regime_bull and (cur_rsi <= dip_rsi) and bullish_candle:
-                                    trigger_buy = True
-                                    buy_reason = "CORE_TACTICAL_PULLBACK_ENTRY"
-                                    buy_rationale = f"Bull regime pullback accumulation confirmed (RSI {cur_rsi:.1f} <= {dip_rsi} above 200 SMA). Spot allocation."
+                                if regime_bull:
+                                    cond_pb = (cur_rsi <= dip_rsi) and bullish_candle
+                                    cond_break = (cur_c >= cur_ema20) and (cur_hist > 0) and (cur_hist >= prev_hist) and (48.0 <= cur_rsi <= 74.0) and bullish_candle
+                                    if cond_pb or cond_break:
+                                        trigger_buy = True
+                                        pending_type = strat_type
+                                        buy_reason = "CORE_TACTICAL_PULLBACK_ENTRY" if cond_pb else "VOLATILITY_BREAKOUT_ENTRY"
+                                        buy_rationale = f"Bull regime {'pullback accumulation' if cond_pb else 'momentum breakout'} confirmed (RSI {cur_rsi:.1f} above 200 SMA). Spot allocation."
+                                else:
+                                    if cur_rsi <= 26.0 and bullish_candle and (cur_c > cur_l + 0.35 * (cur_h - cur_l)):
+                                        trigger_buy = True
+                                        pending_type = "CAPITULATION"
+                                        buy_reason = "CAPITULATION_REBOUND_ENTRY"
+                                        buy_rationale = f"Bear regime oversold capitulation exhaustion (RSI {cur_rsi:.1f} <= 26.0). Tactical rebound allocation."
 
                             elif strat_type == "DYNAMIC_REGIME_HYBRID":
+                                dip_rsi = strat_params.get("dip_rsi", 40.0)
                                 if regime_bull:
-                                    cond_pb = (40.0 <= cur_rsi <= 66.0) and (cur_c >= cur_ema20 * 0.985) and bullish_candle
-                                    cond_dip = (cur_rsi <= 38.0) and bullish_candle
-                                    if cond_pb or cond_dip:
+                                    cond_pb = (cur_rsi <= dip_rsi) and bullish_candle
+                                    cond_break = (cur_c >= cur_ema20) and (cur_hist > 0) and (cur_hist >= prev_hist) and (48.0 <= cur_rsi <= 74.0) and bullish_candle
+                                    if cond_pb or cond_break:
                                         trigger_buy = True
-                                        buy_reason = "CORE_BULL_PULLBACK" if cond_pb else "BULL_DIP_REVERSAL"
-                                        buy_rationale = f"Bull regime {'pullback continuation' if cond_pb else 'oversold dip'} confirmed. Spot allocation."
+                                        pending_type = strat_type
+                                        buy_reason = "CORE_BULL_PULLBACK" if cond_pb else "VOLATILITY_BREAKOUT_ENTRY"
+                                        buy_rationale = f"Bull regime {'pullback continuation' if cond_pb else 'momentum breakout'} confirmed. Spot allocation."
                                 else:
-                                    if cur_rsi <= 32.0 and bullish_candle:
+                                    if cur_rsi <= 26.0 and bullish_candle and (cur_c > cur_l + 0.35 * (cur_h - cur_l)):
                                         trigger_buy = True
+                                        pending_type = "CAPITULATION"
                                         buy_reason = "CAPITULATION_REBOUND_ENTRY"
-                                        buy_rationale = f"Bear regime capitulation oversold exhaustion (RSI {cur_rsi:.1f} <= 32.0). Tactical rebound allocation."
+                                        buy_rationale = f"Bear regime capitulation oversold exhaustion (RSI {cur_rsi:.1f} <= 26.0). Tactical rebound allocation."
 
                             if trigger_buy:
                                 pending_action = "BUY"
@@ -2169,10 +2191,6 @@ class InferenceService:
         cur_ema20 = float(tech_snapshot.get("EMA_20", curr_close))
         c_atr = float(tech_snapshot.get("ATR", curr_close * 0.02))
 
-        # Bollinger Bands
-        bb_mid = ticker_df_risk["Close"].rolling(20).mean().iloc[-1] if len(ticker_df_risk) >= 20 else curr_close
-        bb_std = ticker_df_risk["Close"].rolling(20).std().iloc[-1] if len(ticker_df_risk) >= 20 else curr_close * 0.02
-        cur_bbl = bb_mid - (2.0 * bb_std)
 
         # MACD
         ema12_val = ticker_df_risk["Close"].ewm(span=12).mean()
@@ -2230,7 +2248,7 @@ class InferenceService:
                 trail_stop = peak_p - (base_trail * c_atr)
 
             hit_macro_bear = (
-                (not macro_spy_bull and curr_close < sma_200)
+                ((not macro_spy_bull and curr_close < sma_200) or (curr_close < sma_200 * 0.98))
                 if strat_params.get("macro_bear_exit", True)
                 else False
             )
@@ -2240,7 +2258,7 @@ class InferenceService:
             hit_trailing = (curr_close < trail_stop)
 
             hit_rebound_target = False
-            if strat_type == "ASYMMETRIC_MEAN_REVERSION":
+            if strat_type == "ASYMMETRIC_MEAN_REVERSION" and not regime_bull:
                 rebound_rsi = strat_params.get("rebound_exit_rsi", 55.0)
                 hit_rebound_target = (curr_close >= cur_ema20) and (c_rsi >= rebound_rsi)
 
@@ -2276,7 +2294,7 @@ class InferenceService:
                 tactical_action = "COUNTER_TREND_SHORT_CANDIDATE"
                 tactical_rationale = f"{strat_name}: Model consensus signals SELL while flat."
             elif strat_type == "VOLATILITY_BREAKOUT_SWING":
-                cond_macd = cur_hist > 0 and cur_hist > prev_hist
+                cond_macd = cur_hist > 0 and cur_hist >= prev_hist
                 cond_break = (curr_close >= cur_ema20) and (48.0 <= c_rsi <= 74.0) and bullish_candle
                 if pre_signal == "BUY" or (regime_bull and cond_macd and cond_break):
                     trigger_buy = True
@@ -2289,18 +2307,29 @@ class InferenceService:
                     tactical_rationale = f"{strat_name}: Awaiting momentum breakout setup. 100% Cash defense."
 
             elif strat_type == "ASYMMETRIC_MEAN_REVERSION":
-                dip_rsi = strat_params.get("dip_rsi", 33.0)
-                cond_bb = (curr_close <= cur_bbl * 1.015) and bullish_candle
-                cond_rsi = (c_rsi <= dip_rsi) and bullish_candle
-                if pre_signal == "BUY" or (cond_bb or cond_rsi):
-                    trigger_buy = True
-                    buy_action = "OVERSOLD_CAPITULATION_BUY"
-                    buy_rationale = f"Asymmetric capitulation dip confirmed ({'Lower BB' if cond_bb else f'RSI {c_rsi:.1f} <= {dip_rsi}'}). Spot rebound allocation."
+                dip_rsi = strat_params.get("dip_rsi", 42.0)
+                if regime_bull:
+                    cond_pb = (c_rsi <= dip_rsi) and bullish_candle
+                    cond_break = (curr_close >= cur_ema20) and (cur_hist > 0) and (cur_hist >= prev_hist) and (48.0 <= c_rsi <= 74.0) and bullish_candle
+                    if pre_signal == "BUY" or (cond_pb or cond_break):
+                        trigger_buy = True
+                        buy_action = "TACTICAL_PULLBACK_BUY" if cond_pb else "VOLATILITY_BREAKOUT_BUY"
+                        buy_rationale = f"Bull regime {'pullback accumulation' if cond_pb else 'momentum breakout'} confirmed (RSI {c_rsi:.1f}). Spot allocation."
+                    else:
+                        pre_signal = "HOLD"
+                        target_exposure = 0.00
+                        tactical_action = "AWAITING_TREND_SETUP"
+                        tactical_rationale = f"{strat_name}: Preserving 100% Cash defense while awaiting pullback/breakout setup (RSI {c_rsi:.1f})."
                 else:
-                    pre_signal = "HOLD"
-                    target_exposure = 0.00
-                    tactical_action = "CASH_DEFENSE_AWAITING_DIP"
-                    tactical_rationale = f"{strat_name}: Preserving 100% Cash defense while awaiting extreme oversold dip (RSI {c_rsi:.1f})."
+                    if pre_signal == "BUY" or (c_rsi <= 28.0 and bullish_candle and (curr_close > cur_l + 0.35 * (cur_h - cur_l))):
+                        trigger_buy = True
+                        buy_action = "CAPITULATION_REBOUND_BUY"
+                        buy_rationale = f"Bear regime extreme oversold capitulation exhaustion (RSI {c_rsi:.1f} <= 28.0). Tactical rebound allocation."
+                    else:
+                        pre_signal = "HOLD"
+                        target_exposure = 0.00
+                        tactical_action = "CASH_DEFENSE_100%"
+                        tactical_rationale = "Bear Regime / Macro Breakdown active. 100% Cash Defense sheltering capital from market drawdowns."
 
             elif strat_type == "CORE_TACTICAL_ACCUMULATION":
                 dip_rsi = strat_params.get("dip_rsi", 45.0)
@@ -2309,29 +2338,46 @@ class InferenceService:
                     buy_action = "CORE_TACTICAL_PULLBACK_BUY"
                     buy_rationale = f"Bull regime pullback accumulation confirmed (RSI {c_rsi:.1f} <= {dip_rsi} above 200 SMA). Spot allocation."
                 else:
-                    pre_signal = "HOLD"
-                    target_exposure = 0.00
-                    tactical_action = "AWAITING_TREND_PULLBACK"
-                    tactical_rationale = f"{strat_name}: Macro bull intact. Preserving 100% Cash while awaiting pullback (RSI {c_rsi:.1f})."
+                    cond_break = (curr_close >= cur_ema20) and (cur_hist > 0) and (cur_hist >= prev_hist) and (48.0 <= c_rsi <= 74.0) and bullish_candle
+                    if pre_signal == "BUY" or (regime_bull and cond_break):
+                        trigger_buy = True
+                        buy_action = "VOLATILITY_BREAKOUT_BUY"
+                        buy_rationale = f"Bull regime momentum breakout confirmed (RSI {c_rsi:.1f} above 200 SMA). Spot allocation."
+                    else:
+                        pre_signal = "HOLD"
+                        target_exposure = 0.00
+                        tactical_action = "AWAITING_TREND_PULLBACK"
+                        tactical_rationale = f"{strat_name}: Macro bull intact. Preserving 100% Cash while awaiting pullback (RSI {c_rsi:.1f})."
+                if not regime_bull:
+                    if pre_signal == "BUY" or (c_rsi <= 26.0 and bullish_candle and (curr_close > cur_l + 0.35 * (cur_h - cur_l))):
+                        trigger_buy = True
+                        buy_action = "CAPITULATION_REBOUND_BUY"
+                        buy_rationale = f"Bear regime oversold capitulation exhaustion (RSI {c_rsi:.1f} <= 26.0). Tactical rebound allocation."
+                    else:
+                        pre_signal = "HOLD"
+                        target_exposure = 0.00
+                        tactical_action = "CASH_DEFENSE_100%"
+                        tactical_rationale = "Bear Regime / Macro Breakdown active. 100% Cash Defense sheltering capital from market drawdowns."
 
             elif strat_type == "DYNAMIC_REGIME_HYBRID":
+                dip_rsi = strat_params.get("dip_rsi", 40.0)
                 if regime_bull:
-                    cond_pb = (40.0 <= c_rsi <= 66.0) and (curr_close >= cur_ema20 * 0.985) and bullish_candle
-                    cond_dip = (c_rsi <= 38.0) and bullish_candle
-                    if pre_signal == "BUY" or (cond_pb or cond_dip):
+                    cond_pb = (c_rsi <= dip_rsi) and bullish_candle
+                    cond_break = (curr_close >= cur_ema20) and (cur_hist > 0) and (cur_hist >= prev_hist) and (48.0 <= c_rsi <= 74.0) and bullish_candle
+                    if pre_signal == "BUY" or (cond_pb or cond_break):
                         trigger_buy = True
-                        buy_action = "CORE_BULL_PULLBACK_BUY" if cond_pb else "BULL_DIP_REVERSAL_BUY"
-                        buy_rationale = f"Bull regime {'pullback continuation' if cond_pb else 'oversold dip'} confirmed (RSI {c_rsi:.1f}). Deploying 1.00x spot cash equity."
+                        buy_action = "CORE_BULL_PULLBACK_BUY" if cond_pb else "VOLATILITY_BREAKOUT_BUY"
+                        buy_rationale = f"Bull regime {'pullback continuation' if cond_pb else 'momentum breakout'} confirmed (RSI {c_rsi:.1f}). Deploying 1.00x spot cash equity."
                     else:
                         pre_signal = "HOLD"
                         target_exposure = 0.00
                         tactical_action = "AWAITING_PULLBACK_SETUP"
                         tactical_rationale = f"Macro Bull intact. Waiting for high-probability pullback / dip setup (RSI {c_rsi:.1f}). 100% Cash preserved."
                 else:
-                    if pre_signal == "BUY" or (c_rsi <= 32.0 and bullish_candle):
+                    if pre_signal == "BUY" or (c_rsi <= 26.0 and bullish_candle and (curr_close > cur_l + 0.35 * (cur_h - cur_l))):
                         trigger_buy = True
                         buy_action = "CAPITULATION_REBOUND_BUY"
-                        buy_rationale = f"Bear regime capitulation oversold exhaustion (RSI {c_rsi:.1f} <= 32.0). Tactical mean-reversion spot allocation."
+                        buy_rationale = f"Bear regime capitulation oversold exhaustion (RSI {c_rsi:.1f} <= 26.0). Tactical mean-reversion spot allocation."
                     else:
                         pre_signal = "HOLD"
                         target_exposure = 0.00

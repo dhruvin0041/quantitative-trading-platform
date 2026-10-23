@@ -409,28 +409,31 @@ class ReportGenerator:
         ]
         window_markers.sort(key=lambda m: m["time"])
 
-        # Parity with institutional positions active prior to visible chart window:
-        # If the visible window begins with an exit (SELL) or has an open position entered before min_date,
-        # anchor the preceding entry (BUY) to min_date so the chart visually reflects the active trade.
+        # Clean pairing for institutional chart presentation:
+        # If the window starts with an orphaned SELL (from a position entered prior to the 1-year window),
+        # cleanly anchor the preceding BUY to min_date (if the exit is on a later bar),
+        # or discard the orphaned day-0 SELL to ensure all visible trades start with a clean BUY entry.
         if min_date and raw_markers:
             pre_buys = [
                 m
                 for m in raw_markers
                 if m.get("time") and str(m["time"]) < min_date and m.get("action") == "BUY"
             ]
-            pre_sells = [
-                m
-                for m in raw_markers
-                if m.get("time") and str(m["time"]) < min_date and m.get("action") == "SELL"
-            ]
-            has_unclosed_pre_position = len(pre_buys) > len(pre_sells)
-            first_is_sell = bool(window_markers and window_markers[0].get("action") == "SELL")
-
-            if (first_is_sell or (not window_markers and has_unclosed_pre_position)) and pre_buys:
-                last_pre_buy = pre_buys[-1].copy()
-                last_pre_buy["time"] = min_date
-                last_pre_buy["bar_timestamp"] = min_date
-                window_markers.insert(0, last_pre_buy)
+            while window_markers and window_markers[0].get("action") == "SELL":
+                sell_time = str(window_markers[0].get("time", ""))
+                if sell_time <= min_date:
+                    # Discard orphaned exit that occurs on or before min_date
+                    window_markers.pop(0)
+                else:
+                    # Anchor preceding buy to min_date so the full trade is visible
+                    if pre_buys:
+                        last_pre_buy = pre_buys[-1].copy()
+                        last_pre_buy["time"] = min_date
+                        last_pre_buy["bar_timestamp"] = min_date
+                        window_markers.insert(0, last_pre_buy)
+                    else:
+                        window_markers.pop(0)
+                    break
 
         return {
             "candles": candles,
