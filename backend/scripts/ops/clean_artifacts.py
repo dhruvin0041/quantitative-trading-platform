@@ -177,13 +177,19 @@ def clean_optimization_artifacts(ticker=None, universal=False, all_tickers=False
 
 
 def clean_data_state():
-    """Deletes institutional data state: Signal Journal and Paper Trading history."""
+    """Deletes institutional data state: Signal Journal, Ledgers, and Paper Trading history."""
     files = [
         "data/empirical_validation.db",
         "data/paper_trading.json",
         "data/paper_trading.db",
         "data/backtest_log.db",
         "artifacts/paper_execution_state.db",
+        "artifacts/signal_ledger.db",
+        "artifacts/signal_ledger.db-shm",
+        "artifacts/signal_ledger.db-wal",
+        "artifacts/ledger.db",
+        "artifacts/test_prospective_ledger.db",
+        "artifacts/universe_accuracy_audit.json",
     ]
     print("--- Cleaning Data State (Zero-State Protocol) ---")
     for f in files:

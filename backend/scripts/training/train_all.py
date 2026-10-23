@@ -132,6 +132,13 @@ def run_train_all(
             indent=4,
         )
     print(f"Summary JSON saved to {summary_path}")
+
+    # Reset active ticker to primary benchmark asset (AAPL)
+    active_path = BACKEND_DIR / "configs" / "active_ticker.json"
+    with open(active_path, "w") as f:
+        json.dump({"ticker": "AAPL", "market": "us"}, f, indent=4)
+    print("Default active ticker restored to AAPL.")
+
     return results
 
 

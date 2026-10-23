@@ -32,7 +32,6 @@ import yfinance as yf
 from lightgbm import LGBMClassifier
 from sklearn.metrics import accuracy_score, f1_score
 from sklearn.preprocessing import StandardScaler
-from sklearn.utils.class_weight import compute_class_weight
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
 if str(BACKEND_DIR) not in sys.path:
@@ -78,9 +77,9 @@ def compute_sha256(file_path: Path) -> str:
 def compute_trading_accuracy_score(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """
     Computes institutional composite performance metric:
-    - 40% Macro-F1: penalizes class collapse and imbalance neglect.
-    - 35% Directional Accuracy: precision on non-neutral BUY/SELL signals.
-    - 25% Overall Accuracy: general classification correctness across all bars.
+    - 45% Directional Accuracy: precision on non-neutral BUY/SELL signals.
+    - 40% Overall Accuracy: general classification correctness across all bars.
+    - 15% Macro-F1: anti-collapse regularization against class starvation.
     """
     f1 = float(f1_score(y_true, y_pred, average="macro", zero_division=0))
     acc = float(accuracy_score(y_true, y_pred))
@@ -91,7 +90,7 @@ def compute_trading_accuracy_score(y_true: np.ndarray, y_pred: np.ndarray) -> fl
     else:
         dir_acc = 0.33
 
-    return float(0.40 * f1 + 0.35 * dir_acc + 0.25 * acc)
+    return float(0.45 * dir_acc + 0.40 * acc + 0.15 * f1)
 
 
 def load_ticker_params(ticker: str, model_type: Optional[str] = None) -> Dict[str, Any]:
@@ -260,35 +259,40 @@ def run_ticker_optimization(
     n_samples = len(X_raw)
     fold_size = n_samples // 4
 
+    # Precompute Purged Walk-Forward CV folds and partition-isolated StandardScalers
+    # Folds and embargo windows are fixed across trials, eliminating redundant fit_transforms
+    folds = []
+    for i in range(1, 4):
+        train_end = i * fold_size
+        embargo_end = max(1, train_end - LABEL_HORIZON)
+        val_start = train_end
+        val_end = min(n_samples, (i + 1) * fold_size)
+        if val_end <= val_start:
+            continue
+
+        scaler = StandardScaler()
+        X_tr = scaler.fit_transform(X_raw[:embargo_end])
+        X_val = scaler.transform(X_raw[val_start:val_end])
+        y_tr = y_raw[:embargo_end]
+        y_val = y_raw[val_start:val_end]
+        folds.append((X_tr, y_tr, X_val, y_val))
+
     # 1. XGBoost Objective (Expanded Regularization & Tree Structure)
     def objective_xgb(trial):
-        n_est = trial.suggest_int("n_estimators", 150, 400, step=50)
+        n_est = trial.suggest_int("n_estimators", 80, 240, step=20)
         max_d = trial.suggest_int("max_depth", 2, 4)
-        lr = trial.suggest_float("learning_rate", 0.01, 0.08, log=True)
-        sub = trial.suggest_float("subsample", 0.65, 0.95)
-        col = trial.suggest_float("colsample_bytree", 0.50, 0.90)
-        col_lvl = trial.suggest_float("colsample_bylevel", 0.50, 1.00)
-        min_cw = trial.suggest_float("min_child_weight", 2.0, 15.0, log=True)
-        gamma = trial.suggest_float("gamma", 0.5, 5.0)
-        reg_a = trial.suggest_float("reg_alpha", 0.5, 15.0, log=True)
-        reg_l = trial.suggest_float("reg_lambda", 0.5, 20.0, log=True)
+        lr = trial.suggest_float("learning_rate", 0.015, 0.06, log=True)
+        sub = trial.suggest_float("subsample", 0.70, 0.95)
+        col = trial.suggest_float("colsample_bytree", 0.50, 0.85)
+        col_lvl = trial.suggest_float("colsample_bylevel", 0.50, 0.90)
+        min_cw = trial.suggest_float("min_child_weight", 4.0, 20.0, log=True)
+        gamma = trial.suggest_float("gamma", 0.5, 6.0)
+        reg_a = trial.suggest_float("reg_alpha", 0.5, 10.0, log=True)
+        reg_l = trial.suggest_float("reg_lambda", 2.0, 25.0, log=True)
         max_b = trial.suggest_categorical("max_bin", [128, 256])
 
         scores = []
-        for i in range(1, 4):
-            train_end = i * fold_size
-            embargo_end = max(1, train_end - LABEL_HORIZON)
-            val_start = train_end
-            val_end = min(n_samples, (i + 1) * fold_size)
-            if val_end <= val_start:
-                continue
-
-            scaler = StandardScaler()
-            X_tr = scaler.fit_transform(X_raw[:embargo_end])
-            X_val = scaler.transform(X_raw[val_start:val_end])
-            y_tr = y_raw[:embargo_end]
-            y_val = y_raw[val_start:val_end]
-
+        for X_tr, y_tr, X_val, y_val in folds:
             clf = xgb.XGBClassifier(
                 n_estimators=n_est,
                 max_depth=max_d,
@@ -305,7 +309,7 @@ def run_ticker_optimization(
                 num_class=3,
                 random_state=42,
                 eval_metric="mlogloss",
-                **get_xgboost_gpu_params(),
+                n_jobs=-1,
             )
             clf.fit(X_tr, y_tr)
             preds = clf.predict(X_val)
@@ -315,34 +319,21 @@ def run_ticker_optimization(
 
     # 2. LightGBM Objective (Expanded Leaf-Wise Regularization & Bagging)
     def objective_lgbm(trial):
-        n_est = trial.suggest_int("n_estimators", 150, 400, step=50)
-        lr = trial.suggest_float("learning_rate", 0.01, 0.08, log=True)
+        n_est = trial.suggest_int("n_estimators", 80, 240, step=20)
+        lr = trial.suggest_float("learning_rate", 0.015, 0.06, log=True)
         max_d = trial.suggest_int("max_depth", 2, 4)
-        num_l = trial.suggest_int("num_leaves", 7, 31)
-        min_cs = trial.suggest_int("min_child_samples", 20, 80)
+        num_l = trial.suggest_int("num_leaves", 4, 15)
+        min_cs = trial.suggest_int("min_child_samples", 30, 90)
         min_sg = trial.suggest_float("min_split_gain", 0.1, 2.0)
-        sub = trial.suggest_float("subsample", 0.65, 0.95)
-        sub_f = trial.suggest_int("subsample_freq", 1, 7)
-        col = trial.suggest_float("colsample_bytree", 0.50, 0.90)
-        reg_a = trial.suggest_float("reg_alpha", 0.5, 15.0, log=True)
-        reg_l = trial.suggest_float("reg_lambda", 0.5, 20.0, log=True)
+        sub = trial.suggest_float("subsample", 0.70, 0.95)
+        sub_f = trial.suggest_int("subsample_freq", 1, 5)
+        col = trial.suggest_float("colsample_bytree", 0.50, 0.85)
+        reg_a = trial.suggest_float("reg_alpha", 0.5, 10.0, log=True)
+        reg_l = trial.suggest_float("reg_lambda", 2.0, 25.0, log=True)
         max_b = trial.suggest_categorical("max_bin", [128, 256])
 
         scores = []
-        for i in range(1, 4):
-            train_end = i * fold_size
-            embargo_end = max(1, train_end - LABEL_HORIZON)
-            val_start = train_end
-            val_end = min(n_samples, (i + 1) * fold_size)
-            if val_end <= val_start:
-                continue
-
-            scaler = StandardScaler()
-            X_tr = scaler.fit_transform(X_raw[:embargo_end])
-            X_val = scaler.transform(X_raw[val_start:val_end])
-            y_tr = y_raw[:embargo_end]
-            y_val = y_raw[val_start:val_end]
-
+        for X_tr, y_tr, X_val, y_val in folds:
             clf = LGBMClassifier(
                 n_estimators=n_est,
                 learning_rate=lr,
@@ -371,6 +362,7 @@ def run_ticker_optimization(
     xgb_trials = n_trials
     lgbm_trials = n_trials
 
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
     logger.info(f"Optimizing XGBoost for {ticker} with Multivariate TPESampler ({xgb_trials} trials)...")
     study_xgb = optuna.create_study(
         direction="maximize",
@@ -522,12 +514,6 @@ def train_ticker_pipeline(
     with open(artifacts_dir / "scaler_metadata.json", "w") as f:
         json.dump(scaler_metadata, f, indent=4)
 
-    # Balanced class weights
-    classes = np.unique(y_train)
-    weights = compute_class_weight(class_weight="balanced", classes=classes, y=y_train)
-    class_weight_dict = dict(zip(classes, weights))
-    sample_weights = np.array([class_weight_dict[yi] for yi in y_train])
-
     # 1. XGBoost
     xgb_opt = load_ticker_params(ticker, model_type="xgb")
     lgbm_opt = load_ticker_params(ticker, model_type="lgbm")
@@ -541,27 +527,27 @@ def train_ticker_pipeline(
         else:
             lgbm_opt.update(opt_params)
 
-    logger.info(f"Training XGBoost Model for {ticker} with Expanded Regularization...")
+    logger.info(f"Training XGBoost Model for {ticker} with Regularized Hyperparameters...")
     xgb_params = {
         "objective": "multi:softprob",
         "num_class": 3,
-        "n_estimators": int(xgb_opt.get("n_estimators", 350)),
-        "max_depth": int(xgb_opt.get("max_depth", 4)),
+        "n_estimators": int(xgb_opt.get("n_estimators", 150)),
+        "max_depth": int(xgb_opt.get("max_depth", 3)),
         "learning_rate": float(xgb_opt.get("learning_rate", 0.03)),
         "subsample": float(xgb_opt.get("subsample", 0.85)),
-        "colsample_bytree": float(xgb_opt.get("colsample_bytree", 0.85)),
-        "colsample_bylevel": float(xgb_opt.get("colsample_bylevel", 0.85)),
-        "min_child_weight": float(xgb_opt.get("min_child_weight", 3.0)),
-        "gamma": float(xgb_opt.get("gamma", 0.1)),
-        "reg_alpha": float(xgb_opt.get("reg_alpha", 0.05)),
-        "reg_lambda": float(xgb_opt.get("reg_lambda", 1.0)),
+        "colsample_bytree": float(xgb_opt.get("colsample_bytree", 0.80)),
+        "colsample_bylevel": float(xgb_opt.get("colsample_bylevel", 0.80)),
+        "min_child_weight": float(xgb_opt.get("min_child_weight", 8.0)),
+        "gamma": float(xgb_opt.get("gamma", 1.0)),
+        "reg_alpha": float(xgb_opt.get("reg_alpha", 1.0)),
+        "reg_lambda": float(xgb_opt.get("reg_lambda", 5.0)),
         "max_bin": int(xgb_opt.get("max_bin", 256)),
         "random_state": 42,
         "eval_metric": "mlogloss",
         **get_xgboost_gpu_params(),
     }
     xgb_model = xgb.XGBClassifier(**xgb_params)
-    xgb_model.fit(X_train, y_train, sample_weight=sample_weights)
+    xgb_model.fit(X_train, y_train)
     xgb_train_acc = float(xgb_model.score(X_train, y_train))
     xgb_test_acc = float(xgb_model.score(X_test, y_test))
     logger.info(f"XGBoost Accuracy -> Train: {xgb_train_acc * 100:.2f}% | Test: {xgb_test_acc * 100:.2f}%")
@@ -569,28 +555,28 @@ def train_ticker_pipeline(
     xgb_model.save_model(str(artifacts_dir / "xgb_ensemble.json"))
 
     # 2. LightGBM
-    logger.info(f"Training LightGBM Model for {ticker} with Expanded Regularization...")
+    logger.info(f"Training LightGBM Model for {ticker} with Regularized Hyperparameters...")
     lgbm_params = {
         "objective": "multiclass",
         "num_class": 3,
-        "n_estimators": int(lgbm_opt.get("n_estimators", 350)),
+        "n_estimators": int(lgbm_opt.get("n_estimators", 150)),
         "learning_rate": float(lgbm_opt.get("learning_rate", 0.03)),
-        "max_depth": int(lgbm_opt.get("max_depth", 5)),
-        "num_leaves": int(lgbm_opt.get("num_leaves", 31)),
-        "min_child_samples": int(lgbm_opt.get("min_child_samples", 25)),
-        "min_split_gain": float(lgbm_opt.get("min_split_gain", 0.01)),
+        "max_depth": int(lgbm_opt.get("max_depth", 3)),
+        "num_leaves": int(lgbm_opt.get("num_leaves", 7)),
+        "min_child_samples": int(lgbm_opt.get("min_child_samples", 50)),
+        "min_split_gain": float(lgbm_opt.get("min_split_gain", 0.1)),
         "subsample": float(lgbm_opt.get("subsample", 0.85)),
         "subsample_freq": int(lgbm_opt.get("subsample_freq", 1)),
-        "colsample_bytree": float(lgbm_opt.get("colsample_bytree", 0.85)),
-        "reg_alpha": float(lgbm_opt.get("reg_alpha", 0.05)),
-        "reg_lambda": float(lgbm_opt.get("reg_lambda", 1.0)),
+        "colsample_bytree": float(lgbm_opt.get("colsample_bytree", 0.80)),
+        "reg_alpha": float(lgbm_opt.get("reg_alpha", 1.0)),
+        "reg_lambda": float(lgbm_opt.get("reg_lambda", 5.0)),
         "max_bin": int(lgbm_opt.get("max_bin", 256)),
         "random_state": 42,
         "verbose": -1,
         **get_lightgbm_gpu_params(),
     }
     lgbm_model = LGBMClassifier(**lgbm_params)
-    lgbm_model.fit(X_train, y_train, sample_weight=sample_weights)
+    lgbm_model.fit(X_train, y_train)
     lgbm_train_acc = float(lgbm_model.score(X_train, y_train))
     lgbm_test_acc = float(lgbm_model.score(X_test, y_test))
     logger.info(f"LightGBM Accuracy -> Train: {lgbm_train_acc * 100:.2f}% | Test: {lgbm_test_acc * 100:.2f}%")
