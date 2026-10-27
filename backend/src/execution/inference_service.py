@@ -29,6 +29,7 @@ from src.execution.governance_engine import SignalGovernanceAnalytics
 from src.execution.live_inference import (
     FEATURE_COLUMNS,
     FEATURE_COLUMNS_V30,
+    FEATURE_COLUMNS_V40,
     add_upgraded_features,
     check_bar_forming_status,
     compute_shap_explanation,
@@ -643,12 +644,14 @@ class InferenceService:
 
             # Dynamically align active feature columns to scaler's exact fitted dimensions
             scaler_n_feats = getattr(scaler, "n_features_in_", len(FEATURE_COLUMNS))
-            if scaler_n_feats == len(FEATURE_COLUMNS_V30):
+            if scaler_n_feats == len(FEATURE_COLUMNS_V40):
+                active_cols = FEATURE_COLUMNS_V40
+            elif scaler_n_feats == len(FEATURE_COLUMNS_V30):
                 active_cols = FEATURE_COLUMNS_V30
             elif scaler_n_feats == len(FEATURE_COLUMNS):
                 active_cols = FEATURE_COLUMNS
             else:
-                active_cols = FEATURE_COLUMNS_V30 if len(FEATURE_COLUMNS_V30) == scaler_n_feats else FEATURE_COLUMNS
+                active_cols = FEATURE_COLUMNS_V40 if len(FEATURE_COLUMNS_V40) == scaler_n_feats else FEATURE_COLUMNS
 
             df_filtered = df_feat.reindex(columns=active_cols).dropna()
 
@@ -1816,11 +1819,13 @@ class InferenceService:
         df_feat = add_upgraded_features(df.copy(), spy, None)
         df_feat = df_feat.loc[:, ~df_feat.columns.duplicated()].copy()
 
-        active_cols = (
-            FEATURE_COLUMNS_V30
-            if getattr(scaler, "n_features_in_", 0) == len(FEATURE_COLUMNS_V30)
-            else FEATURE_COLUMNS
-        )
+        s_in = getattr(scaler, "n_features_in_", 0)
+        if s_in == len(FEATURE_COLUMNS_V40):
+            active_cols = FEATURE_COLUMNS_V40
+        elif s_in == len(FEATURE_COLUMNS_V30):
+            active_cols = FEATURE_COLUMNS_V30
+        else:
+            active_cols = FEATURE_COLUMNS
         df_filtered = df_feat.reindex(columns=active_cols).dropna()
         if df_filtered.empty or len(df_filtered) < 15:
             result["error"] = "INSUFFICIENT_VALID_BARS"

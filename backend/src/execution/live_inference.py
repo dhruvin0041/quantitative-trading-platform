@@ -88,11 +88,25 @@ FEATURE_COLUMNS_V30 = FEATURE_COLUMNS_V24 + [
     "CMF_Divergence",
 ]
 
-FEATURE_COLUMNS = FEATURE_COLUMNS_V24
+FEATURE_COLUMNS_V40 = FEATURE_COLUMNS_V30 + [
+    "Garman_Klass_Vol",
+    "KAMA_Efficiency_Ratio",
+    "Supertrend_Direction",
+    "Supertrend_Distance",
+    "CMO_14",
+    "NATR_14",
+    "VPCI",
+    "Downside_Deviation_20",
+    "ZScore_GK_Vol_20",
+]
+
+FEATURE_COLUMNS = FEATURE_COLUMNS_V40
 
 
-def get_feature_columns(version: str = "V3.0") -> list[str]:
+def get_feature_columns(version: str = "V4.0") -> list[str]:
     """Returns authoritative feature column list by strategy version."""
+    if version and version.upper().startswith("V4"):
+        return FEATURE_COLUMNS_V40
     if version and version.upper().startswith("V3"):
         return FEATURE_COLUMNS_V30
     return FEATURE_COLUMNS_V24
@@ -435,6 +449,91 @@ def add_upgraded_features(df, spy_df, vix_df, lag_vix: bool = True):
     # Values > 1.5 = high vol regime, < 0.7 = low vol regime
     atr_rolling_mean_50 = df["ATR"].rolling(window=50, min_periods=50).mean()
     df["ATR_Regime_Ratio"] = df["ATR"] / (atr_rolling_mean_50 + 1e-9)
+
+    # ==========================================
+    # STEP 3: V4.0 INSTITUTIONAL QUANTITATIVE EXPANSION
+    # ==========================================
+    # 1. Garman-Klass Historical Volatility (8x efficiency over close-to-close)
+    log_hl = np.log(high_s / (low_s + 1e-9))
+    log_co = np.log(close_s / (open_s + 1e-9))
+    gk_var = 0.5 * (log_hl ** 2) - (2.0 * np.log(2) - 1.0) * (log_co ** 2)
+    df["Garman_Klass_Vol"] = np.sqrt(np.maximum(gk_var.rolling(20).mean() * 252.0, 0.0)).fillna(0.0)
+
+    # 2. Kaufman Adaptive Moving Average (KAMA) Efficiency Ratio (Signal-to-Noise [0, 1])
+    change_10 = (close_s - close_s.shift(10)).abs()
+    volatility_10 = close_s.diff().abs().rolling(10).sum()
+    df["KAMA_Efficiency_Ratio"] = (change_10 / (volatility_10 + 1e-9)).clip(0.0, 1.0).fillna(0.5)
+
+    # 3. Supertrend Direction & Distance (ATR Volatility Trailing Stop)
+    hl2_arr = (high_s.values + low_s.values) / 2.0
+    atr_arr = df["ATR"].values
+    b_upper_arr = hl2_arr + (3.0 * atr_arr)
+    b_lower_arr = hl2_arr - (3.0 * atr_arr)
+    c_vals = close_s.values
+    n_bars = len(df)
+    final_u = np.zeros(n_bars)
+    final_l = np.zeros(n_bars)
+    dir_arr = np.ones(n_bars)
+    st_arr = np.zeros(n_bars)
+
+    if n_bars > 0:
+        final_u[0] = b_upper_arr[0]
+        final_l[0] = b_lower_arr[0]
+        st_arr[0] = b_lower_arr[0]
+        dir_arr[0] = 1.0
+
+    for idx in range(1, n_bars):
+        if b_upper_arr[idx] < final_u[idx - 1] or c_vals[idx - 1] > final_u[idx - 1]:
+            final_u[idx] = b_upper_arr[idx]
+        else:
+            final_u[idx] = final_u[idx - 1]
+
+        if b_lower_arr[idx] > final_l[idx - 1] or c_vals[idx - 1] < final_l[idx - 1]:
+            final_l[idx] = b_lower_arr[idx]
+        else:
+            final_l[idx] = final_l[idx - 1]
+
+        if dir_arr[idx - 1] == 1.0:
+            if c_vals[idx] < final_l[idx]:
+                dir_arr[idx] = -1.0
+                st_arr[idx] = final_u[idx]
+            else:
+                dir_arr[idx] = 1.0
+                st_arr[idx] = final_l[idx]
+        else:
+            if c_vals[idx] > final_u[idx]:
+                dir_arr[idx] = 1.0
+                st_arr[idx] = final_l[idx]
+            else:
+                dir_arr[idx] = -1.0
+                st_arr[idx] = final_u[idx]
+
+    df["Supertrend_Direction"] = pd.Series(dir_arr, index=df.index).fillna(1.0)
+    df["Supertrend_Distance"] = ((close_s - pd.Series(st_arr, index=df.index)) / (df["ATR"] + 1e-9)).fillna(0.0)
+
+    # 4. Chande Momentum Oscillator (CMO 14 - Unfiltered Momentum)
+    c_diff = close_s.diff()
+    su_14 = c_diff.clip(lower=0).rolling(14).sum()
+    sd_14 = (-c_diff.clip(upper=0)).rolling(14).sum()
+    df["CMO_14"] = (100.0 * (su_14 - sd_14) / (su_14 + sd_14 + 1e-9)).fillna(0.0)
+
+    # 5. Normalized Average True Range (NATR 14)
+    df["NATR_14"] = (df["ATR"] / (close_s + 1e-9) * 100.0).fillna(1.0)
+
+    # 6. Volume-Price Confirmation Indicator (VPCI)
+    vwma_14 = (close_s * vol_s).rolling(14).sum() / (vol_s.rolling(14).sum() + 1e-9)
+    sma_14 = close_s.rolling(14).mean()
+    vpc_val = vwma_14 - sma_14
+    vpr_val = vwma_14 / (sma_14 + 1e-9)
+    vm_val = vol_s.rolling(14).mean() / (vol_s.rolling(50).mean() + 1e-9)
+    df["VPCI"] = (vpc_val * vpr_val * vm_val).fillna(0.0)
+
+    # 7. Downside Deviation (Asymmetric 20-day annualized downside risk)
+    neg_ret_s = df["Return"].clip(upper=0.0)
+    df["Downside_Deviation_20"] = (np.sqrt((neg_ret_s ** 2).rolling(20).mean()) * np.sqrt(252.0)).fillna(0.0)
+
+    # 8. Rolling Z-Score of Garman-Klass Volatility (Volatility Shock Detector)
+    df["ZScore_GK_Vol_20"] = rolling_zscore(df["Garman_Klass_Vol"], 20).fillna(0.0)
 
     # Final Numerical Stability Guard
     df.replace([np.inf, -np.inf], np.nan, inplace=True)

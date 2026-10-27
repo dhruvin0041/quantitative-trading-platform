@@ -29,5 +29,14 @@
     "Keltner_Position",
     "HMA_Slope",
     "Connors_RSI",
-    "CMF_Divergence"
+    "CMF_Divergence",
+    "Garman_Klass_Vol",
+    "KAMA_Efficiency_Ratio",
+    "Supertrend_Direction",
+    "Supertrend_Distance",
+    "CMO_14",
+    "NATR_14",
+    "VPCI",
+    "Downside_Deviation_20",
+    "ZScore_GK_Vol_20"
 ]

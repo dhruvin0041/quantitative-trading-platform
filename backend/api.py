@@ -206,11 +206,11 @@ if kf_path.exists():
         with open(kf_path, "r") as f:
             kept_features_list = json.load(f)
     except Exception:
-        from src.execution.live_inference import FEATURE_COLUMNS_V30
-        kept_features_list = FEATURE_COLUMNS_V30
+        from src.execution.live_inference import FEATURE_COLUMNS_V40
+        kept_features_list = FEATURE_COLUMNS_V40
 else:
-    from src.execution.live_inference import FEATURE_COLUMNS_V30
-    kept_features_list = FEATURE_COLUMNS_V30
+    from src.execution.live_inference import FEATURE_COLUMNS_V40
+    kept_features_list = FEATURE_COLUMNS_V40
     try:
         with open(kf_path, "w") as f:
             json.dump(kept_features_list, f, indent=4)
@@ -354,7 +354,7 @@ async def get_stock_universe():
 @app.get("/active_ticker", dependencies=[Depends(verify_api_key)])
 async def get_active_ticker():
     try:
-        with open("configs/active_ticker.json", "r") as f:
+        with open(CONFIGS_DIR / "active_ticker.json", "r") as f:
             data = json.load(f)
             if data.get("ticker") == "UNIVERSAL":
                 data["ticker"] = "AAPL"

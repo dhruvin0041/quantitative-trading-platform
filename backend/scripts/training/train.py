@@ -47,7 +47,7 @@ from src.data_ingestion.market_data import (
     get_sector_peer,
 )
 from src.execution.live_inference import (
-    FEATURE_COLUMNS_V30,
+    FEATURE_COLUMNS_V40,
     add_upgraded_features,
 )
 from src.models.regime.calibration import ModelCalibrator
@@ -268,7 +268,7 @@ def run_ticker_optimization(
     Co-optimizes both XGBoost and LightGBM across expanded capacity, regularization, and subsampling spaces.
     """
     logger.info(f"--- Running Bayesian Optimization for {ticker} ({n_trials} trials each) ---")
-    kept_features = FEATURE_COLUMNS_V30
+    kept_features = FEATURE_COLUMNS_V40
 
     df_clean = df_train.replace([np.inf, -np.inf], np.nan).dropna(
         subset=kept_features + ["target_signal"]
@@ -502,7 +502,7 @@ def train_ticker_pipeline(
 
     # Step 4: Model Training & Calibration
     logger.info(f"\n[4/5] Training Technical Brain Ensemble & Fitting Scalers for {ticker}...")
-    kept_features = FEATURE_COLUMNS_V30
+    kept_features = FEATURE_COLUMNS_V40
 
     configs_dir = BACKEND_DIR / "configs"
     configs_dir.mkdir(parents=True, exist_ok=True)
