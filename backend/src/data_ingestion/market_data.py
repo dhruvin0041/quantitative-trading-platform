@@ -4,21 +4,39 @@ import pandas as pd
 import yfinance as yf
 
 
-def fetch_historical_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
+def fetch_historical_data(ticker: str, start_date: str, end_date: str, max_retries: int = 3) -> pd.DataFrame:
     """
-    Fetches real historical daily data from Yahoo Finance.
+    Fetches real historical daily data from Yahoo Finance with exponential backoff retries.
     """
+    import time
     print(f"Fetching real-world data for {ticker}...")
-    df = yf.download(ticker, start=start_date, end=end_date, progress=False)
+    for attempt in range(1, max_retries + 1):
+        try:
+            df = yf.download(ticker, start=start_date, end=end_date, progress=False)
+            if not df.empty and len(df) >= 20:
+                if isinstance(df.columns, pd.MultiIndex):
+                    df.columns = df.columns.droplevel(1)
+                df.dropna(inplace=True)
+                return df
+        except Exception as e:
+            print(f"Warning: Download attempt {attempt} for {ticker} encountered: {e}")
 
-    if df.empty:
-        raise ValueError(f"No data found for {ticker}.")
+        # Fallback to Ticker.history()
+        try:
+            t = yf.Ticker(ticker)
+            df = t.history(start=start_date, end=end_date, auto_adjust=False)
+            if not df.empty and len(df) >= 20:
+                if isinstance(df.columns, pd.MultiIndex):
+                    df.columns = df.columns.droplevel(1)
+                df.dropna(inplace=True)
+                return df
+        except Exception:
+            pass
 
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.droplevel(1)
+        if attempt < max_retries:
+            time.sleep(attempt * 2)
 
-    df.dropna(inplace=True)
-    return df
+    raise ValueError(f"No data found for {ticker} after {max_retries} attempts.")
 
 
 def get_sector_peer(ticker_symbol: str) -> str:
