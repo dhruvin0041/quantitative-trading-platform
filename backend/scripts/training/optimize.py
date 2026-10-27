@@ -204,7 +204,7 @@ def run_optuna_optimization(ticker, n_trials=50, start="auto", end="auto"):
     if isinstance(vix_df.columns, pd.MultiIndex):
         vix_df.columns = vix_df.columns.droplevel(1)
 
-    df_features = add_upgraded_features(df_raw.copy(), spy_df, vix_df)
+    df_features = add_upgraded_features(df_raw.copy(), spy_df, vix_df, ticker=ticker)
     # Drop uninitialized warmup period (first 119 bars for rolling 120-bar indicators)
     if len(df_features) > 120:
         df_features = df_features.iloc[119:]

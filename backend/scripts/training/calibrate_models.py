@@ -57,7 +57,7 @@ def calibrate():
             TemporalFirewall.validate_validation_data(df, f"calib_fetch_{t}")
             TemporalFirewall.validate_no_2026_leakage(df, f"calib_fetch_{t}")
 
-            df = add_upgraded_features(df, spy_df, vix_df)
+            df = add_upgraded_features(df, spy_df, vix_df, ticker=t)
 
             # Using 5-day future returns for labels, evaluated strictly within <= 2025-12-31
             future_ret = df["Close"].shift(-5) / df["Close"] - 1

@@ -215,9 +215,9 @@ def prepare_ticker_data(
     peer_raw = fetch_historical_data(peer_ticker, start_date=start_date, end_date=end_date)
 
     # Compute 31 features continuously
-    df_features = add_upgraded_features(df_raw.copy(), spy_full, vix_full)
+    df_features = add_upgraded_features(df_raw.copy(), spy_full, vix_full, ticker=ticker)
     if peer_raw is not None and len(peer_raw) > 250:
-        peer_features = add_upgraded_features(peer_raw.copy(), spy_full, vix_full)
+        peer_features = add_upgraded_features(peer_raw.copy(), spy_full, vix_full, ticker=peer_ticker)
         common_idx = df_features.index.intersection(peer_features.index)
         df_features = df_features.loc[common_idx].copy()
 

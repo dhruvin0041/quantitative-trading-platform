@@ -52,7 +52,7 @@ def regenerate():
             # Fetch strictly 2016-2024 for development/scaler fitting (zero 2025/2026 leakage)
             df = fetch_historical_data(t, "2016-01-01", "2024-12-31")
             TemporalFirewall.validate_development_data(df, f"scaler_{t}")
-            df = add_upgraded_features(df, spy_df, vix_df)
+            df = add_upgraded_features(df, spy_df, vix_df, ticker=t)
 
             # Drop uninitialized warmup period (first 119 bars for rolling 120-bar indicators)
             if len(df) > 120:

@@ -47,10 +47,10 @@ def run_rolling_retrain(ticker="MSFT"):
     if isinstance(vix_df.columns, pd.MultiIndex):
         vix_df.columns = vix_df.columns.droplevel(1)
 
-    df = add_upgraded_features(df, spy_df, vix_df)
+    df = add_upgraded_features(df, spy_df, vix_df, ticker=ticker)
     peer_ticker = get_sector_peer(ticker)
     peer_df = fetch_historical_data(peer_ticker, start_date=start_str, end_date=end_str)
-    peer_df = add_upgraded_features(peer_df, spy_df, vix_df)
+    peer_df = add_upgraded_features(peer_df, spy_df, vix_df, ticker=peer_ticker)
 
     # Target labeling
     df["target_direction"] = (df["Close"].shift(-5) > df["Close"] * 1.01).astype(int)
