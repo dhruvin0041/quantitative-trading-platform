@@ -544,8 +544,37 @@ def add_upgraded_features(df, spy_df, vix_df, lag_vix: bool = True):
 
 def fetch_live_data(ticker, config, version: Optional[str] = None):
     if version is None:
-        num_f = config.get("data", {}).get("num_features", 27) if isinstance(config, dict) else 27
-        version = "V3.0" if num_f == 31 else "V2.4"
+        target_dim = None
+        for tsp in [
+            f"artifacts/models/{ticker}/latest_scaler.joblib",
+            f"backend/artifacts/models/{ticker}/latest_scaler.joblib",
+            "artifacts/latest_scaler.joblib",
+            "backend/artifacts/latest_scaler.joblib",
+        ]:
+            p_tsp = Path(tsp)
+            if p_tsp.exists():
+                try:
+                    s_probe = joblib.load(p_tsp)
+                    target_dim = getattr(s_probe, "n_features_in_", None)
+                    if target_dim:
+                        break
+                except Exception:
+                    pass
+
+        if target_dim == 40:
+            version = "V4.0"
+        elif target_dim == 31:
+            version = "V3.0"
+        elif target_dim == 27:
+            version = "V2.4"
+        else:
+            num_f = config.get("data", {}).get("num_features", 40) if isinstance(config, dict) else 40
+            if num_f >= 40:
+                version = "V4.0"
+            elif num_f == 31:
+                version = "V3.0"
+            else:
+                version = "V2.4"
     print(f"Fetching live market data for {ticker} ({version})...")
     df = fetch_historical_data(
         ticker,
