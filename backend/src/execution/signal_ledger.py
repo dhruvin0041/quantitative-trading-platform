@@ -1126,13 +1126,14 @@ class SignalLedger:
                 )
                 return False
             is_valid_version = (
-                model_ver in ("Institutional_Mesh_V2.4.1", "Institutional_Mesh_V2.4", "Institutional_Mesh_V3")
+                model_ver in ("Institutional_Mesh_V2.4.1", "Institutional_Mesh_V2.4", "Institutional_Mesh_V3", "Institutional_Mesh_V4")
                 or model_ver.startswith("Institutional_Mesh_V3")
+                or model_ver.startswith("Institutional_Mesh_V4")
             )
             if not is_valid_version:
                 logger.error(
                     f"[LEDGER VALIDATION ERROR] {symbol} index {idx}: Unauthorized model_version provenance '{model_ver}'. "
-                    f"Must be one of: Institutional_Mesh_V2.4.1, Institutional_Mesh_V2.4, Institutional_Mesh_V3, or Institutional_Mesh_V3.0_{symbol}."
+                    f"Must be one of: Institutional_Mesh_V2.4.1, Institutional_Mesh_V2.4, Institutional_Mesh_V3, Institutional_Mesh_V4, or Institutional_Mesh_V4.0_{symbol}."
                 )
                 return False
 

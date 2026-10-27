@@ -313,6 +313,15 @@ class InferenceService:
             "model_key": "v3/xgb_ensemble.json",
             "scaler_key": "v3/latest_scaler.joblib",
         },
+        "Institutional_Mesh_V4": {
+            "manifest_candidates": [
+                Path("artifacts/frozen_strategy_manifest_v4.0.json"),
+                Path("backend/artifacts/frozen_strategy_manifest_v4.0.json"),
+            ],
+            "allowed_dims": {40},
+            "model_key": "xgb_ensemble.json",
+            "scaler_key": "latest_scaler.joblib",
+        },
     }
 
     SUPPORTED_RESEARCH_CANDIDATE_VERSIONS: Dict[str, Dict[str, Any]] = {
@@ -442,12 +451,20 @@ class InferenceService:
                 if isinstance(actual_xgb, str) and isinstance(actual_scaler, str):
                     exp_xgb = hashlib.sha256((ticker_dir / "xgb_ensemble.json").read_bytes()).hexdigest()
                     exp_scaler = hashlib.sha256((ticker_dir / "latest_scaler.joblib").read_bytes()).hexdigest()
-                    if actual_xgb == exp_xgb and actual_scaler == exp_scaler and scaler_n in {27, 31}:
-                        institutional_id = f"Institutional_Mesh_V3.0_{ticker_sym}"
+                    if actual_xgb == exp_xgb and actual_scaler == exp_scaler and scaler_n in {27, 31, 40}:
+                        institutional_id = (
+                            f"Institutional_Mesh_V4.0_{ticker_sym}"
+                            if scaler_n == 40
+                            else f"Institutional_Mesh_V3.0_{ticker_sym}"
+                        )
                         if requested_version is not None:
                             req_clean = requested_version.strip()
                             allowed_reqs = {
                                 institutional_id,
+                                f"Institutional_Mesh_V4.0_{ticker_sym}",
+                                "Institutional_Mesh_V4",
+                                "V4.0",
+                                f"Institutional_Mesh_V3.0_{ticker_sym}",
                                 "Institutional_Mesh_V3",
                                 "V3.0",
                                 "Institutional_Mesh_V2.4",
@@ -1611,7 +1628,7 @@ class InferenceService:
             first_sig_mode = first_sig_meta.get("strategy_mode", "")
             if first_sig_mode != expected_mode:
                 has_legacy_signals = True
-            elif "V3" not in first_sig_ver and "Adaptive" not in first_sig_ver:
+            elif "V4" not in first_sig_ver and "V3" not in first_sig_ver and "Adaptive" not in first_sig_ver:
                 has_legacy_signals = True
 
         if force_recompute or len(all_signals) < 1 or has_legacy_signals:
