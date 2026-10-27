@@ -27,9 +27,23 @@ export interface TechnicalSnapshot {
   MACD: number;
   ATR: number;
   BB_Position: number;
+  BB_Upper?: number;
+  BB_Lower?: number;
+  BB_Width?: number;
+  BB_Window?: number;
+  BB_Mult?: number;
+  BB_Adaptive?: boolean;
   ADX: number;
   Volume_Ratio: number;
   ATR_Regime_Ratio?: number;
+  Keltner_Position?: number;
+  Keltner_Lower?: number;
+  Keltner_Upper?: number;
+  HMA_9?: number;
+  Connors_RSI?: number;
+  CMF_Divergence?: number;
+  is_bar_forming?: boolean;
+  bar_state?: string;
 }
 
 export interface AIReport {

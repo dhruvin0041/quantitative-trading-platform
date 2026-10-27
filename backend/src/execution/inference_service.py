@@ -19,6 +19,7 @@ from src.execution.asset_intelligence import (
     AdaptiveWeightingEngine,
     AssetProfileEngine,
     MultiTimeframeEngine,
+    compute_adaptive_bollinger_bands,
     get_champion_strategy_for_ticker,
 )
 from src.execution.confidence_engine import ConfidenceBreakdownEngine
@@ -627,7 +628,7 @@ class InferenceService:
                 return []
 
             spy = clean_multiindex_columns(spy_df.copy()) if spy_df is not None else None
-            df_feat = add_upgraded_features(df.copy(), spy, None)
+            df_feat = add_upgraded_features(df.copy(), spy, None, ticker=ticker)
             df_feat = df_feat.loc[:, ~df_feat.columns.duplicated()].copy()
 
             # Ensure ModelManager is active for this ticker
@@ -855,11 +856,13 @@ class InferenceService:
                 else close_s.ewm(span=50).mean()
             )
 
-            # Bollinger Bands (20, 2)
-            bb_mid = close_s.rolling(20).mean()
-            bb_std = close_s.rolling(20).std()
-            bb_upper_s = bb_mid + (2.0 * bb_std)
-            bb_lower_s = bb_mid - (2.0 * bb_std)
+            # Volatility-Adaptive Bollinger Bands customized per ticker
+            bb_mid_raw, bb_upper_raw, bb_lower_raw, _bb_width_raw, _bb_pos_raw = (
+                compute_adaptive_bollinger_bands(df, ticker)
+            )
+            bb_mid = bb_mid_raw.reindex(valid_indices).ffill()
+            bb_upper_s = bb_upper_raw.reindex(valid_indices).ffill()
+            bb_lower_s = bb_lower_raw.reindex(valid_indices).ffill()
 
             # MACD histogram for volatility breakout swings
             ema12 = close_s.ewm(span=12).mean()
@@ -916,6 +919,9 @@ class InferenceService:
                             "strategy_mode": strat_type,
                             "strategy_name": strat_name,
                             "strategy_sub_type": strat_type,
+                            "bb_window": int(strat_params.get("bb_window", 20)),
+                            "bb_mult": float(strat_params.get("bb_mult", 2.0)),
+                            "bb_adaptive": bool(strat_params.get("bb_adaptive", True)),
                             "reason": "INITIAL_CHAMPION_ENTRY",
                         },
                     })
@@ -1135,6 +1141,9 @@ class InferenceService:
                                     "strategy_mode": strat_type,
                                     "strategy_name": strat_name,
                                     "strategy_sub_type": strat_type,
+                                    "bb_window": int(strat_params.get("bb_window", 20)),
+                                    "bb_mult": float(strat_params.get("bb_mult", 2.0)),
+                                    "bb_adaptive": bool(strat_params.get("bb_adaptive", True)),
                                     "reason": reason,
                                     "sizing_regime": "CASH_DEFENSE",
                                     "sizing_rationale": rationale,
@@ -1233,6 +1242,9 @@ class InferenceService:
                                         "strategy_mode": strat_type,
                                         "strategy_name": strat_name,
                                         "strategy_sub_type": strat_type,
+                                        "bb_window": int(strat_params.get("bb_window", 20)),
+                                        "bb_mult": float(strat_params.get("bb_mult", 2.0)),
+                                        "bb_adaptive": bool(strat_params.get("bb_adaptive", True)),
                                         "reason": buy_reason,
                                         "sizing_regime": "DYNAMIC_REGIME_ALLOCATION",
                                         "sizing_rationale": buy_rationale,
@@ -1833,7 +1845,7 @@ class InferenceService:
 
         # Run feature calculation and dry-run inference
         spy = clean_multiindex_columns(spy_df.copy()) if spy_df is not None else None
-        df_feat = add_upgraded_features(df.copy(), spy, None)
+        df_feat = add_upgraded_features(df.copy(), spy, None, ticker=ticker)
         df_feat = df_feat.loc[:, ~df_feat.columns.duplicated()].copy()
 
         s_in = getattr(scaler, "n_features_in_", 0)
@@ -2554,6 +2566,9 @@ class InferenceService:
         trade_construction["earnings_shield"] = earnings_proximity
         trade_construction["strategy_mode"] = strat_type
         trade_construction["strategy_name"] = strat_name
+        trade_construction["bb_window"] = int(strat_params.get("bb_window", 20))
+        trade_construction["bb_mult"] = float(strat_params.get("bb_mult", 2.0))
+        trade_construction["bb_adaptive"] = bool(strat_params.get("bb_adaptive", True))
 
         # Pre-Earnings Ratchet Tightening on Active Positions
         if earnings_proximity.get("is_blackout", False):
@@ -2822,6 +2837,9 @@ class InferenceService:
         # Preserve the causal fields after package_chart_data update
         response_data["strategy_mode"] = strat_type
         response_data["strategy_name"] = strat_name
+        response_data["bb_window"] = int(strat_params.get("bb_window", 20))
+        response_data["bb_mult"] = float(strat_params.get("bb_mult", 2.0))
+        response_data["bb_adaptive"] = bool(strat_params.get("bb_adaptive", True))
         response_data["tactical_action"] = tactical_action
         response_data["target_exposure"] = target_exposure
         response_data["tactical_rationale"] = tactical_rationale

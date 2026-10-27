@@ -1,5 +1,6 @@
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
+import numpy as np
 import pandas as pd
 import yfinance as yf
 
@@ -343,6 +344,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "init_entry": True,
             "cooldown": 3,
             "macro_bear_exit": True,
+            "bb_window": 20,
+            "bb_mult": 2.2,
+            "bb_adaptive": True,
         },
         "description": "Momentum expansion with MACD acceleration and institutional Chandelier trailing ratchet.",
     },
@@ -359,6 +363,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "init_entry": True,
             "cooldown": 3,
             "macro_bear_exit": True,
+            "bb_window": 22,
+            "bb_mult": 2.5,
+            "bb_adaptive": True,
         },
         "description": "High-beta trend expansion with dynamic volatility trailing stop.",
     },
@@ -375,6 +382,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "init_entry": False,
             "cooldown": 3,
             "macro_bear_exit": True,
+            "bb_window": 20,
+            "bb_mult": 2.2,
+            "bb_adaptive": True,
         },
         "description": "Institutional core trend accumulator capturing secular breakouts with 100% Cash Defense during corrections.",
     },
@@ -391,6 +401,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "init_entry": False,
             "cooldown": 3,
             "macro_bear_exit": True,
+            "bb_window": 20,
+            "bb_mult": 2.3,
+            "bb_adaptive": True,
         },
         "description": "Tactical trend accumulator capturing institutional pullbacks and secular momentum expansions.",
     },
@@ -407,6 +420,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "init_entry": True,
             "cooldown": 4,
             "macro_bear_exit": True,
+            "bb_window": 22,
+            "bb_mult": 2.4,
+            "bb_adaptive": True,
         },
         "description": "Institutional trend accumulator with wide Chandelier ratchets protecting against mid-trend whipsaws.",
     },
@@ -423,6 +439,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "init_entry": False,
             "cooldown": 3,
             "macro_bear_exit": True,
+            "bb_window": 20,
+            "bb_mult": 2.2,
+            "bb_adaptive": True,
         },
         "description": "Tactical accumulation engine participating in sustained bull trends and preserving capital in bear regimes.",
     },
@@ -439,6 +458,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "init_entry": True,
             "cooldown": 4,
             "macro_bear_exit": True,
+            "bb_window": 24,
+            "bb_mult": 2.7,
+            "bb_adaptive": True,
         },
         "description": "High-volatility momentum breakout with strict 200 SMA regime filter, dynamic ATR ratchets, and bear de-risking.",
     },
@@ -455,6 +477,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "init_entry": True,
             "cooldown": 3,
             "macro_bear_exit": True,
+            "bb_window": 24,
+            "bb_mult": 2.6,
+            "bb_adaptive": True,
         },
         "description": "Secular semiconductor momentum breakout with volume confirmation and disciplined Chandelier trailing ratchets.",
     },
@@ -471,6 +496,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "init_entry": True,
             "cooldown": 3,
             "macro_bear_exit": True,
+            "bb_window": 18,
+            "bb_mult": 2.0,
+            "bb_adaptive": True,
         },
         "description": "Low-beta consumer retail compounder capturing steady tactical accumulation and protecting during market corrections.",
     },
@@ -487,6 +515,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "init_entry": True,
             "cooldown": 3,
             "macro_bear_exit": True,
+            "bb_window": 18,
+            "bb_mult": 1.9,
+            "bb_adaptive": True,
         },
         "description": "Defensive staple accumulator with high capital preservation and disciplined trend trailing ratchets.",
     },
@@ -503,6 +534,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "init_entry": False,
             "cooldown": 3,
             "macro_bear_exit": True,
+            "bb_window": 20,
+            "bb_mult": 2.1,
+            "bb_adaptive": True,
         },
         "description": "Financial sector powerhouse capturing secular credit expansion cycles with swift macro bear de-risking.",
     },
@@ -519,6 +553,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "init_entry": True,
             "cooldown": 3,
             "macro_bear_exit": True,
+            "bb_window": 22,
+            "bb_mult": 2.4,
+            "bb_adaptive": True,
         },
         "description": "Healthcare momentum leader participating in secular product-cycle breakouts with dynamic Chandelier ratchets.",
     },
@@ -535,6 +572,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "init_entry": True,
             "cooldown": 3,
             "macro_bear_exit": True,
+            "bb_window": 20,
+            "bb_mult": 2.2,
+            "bb_adaptive": True,
         },
         "description": "Diversified industrial/energy giant capturing high-momentum expansion runs with trailing risk controls.",
     },
@@ -551,6 +591,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "init_entry": False,
             "cooldown": 3,
             "macro_bear_exit": True,
+            "bb_window": 20,
+            "bb_mult": 2.0,
+            "bb_adaptive": True,
         },
         "description": "IT export blue-chip with disciplined pullback entries and swift profit harvesting at structural resistance.",
     },
@@ -567,6 +610,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "init_entry": True,
             "cooldown": 3,
             "macro_bear_exit": True,
+            "bb_window": 20,
+            "bb_mult": 2.1,
+            "bb_adaptive": True,
         },
         "description": "Premier Indian private bank riding credit growth secular trends with bear-regime cash preservation.",
     },
@@ -583,6 +629,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "init_entry": True,
             "cooldown": 3,
             "macro_bear_exit": True,
+            "bb_window": 20,
+            "bb_mult": 2.1,
+            "bb_adaptive": True,
         },
         "description": "Telecom infrastructure compounder capturing secular ARPU growth with tight drawdown controls.",
     },
@@ -599,6 +648,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "init_entry": True,
             "cooldown": 3,
             "macro_bear_exit": True,
+            "bb_window": 20,
+            "bb_mult": 2.1,
+            "bb_adaptive": True,
         },
         "description": "Capex infrastructure leader participating in industrial expansion super-cycles.",
     },
@@ -615,6 +667,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "init_entry": True,
             "cooldown": 3,
             "macro_bear_exit": True,
+            "bb_window": 18,
+            "bb_mult": 1.8,
+            "bb_adaptive": True,
         },
         "description": "Defensive high-yield FMCG compounder with low beta and tight trailing defense.",
     },
@@ -637,10 +692,69 @@ def get_champion_strategy_for_ticker(ticker: str) -> Dict[str, Any]:
                 "init_entry": True,
                 "cooldown": 1,
                 "macro_bear_exit": True,
+                "bb_window": 20,
+                "bb_mult": 2.0,
+                "bb_adaptive": True,
             },
             "description": "Adaptive multi-regime hybrid alpha driver.",
         },
     )
+
+
+def compute_adaptive_bollinger_bands(
+    df: pd.DataFrame,
+    ticker: str,
+) -> Tuple[pd.Series, pd.Series, pd.Series, pd.Series, pd.Series]:
+    """
+    Computes ticker-specific volatility-adaptive Bollinger Bands.
+
+    Modulates the standard deviation multiplier dynamically using the asset's
+    real-time ATR Regime Ratio (14-day ATR vs 60-day baseline), expanding
+    the envelope during volatility spikes and contracting during squeezes.
+
+    Returns:
+        (bb_mid, bb_upper, bb_lower, bb_width, bb_position)
+    """
+    ticker_clean = ticker.upper() if isinstance(ticker, str) and ticker.strip() else "AAPL"
+    strat_cfg = get_champion_strategy_for_ticker(ticker_clean)
+    params = strat_cfg.get("params", {})
+    window = int(params.get("bb_window", 20))
+    base_k = float(params.get("bb_mult", 2.0))
+    is_adaptive = bool(params.get("bb_adaptive", True))
+
+    close = df["Close"].squeeze()
+    if isinstance(close, pd.DataFrame):
+        close = close.iloc[:, 0]
+
+    bb_mid = close.rolling(window=window, min_periods=min(10, window)).mean()
+    bb_std = close.rolling(window=window, min_periods=min(10, window)).std()
+
+    if is_adaptive and len(df) >= 14:
+        high = df["High"].squeeze() if "High" in df.columns else close
+        low = df["Low"].squeeze() if "Low" in df.columns else close
+        if isinstance(high, pd.DataFrame):
+            high = high.iloc[:, 0]
+        if isinstance(low, pd.DataFrame):
+            low = low.iloc[:, 0]
+
+        tr = pd.concat([
+            high - low,
+            (high - close.shift(1)).abs(),
+            (low - close.shift(1)).abs(),
+        ], axis=1).max(axis=1)
+        atr_14 = tr.rolling(14, min_periods=5).mean().bfill()
+        atr_baseline = atr_14.ewm(span=60, min_periods=10).mean()
+        arr = (atr_14 / (atr_baseline + 1e-8)).clip(0.75, 1.35)
+        dynamic_k = base_k * np.sqrt(arr)
+    else:
+        dynamic_k = base_k
+
+    bb_upper = bb_mid + (dynamic_k * bb_std)
+    bb_lower = bb_mid - (dynamic_k * bb_std)
+    bb_width = (bb_upper - bb_lower) / (bb_mid + 1e-9)
+    bb_position = ((close - bb_lower) / (bb_upper - bb_lower + 1e-9)).clip(0.0, 1.0).fillna(0.5)
+
+    return bb_mid, bb_upper, bb_lower, bb_width, bb_position
 
 
 

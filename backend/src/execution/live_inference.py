@@ -223,7 +223,7 @@ def is_near_earnings(ticker):
         return False
 
 
-def add_upgraded_features(df, spy_df, vix_df, lag_vix: bool = True):
+def add_upgraded_features(df, spy_df, vix_df, lag_vix: bool = True, ticker: Optional[str] = None):
     # Ensure columns are flattened if MultiIndex exists
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
@@ -258,15 +258,25 @@ def add_upgraded_features(df, spy_df, vix_df, lag_vix: bool = True):
     df["Stoch_K"] = 100 * (close_s - low14) / (high14 - low14 + 1e-9)
     df["Stoch_D"] = df["Stoch_K"].rolling(3).mean()
 
-    # Volatility Indicators
-    df["BB_Mid"] = close_s.rolling(20).mean()
-    df["BB_Std"] = close_s.rolling(20).std()
-    df["BB_Upper"] = df["BB_Mid"] + 2 * df["BB_Std"]
-    df["BB_Lower"] = df["BB_Mid"] - 2 * df["BB_Std"]
-    df["BB_Width"] = (df["BB_Upper"] - df["BB_Lower"]) / (df["BB_Mid"] + 1e-9)
-    df["BB_Position"] = (
-        (close_s - df["BB_Lower"]) / (df["BB_Upper"] - df["BB_Lower"] + 1e-9)
-    ).fillna(0.5)
+    # Volatility Indicators - Ticker-Specific Volatility-Adaptive Bollinger Bands
+    if ticker:
+        from src.execution.asset_intelligence import compute_adaptive_bollinger_bands
+        bb_mid, bb_upper, bb_lower, bb_width, bb_position = compute_adaptive_bollinger_bands(df, ticker)
+        df["BB_Mid"] = bb_mid
+        df["BB_Std"] = close_s.rolling(20).std()
+        df["BB_Upper"] = bb_upper
+        df["BB_Lower"] = bb_lower
+        df["BB_Width"] = bb_width
+        df["BB_Position"] = bb_position
+    else:
+        df["BB_Mid"] = close_s.rolling(20).mean()
+        df["BB_Std"] = close_s.rolling(20).std()
+        df["BB_Upper"] = df["BB_Mid"] + 2 * df["BB_Std"]
+        df["BB_Lower"] = df["BB_Mid"] - 2 * df["BB_Std"]
+        df["BB_Width"] = (df["BB_Upper"] - df["BB_Lower"]) / (df["BB_Mid"] + 1e-9)
+        df["BB_Position"] = (
+            (close_s - df["BB_Lower"]) / (df["BB_Upper"] - df["BB_Lower"] + 1e-9)
+        ).fillna(0.5)
 
     high_s = df["High"].squeeze()
     low_s = df["Low"].squeeze()
@@ -590,7 +600,7 @@ def fetch_live_data(ticker, config, version: Optional[str] = None):
     if isinstance(vix_df.columns, pd.MultiIndex):
         vix_df.columns = vix_df.columns.droplevel(1)
 
-    df = add_upgraded_features(df, spy_df, vix_df)
+    df = add_upgraded_features(df, spy_df, vix_df, ticker=ticker)
     # Institutional Fix: Remove duplicate columns before reindexing to prevent crash
     df = df.loc[:, ~df.columns.duplicated()].copy()
     feature_cols = get_feature_columns(version)
@@ -610,7 +620,7 @@ def fetch_live_data(ticker, config, version: Optional[str] = None):
             start_date="2022-01-01",
             end_date=(pd.Timestamp.now() + pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
         )
-        peer_df = add_upgraded_features(peer_df, spy_df, vix_df)
+        peer_df = add_upgraded_features(peer_df, spy_df, vix_df, ticker=peer_ticker)
         peer_filtered = peer_df.reindex(columns=feature_cols).dropna()
 
         common_idx = df_filtered.index.intersection(peer_filtered.index)
@@ -708,11 +718,24 @@ def fetch_live_data(ticker, config, version: Optional[str] = None):
 
     is_forming, bar_state = check_bar_forming_status(df)
 
+    from src.execution.asset_intelligence import get_champion_strategy_for_ticker
+    strat_cfg = get_champion_strategy_for_ticker(ticker)
+    strat_params = strat_cfg.get("params", {})
+    bb_window = int(strat_params.get("bb_window", 20))
+    bb_mult = float(strat_params.get("bb_mult", 2.0))
+    bb_adaptive = bool(strat_params.get("bb_adaptive", True))
+
     tech_snapshot = {
         "RSI": round(float(df["RSI"].iloc[-1]), 2),
         "MACD": round(float(df["MACD"].iloc[-1]), 2),
         "ATR": round(float(df["ATR"].iloc[-1]), 2),
         "BB_Position": round(float(df["BB_Position"].iloc[-1]), 2),
+        "BB_Upper": round(float(df["BB_Upper"].iloc[-1]), 2) if "BB_Upper" in df.columns else round(current_price * 1.05, 2),
+        "BB_Lower": round(float(df["BB_Lower"].iloc[-1]), 2) if "BB_Lower" in df.columns else round(current_price * 0.95, 2),
+        "BB_Width": round(float(df["BB_Width"].iloc[-1]), 2) if "BB_Width" in df.columns else 0.1,
+        "BB_Window": bb_window,
+        "BB_Mult": bb_mult,
+        "BB_Adaptive": bb_adaptive,
         "ADX": round(float(df["ADX"].iloc[-1]), 2),
         "Volume_Ratio": round(float(vol_ratio), 2),
         "ATR_Regime_Ratio": round(float(df["ATR_Regime_Ratio"].iloc[-1]), 2) if "ATR_Regime_Ratio" in df.columns else 1.0,

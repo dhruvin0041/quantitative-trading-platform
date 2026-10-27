@@ -140,6 +140,14 @@ export function TechnicalSnapshot({ data, currency = '$' }: TechnicalSnapshotPro
                 ) : "N/A"}
               </span>
             </div>
+            {technical_snapshot.BB_Window && technical_snapshot.BB_Mult && (
+              <div className="flex justify-between items-center p-2 bg-background border border-border rounded">
+                <span className="text-[11px] font-bold text-muted-foreground uppercase">Adaptive BB Model</span>
+                <span className="text-[11px] font-mono font-bold text-primary">
+                  {technical_snapshot.BB_Window}d / {technical_snapshot.BB_Mult}σ {technical_snapshot.BB_Adaptive ? "(Adaptive)" : ""}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 

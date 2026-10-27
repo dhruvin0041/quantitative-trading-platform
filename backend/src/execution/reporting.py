@@ -20,7 +20,7 @@ from src.data_ingestion.technical_indicators import (
     add_advanced_features,
     clean_multiindex_columns,
 )
-from src.execution.asset_intelligence import AssetExpectancyFilter
+from src.execution.asset_intelligence import AssetExpectancyFilter, compute_adaptive_bollinger_bands
 from src.execution.live_inference import FEATURE_COLUMNS
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
@@ -325,11 +325,12 @@ class ReportGenerator:
         df_features = add_advanced_features(df_full.copy())
         df_features = clean_multiindex_columns(df_features)
 
-        # Data Alignment
+        # Data Alignment & Ticker-Specific Adaptive Bollinger Bands
         df_full["ribbon_upper"] = df_features["Ribbon_Fast"]
         df_full["ribbon_lower"] = df_features["Ribbon_Slow"]
-        df_full["bb_upper"] = df_features["BB_120_Upper"]
-        df_full["bb_lower"] = df_features["BB_120_Lower"]
+        _, bb_u, bb_l, _, _ = compute_adaptive_bollinger_bands(df_full, ticker)
+        df_full["bb_upper"] = bb_u
+        df_full["bb_lower"] = bb_l
         if "trailing_stop" not in df_full.columns:
             df_full["trailing_stop"] = np.nan
 

@@ -14,6 +14,12 @@ class TechnicalSnapshot(BaseModel):
     MACD: float
     ATR: float
     BB_Position: float
+    BB_Upper: Optional[float] = None
+    BB_Lower: Optional[float] = None
+    BB_Width: Optional[float] = None
+    BB_Window: Optional[int] = None
+    BB_Mult: Optional[float] = None
+    BB_Adaptive: Optional[bool] = None
     ADX: float
     Volume_Ratio: float
     ATR_Regime_Ratio: Optional[float] = 1.0
@@ -253,6 +259,11 @@ class PredictResponse(BaseModel):
 
     # Dynamic Volatility Position Sizing (Half-Kelly / Volatility Scaling)
     dynamic_sizing: Optional[Dict[str, Any]] = None
+
+    # Ticker-Specific Volatility-Adaptive Bollinger Bands Telemetry
+    bb_window: Optional[int] = None
+    bb_mult: Optional[float] = None
+    bb_adaptive: Optional[bool] = None
 
 
 
