@@ -212,7 +212,11 @@ def prepare_ticker_data(
         raise ValueError(f"Insufficient data for {ticker}. At least 250 bars required.")
 
     peer_ticker = get_sector_peer(ticker)
-    peer_raw = fetch_historical_data(peer_ticker, start_date=start_date, end_date=end_date)
+    try:
+        peer_raw = fetch_historical_data(peer_ticker, start_date=start_date, end_date=end_date)
+    except Exception as e:
+        logger.warning(f"Could not fetch peer {peer_ticker} for {ticker}: {e}. Proceeding without peer alignment.")
+        peer_raw = None
 
     # Compute 31 features continuously
     df_features = add_upgraded_features(df_raw.copy(), spy_full, vix_full, ticker=ticker)
