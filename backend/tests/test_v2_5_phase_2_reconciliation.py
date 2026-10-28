@@ -25,6 +25,7 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 REPORTS_DIR = BACKEND_DIR / "reports"
 RESEARCH_ARTIFACTS_DIR = BACKEND_DIR / "artifacts" / "research"
 ROOT_DIR = BACKEND_DIR.parent
+RELEASES_DIR = ROOT_DIR / "docs" / "releases"
 
 from scripts.research.master_research_validation_sprint import (
     compute_all_feature_candidates,
@@ -90,7 +91,7 @@ def test_ending_equity_arithmetic_strict_reconciliation():
     within 1 cent ($0.01 tolerance).
     """
     bench_paths = [
-        ROOT_DIR / "HYDRA_V2_5_BENCHMARK_RESULTS.csv",
+        RELEASES_DIR / "HYDRA_V2_5_BENCHMARK_RESULTS.csv",
         REPORTS_DIR / "HYDRA_V2_5_BENCHMARK_RESULTS.csv",
     ]
     for p in bench_paths:
@@ -133,7 +134,7 @@ def test_trade_ledger_terminal_cash_and_equity_continuity():
         portfolio_equity == terminal_cash + open_market_value == $1,188.34
     """
     ledger_paths = [
-        ROOT_DIR / "HYDRA_V2_5_TRADE_LEDGER.csv",
+        RELEASES_DIR / "HYDRA_V2_5_TRADE_LEDGER.csv",
         REPORTS_DIR / "HYDRA_V2_5_TRADE_LEDGER.csv",
     ]
     for p in ledger_paths:
@@ -250,7 +251,7 @@ def test_distinct_run_id_integrity_and_provenance():
     Assert that all evaluated runs (Run 1, 2, 3A, 3B, Frozen) have unique Run IDs,
     independent inputs, distinct classifications, and documented equity outcomes.
     """
-    bench_path = ROOT_DIR / "HYDRA_V2_5_BENCHMARK_RESULTS.csv"
+    bench_path = RELEASES_DIR / "HYDRA_V2_5_BENCHMARK_RESULTS.csv"
     df_bench = pd.read_csv(bench_path)
 
     run_ids = df_bench["run_id"].tolist()
@@ -312,7 +313,7 @@ def test_first_principles_transaction_accounting_recalculation():
     slippage, commissions, and cash movements from first principles ($1,000 initial capital).
     Assert zero penny discrepancy across all 19 trades.
     """
-    ledger_path = ROOT_DIR / "HYDRA_V2_5_TRADE_LEDGER.csv"
+    ledger_path = RELEASES_DIR / "HYDRA_V2_5_TRADE_LEDGER.csv"
     df_ledger = pd.read_csv(ledger_path)
 
     running_cash = 1000.0000
@@ -469,7 +470,7 @@ def test_cryptographic_run_provenance_manifest_integrity():
         assert actual_hash == crypto[key], f"Cryptographic mismatch for {key}: actual={actual_hash}, recorded={crypto[key]}"
 
     # 2. Verify benchmark CSV matches provenance manifest
-    bench_path = ROOT_DIR / "HYDRA_V2_5_BENCHMARK_RESULTS.csv"
+    bench_path = RELEASES_DIR / "HYDRA_V2_5_BENCHMARK_RESULTS.csv"
     df_bench = pd.read_csv(bench_path)
 
     for idx, row in df_bench.iterrows():
@@ -495,7 +496,7 @@ def test_open_marked_position_rejects_exit_proceeds_and_execution_fills():
     for any position with status OPEN_MARKED_TO_MARKET. Ensure strict separation
     between actual exit executions and terminal mark-to-market valuations.
     """
-    ledger_path = ROOT_DIR / "HYDRA_V2_5_TRADE_LEDGER.csv"
+    ledger_path = RELEASES_DIR / "HYDRA_V2_5_TRADE_LEDGER.csv"
     df_ledger = pd.read_csv(ledger_path)
     open_positions = df_ledger[df_ledger["status"] == "OPEN_MARKED_TO_MARKET"]
     assert len(open_positions) > 0, "No open marked position found in ledger"

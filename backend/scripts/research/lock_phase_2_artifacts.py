@@ -285,7 +285,7 @@ def main():
 
     df_master_ledger = pd.DataFrame(ledger_rows)
     master_ledger_reports = REPORTS_DIR / "HYDRA_V2_5_TRADE_LEDGER.csv"
-    master_ledger_root = ROOT_DIR / "HYDRA_V2_5_TRADE_LEDGER.csv"
+    master_ledger_root = ROOT_DIR / "docs" / "releases" / "HYDRA_V2_5_TRADE_LEDGER.csv"
     df_master_ledger.to_csv(master_ledger_reports, index=False)
     df_master_ledger.to_csv(master_ledger_root, index=False)
     logger.info(f"  Complete 19-row trade ledger saved to {master_ledger_reports} and {master_ledger_root}")
@@ -589,7 +589,7 @@ def main():
 
     df_benchmarks = pd.DataFrame(benchmarks_data)
     bench_reports = REPORTS_DIR / "HYDRA_V2_5_BENCHMARK_RESULTS.csv"
-    bench_root = ROOT_DIR / "HYDRA_V2_5_BENCHMARK_RESULTS.csv"
+    bench_root = ROOT_DIR / "docs" / "releases" / "HYDRA_V2_5_BENCHMARK_RESULTS.csv"
     df_benchmarks.to_csv(bench_reports, index=False)
     df_benchmarks.to_csv(bench_root, index=False)
     logger.info(f"  Complete benchmark results saved to {bench_reports} and {bench_root}")
