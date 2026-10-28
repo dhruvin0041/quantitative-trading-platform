@@ -639,7 +639,7 @@ def train_ticker_pipeline(
     logger.info("\n[5/5] Saving Active Ticker and Strategy Metadata...")
     market = "us"
     if ".NS" in ticker or ".BO" in ticker:
-        market = "in"
+        market = "india"
 
     with open(configs_dir / "active_ticker.json", "w") as f:
         json.dump({"ticker": ticker, "market": market}, f, indent=4)

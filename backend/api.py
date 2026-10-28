@@ -358,6 +358,12 @@ async def get_active_ticker():
             data = json.load(f)
             if data.get("ticker") == "UNIVERSAL":
                 data["ticker"] = "AAPL"
+            ticker_val = str(data.get("ticker", "AAPL"))
+            market_val = str(data.get("market", "")).lower()
+            if ticker_val.endswith(".NS") or market_val in ["in", "india", "nse"]:
+                data["market"] = "india"
+            else:
+                data["market"] = "us"
             return data
     except Exception:
         # Default to Apple if no training run has set an active ticker

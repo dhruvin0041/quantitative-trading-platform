@@ -20,6 +20,13 @@ import { API_KEY, getBaseUrl } from '@/lib/config';
 
 type TabType = 'CONSENSUS' | 'RISK' | 'PORTFOLIO' | 'PERFORMANCE' | 'PROSPECTIVE' | 'TECHNICAL';
 
+const normalizeMarket = (m?: string): 'us' | 'india' => {
+  if (!m) return 'us';
+  const clean = m.toLowerCase().trim();
+  if (clean === 'in' || clean === 'india' || clean === 'nse') return 'india';
+  return 'us';
+};
+
 export default function HydraTerminal() {
   const [ticker, setTicker] = useState<string>("AAPL"); 
   const [market, setMarket] = useState<string>('us');
@@ -55,8 +62,14 @@ export default function HydraTerminal() {
         if (data.ticker) {
           const resolvedTicker = data.ticker === 'UNIVERSAL' ? 'AAPL' : data.ticker;
           setTicker(resolvedTicker);
+          if (resolvedTicker.endsWith('.NS')) {
+            setMarket('india');
+          } else if (data.market) {
+            setMarket(normalizeMarket(data.market));
+          }
+        } else if (data.market) {
+          setMarket(normalizeMarket(data.market));
         }
-        if (data.market) setMarket(data.market);
       })
       .catch(err => console.error("Failed to fetch active ticker", err));
 
@@ -134,8 +147,9 @@ export default function HydraTerminal() {
   }, [ticker, API_URL]); 
 
   const filteredUniverse = useMemo(() => {
-    const list = universe.filter(s => s.market === market);
-    const priorityList = market === 'us' ? TOP_US_TICKERS : market === 'india' ? TOP_INDIA_TICKERS : [];
+    const normMarket = normalizeMarket(market);
+    const list = universe.filter(s => normalizeMarket(s.market) === normMarket);
+    const priorityList = normMarket === 'us' ? TOP_US_TICKERS : TOP_INDIA_TICKERS;
     if (priorityList.length > 0) {
       return [...list].sort((a, b) => {
         const aIdx = priorityList.indexOf(a.ticker);
@@ -143,7 +157,7 @@ export default function HydraTerminal() {
         if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
         if (aIdx !== -1) return -1;
         if (bIdx !== -1) return 1;
-        return 0;
+        return a.ticker.localeCompare(b.ticker);
       });
     }
     return list;
@@ -152,14 +166,19 @@ export default function HydraTerminal() {
   const handleStockSelect = (selectedTicker: string) => {
     setTicker(selectedTicker);
     const stock = universe.find(s => s.ticker === selectedTicker);
-    if (stock && stock.market !== market) {
-      setMarket(stock.market);
+    if (stock) {
+      setMarket(normalizeMarket(stock.market));
+    } else if (selectedTicker.endsWith('.NS')) {
+      setMarket('india');
+    } else {
+      setMarket('us');
     }
   };
 
   const currencySymbol = useMemo(() => {
+    if (ticker.endsWith('.NS')) return '₹';
     const stock = universe.find(s => s.ticker === ticker);
-    return stock?.market === 'india' ? '₹' : '$';
+    return normalizeMarket(stock?.market) === 'india' ? '₹' : '$';
   }, [universe, ticker]);
 
   const strategyModeLabel = useMemo(() => {
@@ -251,7 +270,7 @@ export default function HydraTerminal() {
                 onClick={() => setMarket('us')}
                 className={cn(
                   "flex-1 min-w-[45px] py-1.5 rounded-md text-[11px] font-bold uppercase transition-all",
-                  market === 'us' ? "bg-muted text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  normalizeMarket(market) === 'us' ? "bg-muted text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 🇺🇸 US
@@ -260,7 +279,7 @@ export default function HydraTerminal() {
                 onClick={() => setMarket('india')}
                 className={cn(
                   "flex-1 min-w-[45px] py-1.5 rounded-md text-[11px] font-bold uppercase transition-all",
-                  market === 'india' ? "bg-muted text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  normalizeMarket(market) === 'india' ? "bg-muted text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 🇮🇳 IND
