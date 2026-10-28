@@ -798,6 +798,22 @@ def compute_adaptive_ema_ribbon(
     return ema_fast, ema_slow, ribbon_state
 
 
+def get_ticker_bb_params(ticker: Optional[str]) -> Tuple[int, float, bool]:
+    """
+    Returns the calibrated (window, multiplier, is_adaptive) Bollinger Band parameters for the ticker.
+    Falls back to institutional baseline (20, 2.0, True) if unspecified or unmapped.
+    """
+    if not ticker or not isinstance(ticker, str):
+        return 20, 2.0, True
+    ticker_clean = ticker.upper().strip()
+    strat_cfg = get_champion_strategy_for_ticker(ticker_clean)
+    params = strat_cfg.get("params", {})
+    window = int(params.get("bb_window", 20))
+    mult = float(params.get("bb_mult", 2.0))
+    is_adaptive = bool(params.get("bb_adaptive", True))
+    return window, mult, is_adaptive
+
+
 def compute_adaptive_bollinger_bands(
     df: pd.DataFrame,
     ticker: str,
