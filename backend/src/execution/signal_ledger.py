@@ -1126,9 +1126,9 @@ class SignalLedger:
                 )
                 return False
             is_valid_version = (
-                model_ver in ("Institutional_Mesh_V2.4.1", "Institutional_Mesh_V2.4", "Institutional_Mesh_V3", "Institutional_Mesh_V4")
+                model_ver in ("Institutional_Mesh_V2.4.1", "Institutional_Mesh_V2.4", "Institutional_Mesh_V3")
                 or model_ver.startswith("Institutional_Mesh_V3")
-                or model_ver.startswith("Institutional_Mesh_V4")
+                or model_ver.startswith("Institutional_Mesh_V4.0_")
             )
             if not is_valid_version:
                 logger.error(

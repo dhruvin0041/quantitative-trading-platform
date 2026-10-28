@@ -301,7 +301,7 @@ class InferenceService:
                 Path("artifacts/frozen_strategy_manifest_v2.4.json"),
                 Path("backend/artifacts/frozen_strategy_manifest_v2.4.json"),
             ],
-            "allowed_dims": {27, 31},
+            "allowed_dims": {27, 31, 40},
             "model_key": "xgb_ensemble.json",
             "scaler_key": "latest_scaler.joblib",
         },
@@ -1062,47 +1062,56 @@ class InferenceService:
                     cur_hist = float(macd_hist_s.iloc[i]) if pd.notna(macd_hist_s.iloc[i]) else 0.0
                     prev_hist = float(macd_hist_s.iloc[i - 1]) if i > 0 and pd.notna(macd_hist_s.iloc[i - 1]) else 0.0
 
-                    cur_spy_macro = (
-                        float(spy_sma200_s.iloc[i])
-                        if pd.notna(spy_sma200_s.iloc[i])
-                        else cur_spy
-                    )
-                    macro_spy_bull = bool(cur_spy >= cur_spy_macro * 0.985)
-                    asset_bull = bool(cur_c >= cur_sma200 * 0.99)
+                    is_indian = ticker.upper().endswith(".NS")
+                    if spy is not None and "Close" in spy.columns and not is_indian:
+                        cur_spy_macro = (
+                            float(spy_sma200_s.iloc[i])
+                            if pd.notna(spy_sma200_s.iloc[i])
+                            else cur_spy
+                        )
+                        macro_spy_bull = bool(cur_spy >= cur_spy_macro * 0.985)
+                    else:
+                        macro_spy_bull = bool(cur_c >= cur_sma200 * 0.980)
+
+                    asset_bull = bool(cur_c >= cur_sma200 * 0.980)
                     regime_bull = macro_spy_bull and asset_bull
 
-                    if cur_c < cur_sma200 * 0.98:
+                    if cur_c < cur_sma200 * 0.970:
                         consec_below += 1
                     else:
                         consec_below = 0
 
                     bullish_candle = (cur_c > cur_o) or (cur_c > cur_l + 0.35 * (cur_h - cur_l))
-                    bearish_candle = (cur_c < cur_o) and (cur_c < cur_l + 0.45 * (cur_h - cur_l))
 
                     if current_pos == "LONG" and not pending_action:
                         peak_price = max(peak_price, cur_h)
                         gain_pct = (cur_c - entry_price) / max(entry_price, 1e-6)
 
-                        base_trail = strat_params.get("base_atr", 4.2)
-                        ratchet_15 = strat_params.get("ratchet_15", base_trail)
-                        ratchet_25 = strat_params.get("ratchet_25", ratchet_15)
+                        base_trail = strat_params.get("base_atr", 3.8)
+                        ratchet_15 = strat_params.get("ratchet_15", base_trail * 0.8)
+                        ratchet_25 = strat_params.get("ratchet_25", base_trail * 0.6)
 
                         if gain_pct >= 0.25:
-                            new_stop = max(entry_price * 1.05, peak_price - (ratchet_25 * c_atr))
+                            new_stop = max(entry_price * 1.06, peak_price - (ratchet_25 * c_atr))
                         elif gain_pct >= 0.15:
-                            new_stop = max(entry_price * 1.01, peak_price - (ratchet_15 * c_atr))
+                            new_stop = max(entry_price * 1.02, peak_price - (ratchet_15 * c_atr))
                         else:
                             new_stop = peak_price - (base_trail * c_atr)
                         trailing_stop = max(trailing_stop, new_stop)
 
                         hit_macro_bear = (
-                            ((not macro_spy_bull and cur_c < cur_sma200) or (cur_c < cur_sma200 * 0.98) or (consec_below >= 3))
+                            ((not macro_spy_bull and cur_c < cur_sma200 * 0.965) or (consec_below >= 5))
                             if strat_params.get("macro_bear_exit", True)
                             else False
                         )
                         climax_rsi = strat_params.get("climax_rsi")
-                        climax_gain = strat_params.get("climax_gain", 0.15)
-                        hit_climax = (cur_rsi >= climax_rsi and bearish_candle and gain_pct >= climax_gain) if climax_rsi else False
+                        climax_gain = strat_params.get("climax_gain", 0.18)
+                        hit_climax = False
+                        if climax_rsi and cur_rsi >= climax_rsi and gain_pct >= climax_gain:
+                            tight_stop = peak_price - (1.6 * c_atr)
+                            trailing_stop = max(trailing_stop, tight_stop)
+                            if cur_c < trailing_stop:
+                                hit_climax = True
                         hit_trailing = (cur_c < trailing_stop)
 
                         hit_rebound_target = False
@@ -1166,9 +1175,11 @@ class InferenceService:
                             buy_reason = None
                             buy_rationale = None
 
+                            rsi_max = 84.0 if (cur_c >= cur_sma200 or cur_c >= cur_ema20) else 74.0
+
                             if strat_type == "VOLATILITY_BREAKOUT_SWING":
-                                cond_macd = cur_hist > 0 and cur_hist >= prev_hist
-                                cond_break = (cur_c >= cur_ema20) and (48.0 <= cur_rsi <= 74.0) and bullish_candle
+                                cond_macd = cur_hist > 0
+                                cond_break = (cur_c >= cur_ema20 * 0.995) and (45.0 <= cur_rsi <= rsi_max) and bullish_candle
                                 if regime_bull and cond_macd and cond_break:
                                     trigger_buy = True
                                     pending_type = strat_type
@@ -1179,52 +1190,35 @@ class InferenceService:
                                 dip_rsi = strat_params.get("dip_rsi", 42.0)
                                 if regime_bull:
                                     cond_pb = (cur_rsi <= dip_rsi) and bullish_candle
-                                    cond_break = (cur_c >= cur_ema20) and (cur_hist > 0) and (cur_hist >= prev_hist) and (48.0 <= cur_rsi <= 74.0) and bullish_candle
+                                    cond_break = (cur_c >= cur_ema20 * 0.995) and (cur_hist > 0) and (45.0 <= cur_rsi <= rsi_max) and bullish_candle
                                     if cond_pb or cond_break:
                                         trigger_buy = True
                                         pending_type = strat_type
                                         buy_reason = "TACTICAL_PULLBACK_ENTRY" if cond_pb else "VOLATILITY_BREAKOUT_ENTRY"
                                         buy_rationale = f"Bull regime {'pullback accumulation' if cond_pb else 'momentum breakout'} confirmed (RSI {cur_rsi:.1f}). Spot allocation."
                                 else:
-                                    if cur_rsi <= 28.0 and bullish_candle and (cur_c > cur_l + 0.35 * (cur_h - cur_l)):
+                                    if cur_rsi <= 30.0 and bullish_candle:
                                         trigger_buy = True
                                         pending_type = "CAPITULATION"
                                         buy_reason = "CAPITULATION_REBOUND_ENTRY"
-                                        buy_rationale = f"Bear regime extreme oversold capitulation exhaustion (RSI {cur_rsi:.1f} <= 28.0). Tactical rebound allocation."
+                                        buy_rationale = f"Bear regime extreme oversold capitulation exhaustion (RSI {cur_rsi:.1f} <= 30.0). Tactical rebound allocation."
 
-                            elif strat_type == "CORE_TACTICAL_ACCUMULATION":
+                            elif strat_type in ["CORE_TACTICAL_ACCUMULATION", "DYNAMIC_REGIME_HYBRID"]:
                                 dip_rsi = strat_params.get("dip_rsi", 45.0)
                                 if regime_bull:
                                     cond_pb = (cur_rsi <= dip_rsi) and bullish_candle
-                                    cond_break = (cur_c >= cur_ema20) and (cur_hist > 0) and (cur_hist >= prev_hist) and (48.0 <= cur_rsi <= 74.0) and bullish_candle
+                                    cond_break = (cur_c >= cur_ema20 * 0.995) and (cur_hist > 0) and (45.0 <= cur_rsi <= rsi_max) and bullish_candle
                                     if cond_pb or cond_break:
                                         trigger_buy = True
                                         pending_type = strat_type
                                         buy_reason = "CORE_TACTICAL_PULLBACK_ENTRY" if cond_pb else "VOLATILITY_BREAKOUT_ENTRY"
                                         buy_rationale = f"Bull regime {'pullback accumulation' if cond_pb else 'momentum breakout'} confirmed (RSI {cur_rsi:.1f} above 200 SMA). Spot allocation."
                                 else:
-                                    if cur_rsi <= 26.0 and bullish_candle and (cur_c > cur_l + 0.35 * (cur_h - cur_l)):
+                                    if cur_rsi <= 28.0 and bullish_candle:
                                         trigger_buy = True
                                         pending_type = "CAPITULATION"
                                         buy_reason = "CAPITULATION_REBOUND_ENTRY"
-                                        buy_rationale = f"Bear regime oversold capitulation exhaustion (RSI {cur_rsi:.1f} <= 26.0). Tactical rebound allocation."
-
-                            elif strat_type == "DYNAMIC_REGIME_HYBRID":
-                                dip_rsi = strat_params.get("dip_rsi", 40.0)
-                                if regime_bull:
-                                    cond_pb = (cur_rsi <= dip_rsi) and bullish_candle
-                                    cond_break = (cur_c >= cur_ema20) and (cur_hist > 0) and (cur_hist >= prev_hist) and (48.0 <= cur_rsi <= 74.0) and bullish_candle
-                                    if cond_pb or cond_break:
-                                        trigger_buy = True
-                                        pending_type = strat_type
-                                        buy_reason = "CORE_BULL_PULLBACK" if cond_pb else "VOLATILITY_BREAKOUT_ENTRY"
-                                        buy_rationale = f"Bull regime {'pullback continuation' if cond_pb else 'momentum breakout'} confirmed. Spot allocation."
-                                else:
-                                    if cur_rsi <= 26.0 and bullish_candle and (cur_c > cur_l + 0.35 * (cur_h - cur_l)):
-                                        trigger_buy = True
-                                        pending_type = "CAPITULATION"
-                                        buy_reason = "CAPITULATION_REBOUND_ENTRY"
-                                        buy_rationale = f"Bear regime capitulation oversold exhaustion (RSI {cur_rsi:.1f} <= 26.0). Tactical rebound allocation."
+                                        buy_rationale = f"Bear regime oversold capitulation exhaustion (RSI {cur_rsi:.1f} <= 28.0). Tactical rebound allocation."
 
                             if trigger_buy:
                                 pending_action = "BUY"
@@ -2258,7 +2252,6 @@ class InferenceService:
         macd_line = ema12_val - ema26_val
         macd_sig = macd_line.ewm(span=9).mean()
         cur_hist = float((macd_line - macd_sig).iloc[-1]) if len(ticker_df_risk) >= 2 else 0.0
-        prev_hist = float((macd_line - macd_sig).iloc[-2]) if len(ticker_df_risk) >= 2 else 0.0
 
         # Check if currently holding long position from paper engine OR signal ledger
         last_ledger_signals = self.signal_ledger.get_signals(
@@ -2278,16 +2271,19 @@ class InferenceService:
             )
         )
 
-        # Macro regime
-        macro_spy_bull = bool(curr_spy_close >= spy_sma_200 * 0.985)
-        asset_bull = bool(curr_close >= sma_200 * 0.99)
+        is_indian = ticker.upper().endswith(".NS")
+        if not is_indian and curr_spy_close > 0:
+            macro_spy_bull = bool(curr_spy_close >= spy_sma_200 * 0.985)
+        else:
+            macro_spy_bull = bool(curr_close >= sma_200 * 0.980)
+
+        asset_bull = bool(curr_close >= sma_200 * 0.980)
         regime_bull = macro_spy_bull and asset_bull
 
         cur_o = float(ticker_df_risk["Open"].iloc[-1]) if "Open" in ticker_df_risk.columns else curr_close
         cur_h = float(ticker_df_risk["High"].iloc[-1]) if "High" in ticker_df_risk.columns else curr_close
         cur_l = float(ticker_df_risk["Low"].iloc[-1]) if "Low" in ticker_df_risk.columns else curr_close
         bullish_candle = (curr_close > cur_o) or (curr_close > cur_l + 0.35 * (cur_h - cur_l))
-        bearish_candle = (curr_close < cur_o) and (curr_close < cur_l + 0.45 * (cur_h - cur_l))
         gain_pct = (curr_close - last_entry) / max(last_entry, 1e-6) if last_entry > 0 else 0.0
 
         if is_in_long_pos:
@@ -2296,25 +2292,30 @@ class InferenceService:
             recent_highs = ticker_df_risk["High"].iloc[-30:].max() if len(ticker_df_risk) >= 1 else cur_h
             peak_p = max(last_entry, float(recent_highs))
 
-            base_trail = strat_params.get("base_atr", 4.2)
-            ratchet_15 = strat_params.get("ratchet_15", base_trail)
-            ratchet_25 = strat_params.get("ratchet_25", ratchet_15)
+            base_trail = strat_params.get("base_atr", 3.8)
+            ratchet_15 = strat_params.get("ratchet_15", base_trail * 0.8)
+            ratchet_25 = strat_params.get("ratchet_25", base_trail * 0.6)
 
             if gain_pct >= 0.25:
-                trail_stop = max(last_entry * 1.05, peak_p - (ratchet_25 * c_atr))
+                trail_stop = max(last_entry * 1.06, peak_p - (ratchet_25 * c_atr))
             elif gain_pct >= 0.15:
-                trail_stop = max(last_entry * 1.01, peak_p - (ratchet_15 * c_atr))
+                trail_stop = max(last_entry * 1.02, peak_p - (ratchet_15 * c_atr))
             else:
                 trail_stop = peak_p - (base_trail * c_atr)
 
             hit_macro_bear = (
-                ((not macro_spy_bull and curr_close < sma_200) or (curr_close < sma_200 * 0.98))
+                ((not macro_spy_bull and curr_close < sma_200 * 0.965) or (curr_close < sma_200 * 0.95))
                 if strat_params.get("macro_bear_exit", True)
                 else False
             )
             climax_rsi = strat_params.get("climax_rsi")
-            climax_gain = strat_params.get("climax_gain", 0.15)
-            hit_climax = (c_rsi >= climax_rsi and bearish_candle and gain_pct >= climax_gain) if climax_rsi else False
+            climax_gain = strat_params.get("climax_gain", 0.18)
+            hit_climax = False
+            if climax_rsi and c_rsi >= climax_rsi and gain_pct >= climax_gain:
+                tight_stop = peak_p - (1.6 * c_atr)
+                trail_stop = max(trail_stop, tight_stop)
+                if curr_close < trail_stop:
+                    hit_climax = True
             hit_trailing = (curr_close < trail_stop)
 
             hit_rebound_target = False
@@ -2349,17 +2350,19 @@ class InferenceService:
             buy_action = None
             buy_rationale = None
 
+            rsi_max = 84.0 if (curr_close >= sma_200 or curr_close >= cur_ema20) else 74.0
+
             if pre_signal == "SELL":
                 target_exposure = 0.00
                 tactical_action = "COUNTER_TREND_SHORT_CANDIDATE"
                 tactical_rationale = f"{strat_name}: Model consensus signals SELL while flat."
             elif strat_type == "VOLATILITY_BREAKOUT_SWING":
-                cond_macd = cur_hist > 0 and cur_hist >= prev_hist
-                cond_break = (curr_close >= cur_ema20) and (48.0 <= c_rsi <= 74.0) and bullish_candle
+                cond_macd = cur_hist > 0
+                cond_break = (curr_close >= cur_ema20 * 0.995) and (45.0 <= c_rsi <= rsi_max) and bullish_candle
                 if pre_signal == "BUY" or (regime_bull and cond_macd and cond_break):
                     trigger_buy = True
                     buy_action = "VOLATILITY_BREAKOUT_BUY"
-                    buy_rationale = f"Bull regime momentum breakout confirmed: MACD expanding ({cur_hist:.3f}), RSI {c_rsi:.1f}. Spot allocation."
+                    buy_rationale = f"Bull regime momentum breakout confirmed: MACD positive ({cur_hist:.3f}), RSI {c_rsi:.1f}. Spot allocation."
                 else:
                     pre_signal = "HOLD"
                     target_exposure = 0.00
@@ -2370,7 +2373,7 @@ class InferenceService:
                 dip_rsi = strat_params.get("dip_rsi", 42.0)
                 if regime_bull:
                     cond_pb = (c_rsi <= dip_rsi) and bullish_candle
-                    cond_break = (curr_close >= cur_ema20) and (cur_hist > 0) and (cur_hist >= prev_hist) and (48.0 <= c_rsi <= 74.0) and bullish_candle
+                    cond_break = (curr_close >= cur_ema20 * 0.995) and (cur_hist > 0) and (45.0 <= c_rsi <= rsi_max) and bullish_candle
                     if pre_signal == "BUY" or (cond_pb or cond_break):
                         trigger_buy = True
                         buy_action = "TACTICAL_PULLBACK_BUY" if cond_pb else "VOLATILITY_BREAKOUT_BUY"
@@ -2381,24 +2384,24 @@ class InferenceService:
                         tactical_action = "AWAITING_TREND_SETUP"
                         tactical_rationale = f"{strat_name}: Preserving 100% Cash defense while awaiting pullback/breakout setup (RSI {c_rsi:.1f})."
                 else:
-                    if pre_signal == "BUY" or (c_rsi <= 28.0 and bullish_candle and (curr_close > cur_l + 0.35 * (cur_h - cur_l))):
+                    if pre_signal == "BUY" or (c_rsi <= 30.0 and bullish_candle):
                         trigger_buy = True
                         buy_action = "CAPITULATION_REBOUND_BUY"
-                        buy_rationale = f"Bear regime extreme oversold capitulation exhaustion (RSI {c_rsi:.1f} <= 28.0). Tactical rebound allocation."
+                        buy_rationale = f"Bear regime extreme oversold capitulation exhaustion (RSI {c_rsi:.1f} <= 30.0). Tactical rebound allocation."
                     else:
                         pre_signal = "HOLD"
                         target_exposure = 0.00
                         tactical_action = "CASH_DEFENSE_100%"
                         tactical_rationale = "Bear Regime / Macro Breakdown active. 100% Cash Defense sheltering capital from market drawdowns."
 
-            elif strat_type == "CORE_TACTICAL_ACCUMULATION":
+            elif strat_type in ["CORE_TACTICAL_ACCUMULATION", "DYNAMIC_REGIME_HYBRID"]:
                 dip_rsi = strat_params.get("dip_rsi", 45.0)
                 if pre_signal == "BUY" or (regime_bull and (c_rsi <= dip_rsi) and bullish_candle):
                     trigger_buy = True
                     buy_action = "CORE_TACTICAL_PULLBACK_BUY"
                     buy_rationale = f"Bull regime pullback accumulation confirmed (RSI {c_rsi:.1f} <= {dip_rsi} above 200 SMA). Spot allocation."
                 else:
-                    cond_break = (curr_close >= cur_ema20) and (cur_hist > 0) and (cur_hist >= prev_hist) and (48.0 <= c_rsi <= 74.0) and bullish_candle
+                    cond_break = (curr_close >= cur_ema20 * 0.995) and (cur_hist > 0) and (45.0 <= c_rsi <= rsi_max) and bullish_candle
                     if pre_signal == "BUY" or (regime_bull and cond_break):
                         trigger_buy = True
                         buy_action = "VOLATILITY_BREAKOUT_BUY"
@@ -2409,30 +2412,15 @@ class InferenceService:
                         tactical_action = "AWAITING_TREND_PULLBACK"
                         tactical_rationale = f"{strat_name}: Macro bull intact. Preserving 100% Cash while awaiting pullback (RSI {c_rsi:.1f})."
                 if not regime_bull:
-                    if pre_signal == "BUY" or (c_rsi <= 26.0 and bullish_candle and (curr_close > cur_l + 0.35 * (cur_h - cur_l))):
+                    if pre_signal == "BUY" or (c_rsi <= 28.0 and bullish_candle):
                         trigger_buy = True
                         buy_action = "CAPITULATION_REBOUND_BUY"
-                        buy_rationale = f"Bear regime oversold capitulation exhaustion (RSI {c_rsi:.1f} <= 26.0). Tactical rebound allocation."
+                        buy_rationale = f"Bear regime oversold capitulation exhaustion (RSI {c_rsi:.1f} <= 28.0). Tactical rebound allocation."
                     else:
                         pre_signal = "HOLD"
                         target_exposure = 0.00
                         tactical_action = "CASH_DEFENSE_100%"
                         tactical_rationale = "Bear Regime / Macro Breakdown active. 100% Cash Defense sheltering capital from market drawdowns."
-
-            elif strat_type == "DYNAMIC_REGIME_HYBRID":
-                dip_rsi = strat_params.get("dip_rsi", 40.0)
-                if regime_bull:
-                    cond_pb = (c_rsi <= dip_rsi) and bullish_candle
-                    cond_break = (curr_close >= cur_ema20) and (cur_hist > 0) and (cur_hist >= prev_hist) and (48.0 <= c_rsi <= 74.0) and bullish_candle
-                    if pre_signal == "BUY" or (cond_pb or cond_break):
-                        trigger_buy = True
-                        buy_action = "CORE_BULL_PULLBACK_BUY" if cond_pb else "VOLATILITY_BREAKOUT_BUY"
-                        buy_rationale = f"Bull regime {'pullback continuation' if cond_pb else 'momentum breakout'} confirmed (RSI {c_rsi:.1f}). Deploying 1.00x spot cash equity."
-                    else:
-                        pre_signal = "HOLD"
-                        target_exposure = 0.00
-                        tactical_action = "AWAITING_PULLBACK_SETUP"
-                        tactical_rationale = f"Macro Bull intact. Waiting for high-probability pullback / dip setup (RSI {c_rsi:.1f}). 100% Cash preserved."
                 else:
                     if pre_signal == "BUY" or (c_rsi <= 26.0 and bullish_candle and (curr_close > cur_l + 0.35 * (cur_h - cur_l))):
                         trigger_buy = True
