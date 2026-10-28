@@ -56,23 +56,6 @@ export default function HydraTerminal() {
   };
 
   useEffect(() => {
-    fetch(`${API_URL}/active_ticker`, { headers: { "X-API-Key": API_KEY } })
-      .then(res => res.json())
-      .then(data => {
-        if (data.ticker) {
-          const resolvedTicker = data.ticker === 'UNIVERSAL' ? 'AAPL' : data.ticker;
-          setTicker(resolvedTicker);
-          if (resolvedTicker.endsWith('.NS')) {
-            setMarket('india');
-          } else if (data.market) {
-            setMarket(normalizeMarket(data.market));
-          }
-        } else if (data.market) {
-          setMarket(normalizeMarket(data.market));
-        }
-      })
-      .catch(err => console.error("Failed to fetch active ticker", err));
-
     fetch(`${API_URL}/universe`, { headers: { "X-API-Key": API_KEY } })
       .then(res => res.json())
       .then(data => { if (data.universe) setUniverse(data.universe); })
