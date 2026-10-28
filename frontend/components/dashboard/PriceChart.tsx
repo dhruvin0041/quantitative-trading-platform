@@ -341,15 +341,34 @@ export function PriceChart({ data, loading }: PriceChartProps) {
         </div>
       )}
 
-      {/* Champion Strategy Header Badge */}
-      {(data?.strategy_name || data?.strategy_mode) && (
-        <div className="absolute top-4 right-4 z-20 pointer-events-none flex items-center gap-2 bg-card/85 backdrop-blur-md px-3 py-1.5 rounded-lg border border-border shadow-md">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-[11px] font-mono font-bold text-foreground uppercase tracking-wider">
-            {data.strategy_name || data.strategy_mode}
-          </span>
-        </div>
-      )}
+      {/* Header Badges */}
+      <div className="absolute top-4 right-4 z-20 pointer-events-none flex flex-wrap items-center gap-2">
+        {(data?.strategy_name || data?.strategy_mode) && (
+          <div className="flex items-center gap-2 bg-card/85 backdrop-blur-md px-3 py-1.5 rounded-lg border border-border shadow-md">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[11px] font-mono font-bold text-foreground uppercase tracking-wider">
+              {data.strategy_name || data.strategy_mode}
+            </span>
+          </div>
+        )}
+        {(data?.ema_fast || data?.ema_slow) && (
+          <div className="flex items-center gap-2.5 bg-card/85 backdrop-blur-md px-3 py-1.5 rounded-lg border border-border shadow-md">
+            <span className="flex items-center gap-1.5 text-[11px] font-mono font-semibold text-foreground">
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#FF8C38' }} />
+              EMA {data.ema_fast || 9}
+            </span>
+            <span className="flex items-center gap-1.5 text-[11px] font-mono font-semibold text-foreground">
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#4FC3F7' }} />
+              EMA {data.ema_slow || 21}
+            </span>
+            {data.ema_adaptive && (
+              <span className="text-[9px] uppercase font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold">
+                Adaptive
+              </span>
+            )}
+          </div>
+        )}
+      </div>
       
       {/* Chart Container */}
       <div ref={chartContainerRef} className="w-full h-full" />

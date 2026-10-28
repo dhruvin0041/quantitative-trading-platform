@@ -106,6 +106,14 @@ export function TechnicalSnapshot({ data, currency = '$' }: TechnicalSnapshotPro
               <span className="text-[11px] font-bold text-muted-foreground uppercase">MA Alignment</span>
               <span className={cn("text-[11px] font-bold uppercase", maAlignment === "BULLISH STACK" ? "text-positive" : "text-negative")}>{maAlignment}</span>
             </div>
+            {technical_snapshot.EMA_Fast && technical_snapshot.EMA_Slow && (
+              <div className="flex justify-between items-center p-2 bg-background border border-border rounded">
+                <span className="text-[11px] font-bold text-muted-foreground uppercase">Adaptive EMA Ribbon</span>
+                <span className="text-[11px] font-mono font-bold text-primary">
+                  {technical_snapshot.EMA_Fast}d / {technical_snapshot.EMA_Slow}d {technical_snapshot.EMA_Adaptive ? "(Adaptive)" : ""}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 

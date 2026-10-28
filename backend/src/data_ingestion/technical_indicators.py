@@ -1,5 +1,5 @@
 # src/data_ingestion/technical_indicators.py
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -87,7 +87,10 @@ def compute_connors_rsi(
 
 
 def add_advanced_features(
-    df: pd.DataFrame, vix_data: pd.DataFrame = None, tnx_data: pd.DataFrame = None
+    df: pd.DataFrame,
+    vix_data: pd.DataFrame = None,
+    tnx_data: pd.DataFrame = None,
+    ticker: Optional[str] = None,
 ) -> pd.DataFrame:
     """
     Adds advanced, trend-strength, volatility-aware, and macro features.
@@ -286,12 +289,19 @@ def add_advanced_features(
     # 1. Long-term 120-period Moving Average (The Baseline)
     df["MA_120"] = ta.trend.EMAIndicator(close=df["Close"], window=120).ema_indicator()
 
-    # 2. The Trend Ribbon (Fast 12 EMA vs Slow 24 EMA)
+    # 2. The Trend Ribbon (Ticker-Specific Adaptive Fast vs Slow EMA)
+    if ticker:
+        from src.execution.asset_intelligence import get_ticker_ema_params
+
+        fast_p, slow_p = get_ticker_ema_params(ticker)
+    else:
+        fast_p, slow_p = 12, 24
+
     df["Ribbon_Fast"] = ta.trend.EMAIndicator(
-        close=df["Close"], window=12
+        close=df["Close"], window=fast_p
     ).ema_indicator()
     df["Ribbon_Slow"] = ta.trend.EMAIndicator(
-        close=df["Close"], window=24
+        close=df["Close"], window=slow_p
     ).ema_indicator()
 
     # 3. Ribbon State (Bullish/Bearish Cloud)

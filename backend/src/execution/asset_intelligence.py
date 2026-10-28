@@ -1,4 +1,4 @@
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -347,6 +347,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "bb_window": 20,
             "bb_mult": 2.2,
             "bb_adaptive": True,
+            "ema_fast": 8,
+            "ema_slow": 13,
+            "ema_adaptive": True,
         },
         "description": "Momentum expansion with MACD acceleration and institutional Chandelier trailing ratchet.",
     },
@@ -366,6 +369,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "bb_window": 22,
             "bb_mult": 2.5,
             "bb_adaptive": True,
+            "ema_fast": 9,
+            "ema_slow": 15,
+            "ema_adaptive": True,
         },
         "description": "High-beta trend expansion with dynamic volatility trailing stop.",
     },
@@ -385,6 +391,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "bb_window": 20,
             "bb_mult": 2.2,
             "bb_adaptive": True,
+            "ema_fast": 10,
+            "ema_slow": 17,
+            "ema_adaptive": True,
         },
         "description": "Institutional core trend accumulator capturing secular breakouts with 100% Cash Defense during corrections.",
     },
@@ -404,6 +413,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "bb_window": 20,
             "bb_mult": 2.3,
             "bb_adaptive": True,
+            "ema_fast": 6,
+            "ema_slow": 25,
+            "ema_adaptive": True,
         },
         "description": "Tactical trend accumulator capturing institutional pullbacks and secular momentum expansions.",
     },
@@ -423,6 +435,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "bb_window": 22,
             "bb_mult": 2.4,
             "bb_adaptive": True,
+            "ema_fast": 6,
+            "ema_slow": 11,
+            "ema_adaptive": True,
         },
         "description": "Institutional trend accumulator with wide Chandelier ratchets protecting against mid-trend whipsaws.",
     },
@@ -442,6 +457,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "bb_window": 20,
             "bb_mult": 2.2,
             "bb_adaptive": True,
+            "ema_fast": 7,
+            "ema_slow": 12,
+            "ema_adaptive": True,
         },
         "description": "Tactical accumulation engine participating in sustained bull trends and preserving capital in bear regimes.",
     },
@@ -461,6 +479,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "bb_window": 24,
             "bb_mult": 2.7,
             "bb_adaptive": True,
+            "ema_fast": 12,
+            "ema_slow": 33,
+            "ema_adaptive": True,
         },
         "description": "High-volatility momentum breakout with strict 200 SMA regime filter, dynamic ATR ratchets, and bear de-risking.",
     },
@@ -480,6 +501,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "bb_window": 24,
             "bb_mult": 2.6,
             "bb_adaptive": True,
+            "ema_fast": 8,
+            "ema_slow": 13,
+            "ema_adaptive": True,
         },
         "description": "Secular semiconductor momentum breakout with volume confirmation and disciplined Chandelier trailing ratchets.",
     },
@@ -499,6 +523,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "bb_window": 18,
             "bb_mult": 2.0,
             "bb_adaptive": True,
+            "ema_fast": 11,
+            "ema_slow": 32,
+            "ema_adaptive": True,
         },
         "description": "Low-beta consumer retail compounder capturing steady tactical accumulation and protecting during market corrections.",
     },
@@ -518,6 +545,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "bb_window": 18,
             "bb_mult": 1.9,
             "bb_adaptive": True,
+            "ema_fast": 7,
+            "ema_slow": 19,
+            "ema_adaptive": True,
         },
         "description": "Defensive staple accumulator with high capital preservation and disciplined trend trailing ratchets.",
     },
@@ -537,6 +567,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "bb_window": 20,
             "bb_mult": 2.1,
             "bb_adaptive": True,
+            "ema_fast": 6,
+            "ema_slow": 20,
+            "ema_adaptive": True,
         },
         "description": "Financial sector powerhouse capturing secular credit expansion cycles with swift macro bear de-risking.",
     },
@@ -556,6 +589,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "bb_window": 22,
             "bb_mult": 2.4,
             "bb_adaptive": True,
+            "ema_fast": 7,
+            "ema_slow": 27,
+            "ema_adaptive": True,
         },
         "description": "Healthcare momentum leader participating in secular product-cycle breakouts with dynamic Chandelier ratchets.",
     },
@@ -575,6 +611,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "bb_window": 20,
             "bb_mult": 2.2,
             "bb_adaptive": True,
+            "ema_fast": 5,
+            "ema_slow": 30,
+            "ema_adaptive": True,
         },
         "description": "Diversified industrial/energy giant capturing high-momentum expansion runs with trailing risk controls.",
     },
@@ -594,6 +633,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "bb_window": 20,
             "bb_mult": 2.0,
             "bb_adaptive": True,
+            "ema_fast": 11,
+            "ema_slow": 35,
+            "ema_adaptive": True,
         },
         "description": "IT export blue-chip with disciplined pullback entries and swift profit harvesting at structural resistance.",
     },
@@ -613,6 +655,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "bb_window": 20,
             "bb_mult": 2.1,
             "bb_adaptive": True,
+            "ema_fast": 5,
+            "ema_slow": 10,
+            "ema_adaptive": True,
         },
         "description": "Premier Indian private bank riding credit growth secular trends with bear-regime cash preservation.",
     },
@@ -632,6 +677,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "bb_window": 20,
             "bb_mult": 2.1,
             "bb_adaptive": True,
+            "ema_fast": 5,
+            "ema_slow": 20,
+            "ema_adaptive": True,
         },
         "description": "Telecom infrastructure compounder capturing secular ARPU growth with tight drawdown controls.",
     },
@@ -651,6 +699,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "bb_window": 20,
             "bb_mult": 2.1,
             "bb_adaptive": True,
+            "ema_fast": 5,
+            "ema_slow": 10,
+            "ema_adaptive": True,
         },
         "description": "Capex infrastructure leader participating in industrial expansion super-cycles.",
     },
@@ -670,6 +721,9 @@ ASSET_CHAMPION_STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
             "bb_window": 18,
             "bb_mult": 1.8,
             "bb_adaptive": True,
+            "ema_fast": 10,
+            "ema_slow": 35,
+            "ema_adaptive": True,
         },
         "description": "Defensive high-yield FMCG compounder with low beta and tight trailing defense.",
     },
@@ -695,10 +749,53 @@ def get_champion_strategy_for_ticker(ticker: str) -> Dict[str, Any]:
                 "bb_window": 20,
                 "bb_mult": 2.0,
                 "bb_adaptive": True,
+                "ema_fast": 9,
+                "ema_slow": 21,
+                "ema_adaptive": True,
             },
             "description": "Adaptive multi-regime hybrid alpha driver.",
         },
     )
+
+
+def get_ticker_ema_params(ticker: Optional[str]) -> Tuple[int, int]:
+    """
+    Returns the mathematically calibrated (fast_period, slow_period) EMA pair for the specified ticker.
+    Falls back to institutional baseline (9, 21) if ticker is unspecified or unmapped.
+    """
+    if not ticker or not isinstance(ticker, str):
+        return 9, 21
+    ticker_clean = ticker.upper().strip()
+    strat_cfg = get_champion_strategy_for_ticker(ticker_clean)
+    params = strat_cfg.get("params", {})
+    fast_p = int(params.get("ema_fast", 9))
+    slow_p = int(params.get("ema_slow", 21))
+    return fast_p, slow_p
+
+
+def compute_adaptive_ema_ribbon(
+    df: pd.DataFrame,
+    ticker: Optional[str],
+) -> Tuple[pd.Series, pd.Series, pd.Series]:
+    """
+    Computes ticker-specific volatility-calibrated Exponential Moving Average lines (Ribbon).
+
+    Returns:
+        (ema_fast, ema_slow, ribbon_state)
+        where ribbon_state is 1 for bullish (Fast >= Slow) and -1 for bearish (Fast < Slow).
+    """
+    fast_p, slow_p = get_ticker_ema_params(ticker)
+    close = df["Close"].squeeze()
+    if isinstance(close, pd.DataFrame):
+        close = close.iloc[:, 0]
+
+    ema_fast = close.ewm(span=fast_p, adjust=False).mean()
+    ema_slow = close.ewm(span=slow_p, adjust=False).mean()
+    ribbon_state = pd.Series(
+        np.where(ema_fast >= ema_slow, 1.0, -1.0),
+        index=df.index,
+    )
+    return ema_fast, ema_slow, ribbon_state
 
 
 def compute_adaptive_bollinger_bands(

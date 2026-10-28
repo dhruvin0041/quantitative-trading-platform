@@ -820,7 +820,6 @@ class InferenceService:
             exit_rsi = 55.0
             stop_atr_mult = 2.0
             slippage_rate = 0.0005
-            e20_series = close_s.ewm(span=20).mean()
 
             # 14-period True Range ATR for exact parity with Institutional Backtest
             tr1 = high_s - low_s
@@ -837,6 +836,8 @@ class InferenceService:
             strat_params = strat_cfg["params"]
             init_entry = strat_params.get("init_entry", False)
             base_atr = strat_params.get("base_atr", 4.2)
+            ema_fast_p = int(strat_params.get("ema_fast", 9))
+            ema_slow_p = int(strat_params.get("ema_slow", 21))
 
             pos_type = strat_type
             entry_price = 0.0
@@ -848,6 +849,9 @@ class InferenceService:
             pending_type = None
             exit_reason = None
             entry_reason = None
+
+            # Ticker-specific volatility-calibrated slow EMA reference line
+            e20_series = close_s.ewm(span=ema_slow_p).mean()
 
             # 50-day EMA for trend alignment
             ema50_s = (
@@ -922,6 +926,9 @@ class InferenceService:
                             "bb_window": int(strat_params.get("bb_window", 20)),
                             "bb_mult": float(strat_params.get("bb_mult", 2.0)),
                             "bb_adaptive": bool(strat_params.get("bb_adaptive", True)),
+                            "ema_fast": int(strat_params.get("ema_fast", 9)),
+                            "ema_slow": int(strat_params.get("ema_slow", 21)),
+                            "ema_adaptive": bool(strat_params.get("ema_adaptive", True)),
                             "reason": "INITIAL_CHAMPION_ENTRY",
                         },
                     })
@@ -1144,6 +1151,9 @@ class InferenceService:
                                     "bb_window": int(strat_params.get("bb_window", 20)),
                                     "bb_mult": float(strat_params.get("bb_mult", 2.0)),
                                     "bb_adaptive": bool(strat_params.get("bb_adaptive", True)),
+                                    "ema_fast": int(strat_params.get("ema_fast", 9)),
+                                    "ema_slow": int(strat_params.get("ema_slow", 21)),
+                                    "ema_adaptive": bool(strat_params.get("ema_adaptive", True)),
                                     "reason": reason,
                                     "sizing_regime": "CASH_DEFENSE",
                                     "sizing_rationale": rationale,
@@ -1245,6 +1255,9 @@ class InferenceService:
                                         "bb_window": int(strat_params.get("bb_window", 20)),
                                         "bb_mult": float(strat_params.get("bb_mult", 2.0)),
                                         "bb_adaptive": bool(strat_params.get("bb_adaptive", True)),
+                                        "ema_fast": int(strat_params.get("ema_fast", 9)),
+                                        "ema_slow": int(strat_params.get("ema_slow", 21)),
+                                        "ema_adaptive": bool(strat_params.get("ema_adaptive", True)),
                                         "reason": buy_reason,
                                         "sizing_regime": "DYNAMIC_REGIME_ALLOCATION",
                                         "sizing_rationale": buy_rationale,
@@ -1993,12 +2006,25 @@ class InferenceService:
             # DL_FUSION is permanently QUARANTINED: bypass tensor execution and assign neutral output
             dl_preds_raw = np.array([0.0, 1.0, 0.0])
 
-        xgb_preds_raw = self.mm.xgb_model.predict_proba(tabular_row)[0]
-        lgbm_preds_raw = (
-            self.mm.lgbm_model.predict_proba(tabular_row)[0]
-            if self.mm.lgbm_model
-            else np.array([0.33, 0.33, 0.33])
-        )
+        try:
+            xgb_preds_raw = (
+                self.mm.xgb_model.predict_proba(tabular_row)[0]
+                if self.mm.xgb_model is not None
+                else np.array([0.33, 0.34, 0.33])
+            )
+        except Exception as e:
+            logger.warning("XGBoost prediction failed: %s; using neutral baseline.", e)
+            xgb_preds_raw = np.array([0.33, 0.34, 0.33])
+
+        try:
+            lgbm_preds_raw = (
+                self.mm.lgbm_model.predict_proba(tabular_row)[0]
+                if self.mm.lgbm_model is not None
+                else np.array([0.33, 0.33, 0.33])
+            )
+        except Exception as e:
+            logger.warning("LGBM prediction failed: %s; using neutral baseline.", e)
+            lgbm_preds_raw = np.array([0.33, 0.33, 0.33])
 
         # Apply isotonic calibration (fitted on validation data during training)
         if self.model_calibrator is not None:
@@ -2569,6 +2595,9 @@ class InferenceService:
         trade_construction["bb_window"] = int(strat_params.get("bb_window", 20))
         trade_construction["bb_mult"] = float(strat_params.get("bb_mult", 2.0))
         trade_construction["bb_adaptive"] = bool(strat_params.get("bb_adaptive", True))
+        trade_construction["ema_fast"] = int(strat_params.get("ema_fast", 9))
+        trade_construction["ema_slow"] = int(strat_params.get("ema_slow", 21))
+        trade_construction["ema_adaptive"] = bool(strat_params.get("ema_adaptive", True))
 
         # Pre-Earnings Ratchet Tightening on Active Positions
         if earnings_proximity.get("is_blackout", False):
@@ -2840,6 +2869,9 @@ class InferenceService:
         response_data["bb_window"] = int(strat_params.get("bb_window", 20))
         response_data["bb_mult"] = float(strat_params.get("bb_mult", 2.0))
         response_data["bb_adaptive"] = bool(strat_params.get("bb_adaptive", True))
+        response_data["ema_fast"] = int(strat_params.get("ema_fast", 9))
+        response_data["ema_slow"] = int(strat_params.get("ema_slow", 21))
+        response_data["ema_adaptive"] = bool(strat_params.get("ema_adaptive", True))
         response_data["tactical_action"] = tactical_action
         response_data["target_exposure"] = target_exposure
         response_data["tactical_rationale"] = tactical_rationale

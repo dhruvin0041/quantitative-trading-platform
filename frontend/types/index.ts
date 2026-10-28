@@ -33,6 +33,9 @@ export interface TechnicalSnapshot {
   BB_Window?: number;
   BB_Mult?: number;
   BB_Adaptive?: boolean;
+  EMA_Fast?: number;
+  EMA_Slow?: number;
+  EMA_Adaptive?: boolean;
   ADX: number;
   Volume_Ratio: number;
   ATR_Regime_Ratio?: number;
@@ -192,6 +195,12 @@ export interface ChartData {
   strategy_name?: string | null;
   tactical_action?: string | null;
   target_exposure?: number | null;
+  bb_window?: number;
+  bb_mult?: number;
+  bb_adaptive?: boolean;
+  ema_fast?: number;
+  ema_slow?: number;
+  ema_adaptive?: boolean;
   
   // Causal Signal States and Timing Mandate
   signal_state?: 'CONFIRMED' | 'PROVISIONAL' | 'HOLD' | 'NO_SIGNAL';

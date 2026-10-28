@@ -335,12 +335,21 @@ def add_upgraded_features(df, spy_df, vix_df, lag_vix: bool = True, ticker: Opti
     bear_div = (close_s >= price_max_14 * 0.995) & (df["CMF_20"] < cmf_max_14 - 0.05)
     df["CMF_Divergence"] = np.where(bull_div, 1.0, np.where(bear_div, -1.0, 0.0))
 
-    # Trend Indicators
-    df["EMA9"] = close_s.ewm(span=9).mean()
-    df["EMA21"] = close_s.ewm(span=21).mean()
-    df["EMA9_vs_EMA21"] = (df["EMA9"] - df["EMA21"]) / (close_s + 1e-9)
-    df["Price_vs_EMA9"] = (close_s - df["EMA9"]) / (close_s + 1e-9)
-    df["Price_vs_EMA21"] = (close_s - df["EMA21"]) / (close_s + 1e-9)
+    # Trend Indicators - Ticker-Specific Volatility-Adaptive Exponential Moving Averages
+    if ticker:
+        from src.execution.asset_intelligence import get_ticker_ema_params
+
+        fast_p, slow_p = get_ticker_ema_params(ticker)
+    else:
+        fast_p, slow_p = 9, 21
+
+    df["EMA_Fast"] = close_s.ewm(span=fast_p).mean()
+    df["EMA_Slow"] = close_s.ewm(span=slow_p).mean()
+    df["EMA9"] = df["EMA_Fast"]
+    df["EMA21"] = df["EMA_Slow"]
+    df["EMA9_vs_EMA21"] = (df["EMA_Fast"] - df["EMA_Slow"]) / (close_s + 1e-9)
+    df["Price_vs_EMA9"] = (close_s - df["EMA_Fast"]) / (close_s + 1e-9)
+    df["Price_vs_EMA21"] = (close_s - df["EMA_Slow"]) / (close_s + 1e-9)
 
     plus_DM = high_s.diff()
     minus_DM = -low_s.diff()
@@ -724,6 +733,9 @@ def fetch_live_data(ticker, config, version: Optional[str] = None):
     bb_window = int(strat_params.get("bb_window", 20))
     bb_mult = float(strat_params.get("bb_mult", 2.0))
     bb_adaptive = bool(strat_params.get("bb_adaptive", True))
+    ema_fast = int(strat_params.get("ema_fast", 9))
+    ema_slow = int(strat_params.get("ema_slow", 21))
+    ema_adaptive = bool(strat_params.get("ema_adaptive", True))
 
     tech_snapshot = {
         "RSI": round(float(df["RSI"].iloc[-1]), 2),
@@ -736,6 +748,9 @@ def fetch_live_data(ticker, config, version: Optional[str] = None):
         "BB_Window": bb_window,
         "BB_Mult": bb_mult,
         "BB_Adaptive": bb_adaptive,
+        "EMA_Fast": ema_fast,
+        "EMA_Slow": ema_slow,
+        "EMA_Adaptive": ema_adaptive,
         "ADX": round(float(df["ADX"].iloc[-1]), 2),
         "Volume_Ratio": round(float(vol_ratio), 2),
         "ATR_Regime_Ratio": round(float(df["ATR_Regime_Ratio"].iloc[-1]), 2) if "ATR_Regime_Ratio" in df.columns else 1.0,

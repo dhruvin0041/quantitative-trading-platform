@@ -145,7 +145,7 @@ class ModelManager:
         institutional baseline models.
         """
         ticker = ticker.upper()
-        if ticker in self._ticker_models:
+        if ticker in self._ticker_models and not self._ticker_models[ticker].get("is_fallback", False):
             bundle = self._ticker_models[ticker]
             self._activate_bundle(ticker, bundle)
             return bundle
@@ -226,6 +226,7 @@ class ModelManager:
             "scaler": self.scaler,
             "calibrator": self.model_calibrator,
             "accuracies": self.accuracies,
+            "is_fallback": True,
         }
         self._ticker_models[ticker] = bundle
         self._activate_bundle(ticker, bundle)
@@ -429,6 +430,7 @@ class ModelManager:
                 logger.info("Loaded Authorized Primary XGBoost ensemble (%d features, digest=%s).", self.num_features, getattr(self.xgb_model, "_artifact_hash"))
         except Exception as e:
             logger.warning(f"Could not load XGB ensemble: {e}")
+            self.xgb_model = None
 
     def _load_svm(self):
         svm_path = Path("artifacts/svm_ensemble.joblib")
@@ -470,6 +472,7 @@ class ModelManager:
                 logger.info("Loaded Authorized Primary LightGBM agent (%d features).", self.num_features)
         except Exception as e:
             logger.warning(f"Could not load LightGBM agent: {e}")
+            self.lgbm_model = None
 
     def _load_dqn(self):
         dqn_path = Path("artifacts/dqn_model.pth")

@@ -20,7 +20,11 @@ from src.data_ingestion.technical_indicators import (
     add_advanced_features,
     clean_multiindex_columns,
 )
-from src.execution.asset_intelligence import AssetExpectancyFilter, compute_adaptive_bollinger_bands
+from src.execution.asset_intelligence import (
+    AssetExpectancyFilter,
+    compute_adaptive_bollinger_bands,
+    compute_adaptive_ema_ribbon,
+)
 from src.execution.live_inference import FEATURE_COLUMNS
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
@@ -322,12 +326,13 @@ class ReportGenerator:
         consecutive signals.
         """
         df_full = clean_multiindex_columns(df_full)
-        df_features = add_advanced_features(df_full.copy())
+        df_features = add_advanced_features(df_full.copy(), ticker=ticker)
         df_features = clean_multiindex_columns(df_features)
 
-        # Data Alignment & Ticker-Specific Adaptive Bollinger Bands
-        df_full["ribbon_upper"] = df_features["Ribbon_Fast"]
-        df_full["ribbon_lower"] = df_features["Ribbon_Slow"]
+        # Data Alignment & Ticker-Specific Adaptive Bollinger Bands & Adaptive EMA Ribbon
+        ema_f, ema_s, _ = compute_adaptive_ema_ribbon(df_full, ticker)
+        df_full["ribbon_upper"] = ema_f
+        df_full["ribbon_lower"] = ema_s
         _, bb_u, bb_l, _, _ = compute_adaptive_bollinger_bands(df_full, ticker)
         df_full["bb_upper"] = bb_u
         df_full["bb_lower"] = bb_l

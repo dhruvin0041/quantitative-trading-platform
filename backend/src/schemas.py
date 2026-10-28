@@ -20,6 +20,9 @@ class TechnicalSnapshot(BaseModel):
     BB_Window: Optional[int] = None
     BB_Mult: Optional[float] = None
     BB_Adaptive: Optional[bool] = None
+    EMA_Fast: Optional[int] = None
+    EMA_Slow: Optional[int] = None
+    EMA_Adaptive: Optional[bool] = None
     ADX: float
     Volume_Ratio: float
     ATR_Regime_Ratio: Optional[float] = 1.0
@@ -264,6 +267,11 @@ class PredictResponse(BaseModel):
     bb_window: Optional[int] = None
     bb_mult: Optional[float] = None
     bb_adaptive: Optional[bool] = None
+
+    # Ticker-Specific Adaptive Exponential Moving Average Ribbon Telemetry
+    ema_fast: Optional[int] = None
+    ema_slow: Optional[int] = None
+    ema_adaptive: Optional[bool] = None
 
 
 
