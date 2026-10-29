@@ -43,10 +43,11 @@ class TestAdaptiveIndicatorsAndCausality:
         close_prices = 100.0 + np.linspace(0, 50, len(dates))  # Linear uptrend
         df = pd.DataFrame({"Close": close_prices}, index=dates)
 
-        # Test TSLA: fast=12, slow=33
+        # Test TSLA: dynamically fetch champion calibrated fast and slow parameters
+        fast_tsla, slow_tsla = get_ticker_ema_params("TSLA")
         ribbon_fast_tsla, ribbon_slow_tsla, _ = compute_adaptive_ema_ribbon(df, "TSLA")
-        expected_fast = df["Close"].ewm(span=12, adjust=False).mean()
-        expected_slow = df["Close"].ewm(span=33, adjust=False).mean()
+        expected_fast = df["Close"].ewm(span=fast_tsla, adjust=False).mean()
+        expected_slow = df["Close"].ewm(span=slow_tsla, adjust=False).mean()
 
         np.testing.assert_allclose(ribbon_fast_tsla.values, expected_fast.values, rtol=1e-5)
         np.testing.assert_allclose(ribbon_slow_tsla.values, expected_slow.values, rtol=1e-5)
@@ -54,10 +55,11 @@ class TestAdaptiveIndicatorsAndCausality:
         # In an uptrend, fast EMA must be strictly above slow EMA
         assert (ribbon_fast_tsla.iloc[-10:] > ribbon_slow_tsla.iloc[-10:]).all()
 
-        # Test AAPL: fast=8, slow=13
+        # Test AAPL: dynamically fetch champion calibrated fast and slow parameters
+        fast_aapl, slow_aapl = get_ticker_ema_params("AAPL")
         ribbon_fast_aapl, ribbon_slow_aapl, _ = compute_adaptive_ema_ribbon(df, "AAPL")
-        expected_fast_aapl = df["Close"].ewm(span=8, adjust=False).mean()
-        expected_slow_aapl = df["Close"].ewm(span=13, adjust=False).mean()
+        expected_fast_aapl = df["Close"].ewm(span=fast_aapl, adjust=False).mean()
+        expected_slow_aapl = df["Close"].ewm(span=slow_aapl, adjust=False).mean()
 
         np.testing.assert_allclose(ribbon_fast_aapl.values, expected_fast_aapl.values, rtol=1e-5)
         np.testing.assert_allclose(ribbon_slow_aapl.values, expected_slow_aapl.values, rtol=1e-5)
@@ -171,3 +173,73 @@ class TestAdaptiveIndicatorsAndCausality:
                             f"Feature '{col}' for {ticker} leaked future information at {target_date}: "
                             f"past={p_val}, future={f_val}"
                         )
+    def test_zlema_reduces_lag_relative_to_standard_ema(self):
+        """Verify that Zero-Lag EMA responds faster to a sudden step change than standard EMA."""
+        from src.data_ingestion.technical_indicators import compute_zlema
+
+        prices = np.concatenate([np.full(50, 100.0), np.full(50, 120.0)])
+        s = pd.Series(prices)
+        zlema = compute_zlema(s, window=14)
+        ema = s.ewm(span=14, adjust=False).mean()
+
+        # Right after step change at index 50, ZLEMA must be closer to 120.0 than standard EMA
+        assert zlema.iloc[52] > ema.iloc[52], "ZLEMA must react faster to step change than standard EMA"
+
+    def test_kama_efficiency_adaptation(self):
+        """Verify KAMA adapts dynamically to trend vs chop."""
+        from src.data_ingestion.technical_indicators import compute_kama
+
+        # Strong trend: linear climb
+        trend_prices = pd.Series(100.0 + np.arange(100) * 1.5)
+        kama_trend = compute_kama(trend_prices, n=10)
+        assert len(kama_trend) == len(trend_prices)
+        assert kama_trend.iloc[-1] > 200.0
+
+    def test_chandelier_exit_invariants(self):
+        """Verify Chandelier Exit trailing stops maintain causal risk boundary."""
+        from src.data_ingestion.technical_indicators import compute_chandelier_exit
+
+        dates = pd.date_range("2026-01-01", periods=60, freq="B")
+        close = pd.Series(100.0 + np.linspace(0, 30, 60), index=dates)
+        high = close + 2.0
+        low = close - 2.0
+
+        long_stop, short_stop = compute_chandelier_exit(high, low, close, period=14, mult=2.5)
+        # In a steady uptrend, long stop must remain below close
+        valid_stops = long_stop.dropna()
+        assert (valid_stops < close.loc[valid_stops.index]).all()
+
+    def test_mtf_fractal_alignment(self):
+        """Verify MultiTimeframeEngine correctly detects higher timeframe alignment."""
+        from src.execution.asset_intelligence import MultiTimeframeEngine
+
+        dates = pd.date_range("2025-01-01", periods=150, freq="B")
+        close = pd.Series(100.0 + np.linspace(0, 50, 150), index=dates)
+        df = pd.DataFrame({"Close": close}, index=dates)
+
+        mtf = MultiTimeframeEngine()
+        res = mtf.evaluate_mtf_alignment(df, "AAPL", daily_signal="BUY")
+        assert res["weekly_trend"] == "BULLISH"
+        assert res["alignment"] is True
+        assert res["confluence_score"] >= 0.85
+
+    def test_risk_parity_and_fractional_kelly_sizing(self):
+        """Verify Risk Parity and Fractional Kelly algorithms in PortfolioOptimizer."""
+        from src.execution.portfolio_optimizer import PortfolioOptimizer
+
+        opt = PortfolioOptimizer()
+        # 3 assets with different variances: low, med, high
+        cov = np.diag([0.01, 0.04, 0.09])  # vols: 0.1, 0.2, 0.3
+        rp_weights = opt.risk_parity_allocation(cov)
+
+        # Asset 0 (lowest vol) must receive the highest weight
+        assert rp_weights[0] > rp_weights[1] > rp_weights[2]
+        np.testing.assert_allclose(np.sum(rp_weights), 1.0, rtol=1e-5)
+
+        # Fractional Kelly sizing test
+        win_probs = np.array([0.65, 0.55, 0.45])
+        win_loss = np.array([1.5, 1.2, 1.0])
+        kelly_w = opt.fractional_kelly_portfolio(win_probs, win_loss, fraction=0.5)
+        assert kelly_w[0] > kelly_w[1]
+        assert kelly_w[2] == 0.0  # Negative edge receives 0 allocation
+

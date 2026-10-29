@@ -158,12 +158,83 @@ class AdaptiveWeightingEngine:
 
 class MultiTimeframeEngine:
     """
-    Phase 5: Validates signals across multiple periodicities.
+    Phase 5: Validates signals across multiple periodicities (MTF Fractal Confluence).
     """
 
     def get_mtf_consensus(self, ticker: str, daily_signal: str) -> Dict[str, str]:
         # Mocking MTF checks - in prod these would fetch 1H/4H data
         return {"1H": daily_signal, "4H": daily_signal, "1D": daily_signal}
+
+    def evaluate_mtf_alignment(
+        self, df: pd.DataFrame, ticker: str, daily_signal: str = "BUY"
+    ) -> Dict[str, Any]:
+        """
+        Elder Triple-Screen Fractal Confluence Engine.
+        Evaluates higher timeframe (Weekly) trend structure against Daily execution signals.
+        Returns:
+            {
+                "weekly_trend": "BULLISH" | "BEARISH" | "NEUTRAL",
+                "alignment": bool,
+                "confluence_score": float (0.0 to 1.0),
+                "weekly_slope": float,
+            }
+        """
+        if df.empty or len(df) < 30:
+            return {
+                "weekly_trend": "NEUTRAL",
+                "alignment": True,
+                "confluence_score": 0.8,
+                "weekly_slope": 0.0,
+            }
+
+        close = df["Close"].squeeze()
+        if isinstance(close, pd.DataFrame):
+            close = close.iloc[:, 0]
+
+        try:
+            # Resample daily to weekly Friday close
+            weekly_close = close.resample("W-FRI").last().dropna()
+            if len(weekly_close) < 8:
+                weekly_close = close.iloc[::5]  # Fallback to 5-day intervals
+
+            w_fast = weekly_close.ewm(span=8, adjust=False).mean()
+            w_slow = weekly_close.ewm(span=21, adjust=False).mean()
+            slope = float(w_fast.pct_change(1).iloc[-1]) if len(w_fast) > 1 else 0.0
+
+            if w_fast.iloc[-1] > w_slow.iloc[-1] and slope >= -0.005:
+                w_trend = "BULLISH"
+            elif w_fast.iloc[-1] < w_slow.iloc[-1] and slope <= 0.005:
+                w_trend = "BEARISH"
+            else:
+                w_trend = "NEUTRAL"
+
+            sig_upper = str(daily_signal).upper()
+            is_buy = "BUY" in sig_upper
+            is_sell = "SELL" in sig_upper
+
+            if (is_buy and w_trend == "BULLISH") or (is_sell and w_trend == "BEARISH"):
+                alignment = True
+                conf_score = 1.0
+            elif w_trend == "NEUTRAL":
+                alignment = True
+                conf_score = 0.85
+            else:
+                alignment = False
+                conf_score = 0.50
+
+            return {
+                "weekly_trend": w_trend,
+                "alignment": alignment,
+                "confluence_score": conf_score,
+                "weekly_slope": round(slope, 4),
+            }
+        except Exception:
+            return {
+                "weekly_trend": "NEUTRAL",
+                "alignment": True,
+                "confluence_score": 0.8,
+                "weekly_slope": 0.0,
+            }
 
 
 class AssetExpectancyFilter:
@@ -869,5 +940,29 @@ def compute_adaptive_bollinger_bands(
 
     return bb_mid, bb_upper, bb_lower, bb_width, bb_position
 
+def compute_adaptive_zlema_ribbon(
+    df: pd.DataFrame,
+    ticker: Optional[str],
+) -> Tuple[pd.Series, pd.Series, pd.Series]:
+    """
+    Computes ticker-specific Zero-Lag Exponential Moving Average (ZLEMA) Ribbon.
+    Eliminates phase lag while preserving point-in-time causal invariance.
 
+    Returns:
+        (zlema_fast, zlema_slow, ribbon_state)
+    """
+    fast_p, slow_p = get_ticker_ema_params(ticker)
+    close = df["Close"].squeeze()
+    if isinstance(close, pd.DataFrame):
+        close = close.iloc[:, 0]
+
+    from src.data_ingestion.technical_indicators import compute_zlema
+
+    zlema_fast = compute_zlema(close, window=fast_p)
+    zlema_slow = compute_zlema(close, window=slow_p)
+    ribbon_state = pd.Series(
+        np.where(zlema_fast >= zlema_slow, 1.0, -1.0),
+        index=df.index,
+    )
+    return zlema_fast, zlema_slow, ribbon_state
 

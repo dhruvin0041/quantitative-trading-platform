@@ -73,6 +73,20 @@ def calculate_full_kelly(win_prob, win_loss_ratio):
     return float(np.clip(kelly, 0.0, 0.25))
 
 
+def calculate_fractional_kelly(win_prob: float, win_loss_ratio: float, fraction: float = 0.5) -> float:
+    """
+    Calculates the Fractional Kelly Criterion (Half Kelly by default).
+    Formula: K_f = max(0, W - [(1 - W) / R]) * fraction
+    Mitigates parameter estimation risk and prevents over-leveraging.
+    """
+    if win_loss_ratio <= 0:
+        return 0.0
+
+    raw_kelly = win_prob - ((1.0 - win_prob) / win_loss_ratio)
+    fractional = max(0.0, raw_kelly) * fraction
+    return float(np.clip(fractional, 0.0, 0.25))
+
+
 def get_position_sizing(model_confidence, trade_history=None):
     """
     Determines the suggested capital allocation using a blend of confidence and Kelly.

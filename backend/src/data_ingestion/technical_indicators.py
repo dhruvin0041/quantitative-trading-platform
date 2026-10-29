@@ -1,5 +1,5 @@
 # src/data_ingestion/technical_indicators.py
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -41,6 +41,72 @@ def compute_hma(series: pd.Series, window: int = 9) -> pd.Series:
     wma_full = compute_wma(series, window)
     raw_hma = 2 * wma_half - wma_full
     return compute_wma(raw_hma, sqrt_length)
+
+
+def compute_zlema(series: pd.Series, window: int = 14) -> pd.Series:
+    """
+    Computes Zero-Lag Exponential Moving Average (ZLEMA).
+    Removes the (window - 1) / 2 phase lag by smoothing a momentum-adjusted series.
+    """
+    lag = max(1, int((window - 1) / 2))
+    lagged_data = series.shift(lag).bfill()
+    adjusted_data = 2 * series - lagged_data
+    return adjusted_data.ewm(span=window, adjust=False).mean()
+
+
+def compute_kama(
+    series: pd.Series, n: int = 10, pow1: int = 2, pow2: int = 30
+) -> pd.Series:
+    """
+    Computes Kaufman's Adaptive Moving Average (KAMA).
+    Dynamically adjusts smoothing based on the Efficiency Ratio (ER).
+    """
+    change = (series - series.shift(n)).abs()
+    volatility = (series - series.shift(1)).abs().rolling(window=n).sum()
+    er = (change / (volatility + 1e-9)).clip(0.0, 1.0).fillna(0.0)
+
+    fast_sc = 2.0 / (pow1 + 1.0)
+    slow_sc = 2.0 / (pow2 + 1.0)
+    sc = (er * (fast_sc - slow_sc) + slow_sc) ** 2
+
+    kama_vals = np.zeros(len(series))
+    vals = series.values
+    sc_vals = sc.values
+
+    if len(series) > 0:
+        kama_vals[0] = vals[0]
+        for i in range(1, len(series)):
+            if np.isnan(sc_vals[i]):
+                kama_vals[i] = vals[i]
+            else:
+                kama_vals[i] = kama_vals[i - 1] + sc_vals[i] * (vals[i] - kama_vals[i - 1])
+
+    return pd.Series(kama_vals, index=series.index)
+
+
+def compute_chandelier_exit(
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    period: int = 22,
+    mult: float = 3.0,
+) -> Tuple[pd.Series, pd.Series]:
+    """
+    Computes Chandelier Exit trailing stops for trend following.
+    Long Stop: Highest High(period) - mult * ATR(period)
+    Short Stop: Lowest Low(period) + mult * ATR(period)
+    """
+    tr1 = high - low
+    tr2 = (high - close.shift(1)).abs()
+    tr3 = (low - close.shift(1)).abs()
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr = tr.rolling(period, min_periods=min(5, period)).mean().bfill()
+    highest_high = high.rolling(period, min_periods=min(5, period)).max()
+    lowest_low = low.rolling(period, min_periods=min(5, period)).min()
+
+    long_stop = highest_high - (mult * atr)
+    short_stop = lowest_low + (mult * atr)
+    return long_stop, short_stop
 
 
 def compute_connors_rsi(

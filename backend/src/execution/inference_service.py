@@ -1091,12 +1091,15 @@ class InferenceService:
                         ratchet_15 = strat_params.get("ratchet_15", base_trail * 0.8)
                         ratchet_25 = strat_params.get("ratchet_25", base_trail * 0.6)
 
+                        # Rolling Highest-High Chandelier Exit Anchor (trailing 22 bars)
+                        rolling_highest = float(high_s.iloc[max(0, i - 21) : i + 1].max())
+
                         if gain_pct >= 0.25:
-                            new_stop = max(entry_price * 1.06, peak_price - (ratchet_25 * c_atr))
+                            new_stop = max(entry_price * 1.06, rolling_highest - (ratchet_25 * c_atr))
                         elif gain_pct >= 0.15:
-                            new_stop = max(entry_price * 1.02, peak_price - (ratchet_15 * c_atr))
+                            new_stop = max(entry_price * 1.02, rolling_highest - (ratchet_15 * c_atr))
                         else:
-                            new_stop = peak_price - (base_trail * c_atr)
+                            new_stop = rolling_highest - (base_trail * c_atr)
                         trailing_stop = max(trailing_stop, new_stop)
 
                         hit_macro_bear = (
@@ -1177,19 +1180,33 @@ class InferenceService:
 
                             rsi_max = 84.0 if (cur_c >= cur_sma200 or cur_c >= cur_ema20) else 74.0
 
+                            # Institutional Pullback Value Zone condition (EMA test + bullish reversal)
+                            cond_ema_touch = (cur_l <= cur_ema20 * 1.015) and (cur_c >= cur_ema20 * 0.980)
+                            cond_pullback_reentry = (
+                                regime_bull
+                                and cond_ema_touch
+                                and (40.0 <= cur_rsi <= 58.0)
+                                and bullish_candle
+                                and (cur_c >= cur_ema9)
+                            )
+
                             if strat_type == "VOLATILITY_BREAKOUT_SWING":
                                 cond_macd = cur_hist > 0
                                 cond_break = (cur_c >= cur_ema20 * 0.995) and (45.0 <= cur_rsi <= rsi_max) and bullish_candle
-                                if regime_bull and cond_macd and cond_break:
+                                if regime_bull and (cond_break or cond_pullback_reentry) and (cond_macd or cur_hist > prev_hist):
                                     trigger_buy = True
                                     pending_type = strat_type
-                                    buy_reason = "VOLATILITY_BREAKOUT_ENTRY"
-                                    buy_rationale = f"Bull regime momentum breakout confirmed: MACD expanding ({cur_hist:.3f}), RSI {cur_rsi:.1f}. Spot entry."
+                                    buy_reason = "TACTICAL_PULLBACK_REENTRY" if (cond_pullback_reentry and not cond_break) else "VOLATILITY_BREAKOUT_ENTRY"
+                                    buy_rationale = (
+                                        f"Bull regime pullback test on EMA20 confirmed (RSI {cur_rsi:.1f}). Precision re-entry."
+                                        if (cond_pullback_reentry and not cond_break)
+                                        else f"Bull regime momentum breakout confirmed: MACD expanding ({cur_hist:.3f}), RSI {cur_rsi:.1f}. Spot entry."
+                                    )
 
                             elif strat_type == "ASYMMETRIC_MEAN_REVERSION":
                                 dip_rsi = strat_params.get("dip_rsi", 42.0)
                                 if regime_bull:
-                                    cond_pb = (cur_rsi <= dip_rsi) and bullish_candle
+                                    cond_pb = ((cur_rsi <= dip_rsi) or cond_pullback_reentry) and bullish_candle
                                     cond_break = (cur_c >= cur_ema20 * 0.995) and (cur_hist > 0) and (45.0 <= cur_rsi <= rsi_max) and bullish_candle
                                     if cond_pb or cond_break:
                                         trigger_buy = True
@@ -1206,7 +1223,7 @@ class InferenceService:
                             elif strat_type in ["CORE_TACTICAL_ACCUMULATION", "DYNAMIC_REGIME_HYBRID"]:
                                 dip_rsi = strat_params.get("dip_rsi", 45.0)
                                 if regime_bull:
-                                    cond_pb = (cur_rsi <= dip_rsi) and bullish_candle
+                                    cond_pb = ((cur_rsi <= dip_rsi) or cond_pullback_reentry) and bullish_candle
                                     cond_break = (cur_c >= cur_ema20 * 0.995) and (cur_hist > 0) and (45.0 <= cur_rsi <= rsi_max) and bullish_candle
                                     if cond_pb or cond_break:
                                         trigger_buy = True
