@@ -529,5 +529,160 @@
       "win_rate": 0.0,
       "has_open": false
     }
+  },
+  "BRK-B": {
+    "strategy_type": "ASYMMETRIC_MEAN_REVERSION",
+    "strategy_name": "Asymmetric Mean Reversion",
+    "params": {
+      "init_entry": true,
+      "base_atr": 4.5,
+      "ratchet_15": 3.6,
+      "ratchet_25": 2.6999999999999997,
+      "climax_rsi": 82.0,
+      "climax_gain": 0.18,
+      "dip_rsi": 48.0,
+      "cooldown": 1,
+      "ema_fast": 5,
+      "ema_slow": 13,
+      "macro_bear_exit": true,
+      "bb_window": 20,
+      "bb_mult": 2.1,
+      "bb_adaptive": true,
+      "ema_adaptive": true
+    },
+    "performance": {
+      "final_val": 1057.7508588036121,
+      "strat_ret": 5.775085880361211,
+      "bh_ret": 13.368302827340287,
+      "alpha": -7.593216946979076,
+      "trades": 5,
+      "win_rate": 40.0,
+      "has_open": true,
+      "score": 0.40678305302092443
+    }
+  },
+  "V": {
+    "strategy_type": "ASYMMETRIC_MEAN_REVERSION",
+    "strategy_name": "Asymmetric Mean Reversion",
+    "params": {
+      "init_entry": false,
+      "base_atr": 4.5,
+      "ratchet_15": 3.6,
+      "ratchet_25": 2.6999999999999997,
+      "climax_rsi": 82.0,
+      "climax_gain": 0.18,
+      "dip_rsi": 44.0,
+      "cooldown": 2,
+      "ema_fast": 5,
+      "ema_slow": 13,
+      "macro_bear_exit": true,
+      "bb_window": 20,
+      "bb_mult": 2.1,
+      "bb_adaptive": true,
+      "ema_adaptive": true
+    },
+    "performance": {
+      "final_val": 1207.8663588915133,
+      "strat_ret": 20.78663588915133,
+      "bh_ret": 20.82941342196672,
+      "alpha": -0.04277753281538921,
+      "trades": 3,
+      "win_rate": 66.66666666666666,
+      "has_open": true,
+      "score": 13.290555800517943
+    }
+  },
+  "JNJ": {
+    "strategy_type": "CORE_TACTICAL_ACCUMULATION",
+    "strategy_name": "Core Tactical Accumulation",
+    "params": {
+      "init_entry": true,
+      "base_atr": 4.5,
+      "ratchet_15": 3.6,
+      "ratchet_25": 2.6999999999999997,
+      "climax_rsi": 82.0,
+      "climax_gain": 0.18,
+      "dip_rsi": 44.0,
+      "cooldown": 3,
+      "ema_fast": 5,
+      "ema_slow": 13,
+      "macro_bear_exit": true,
+      "bb_window": 20,
+      "bb_mult": 2.1,
+      "bb_adaptive": true,
+      "ema_adaptive": true
+    },
+    "performance": {
+      "final_val": 1516.1774270862995,
+      "strat_ret": 51.617742708629955,
+      "bh_ret": 47.7687251279781,
+      "alpha": 3.8490175806518536,
+      "trades": 3,
+      "win_rate": 66.66666666666666,
+      "has_open": true,
+      "score": 17.182350913985186
+    }
+  },
+  "SUNPHARMA.NS": {
+    "strategy_type": "ASYMMETRIC_MEAN_REVERSION",
+    "strategy_name": "Asymmetric Mean Reversion",
+    "params": {
+      "init_entry": true,
+      "base_atr": 3.0,
+      "ratchet_15": 2.4000000000000004,
+      "ratchet_25": 1.7999999999999998,
+      "climax_rsi": 82.0,
+      "climax_gain": 0.18,
+      "dip_rsi": 40.0,
+      "cooldown": 3,
+      "ema_fast": 5,
+      "ema_slow": 13,
+      "macro_bear_exit": true,
+      "bb_window": 20,
+      "bb_mult": 2.1,
+      "bb_adaptive": true,
+      "ema_adaptive": true
+    },
+    "performance": {
+      "final_val": 1036.7267182744718,
+      "strat_ret": 3.672671827447175,
+      "bh_ret": 5.587803572082407,
+      "alpha": -1.9151317446352323,
+      "trades": 10,
+      "win_rate": 50.0,
+      "has_open": false,
+      "score": 8.084868255364768
+    }
+  },
+  "TITAN.NS": {
+    "strategy_type": "CORE_TACTICAL_ACCUMULATION",
+    "strategy_name": "Core Tactical Accumulation",
+    "params": {
+      "init_entry": true,
+      "base_atr": 3.5,
+      "ratchet_15": 2.8000000000000003,
+      "ratchet_25": 2.1,
+      "climax_rsi": 82.0,
+      "climax_gain": 0.18,
+      "dip_rsi": 40.0,
+      "cooldown": 1,
+      "ema_fast": 5,
+      "ema_slow": 13,
+      "macro_bear_exit": true,
+      "bb_window": 20,
+      "bb_mult": 2.1,
+      "bb_adaptive": true,
+      "ema_adaptive": true
+    },
+    "performance": {
+      "final_val": 1393.8700639768392,
+      "strat_ret": 39.38700639768392,
+      "bh_ret": 19.816352710823036,
+      "alpha": 19.570653686860883,
+      "trades": 4,
+      "win_rate": 100.0,
+      "has_open": true,
+      "score": 39.57065368686088
+    }
   }
 }

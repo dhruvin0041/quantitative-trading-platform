@@ -2,12 +2,11 @@ import json
 import urllib.request
 
 TICKERS = [
-    # US Tech
-    "AAPL", "NVDA", "MSFT", "AMZN", "META", "GOOGL", "TSLA", "AMD",
-    # US Defensives & Financials
+    # US Stable Champions (Top) & Universe
+    "AAPL", "JNJ", "V", "BRK-B", "NVDA", "MSFT", "AMZN", "META", "GOOGL", "TSLA", "AMD",
     "COST", "WMT", "JPM", "LLY",
-    # Indian NSE Giants
-    "RELIANCE.NS", "TCS.NS", "ICICIBANK.NS", "BHARTIARTL.NS", "LT.NS", "ITC.NS"
+    # Indian Stable Champions (Top) & Universe
+    "LT.NS", "TITAN.NS", "SUNPHARMA.NS", "RELIANCE.NS", "TCS.NS", "ICICIBANK.NS", "BHARTIARTL.NS", "ITC.NS"
 ]
 
 results = []

@@ -2,192 +2,242 @@
   "tickers": [
     {
       "ticker": "AAPL",
-      "strategy_final": 1364.13,
-      "strategy_return_pct": 36.41,
+      "strategy_final": 1664.54,
+      "strategy_return_pct": 66.45,
       "bh_final": 1279.37,
       "bh_return_pct": 27.94,
-      "alpha_pct": 8.48,
+      "alpha_pct": 38.52,
       "trades": 5,
       "win_rate_pct": 80.0
     },
     {
+      "ticker": "JNJ",
+      "strategy_final": 1569.53,
+      "strategy_return_pct": 56.95,
+      "bh_final": 1479.1,
+      "bh_return_pct": 47.91,
+      "alpha_pct": 9.04,
+      "trades": 5,
+      "win_rate_pct": 80.0
+    },
+    {
+      "ticker": "V",
+      "strategy_final": 1137.19,
+      "strategy_return_pct": 13.72,
+      "bh_final": 1223.51,
+      "bh_return_pct": 22.35,
+      "alpha_pct": -8.63,
+      "trades": 4,
+      "win_rate_pct": 50.0
+    },
+    {
+      "ticker": "BRK-B",
+      "strategy_final": 985.23,
+      "strategy_return_pct": -1.48,
+      "bh_final": 1136.01,
+      "bh_return_pct": 13.6,
+      "alpha_pct": -15.08,
+      "trades": 7,
+      "win_rate_pct": 28.6
+    },
+    {
       "ticker": "NVDA",
-      "strategy_final": 939.93,
-      "strategy_return_pct": -6.01,
+      "strategy_final": 1128.04,
+      "strategy_return_pct": 12.8,
       "bh_final": 1013.04,
       "bh_return_pct": 1.3,
-      "alpha_pct": -7.31,
+      "alpha_pct": 11.5,
       "trades": 6,
-      "win_rate_pct": 33.3
+      "win_rate_pct": 50.0
     },
     {
       "ticker": "MSFT",
-      "strategy_final": 1088.01,
-      "strategy_return_pct": 8.8,
+      "strategy_final": 933.02,
+      "strategy_return_pct": -6.7,
       "bh_final": 1016.21,
       "bh_return_pct": 1.62,
-      "alpha_pct": 7.18,
+      "alpha_pct": -8.32,
+      "trades": 4,
+      "win_rate_pct": 25.0
+    },
+    {
+      "ticker": "AMZN",
+      "strategy_final": 1027.27,
+      "strategy_return_pct": 2.73,
+      "bh_final": 984.15,
+      "bh_return_pct": -1.58,
+      "alpha_pct": 4.31,
+      "trades": 10,
+      "win_rate_pct": 50.0
+    },
+    {
+      "ticker": "META",
+      "strategy_final": 809.72,
+      "strategy_return_pct": -19.03,
+      "bh_final": 951.76,
+      "bh_return_pct": -4.82,
+      "alpha_pct": -14.2,
+      "trades": 9,
+      "win_rate_pct": 22.2
+    },
+    {
+      "ticker": "GOOGL",
+      "strategy_final": 1267.74,
+      "strategy_return_pct": 26.77,
+      "bh_final": 997.79,
+      "bh_return_pct": -0.22,
+      "alpha_pct": 27.0,
       "trades": 7,
       "win_rate_pct": 42.9
     },
     {
-      "ticker": "AMZN",
-      "strategy_final": 911.87,
-      "strategy_return_pct": -8.81,
-      "bh_final": 984.15,
-      "bh_return_pct": -1.58,
-      "alpha_pct": -7.23,
-      "trades": 10,
-      "win_rate_pct": 30.0
-    },
-    {
-      "ticker": "META",
-      "strategy_final": 1320.01,
-      "strategy_return_pct": 32.0,
-      "bh_final": 951.76,
-      "bh_return_pct": -4.82,
-      "alpha_pct": 36.82,
-      "trades": 10,
-      "win_rate_pct": 60.0
-    },
-    {
-      "ticker": "GOOGL",
-      "strategy_final": 1236.01,
-      "strategy_return_pct": 23.6,
-      "bh_final": 997.79,
-      "bh_return_pct": -0.22,
-      "alpha_pct": 23.82,
-      "trades": 8,
-      "win_rate_pct": 37.5
-    },
-    {
       "ticker": "TSLA",
-      "strategy_final": 1035.37,
-      "strategy_return_pct": 3.54,
+      "strategy_final": 817.41,
+      "strategy_return_pct": -18.26,
       "bh_final": 875.7,
       "bh_return_pct": -12.43,
-      "alpha_pct": 15.97,
-      "trades": 9,
-      "win_rate_pct": 55.6
+      "alpha_pct": -5.83,
+      "trades": 8,
+      "win_rate_pct": 25.0
     },
     {
       "ticker": "AMD",
-      "strategy_final": 1967.04,
-      "strategy_return_pct": 96.7,
+      "strategy_final": 2431.92,
+      "strategy_return_pct": 143.19,
       "bh_final": 1970.95,
       "bh_return_pct": 97.1,
-      "alpha_pct": -0.39,
+      "alpha_pct": 46.1,
       "trades": 7,
       "win_rate_pct": 42.9
     },
     {
       "ticker": "COST",
-      "strategy_final": 1054.26,
-      "strategy_return_pct": 5.43,
+      "strategy_final": 1103.71,
+      "strategy_return_pct": 10.37,
       "bh_final": 1117.18,
       "bh_return_pct": 11.72,
-      "alpha_pct": -6.29,
-      "trades": 7,
-      "win_rate_pct": 42.9
+      "alpha_pct": -1.35,
+      "trades": 4,
+      "win_rate_pct": 50.0
     },
     {
       "ticker": "WMT",
-      "strategy_final": 981.99,
-      "strategy_return_pct": -1.8,
+      "strategy_final": 918.73,
+      "strategy_return_pct": -8.13,
       "bh_final": 1230.97,
       "bh_return_pct": 23.1,
-      "alpha_pct": -24.9,
+      "alpha_pct": -31.22,
       "trades": 7,
       "win_rate_pct": 57.1
     },
     {
       "ticker": "JPM",
-      "strategy_final": 1094.29,
-      "strategy_return_pct": 9.43,
+      "strategy_final": 1116.17,
+      "strategy_return_pct": 11.62,
       "bh_final": 1104.18,
       "bh_return_pct": 10.42,
-      "alpha_pct": -0.99,
-      "trades": 5,
-      "win_rate_pct": 40.0
-    },
-    {
-      "ticker": "LLY",
-      "strategy_final": 1487.69,
-      "strategy_return_pct": 48.77,
-      "bh_final": 1653.2,
-      "bh_return_pct": 65.32,
-      "alpha_pct": -16.55,
+      "alpha_pct": 1.2,
       "trades": 8,
       "win_rate_pct": 50.0
     },
     {
-      "ticker": "RELIANCE.NS",
-      "strategy_final": 859.75,
-      "strategy_return_pct": -14.03,
-      "bh_final": 787.33,
-      "bh_return_pct": -21.27,
-      "alpha_pct": 7.24,
-      "trades": 9,
-      "win_rate_pct": 22.2
-    },
-    {
-      "ticker": "TCS.NS",
-      "strategy_final": 919.43,
-      "strategy_return_pct": -8.06,
-      "bh_final": 853.7,
-      "bh_return_pct": -14.63,
-      "alpha_pct": 6.57,
+      "ticker": "LLY",
+      "strategy_final": 1526.43,
+      "strategy_return_pct": 52.64,
+      "bh_final": 1653.2,
+      "bh_return_pct": 65.32,
+      "alpha_pct": -12.68,
       "trades": 6,
       "win_rate_pct": 50.0
     },
     {
+      "ticker": "LT.NS",
+      "strategy_final": 1127.88,
+      "strategy_return_pct": 12.79,
+      "bh_final": 969.89,
+      "bh_return_pct": -3.01,
+      "alpha_pct": 15.8,
+      "trades": 4,
+      "win_rate_pct": 50.0
+    },
+    {
+      "ticker": "TITAN.NS",
+      "strategy_final": 1291.35,
+      "strategy_return_pct": 29.13,
+      "bh_final": 1187.99,
+      "bh_return_pct": 18.8,
+      "alpha_pct": 10.34,
+      "trades": 7,
+      "win_rate_pct": 57.1
+    },
+    {
+      "ticker": "SUNPHARMA.NS",
+      "strategy_final": 942.69,
+      "strategy_return_pct": -5.73,
+      "bh_final": 1061.06,
+      "bh_return_pct": 6.11,
+      "alpha_pct": -11.84,
+      "trades": 10,
+      "win_rate_pct": 20.0
+    },
+    {
+      "ticker": "RELIANCE.NS",
+      "strategy_final": 994.45,
+      "strategy_return_pct": -0.56,
+      "bh_final": 787.33,
+      "bh_return_pct": -21.27,
+      "alpha_pct": 20.71,
+      "trades": 6,
+      "win_rate_pct": 33.3
+    },
+    {
+      "ticker": "TCS.NS",
+      "strategy_final": 1004.82,
+      "strategy_return_pct": 0.48,
+      "bh_final": 853.7,
+      "bh_return_pct": -14.63,
+      "alpha_pct": 15.11,
+      "trades": 2,
+      "win_rate_pct": 50.0
+    },
+    {
       "ticker": "ICICIBANK.NS",
-      "strategy_final": 1022.53,
-      "strategy_return_pct": 2.25,
+      "strategy_final": 1003.05,
+      "strategy_return_pct": 0.31,
       "bh_final": 1047.93,
       "bh_return_pct": 4.79,
-      "alpha_pct": -2.54,
-      "trades": 11,
-      "win_rate_pct": 45.5
+      "alpha_pct": -4.49,
+      "trades": 9,
+      "win_rate_pct": 66.7
     },
     {
       "ticker": "BHARTIARTL.NS",
-      "strategy_final": 934.92,
-      "strategy_return_pct": -6.51,
+      "strategy_final": 1044.92,
+      "strategy_return_pct": 4.49,
       "bh_final": 972.76,
       "bh_return_pct": -2.72,
-      "alpha_pct": -3.78,
-      "trades": 10,
-      "win_rate_pct": 40.0
-    },
-    {
-      "ticker": "LT.NS",
-      "strategy_final": 1143.23,
-      "strategy_return_pct": 14.32,
-      "bh_final": 969.89,
-      "bh_return_pct": -3.01,
-      "alpha_pct": 17.33,
-      "trades": 5,
-      "win_rate_pct": 60.0
+      "alpha_pct": 7.22,
+      "trades": 11,
+      "win_rate_pct": 54.5
     },
     {
       "ticker": "ITC.NS",
-      "strategy_final": 707.08,
-      "strategy_return_pct": -29.29,
+      "strategy_final": 877.16,
+      "strategy_return_pct": -12.28,
       "bh_final": 662.67,
       "bh_return_pct": -33.73,
-      "alpha_pct": 4.44,
-      "trades": 7,
+      "alpha_pct": 21.45,
+      "trades": 2,
       "win_rate_pct": 0.0
     }
   ],
   "portfolio": {
-    "strategy_final": 20067.55,
-    "strategy_return_pct": 11.49,
-    "bh_final": 19488.78,
-    "bh_return_pct": 8.27,
-    "alpha_pct": 3.22,
-    "trades": 137,
-    "win_rate_pct": 43.1
+    "strategy_final": 26722.96,
+    "strategy_return_pct": 16.19,
+    "bh_final": 25576.45,
+    "bh_return_pct": 11.2,
+    "alpha_pct": 4.98,
+    "trades": 148,
+    "win_rate_pct": 45.3
   }
 }

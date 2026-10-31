@@ -1,6 +1,12 @@
 # universes.py
 UNIVERSES_METADATA = {
     "us": {
+        "BRK-B": {
+            "name": "Berkshire Hathaway",
+            "exchange": "NYSE",
+            "currency": "USD",
+            "timezone": "America/New_York",
+        },
         "AAPL": {
             "name": "Apple Inc.",
             "exchange": "NASDAQ",

@@ -63,12 +63,11 @@ def reseed_all():
         logger.warning(f"Could not download fresh SPY: {e}")
 
     tickers = [
-        # Original Universe
-        "AAPL", "NVDA", "MSFT", "AMZN", "META", "GOOGL", "TSLA", "AMD",
-        # New Clean US Trend Leaders
+        # US Stable Champions & Growth
+        "AAPL", "JNJ", "V", "BRK-B", "NVDA", "MSFT", "AMZN", "META", "GOOGL", "TSLA", "AMD",
         "COST", "WMT", "JPM", "LLY",
-        # New Clean Indian Market Leaders (NSE)
-        "RELIANCE.NS", "TCS.NS", "ICICIBANK.NS", "BHARTIARTL.NS", "LT.NS", "ITC.NS"
+        # Indian Stable Champions & Leaders (NSE)
+        "LT.NS", "TITAN.NS", "SUNPHARMA.NS", "RELIANCE.NS", "TCS.NS", "ICICIBANK.NS", "BHARTIARTL.NS", "ITC.NS"
     ]
     logger.info("=" * 80)
     logger.info(f"RE-SEEDING SIGNAL LEDGER FOR ALL {len(tickers)} UNIVERSE ASSETS")

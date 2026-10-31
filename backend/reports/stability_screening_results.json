@@ -1,0 +1,302 @@
+[
+  {
+    "ticker": "AAPL",
+    "market": "US",
+    "is_outside": false,
+    "ann_vol_pct": 26.68,
+    "norm_atr_pct": 2.21,
+    "max_drawdown_pct": -33.36,
+    "trend_r2": 0.793,
+    "stability_score": 27.24
+  },
+  {
+    "ticker": "MSFT",
+    "market": "US",
+    "is_outside": false,
+    "ann_vol_pct": 25.93,
+    "norm_atr_pct": 2.08,
+    "max_drawdown_pct": -34.5,
+    "trend_r2": 0.24,
+    "stability_score": 0.53
+  },
+  {
+    "ticker": "GOOGL",
+    "market": "US",
+    "is_outside": false,
+    "ann_vol_pct": 31.05,
+    "norm_atr_pct": 2.56,
+    "max_drawdown_pct": -30.41,
+    "trend_r2": 0.852,
+    "stability_score": 25.84
+  },
+  {
+    "ticker": "META",
+    "market": "US",
+    "is_outside": false,
+    "ann_vol_pct": 38.15,
+    "norm_atr_pct": 2.98,
+    "max_drawdown_pct": -34.15,
+    "trend_r2": 0.532,
+    "stability_score": 0.89
+  },
+  {
+    "ticker": "COST",
+    "market": "US",
+    "is_outside": false,
+    "ann_vol_pct": 20.48,
+    "norm_atr_pct": 1.83,
+    "max_drawdown_pct": -20.74,
+    "trend_r2": 0.553,
+    "stability_score": 25.93
+  },
+  {
+    "ticker": "WMT",
+    "market": "US",
+    "is_outside": false,
+    "ann_vol_pct": 23.42,
+    "norm_atr_pct": 1.89,
+    "max_drawdown_pct": -23.34,
+    "trend_r2": 0.873,
+    "stability_score": 38.45
+  },
+  {
+    "ticker": "JPM",
+    "market": "US",
+    "is_outside": false,
+    "ann_vol_pct": 23.04,
+    "norm_atr_pct": 1.99,
+    "max_drawdown_pct": -24.42,
+    "trend_r2": 0.93,
+    "stability_score": 40.78
+  },
+  {
+    "ticker": "LLY",
+    "market": "US",
+    "is_outside": false,
+    "ann_vol_pct": 35.69,
+    "norm_atr_pct": 2.91,
+    "max_drawdown_pct": -34.48,
+    "trend_r2": 0.637,
+    "stability_score": 8.42
+  },
+  {
+    "ticker": "NVDA",
+    "market": "US",
+    "is_outside": false,
+    "ann_vol_pct": 46.57,
+    "norm_atr_pct": 3.77,
+    "max_drawdown_pct": -36.88,
+    "trend_r2": 0.821,
+    "stability_score": 3.87
+  },
+  {
+    "ticker": "AMZN",
+    "market": "US",
+    "is_outside": false,
+    "ann_vol_pct": 31.68,
+    "norm_atr_pct": 2.6,
+    "max_drawdown_pct": -30.88,
+    "trend_r2": 0.781,
+    "stability_score": 21.45
+  },
+  {
+    "ticker": "TSLA",
+    "market": "US",
+    "is_outside": false,
+    "ann_vol_pct": 57.41,
+    "norm_atr_pct": 4.64,
+    "max_drawdown_pct": -53.77,
+    "trend_r2": 0.624,
+    "stability_score": -24.04
+  },
+  {
+    "ticker": "AMD",
+    "market": "US",
+    "is_outside": false,
+    "ann_vol_pct": 58.63,
+    "norm_atr_pct": 4.62,
+    "max_drawdown_pct": -63.0,
+    "trend_r2": 0.521,
+    "stability_score": -32.83
+  },
+  {
+    "ticker": "BRK-B",
+    "market": "US",
+    "is_outside": true,
+    "ann_vol_pct": 15.94,
+    "norm_atr_pct": 1.44,
+    "max_drawdown_pct": -14.95,
+    "trend_r2": 0.682,
+    "stability_score": 39.67
+  },
+  {
+    "ticker": "V",
+    "market": "US",
+    "is_outside": true,
+    "ann_vol_pct": 20.34,
+    "norm_atr_pct": 1.75,
+    "max_drawdown_pct": -20.38,
+    "trend_r2": 0.7,
+    "stability_score": 33.84
+  },
+  {
+    "ticker": "MA",
+    "market": "US",
+    "is_outside": true,
+    "ann_vol_pct": 20.46,
+    "norm_atr_pct": 1.8,
+    "max_drawdown_pct": -20.91,
+    "trend_r2": 0.565,
+    "stability_score": 26.62
+  },
+  {
+    "ticker": "JNJ",
+    "market": "US",
+    "is_outside": true,
+    "ann_vol_pct": 18.5,
+    "norm_atr_pct": 1.67,
+    "max_drawdown_pct": -14.45,
+    "trend_r2": 0.812,
+    "stability_score": 43.14
+  },
+  {
+    "ticker": "PG",
+    "market": "US",
+    "is_outside": true,
+    "ann_vol_pct": 18.3,
+    "norm_atr_pct": 1.61,
+    "max_drawdown_pct": -21.15,
+    "trend_r2": 0.027,
+    "stability_score": 2.29
+  },
+  {
+    "ticker": "HD",
+    "market": "US",
+    "is_outside": true,
+    "ann_vol_pct": 23.32,
+    "norm_atr_pct": 2.11,
+    "max_drawdown_pct": -31.75,
+    "trend_r2": 0.0,
+    "stability_score": -8.68
+  },
+  {
+    "ticker": "LT.NS",
+    "market": "INDIA",
+    "is_outside": false,
+    "ann_vol_pct": 25.65,
+    "norm_atr_pct": 2.08,
+    "max_drawdown_pct": -24.35,
+    "trend_r2": 0.507,
+    "stability_score": 17.13
+  },
+  {
+    "ticker": "RELIANCE.NS",
+    "market": "INDIA",
+    "is_outside": false,
+    "ann_vol_pct": 21.3,
+    "norm_atr_pct": 1.83,
+    "max_drawdown_pct": -27.18,
+    "trend_r2": 0.004,
+    "stability_score": -4.15
+  },
+  {
+    "ticker": "TCS.NS",
+    "market": "INDIA",
+    "is_outside": false,
+    "ann_vol_pct": 24.31,
+    "norm_atr_pct": 2.09,
+    "max_drawdown_pct": -53.39,
+    "trend_r2": 0.679,
+    "stability_score": 18.04
+  },
+  {
+    "ticker": "ICICIBANK.NS",
+    "market": "INDIA",
+    "is_outside": false,
+    "ann_vol_pct": 19.27,
+    "norm_atr_pct": 1.78,
+    "max_drawdown_pct": -18.37,
+    "trend_r2": 0.655,
+    "stability_score": 32.91
+  },
+  {
+    "ticker": "BHARTIARTL.NS",
+    "market": "INDIA",
+    "is_outside": false,
+    "ann_vol_pct": 21.6,
+    "norm_atr_pct": 2.05,
+    "max_drawdown_pct": -18.77,
+    "trend_r2": 0.74,
+    "stability_score": 33.85
+  },
+  {
+    "ticker": "ITC.NS",
+    "market": "INDIA",
+    "is_outside": false,
+    "ann_vol_pct": 19.38,
+    "norm_atr_pct": 1.77,
+    "max_drawdown_pct": -45.04,
+    "trend_r2": 0.52,
+    "stability_score": 18.18
+  },
+  {
+    "ticker": "HDFCBANK.NS",
+    "market": "INDIA",
+    "is_outside": true,
+    "ann_vol_pct": 20.54,
+    "norm_atr_pct": 1.77,
+    "max_drawdown_pct": -31.74,
+    "trend_r2": 0.051,
+    "stability_score": -2.26
+  },
+  {
+    "ticker": "INFY.NS",
+    "market": "INDIA",
+    "is_outside": true,
+    "ann_vol_pct": 26.89,
+    "norm_atr_pct": 2.28,
+    "max_drawdown_pct": -48.17,
+    "trend_r2": 0.291,
+    "stability_score": -2.82
+  },
+  {
+    "ticker": "HINDUNILVR.NS",
+    "market": "INDIA",
+    "is_outside": true,
+    "ann_vol_pct": 20.53,
+    "norm_atr_pct": 1.89,
+    "max_drawdown_pct": -37.64,
+    "trend_r2": 0.244,
+    "stability_score": 5.01
+  },
+  {
+    "ticker": "SUNPHARMA.NS",
+    "market": "INDIA",
+    "is_outside": true,
+    "ann_vol_pct": 19.63,
+    "norm_atr_pct": 1.99,
+    "max_drawdown_pct": -19.13,
+    "trend_r2": 0.503,
+    "stability_score": 23.73
+  },
+  {
+    "ticker": "TITAN.NS",
+    "market": "INDIA",
+    "is_outside": true,
+    "ann_vol_pct": 22.65,
+    "norm_atr_pct": 2.1,
+    "max_drawdown_pct": -22.5,
+    "trend_r2": 0.532,
+    "stability_score": 21.24
+  },
+  {
+    "ticker": "KOTAKBANK.NS",
+    "market": "INDIA",
+    "is_outside": true,
+    "ann_vol_pct": 22.78,
+    "norm_atr_pct": 1.98,
+    "max_drawdown_pct": -22.03,
+    "trend_r2": 0.464,
+    "stability_score": 18.5
+  }
+]

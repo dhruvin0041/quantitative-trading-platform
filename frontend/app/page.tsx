@@ -1,547 +1,557 @@
-"use client";
-
-import React, { useState, useEffect, useMemo } from 'react';
-import { PriceChart } from '@/components/dashboard/PriceChart';
-import { SignalIntelligence } from '@/components/dashboard/SignalIntelligence';
-import { PortfolioAnalytics } from '@/components/dashboard/PortfolioAnalytics';
-import { RiskDashboard } from '@/components/dashboard/RiskDashboard';
-import { TechnicalSnapshot } from '@/components/dashboard/TechnicalSnapshot';
-import { PaperTradingPerformance } from '@/components/dashboard/PaperTradingPerformance';
-import { ProspectivePaperTrading } from '@/components/dashboard/ProspectivePaperTrading';
-import { IntegrityAudit } from '@/components/dashboard/IntegrityAudit';
-import { ChartData, UniverseStock } from '@/types';
-import { motion } from 'framer-motion';
-import { cn } from '@/lib/utils';
-import { Activity, Cpu, Menu, Shield, Briefcase, Target, BarChart2, ShieldCheck, X, CheckCircle2, AlertTriangle, BrainCircuit } from 'lucide-react';
-import { CommandMenu } from '@/components/CommandMenu';
-import { ThemeToggle } from '@/components/ThemeToggle';
-import { StockSearch } from '@/components/StockSearch';
-import { API_KEY, getBaseUrl } from '@/lib/config';
-
-type TabType = 'CONSENSUS' | 'RISK' | 'PORTFOLIO' | 'PERFORMANCE' | 'PROSPECTIVE' | 'TECHNICAL';
-
-const normalizeMarket = (m?: string): 'us' | 'india' => {
-  if (!m) return 'us';
-  const clean = m.toLowerCase().trim();
-  if (clean === 'in' || clean === 'india' || clean === 'nse') return 'india';
-  return 'us';
-};
-
-export default function HydraTerminal() {
-  const [ticker, setTicker] = useState<string>("AAPL"); 
-  const [market, setMarket] = useState<string>('us');
-  const [universe, setUniverse] = useState<UniverseStock[]>([]);
-  const [chartData, setChartData] = useState<ChartData | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Dashboard Layout State
-  const [isSidebarOpen, setSidebarOpen] = useState(true);
-  const [isRiskFeedOpen, setRiskFeedOpen] = useState(true);
-  const [isDebugModalOpen, setDebugModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabType>('CONSENSUS');
-  const [API_URL] = useState(getBaseUrl());
-  const TOP_US_TICKERS = useMemo(() => [
-    "AAPL", "NVDA", "MSFT", "AMZN", "META", "GOOGL", "TSLA", "AMD",
-    "COST", "WMT", "JPM", "LLY"
-  ], []);
-  const TOP_INDIA_TICKERS = useMemo(() => [
-    "RELIANCE.NS", "TCS.NS", "ICICIBANK.NS", "BHARTIARTL.NS", "LT.NS", "ITC.NS"
-  ], []);
-
-  const getBadgeForTicker = (t: string) => {
-    if (['AAPL', 'NVDA', 'LLY', 'RELIANCE.NS'].includes(t)) return 'SWING';
-    if (['TCS.NS'].includes(t)) return 'REBOUND';
-    return 'TACTICAL';
-  };
-
-  useEffect(() => {
-    fetch(`${API_URL}/universe`, { headers: { "X-API-Key": API_KEY } })
-      .then(res => res.json())
-      .then(data => { if (data.universe) setUniverse(data.universe); })
-      .catch(() => {
-        setUniverse([
-          // US Top Universe
-          { ticker: "AAPL", name: "Apple Inc.", price: 0, pct_change: 0, market: 'us' },
-          { ticker: "NVDA", name: "NVIDIA Corp.", price: 0, pct_change: 0, market: 'us' },
-          { ticker: "MSFT", name: "Microsoft Corp.", price: 0, pct_change: 0, market: 'us' },
-          { ticker: "AMZN", name: "Amazon.com Inc.", price: 0, pct_change: 0, market: 'us' },
-          { ticker: "META", name: "Meta Platforms Inc.", price: 0, pct_change: 0, market: 'us' },
-          { ticker: "GOOGL", name: "Alphabet Inc.", price: 0, pct_change: 0, market: 'us' },
-          { ticker: "TSLA", name: "Tesla Inc.", price: 0, pct_change: 0, market: 'us' },
-          { ticker: "AMD", name: "Advanced Micro Devices", price: 0, pct_change: 0, market: 'us' },
-          { ticker: "COST", name: "Costco Wholesale Corp.", price: 0, pct_change: 0, market: 'us' },
-          { ticker: "WMT", name: "Walmart Inc.", price: 0, pct_change: 0, market: 'us' },
-          { ticker: "JPM", name: "JPMorgan Chase & Co.", price: 0, pct_change: 0, market: 'us' },
-          { ticker: "LLY", name: "Eli Lilly and Company", price: 0, pct_change: 0, market: 'us' },
-          // India Top Universe
-          { ticker: "RELIANCE.NS", name: "Reliance Industries", price: 0, pct_change: 0, market: 'india' },
-          { ticker: "TCS.NS", name: "Tata Consultancy Services", price: 0, pct_change: 0, market: 'india' },
-          { ticker: "ICICIBANK.NS", name: "ICICI Bank Ltd.", price: 0, pct_change: 0, market: 'india' },
-          { ticker: "BHARTIARTL.NS", name: "Bharti Airtel Ltd.", price: 0, pct_change: 0, market: 'india' },
-          { ticker: "LT.NS", name: "Larsen & Toubro Ltd.", price: 0, pct_change: 0, market: 'india' },
-          { ticker: "ITC.NS", name: "ITC Ltd.", price: 0, pct_change: 0, market: 'india' },
-        ]);
-      });
-  }, [API_URL]);
-
-  useEffect(() => {
-    let isMounted = true;
-    const controller = new AbortController();
-    
-    const fetchPrediction = async () => {
-      if (!ticker) return;
-
-      setLoading(true);
-      setError(null);
-
-      const requestTicker = ticker === 'UNIVERSAL' ? 'AAPL' : ticker;
-      const requestUrl = `${API_URL}/predict?ticker=${requestTicker}`;
-      const timeoutId = setTimeout(() => controller.abort(), 60000);
-
-      try {
-        const res = await fetch(requestUrl, {
-          headers: { "X-API-Key": API_KEY },
-          signal: controller.signal,
-          cache: 'no-store'
-        });
-
-        clearTimeout(timeoutId);
-
-        if (!res.ok) throw new Error(`Server responded with ${res.status}`);
-
-        const data = await res.json();
-
-        if (isMounted && (data.ticker === requestTicker || data.ticker === ticker)) {
-          setChartData(data);
-          setLoading(false);
-        }
-      } catch (err) {
-        clearTimeout(timeoutId);
-        if (isMounted) {
-          setError((err as Error).message || "Failed to fetch AI predictions.");
-          setLoading(false);
-        }
-      }
-    };
-
-    fetchPrediction();
-    return () => { isMounted = false; controller.abort(); };
-  }, [ticker, API_URL]); 
-
-  const filteredUniverse = useMemo(() => {
-    const normMarket = normalizeMarket(market);
-    const list = universe.filter(s => normalizeMarket(s.market) === normMarket);
-    const priorityList = normMarket === 'us' ? TOP_US_TICKERS : TOP_INDIA_TICKERS;
-    if (priorityList.length > 0) {
-      return [...list].sort((a, b) => {
-        const aIdx = priorityList.indexOf(a.ticker);
-        const bIdx = priorityList.indexOf(b.ticker);
-        if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
-        if (aIdx !== -1) return -1;
-        if (bIdx !== -1) return 1;
-        return a.ticker.localeCompare(b.ticker);
-      });
-    }
-    return list;
-  }, [universe, market, TOP_US_TICKERS, TOP_INDIA_TICKERS]);
-
-  const handleStockSelect = (selectedTicker: string) => {
-    setTicker(selectedTicker);
-    const stock = universe.find(s => s.ticker === selectedTicker);
-    if (stock) {
-      setMarket(normalizeMarket(stock.market));
-    } else if (selectedTicker.endsWith('.NS')) {
-      setMarket('india');
-    } else {
-      setMarket('us');
-    }
-  };
-
-  const currencySymbol = useMemo(() => {
-    if (ticker.endsWith('.NS')) return '₹';
-    const stock = universe.find(s => s.ticker === ticker);
-    return normalizeMarket(stock?.market) === 'india' ? '₹' : '$';
-  }, [universe, ticker]);
-
-  const strategyModeLabel = useMemo(() => {
-    const rawMode = chartData?.strategy_name || chartData?.strategy_mode;
-    if (rawMode) {
-      const clean = rawMode
-        .replace(/_/g, ' ')
-        .toLowerCase()
-        .replace(/\b\w/g, (c: string) => c.toUpperCase());
-      return `Adaptive Mesh · ${clean}`;
-    }
-    return 'Adaptive Mesh · Multi-Agent Consensus';
-  }, [chartData?.strategy_name, chartData?.strategy_mode]);
-
-  // Extract Risk Metrics from chartData or default
-  const portfolioVaR = chartData?.risk?.var_95 !== undefined && chartData?.risk?.var_95 !== null
-    ? Number(chartData.risk.var_95)
-    : (chartData?.metadata?.portfolio_var || 0.0);
-  const isVaRBreach = portfolioVaR > 0.05;
-  const executionStatus = chartData?.execution_state || (isVaRBreach ? "VETOED (VAR_BREACH)" : "PAPER_SIMULATION");
-
-  return (
-    <div className="min-h-screen bg-background text-foreground font-sans flex flex-col selection:bg-primary/30">
-      
-      {/* UNIVERSAL HEADER */}
-      <header className="h-14 bg-card border-b border-border flex items-center justify-between px-4 z-50 sticky top-0">
-        <div className="flex items-center gap-4">
-          <button 
-            onClick={() => setSidebarOpen(!isSidebarOpen)}
-            className="p-1.5 hover:bg-muted rounded-md transition-colors text-foreground"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
-          <div className="flex items-center gap-2">
-            <Cpu className="w-5 h-5 text-primary" />
-            <span className="font-mono font-bold tracking-tight text-lg hidden sm:inline-block">HYDRA<span className="text-muted-foreground font-light">|V2</span></span>
-          </div>
-          <a href="/agents" className="flex items-center gap-2 px-3 py-1.5 ml-4 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 transition-colors">
-            <BrainCircuit className="w-4 h-4" />
-            <span className="text-[11px] font-bold uppercase tracking-widest">Multi-Agent</span>
-          </a>
-          <StockSearch universe={universe} onSelect={handleStockSelect} />
-        </div>
-
-        <div className="flex items-center gap-4">
-          {loading ? (
-            <div className="flex items-center gap-2 px-3 py-1 rounded bg-primary/10 border border-primary/20 text-primary">
-              <Activity className="w-3 h-3 animate-spin" />
-              <span className="text-[11px] font-mono uppercase font-bold">Syncing Panel</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 px-3 py-1 rounded bg-positive/10 border border-positive/20 text-positive shadow-sm">
-              <div className="w-2 h-2 rounded-full bg-positive" />
-              <span className="text-[11px] font-mono uppercase font-bold">Panel Synced</span>
-            </div>
-          )}
-          
-          <button
-            onClick={() => setRiskFeedOpen(!isRiskFeedOpen)}
-            className="px-3 py-1.5 hover:bg-muted rounded-md transition-colors text-[11px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2"
-          >
-            <Shield className="w-4 h-4" /> Risk Feed
-          </button>
-
-          <button
-            onClick={() => setDebugModalOpen(true)}
-            className="p-1.5 hover:bg-muted rounded-md transition-colors text-muted-foreground hover:text-foreground"
-            title="System Integrity Audit"
-          >
-            <ShieldCheck className="w-5 h-5" />
-          </button>
-          <CommandMenu />
-          <ThemeToggle />
-        </div>
-      </header>
-
-      {/* MAIN WORKSPACE: 3-COLUMN LAYOUT */}
-      <div className="flex flex-1 overflow-hidden">
-        
-        {/* COLUMN 1: WATCHLIST (TICKER SELECTION) */}
-        <motion.aside 
-          initial={false}
-          animate={{ width: isSidebarOpen ? 320 : 0, opacity: isSidebarOpen ? 1 : 0 }}
-          className="shrink-0 border-r border-border bg-card flex flex-col overflow-hidden"
-        >
-          <div className="p-4 w-[320px] h-full flex flex-col">
-            <div className="flex p-1 bg-background rounded-lg border border-border mb-4 flex-wrap gap-1">
-              <button
-                onClick={() => setMarket('us')}
-                className={cn(
-                  "flex-1 min-w-[45px] py-1.5 rounded-md text-[11px] font-bold uppercase transition-all",
-                  normalizeMarket(market) === 'us' ? "bg-muted text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                🇺🇸 US
-              </button>
-              <button
-                onClick={() => setMarket('india')}
-                className={cn(
-                  "flex-1 min-w-[45px] py-1.5 rounded-md text-[11px] font-bold uppercase transition-all",
-                  normalizeMarket(market) === 'india' ? "bg-muted text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                🇮🇳 IND
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto hide-scrollbar">
-              <table className="w-full text-left border-collapse">
-                <thead className="sticky top-0 bg-card z-10 border-b border-border">
-                  <tr>
-                    <th className="pb-2 text-[11px] font-bold text-muted-foreground uppercase">Symbol</th>
-                    <th className="pb-2 text-[11px] font-bold text-muted-foreground uppercase text-right">Price</th>
-                    <th className="pb-2 text-[11px] font-bold text-muted-foreground uppercase text-right">Chg%</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredUniverse.map(stock => (
-                    <tr 
-                      key={stock.ticker}
-                      onClick={() => handleStockSelect(stock.ticker)}
-                      className={cn(
-                        "cursor-pointer transition-colors border-b border-border/50",
-                        ticker === stock.ticker ? "bg-primary/10" : "hover:bg-muted/50"
-                      )}
-                    >
-                      <td className="py-2.5">
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-1.5">
-                            <span className={cn("font-bold text-[13px]", ticker === stock.ticker ? "text-primary" : "text-foreground")}>
-                              {stock.ticker}
-                            </span>
-                            {(TOP_US_TICKERS.includes(stock.ticker) || TOP_INDIA_TICKERS.includes(stock.ticker)) && (
-                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-primary/15 text-primary font-mono uppercase font-bold tracking-wider border border-primary/20">
-                                {getBadgeForTicker(stock.ticker)}
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[11px] text-muted-foreground truncate max-w-[120px]">{stock.name}</span>
-                        </div>
-                      </td>
-                      <td className="py-2.5 text-right font-mono text-[13px] text-foreground">
-                        {stock.market === 'india' ? '₹' : '$'}{stock.price.toFixed(2)}
-                      </td>
-                      <td className={cn(
-                        "py-2.5 text-right font-mono text-[13px] font-bold",
-                        stock.pct_change >= 0 ? "text-positive" : "text-negative"
-                      )}>
-                        {stock.pct_change > 0 ? '+' : ''}{stock.pct_change.toFixed(2)}%
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </motion.aside>
-
-        {/* COLUMN 2: CENTER EXECUTION AREA (CHART) */}
-        <main className="flex-1 flex flex-col min-w-0 bg-background overflow-y-auto hide-scrollbar">
-          
-          {error && (
-            <div className="m-4 bg-negative/10 border border-negative/30 text-negative p-3 rounded text-[13px] font-mono">
-              {error}
-            </div>
-          )}
-
-          {/* TOP SECTION: Interactive Chart Area */}
-          <div className="flex flex-col xl:flex-row gap-4 p-4 xl:h-[600px]">
-            {/* Main Interactive Chart */}
-            <div className="flex-1 bg-card border border-border rounded-xl overflow-hidden min-h-[400px] shadow-lg flex flex-col">
-              <div className="px-4 py-3 border-b border-border flex justify-between items-center bg-card shrink-0">
-                 <div className="flex items-center gap-3">
-                   <h2 className="text-[20px] font-bold">{ticker}</h2>
-                   {strategyModeLabel && (
-                     <span className="px-2 py-0.5 rounded bg-primary/15 text-primary text-[10px] font-mono font-bold tracking-wider uppercase border border-primary/25">
-                       {strategyModeLabel}
-                     </span>
-                   )}
-                   <span className="text-[13px] text-muted-foreground hidden sm:inline">{chartData?.metadata?.name || ''}</span>
-                   <span className="px-2 py-0.5 rounded bg-muted text-[11px] text-foreground font-mono font-bold">
-                     {chartData?.current_price ? `${currencySymbol}${chartData.current_price.toFixed(2)}` : '---'}
-                   </span>
-
-                   {/* Active Live Signal Badge */}
-                   {chartData?.signal && (
-                     <span className={cn(
-                       "px-2.5 py-0.5 rounded text-[11px] font-black tracking-wider uppercase flex items-center gap-1.5",
-                       chartData.signal === 'BUY' ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" :
-                       chartData.signal === 'SELL' ? "bg-rose-500/20 text-rose-400 border border-rose-500/30" :
-                       chartData.signal === 'VETOED' ? "bg-amber-500/20 text-amber-400 border border-amber-500/30" :
-                       "bg-muted text-muted-foreground border border-border"
-                     )}>
-                       <span className={cn(
-                         "w-2 h-2 rounded-full",
-                         chartData.signal === 'BUY' ? "bg-emerald-400 animate-pulse" :
-                         chartData.signal === 'SELL' ? "bg-rose-400 animate-pulse" :
-                         chartData.signal === 'VETOED' ? "bg-amber-400" : "bg-muted-foreground"
-                       )} />
-                       {chartData.signal}
-                       {chartData.confidence_score ? ` (${chartData.confidence_score.toFixed(0)}%)` : ''}
-                     </span>
-                   )}
-                 </div>
-
-                 {/* Signal Markers Legend & Counter */}
-                 <div className="flex items-center gap-3 text-[11px] font-mono">
-                   <div className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-muted/40 border border-border">
-                     <span className="text-emerald-400 font-bold flex items-center gap-1">
-                       ▲ BUY ({chartData?.historical_markers?.filter(m => (m.action || m.signal) === 'BUY').length || 0})
-                     </span>
-                     <span className="text-muted-foreground">|</span>
-                     <span className="text-rose-400 font-bold flex items-center gap-1">
-                       ▼ SELL ({chartData?.historical_markers?.filter(m => (m.action || m.signal) === 'SELL').length || 0})
-                     </span>
-                   </div>
-                 </div>
-              </div>
-              <div className="flex-1 relative w-full h-full min-h-[300px]">
-                <PriceChart data={chartData} loading={loading} />
-              </div>
-            </div>
-
-            {/* COLUMN 3: RISK AGENT LIVE FEED */}
-            <motion.div 
-              initial={false}
-              animate={{ width: isRiskFeedOpen ? 360 : 0, opacity: isRiskFeedOpen ? 1 : 0, display: isRiskFeedOpen ? 'block' : 'none' }}
-              className="w-full xl:w-[360px] shrink-0 bg-card border border-border rounded-xl flex flex-col shadow-lg overflow-hidden"
-            >
-              <div className="px-4 py-3 border-b border-border flex items-center justify-between bg-muted/30">
-                 <span className="text-[12px] font-bold tracking-widest text-muted-foreground uppercase flex items-center gap-2">
-                   <Shield className="w-4 h-4 text-primary" /> RiskAgent Live Feed
-                 </span>
-              </div>
-              <div className="p-5 flex-1 overflow-y-auto flex flex-col gap-6">
-                
-                {/* Portfolio VaR Meter */}
-                <div className="flex flex-col gap-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[12px] font-bold uppercase text-muted-foreground">Portfolio VaR (95%)</span>
-                    <span className={cn("text-[14px] font-mono font-bold", isVaRBreach ? "text-negative" : "text-positive")}>
-                      {(portfolioVaR * 100).toFixed(2)}%
-                    </span>
-                  </div>
-                  <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                    <div 
-                      className={cn("h-full transition-all duration-500", isVaRBreach ? "bg-negative" : "bg-positive")} 
-                      style={{ width: `${Math.min((portfolioVaR / 0.05) * 100, 100)}%` }}
-                    />
-                  </div>
-                  <span className="text-[10px] text-muted-foreground text-right">Limit: 5.00%</span>
-                </div>
-
-                {/* Execution Status */}
-                <div className="flex flex-col gap-2 p-4 border border-border rounded-lg bg-background">
-                  <span className="text-[11px] font-bold uppercase text-muted-foreground">Execution Status</span>
-                  <div className="flex items-center gap-2 mt-1">
-                    {isVaRBreach ? <AlertTriangle className="w-5 h-5 text-negative" /> : <Activity className="w-5 h-5 text-positive" />}
-                    <span className={cn("text-[14px] font-mono font-bold", isVaRBreach ? "text-negative" : "text-positive")}>
-                      {executionStatus}
-                    </span>
-                  </div>
-                  {isVaRBreach && (
-                     <span className="text-[11px] text-negative mt-2 leading-tight">
-                       Absolute veto engaged. Portfolio tail risk exceeded safety limits. 
-                     </span>
-                  )}
-                </div>
-
-                {/* Asset Intelligence & Execution Telemetry */}
-                <div className="flex flex-col gap-2 p-4 border border-border rounded-lg bg-background">
-                  <span className="text-[11px] font-bold uppercase text-muted-foreground">Asset Intelligence</span>
-                  <div className="flex justify-between items-center mt-1">
-                    <span className="text-[12px] text-foreground">Asset Class</span>
-                    <span className="text-[13px] font-mono text-primary font-bold">{chartData?.asset_class || "EQUITY"}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-[12px] text-foreground">Execution Mode</span>
-                    <span className="text-[13px] font-mono text-muted-foreground">Modeled Paper Fill</span>
-                  </div>
-                </div>
-
-              </div>
-            </motion.div>
-          </div>
-
-          {/* BOTTOM SECTION: Tabbed Interface */}
-          <div className="px-4 pb-4 flex-1 flex flex-col">
-            <div className="bg-card border border-border rounded-xl shadow-lg flex-1 flex flex-col overflow-hidden">
-              
-              <div className="flex border-b border-border bg-card overflow-x-auto hide-scrollbar">
-                {[
-                  { id: 'CONSENSUS', icon: Target, label: 'Model Consensus' },
-                  { id: 'PROSPECTIVE', icon: ShieldCheck, label: 'Prospective Paper Trading' },
-                  { id: 'RISK', icon: Shield, label: 'Risk Engine' },
-                  { id: 'PORTFOLIO', icon: Briefcase, label: 'Portfolio' },
-                  { id: 'PERFORMANCE', icon: CheckCircle2, label: 'Validation Center' },
-                  { id: 'TECHNICAL', icon: BarChart2, label: 'Technicals' },
-                ].map(tab => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id as TabType)}
-                    className={cn(
-                      "flex items-center gap-2 px-6 py-3 text-[13px] font-bold uppercase tracking-wider transition-colors border-b-2 whitespace-nowrap",
-                      activeTab === tab.id 
-                        ? "border-primary text-primary bg-primary/5" 
-                        : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                    )}
-                  >
-                    <tab.icon className="w-4 h-4" />
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              <div className="p-4 flex-1 overflow-y-auto bg-background/50">
-                {activeTab === 'CONSENSUS' && (
-                  <div className="max-w-4xl">
-                    <SignalIntelligence data={chartData} currency={currencySymbol} />
-                  </div>
-                )}
-                {activeTab === 'PROSPECTIVE' && (
-                  <div className="max-w-5xl">
-                    <ProspectivePaperTrading ticker={ticker} currency={currencySymbol} />
-                  </div>
-                )}
-                {activeTab === 'RISK' && (
-                  <div className="max-w-4xl">
-                    <RiskDashboard data={chartData} currency={currencySymbol} />
-                  </div>
-                )}
-                {activeTab === 'PORTFOLIO' && (
-                  <div className="max-w-4xl">
-                    <PortfolioAnalytics data={chartData} currency={currencySymbol} />
-                  </div>
-                )}
-                {activeTab === 'PERFORMANCE' && (
-                  <div className="max-w-4xl">
-                    <PaperTradingPerformance currency={currencySymbol} />
-                  </div>
-                )}
-                {activeTab === 'TECHNICAL' && (
-                  <div className="max-w-4xl">
-                    <TechnicalSnapshot data={chartData} currency={currencySymbol} />
-                  </div>
-                )}
-              </div>
-
-            </div>
-          </div>
-
-        </main>
-      </div>
-
-      {/* DEBUG MODAL: Integrity Audit */}
-      {isDebugModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden"
-          >
-            <div className="flex items-center justify-between p-4 border-b border-border bg-background">
-              <h2 className="text-[14px] font-bold uppercase tracking-widest text-foreground flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-positive" />
-                System Integrity Audit
-              </h2>
-              <button 
-                onClick={() => setDebugModalOpen(false)}
-                className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-white transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-4 overflow-y-auto">
-              <IntegrityAudit data={chartData} />
-            </div>
-          </motion.div>
-        </div>
-      )}
-    </div>
-  );
-}
+"use client";
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { PriceChart } from '@/components/dashboard/PriceChart';
+import { SignalIntelligence } from '@/components/dashboard/SignalIntelligence';
+import { PortfolioAnalytics } from '@/components/dashboard/PortfolioAnalytics';
+import { RiskDashboard } from '@/components/dashboard/RiskDashboard';
+import { TechnicalSnapshot } from '@/components/dashboard/TechnicalSnapshot';
+import { PaperTradingPerformance } from '@/components/dashboard/PaperTradingPerformance';
+import { ProspectivePaperTrading } from '@/components/dashboard/ProspectivePaperTrading';
+import { IntegrityAudit } from '@/components/dashboard/IntegrityAudit';
+import { ChartData, UniverseStock } from '@/types';
+import { motion } from 'framer-motion';
+import { cn } from '@/lib/utils';
+import { Activity, Cpu, Menu, Shield, Briefcase, Target, BarChart2, ShieldCheck, X, CheckCircle2, AlertTriangle, BrainCircuit } from 'lucide-react';
+import { CommandMenu } from '@/components/CommandMenu';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { StockSearch } from '@/components/StockSearch';
+import { API_KEY, getBaseUrl } from '@/lib/config';
+
+type TabType = 'CONSENSUS' | 'RISK' | 'PORTFOLIO' | 'PERFORMANCE' | 'PROSPECTIVE' | 'TECHNICAL';
+
+const normalizeMarket = (m?: string): 'us' | 'india' => {
+  if (!m) return 'us';
+  const clean = m.toLowerCase().trim();
+  if (clean === 'in' || clean === 'india' || clean === 'nse') return 'india';
+  return 'us';
+};
+
+export default function HydraTerminal() {
+  const [ticker, setTicker] = useState<string>("AAPL"); 
+  const [market, setMarket] = useState<string>('us');
+  const [universe, setUniverse] = useState<UniverseStock[]>([]);
+  const [chartData, setChartData] = useState<ChartData | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Dashboard Layout State
+  const [isSidebarOpen, setSidebarOpen] = useState(true);
+  const [isRiskFeedOpen, setRiskFeedOpen] = useState(true);
+  const [isDebugModalOpen, setDebugModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabType>('CONSENSUS');
+  const [API_URL] = useState(getBaseUrl());
+  const TOP_US_TICKERS = useMemo(() => [
+    "AAPL", "JNJ", "V", "BRK-B", "COST", "JPM", "WMT", "MSFT", "GOOGL", "META", "NVDA", "AMZN", "LLY", "TSLA", "AMD"
+  ], []);
+  const TOP_INDIA_TICKERS = useMemo(() => [
+    "LT.NS", "TITAN.NS", "SUNPHARMA.NS", "RELIANCE.NS", "TCS.NS", "ICICIBANK.NS", "BHARTIARTL.NS", "ITC.NS"
+  ], []);
+
+  const getBadgeForTicker = (t: string) => {
+    if (['AAPL', 'JNJ', 'V', 'BRK-B', 'LT.NS', 'TITAN.NS', 'SUNPHARMA.NS'].includes(t)) return 'STABLE';
+    if (['COST', 'JPM', 'WMT', 'RELIANCE.NS', 'TCS.NS'].includes(t)) return 'SWING';
+    if (['META', 'GOOGL', 'MSFT', 'NVDA', 'AMD'].includes(t)) return 'MOMENTUM';
+    return 'TACTICAL';
+  };
+
+  const getBadgeStyle = (badge: string) => {
+    if (badge === 'STABLE') return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
+    if (badge === 'SWING') return 'bg-blue-500/15 text-blue-400 border-blue-500/30';
+    if (badge === 'MOMENTUM') return 'bg-purple-500/15 text-purple-400 border-purple-500/30';
+    return 'bg-primary/15 text-primary border-primary/20';
+  };
+
+  useEffect(() => {
+    fetch(`${API_URL}/universe`, { headers: { "X-API-Key": API_KEY } })
+      .then(res => res.json())
+      .then(data => { if (data.universe) setUniverse(data.universe); })
+      .catch(() => {
+        setUniverse([
+          // US Top Universe
+          { ticker: "AAPL", name: "Apple Inc.", price: 0, pct_change: 0, market: 'us' },
+          { ticker: "NVDA", name: "NVIDIA Corp.", price: 0, pct_change: 0, market: 'us' },
+          { ticker: "MSFT", name: "Microsoft Corp.", price: 0, pct_change: 0, market: 'us' },
+          { ticker: "AMZN", name: "Amazon.com Inc.", price: 0, pct_change: 0, market: 'us' },
+          { ticker: "META", name: "Meta Platforms Inc.", price: 0, pct_change: 0, market: 'us' },
+          { ticker: "GOOGL", name: "Alphabet Inc.", price: 0, pct_change: 0, market: 'us' },
+          { ticker: "TSLA", name: "Tesla Inc.", price: 0, pct_change: 0, market: 'us' },
+          { ticker: "AMD", name: "Advanced Micro Devices", price: 0, pct_change: 0, market: 'us' },
+          { ticker: "COST", name: "Costco Wholesale Corp.", price: 0, pct_change: 0, market: 'us' },
+          { ticker: "WMT", name: "Walmart Inc.", price: 0, pct_change: 0, market: 'us' },
+          { ticker: "JPM", name: "JPMorgan Chase & Co.", price: 0, pct_change: 0, market: 'us' },
+          { ticker: "LLY", name: "Eli Lilly and Company", price: 0, pct_change: 0, market: 'us' },
+          // India Top Universe
+          { ticker: "RELIANCE.NS", name: "Reliance Industries", price: 0, pct_change: 0, market: 'india' },
+          { ticker: "TCS.NS", name: "Tata Consultancy Services", price: 0, pct_change: 0, market: 'india' },
+          { ticker: "ICICIBANK.NS", name: "ICICI Bank Ltd.", price: 0, pct_change: 0, market: 'india' },
+          { ticker: "BHARTIARTL.NS", name: "Bharti Airtel Ltd.", price: 0, pct_change: 0, market: 'india' },
+          { ticker: "LT.NS", name: "Larsen & Toubro Ltd.", price: 0, pct_change: 0, market: 'india' },
+          { ticker: "ITC.NS", name: "ITC Ltd.", price: 0, pct_change: 0, market: 'india' },
+        ]);
+      });
+  }, [API_URL]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const controller = new AbortController();
+    
+    const fetchPrediction = async () => {
+      if (!ticker) return;
+
+      setLoading(true);
+      setError(null);
+
+      const requestTicker = ticker === 'UNIVERSAL' ? 'AAPL' : ticker;
+      const requestUrl = `${API_URL}/predict?ticker=${requestTicker}`;
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+      try {
+        const res = await fetch(requestUrl, {
+          headers: { "X-API-Key": API_KEY },
+          signal: controller.signal,
+          cache: 'no-store'
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!res.ok) throw new Error(`Server responded with ${res.status}`);
+
+        const data = await res.json();
+
+        if (isMounted && (data.ticker === requestTicker || data.ticker === ticker)) {
+          setChartData(data);
+          setLoading(false);
+        }
+      } catch (err) {
+        clearTimeout(timeoutId);
+        if (isMounted) {
+          setError((err as Error).message || "Failed to fetch AI predictions.");
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchPrediction();
+    return () => { isMounted = false; controller.abort(); };
+  }, [ticker, API_URL]); 
+
+  const filteredUniverse = useMemo(() => {
+    const normMarket = normalizeMarket(market);
+    const list = universe.filter(s => normalizeMarket(s.market) === normMarket);
+    const priorityList = normMarket === 'us' ? TOP_US_TICKERS : TOP_INDIA_TICKERS;
+    if (priorityList.length > 0) {
+      return [...list].sort((a, b) => {
+        const aIdx = priorityList.indexOf(a.ticker);
+        const bIdx = priorityList.indexOf(b.ticker);
+        if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+        if (aIdx !== -1) return -1;
+        if (bIdx !== -1) return 1;
+        return a.ticker.localeCompare(b.ticker);
+      });
+    }
+    return list;
+  }, [universe, market, TOP_US_TICKERS, TOP_INDIA_TICKERS]);
+
+  const handleStockSelect = (selectedTicker: string) => {
+    setTicker(selectedTicker);
+    const stock = universe.find(s => s.ticker === selectedTicker);
+    if (stock) {
+      setMarket(normalizeMarket(stock.market));
+    } else if (selectedTicker.endsWith('.NS')) {
+      setMarket('india');
+    } else {
+      setMarket('us');
+    }
+  };
+
+  const currencySymbol = useMemo(() => {
+    if (ticker.endsWith('.NS')) return '₹';
+    const stock = universe.find(s => s.ticker === ticker);
+    return normalizeMarket(stock?.market) === 'india' ? '₹' : '$';
+  }, [universe, ticker]);
+
+  const strategyModeLabel = useMemo(() => {
+    const rawMode = chartData?.strategy_name || chartData?.strategy_mode;
+    if (rawMode) {
+      const clean = rawMode
+        .replace(/_/g, ' ')
+        .toLowerCase()
+        .replace(/\b\w/g, (c: string) => c.toUpperCase());
+      return `Adaptive Mesh · ${clean}`;
+    }
+    return 'Adaptive Mesh · Multi-Agent Consensus';
+  }, [chartData?.strategy_name, chartData?.strategy_mode]);
+
+  // Extract Risk Metrics from chartData or default
+  const portfolioVaR = chartData?.risk?.var_95 !== undefined && chartData?.risk?.var_95 !== null
+    ? Number(chartData.risk.var_95)
+    : (chartData?.metadata?.portfolio_var || 0.0);
+  const isVaRBreach = portfolioVaR > 0.05;
+  const executionStatus = chartData?.execution_state || (isVaRBreach ? "VETOED (VAR_BREACH)" : "PAPER_SIMULATION");
+
+  return (
+    <div className="min-h-screen bg-background text-foreground font-sans flex flex-col selection:bg-primary/30">
+      
+      {/* UNIVERSAL HEADER */}
+      <header className="h-14 bg-card border-b border-border flex items-center justify-between px-4 z-50 sticky top-0">
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => setSidebarOpen(!isSidebarOpen)}
+            className="p-1.5 hover:bg-muted rounded-md transition-colors text-foreground"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <div className="flex items-center gap-2">
+            <Cpu className="w-5 h-5 text-primary" />
+            <span className="font-mono font-bold tracking-tight text-lg hidden sm:inline-block">HYDRA<span className="text-muted-foreground font-light">|V2</span></span>
+          </div>
+          <a href="/agents" className="flex items-center gap-2 px-3 py-1.5 ml-4 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 transition-colors">
+            <BrainCircuit className="w-4 h-4" />
+            <span className="text-[11px] font-bold uppercase tracking-widest">Multi-Agent</span>
+          </a>
+          <StockSearch universe={universe} onSelect={handleStockSelect} />
+        </div>
+
+        <div className="flex items-center gap-4">
+          {loading ? (
+            <div className="flex items-center gap-2 px-3 py-1 rounded bg-primary/10 border border-primary/20 text-primary">
+              <Activity className="w-3 h-3 animate-spin" />
+              <span className="text-[11px] font-mono uppercase font-bold">Syncing Panel</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 px-3 py-1 rounded bg-positive/10 border border-positive/20 text-positive shadow-sm">
+              <div className="w-2 h-2 rounded-full bg-positive" />
+              <span className="text-[11px] font-mono uppercase font-bold">Panel Synced</span>
+            </div>
+          )}
+          
+          <button
+            onClick={() => setRiskFeedOpen(!isRiskFeedOpen)}
+            className="px-3 py-1.5 hover:bg-muted rounded-md transition-colors text-[11px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2"
+          >
+            <Shield className="w-4 h-4" /> Risk Feed
+          </button>
+
+          <button
+            onClick={() => setDebugModalOpen(true)}
+            className="p-1.5 hover:bg-muted rounded-md transition-colors text-muted-foreground hover:text-foreground"
+            title="System Integrity Audit"
+          >
+            <ShieldCheck className="w-5 h-5" />
+          </button>
+          <CommandMenu />
+          <ThemeToggle />
+        </div>
+      </header>
+
+      {/* MAIN WORKSPACE: 3-COLUMN LAYOUT */}
+      <div className="flex flex-1 overflow-hidden">
+        
+        {/* COLUMN 1: WATCHLIST (TICKER SELECTION) */}
+        <motion.aside 
+          initial={false}
+          animate={{ width: isSidebarOpen ? 320 : 0, opacity: isSidebarOpen ? 1 : 0 }}
+          className="shrink-0 border-r border-border bg-card flex flex-col overflow-hidden"
+        >
+          <div className="p-4 w-[320px] h-full flex flex-col">
+            <div className="flex p-1 bg-background rounded-lg border border-border mb-4 flex-wrap gap-1">
+              <button
+                onClick={() => setMarket('us')}
+                className={cn(
+                  "flex-1 min-w-[45px] py-1.5 rounded-md text-[11px] font-bold uppercase transition-all",
+                  normalizeMarket(market) === 'us' ? "bg-muted text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                🇺🇸 US
+              </button>
+              <button
+                onClick={() => setMarket('india')}
+                className={cn(
+                  "flex-1 min-w-[45px] py-1.5 rounded-md text-[11px] font-bold uppercase transition-all",
+                  normalizeMarket(market) === 'india' ? "bg-muted text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                🇮🇳 IND
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto hide-scrollbar">
+              <table className="w-full text-left border-collapse">
+                <thead className="sticky top-0 bg-card z-10 border-b border-border">
+                  <tr>
+                    <th className="pb-2 text-[11px] font-bold text-muted-foreground uppercase">Symbol</th>
+                    <th className="pb-2 text-[11px] font-bold text-muted-foreground uppercase text-right">Price</th>
+                    <th className="pb-2 text-[11px] font-bold text-muted-foreground uppercase text-right">Chg%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredUniverse.map(stock => (
+                    <tr 
+                      key={stock.ticker}
+                      onClick={() => handleStockSelect(stock.ticker)}
+                      className={cn(
+                        "cursor-pointer transition-colors border-b border-border/50",
+                        ticker === stock.ticker ? "bg-primary/10" : "hover:bg-muted/50"
+                      )}
+                    >
+                      <td className="py-2.5">
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-1.5">
+                            <span className={cn("font-bold text-[13px]", ticker === stock.ticker ? "text-primary" : "text-foreground")}>
+                              {stock.ticker}
+                            </span>
+                            {(TOP_US_TICKERS.includes(stock.ticker) || TOP_INDIA_TICKERS.includes(stock.ticker)) && (
+                              <span className={cn(
+                                "text-[9px] px-1.5 py-0.2 rounded font-mono uppercase font-bold tracking-wider border",
+                                getBadgeStyle(getBadgeForTicker(stock.ticker))
+                              )}>
+                                {getBadgeForTicker(stock.ticker)}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-muted-foreground truncate max-w-[120px]">{stock.name}</span>
+                        </div>
+                      </td>
+                      <td className="py-2.5 text-right font-mono text-[13px] text-foreground">
+                        {stock.market === 'india' ? '₹' : '$'}{stock.price.toFixed(2)}
+                      </td>
+                      <td className={cn(
+                        "py-2.5 text-right font-mono text-[13px] font-bold",
+                        stock.pct_change >= 0 ? "text-positive" : "text-negative"
+                      )}>
+                        {stock.pct_change > 0 ? '+' : ''}{stock.pct_change.toFixed(2)}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </motion.aside>
+
+        {/* COLUMN 2: CENTER EXECUTION AREA (CHART) */}
+        <main className="flex-1 flex flex-col min-w-0 bg-background overflow-y-auto hide-scrollbar">
+          
+          {error && (
+            <div className="m-4 bg-negative/10 border border-negative/30 text-negative p-3 rounded text-[13px] font-mono">
+              {error}
+            </div>
+          )}
+
+          {/* TOP SECTION: Interactive Chart Area */}
+          <div className="flex flex-col xl:flex-row gap-4 p-4 xl:h-[600px]">
+            {/* Main Interactive Chart */}
+            <div className="flex-1 bg-card border border-border rounded-xl overflow-hidden min-h-[400px] shadow-lg flex flex-col">
+              <div className="px-4 py-3 border-b border-border flex justify-between items-center bg-card shrink-0">
+                 <div className="flex items-center gap-3">
+                   <h2 className="text-[20px] font-bold">{ticker}</h2>
+                   {strategyModeLabel && (
+                     <span className="px-2 py-0.5 rounded bg-primary/15 text-primary text-[10px] font-mono font-bold tracking-wider uppercase border border-primary/25">
+                       {strategyModeLabel}
+                     </span>
+                   )}
+                   <span className="text-[13px] text-muted-foreground hidden sm:inline">{chartData?.metadata?.name || ''}</span>
+                   <span className="px-2 py-0.5 rounded bg-muted text-[11px] text-foreground font-mono font-bold">
+                     {chartData?.current_price ? `${currencySymbol}${chartData.current_price.toFixed(2)}` : '---'}
+                   </span>
+
+                   {/* Active Live Signal Badge */}
+                   {chartData?.signal && (
+                     <span className={cn(
+                       "px-2.5 py-0.5 rounded text-[11px] font-black tracking-wider uppercase flex items-center gap-1.5",
+                       chartData.signal === 'BUY' ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" :
+                       chartData.signal === 'SELL' ? "bg-rose-500/20 text-rose-400 border border-rose-500/30" :
+                       chartData.signal === 'VETOED' ? "bg-amber-500/20 text-amber-400 border border-amber-500/30" :
+                       "bg-muted text-muted-foreground border border-border"
+                     )}>
+                       <span className={cn(
+                         "w-2 h-2 rounded-full",
+                         chartData.signal === 'BUY' ? "bg-emerald-400 animate-pulse" :
+                         chartData.signal === 'SELL' ? "bg-rose-400 animate-pulse" :
+                         chartData.signal === 'VETOED' ? "bg-amber-400" : "bg-muted-foreground"
+                       )} />
+                       {chartData.signal}
+                       {chartData.confidence_score ? ` (${chartData.confidence_score.toFixed(0)}%)` : ''}
+                     </span>
+                   )}
+                 </div>
+
+                 {/* Signal Markers Legend & Counter */}
+                 <div className="flex items-center gap-3 text-[11px] font-mono">
+                   <div className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-muted/40 border border-border">
+                     <span className="text-emerald-400 font-bold flex items-center gap-1">
+                       ▲ BUY ({chartData?.historical_markers?.filter(m => (m.action || m.signal) === 'BUY').length || 0})
+                     </span>
+                     <span className="text-muted-foreground">|</span>
+                     <span className="text-rose-400 font-bold flex items-center gap-1">
+                       ▼ SELL ({chartData?.historical_markers?.filter(m => (m.action || m.signal) === 'SELL').length || 0})
+                     </span>
+                   </div>
+                 </div>
+              </div>
+              <div className="flex-1 relative w-full h-full min-h-[300px]">
+                <PriceChart data={chartData} loading={loading} />
+              </div>
+            </div>
+
+            {/* COLUMN 3: RISK AGENT LIVE FEED */}
+            <motion.div 
+              initial={false}
+              animate={{ width: isRiskFeedOpen ? 360 : 0, opacity: isRiskFeedOpen ? 1 : 0, display: isRiskFeedOpen ? 'block' : 'none' }}
+              className="w-full xl:w-[360px] shrink-0 bg-card border border-border rounded-xl flex flex-col shadow-lg overflow-hidden"
+            >
+              <div className="px-4 py-3 border-b border-border flex items-center justify-between bg-muted/30">
+                 <span className="text-[12px] font-bold tracking-widest text-muted-foreground uppercase flex items-center gap-2">
+                   <Shield className="w-4 h-4 text-primary" /> RiskAgent Live Feed
+                 </span>
+              </div>
+              <div className="p-5 flex-1 overflow-y-auto flex flex-col gap-6">
+                
+                {/* Portfolio VaR Meter */}
+                <div className="flex flex-col gap-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[12px] font-bold uppercase text-muted-foreground">Portfolio VaR (95%)</span>
+                    <span className={cn("text-[14px] font-mono font-bold", isVaRBreach ? "text-negative" : "text-positive")}>
+                      {(portfolioVaR * 100).toFixed(2)}%
+                    </span>
+                  </div>
+                  <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                    <div 
+                      className={cn("h-full transition-all duration-500", isVaRBreach ? "bg-negative" : "bg-positive")} 
+                      style={{ width: `${Math.min((portfolioVaR / 0.05) * 100, 100)}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] text-muted-foreground text-right">Limit: 5.00%</span>
+                </div>
+
+                {/* Execution Status */}
+                <div className="flex flex-col gap-2 p-4 border border-border rounded-lg bg-background">
+                  <span className="text-[11px] font-bold uppercase text-muted-foreground">Execution Status</span>
+                  <div className="flex items-center gap-2 mt-1">
+                    {isVaRBreach ? <AlertTriangle className="w-5 h-5 text-negative" /> : <Activity className="w-5 h-5 text-positive" />}
+                    <span className={cn("text-[14px] font-mono font-bold", isVaRBreach ? "text-negative" : "text-positive")}>
+                      {executionStatus}
+                    </span>
+                  </div>
+                  {isVaRBreach && (
+                     <span className="text-[11px] text-negative mt-2 leading-tight">
+                       Absolute veto engaged. Portfolio tail risk exceeded safety limits. 
+                     </span>
+                  )}
+                </div>
+
+                {/* Asset Intelligence & Execution Telemetry */}
+                <div className="flex flex-col gap-2 p-4 border border-border rounded-lg bg-background">
+                  <span className="text-[11px] font-bold uppercase text-muted-foreground">Asset Intelligence</span>
+                  <div className="flex justify-between items-center mt-1">
+                    <span className="text-[12px] text-foreground">Asset Class</span>
+                    <span className="text-[13px] font-mono text-primary font-bold">{chartData?.asset_class || "EQUITY"}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[12px] text-foreground">Execution Mode</span>
+                    <span className="text-[13px] font-mono text-muted-foreground">Modeled Paper Fill</span>
+                  </div>
+                </div>
+
+              </div>
+            </motion.div>
+          </div>
+
+          {/* BOTTOM SECTION: Tabbed Interface */}
+          <div className="px-4 pb-4 flex-1 flex flex-col">
+            <div className="bg-card border border-border rounded-xl shadow-lg flex-1 flex flex-col overflow-hidden">
+              
+              <div className="flex border-b border-border bg-card overflow-x-auto hide-scrollbar">
+                {[
+                  { id: 'CONSENSUS', icon: Target, label: 'Model Consensus' },
+                  { id: 'PROSPECTIVE', icon: ShieldCheck, label: 'Prospective Paper Trading' },
+                  { id: 'RISK', icon: Shield, label: 'Risk Engine' },
+                  { id: 'PORTFOLIO', icon: Briefcase, label: 'Portfolio' },
+                  { id: 'PERFORMANCE', icon: CheckCircle2, label: 'Validation Center' },
+                  { id: 'TECHNICAL', icon: BarChart2, label: 'Technicals' },
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id as TabType)}
+                    className={cn(
+                      "flex items-center gap-2 px-6 py-3 text-[13px] font-bold uppercase tracking-wider transition-colors border-b-2 whitespace-nowrap",
+                      activeTab === tab.id 
+                        ? "border-primary text-primary bg-primary/5" 
+                        : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    )}
+                  >
+                    <tab.icon className="w-4 h-4" />
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="p-4 flex-1 overflow-y-auto bg-background/50">
+                {activeTab === 'CONSENSUS' && (
+                  <div className="max-w-4xl">
+                    <SignalIntelligence data={chartData} currency={currencySymbol} />
+                  </div>
+                )}
+                {activeTab === 'PROSPECTIVE' && (
+                  <div className="max-w-5xl">
+                    <ProspectivePaperTrading ticker={ticker} currency={currencySymbol} />
+                  </div>
+                )}
+                {activeTab === 'RISK' && (
+                  <div className="max-w-4xl">
+                    <RiskDashboard data={chartData} currency={currencySymbol} />
+                  </div>
+                )}
+                {activeTab === 'PORTFOLIO' && (
+                  <div className="max-w-4xl">
+                    <PortfolioAnalytics data={chartData} currency={currencySymbol} />
+                  </div>
+                )}
+                {activeTab === 'PERFORMANCE' && (
+                  <div className="max-w-4xl">
+                    <PaperTradingPerformance currency={currencySymbol} />
+                  </div>
+                )}
+                {activeTab === 'TECHNICAL' && (
+                  <div className="max-w-4xl">
+                    <TechnicalSnapshot data={chartData} currency={currencySymbol} />
+                  </div>
+                )}
+              </div>
+
+            </div>
+          </div>
+
+        </main>
+      </div>
+
+      {/* DEBUG MODAL: Integrity Audit */}
+      {isDebugModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden"
+          >
+            <div className="flex items-center justify-between p-4 border-b border-border bg-background">
+              <h2 className="text-[14px] font-bold uppercase tracking-widest text-foreground flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-positive" />
+                System Integrity Audit
+              </h2>
+              <button 
+                onClick={() => setDebugModalOpen(false)}
+                className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto">
+              <IntegrityAudit data={chartData} />
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </div>
+  );
+}
