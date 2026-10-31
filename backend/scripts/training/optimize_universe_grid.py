@@ -240,94 +240,89 @@ def backtest_ticker(df, strat_type, params, is_indian=False, spy_df=None):
         "has_open": shares > 0
     }
 
-spy_df = pd.read_parquet("backend/data/cache/SPY_2y_features.parquet") if Path("backend/data/cache/SPY_2y_features.parquet").exists() else None
+def run_grid():
+    spy_df = pd.read_parquet("backend/data/cache/SPY_2y_features.parquet") if Path("backend/data/cache/SPY_2y_features.parquet").exists() else None
 
-# Parameter search space per asset class
-best_configs = {}
+    # Parameter search space per asset class
+    best_configs = {}
 
-print("Optimizing strategy parameters across institutional universe...")
+    print("Optimizing strategy parameters across institutional universe...")
 
-for sym in TICKERS:
-    pq_path = Path(f"backend/data/cache/{sym}_2y_features.parquet")
-    if not pq_path.exists():
-        continue
-    df = pd.read_parquet(pq_path)
-    is_indian = sym.endswith(".NS")
+    for sym in TICKERS:
+        pq_path = Path(f"backend/data/cache/{sym}_2y_features.parquet")
+        if not pq_path.exists():
+            continue
+        df = pd.read_parquet(pq_path)
+        is_indian = sym.endswith(".NS")
 
-    # Candidate strategy types
-    strat_types = ["CORE_TACTICAL_ACCUMULATION", "VOLATILITY_BREAKOUT_SWING", "ASYMMETRIC_MEAN_REVERSION"]
-    # Candidate parameter grids
-    base_atrs = [3.2, 3.8, 4.2]
-    ratchet_15s = [2.8, 3.2]
-    ratchet_25s = [2.0, 2.5]
-    dip_rsis = [40.0, 44.0, 46.0]
-    climax_rsis = [80.0, 84.0]
-    init_entries = [True, False]
-    cooldowns = [1, 2, 3]
-    ema_fasts = [5, 7, 9]
-    ema_slows = [13, 21, 30]
+        # Candidate strategy types
+        strat_types = ["CORE_TACTICAL_ACCUMULATION", "VOLATILITY_BREAKOUT_SWING", "ASYMMETRIC_MEAN_REVERSION"]
+        # Candidate parameter grids
 
-    best_res = None
-    best_params = None
-    best_st = None
+        best_res = None
+        best_params = None
+        best_st = None
 
-    # Sample a diverse high-performance grid
-    for st in strat_types:
-        for batr in [3.2, 3.8, 4.2]:
-            for drsi in [42.0, 45.0]:
-                for ie in [True, False]:
-                    for cd in [1, 2]:
-                        for ef, es in [(6, 15), (8, 21), (9, 26)]:
-                            p = {
-                                "init_entry": ie,
-                                "base_atr": batr,
-                                "ratchet_15": batr * 0.8,
-                                "ratchet_25": batr * 0.6,
-                                "climax_rsi": 82.0,
-                                "climax_gain": 0.18,
-                                "dip_rsi": drsi,
-                                "cooldown": cd,
-                                "ema_fast": ef,
-                                "ema_slow": es,
-                                "macro_bear_exit": True,
-                                "bb_window": 20,
-                                "bb_mult": 2.1,
-                                "bb_adaptive": True,
-                                "ema_adaptive": True
-                            }
-                            res = backtest_ticker(df, st, p, is_indian=is_indian, spy_df=spy_df)
-                            if best_res is None or res["final_val"] > best_res["final_val"]:
-                                best_res = res
-                                best_params = p
-                                best_st = st
+        # Sample a diverse high-performance grid
+        for st in strat_types:
+            for batr in [3.2, 3.8, 4.2]:
+                for drsi in [42.0, 45.0]:
+                    for ie in [True, False]:
+                        for cd in [1, 2]:
+                            for ef, es in [(6, 15), (8, 21), (9, 26)]:
+                                p = {
+                                    "init_entry": ie,
+                                    "base_atr": batr,
+                                    "ratchet_15": batr * 0.8,
+                                    "ratchet_25": batr * 0.6,
+                                    "climax_rsi": 82.0,
+                                    "climax_gain": 0.18,
+                                    "dip_rsi": drsi,
+                                    "cooldown": cd,
+                                    "ema_fast": ef,
+                                    "ema_slow": es,
+                                    "macro_bear_exit": True,
+                                    "bb_window": 20,
+                                    "bb_mult": 2.1,
+                                    "bb_adaptive": True,
+                                    "ema_adaptive": True
+                                }
+                                res = backtest_ticker(df, st, p, is_indian=is_indian, spy_df=spy_df)
+                                if best_res is None or res["final_val"] > best_res["final_val"]:
+                                    best_res = res
+                                    best_params = p
+                                    best_st = st
 
-    best_configs[sym] = {
-        "strategy_type": best_st,
-        "strategy_name": best_st.replace("_", " ").title(),
-        "params": best_params,
-        "performance": best_res
-    }
+        best_configs[sym] = {
+            "strategy_type": best_st,
+            "strategy_name": best_st.replace("_", " ").title(),
+            "params": best_params,
+            "performance": best_res
+        }
 
-print("\n" + "=" * 115)
-print(f"{'Ticker':<14} | {'Best Strategy':<28} | {'Final Val':<11} | {'Strat Ret%':<11} | {'B&H Ret%':<10} | {'Alpha %':<9} | {'Win Rate':<8} | {'Trades'}")
-print("=" * 115)
+    print("\n" + "=" * 115)
+    print(f"{'Ticker':<14} | {'Best Strategy':<28} | {'Final Val':<11} | {'Strat Ret%':<11} | {'B&H Ret%':<10} | {'Alpha %':<9} | {'Win Rate':<8} | {'Trades'}")
+    print("=" * 115)
 
-tot_bh = 0.0
-tot_best = 0.0
+    tot_bh = 0.0
+    tot_best = 0.0
 
-for sym, cfg in best_configs.items():
-    p = cfg["performance"]
-    tot_bh += 1000.0 * (1.0 + p["bh_ret"] / 100.0)
-    tot_best += p["final_val"]
-    print(f"{sym:<14} | {cfg['strategy_type']:<28} | ${p['final_val']:<10.2f} | {p['strat_ret']:>+9.2f}% | {p['bh_ret']:>+8.2f}% | {p['alpha']:>+7.2f}% | {p['win_rate']:>6.1f}% | {p['trades']}")
+    for sym, cfg in best_configs.items():
+        p = cfg["performance"]
+        tot_bh += 1000.0 * (1.0 + p["bh_ret"] / 100.0)
+        tot_best += p["final_val"]
+        print(f"{sym:<14} | {cfg['strategy_type']:<28} | ${p['final_val']:<10.2f} | {p['strat_ret']:>+9.2f}% | {p['bh_ret']:>+8.2f}% | {p['alpha']:>+7.2f}% | {p['win_rate']:>6.1f}% | {p['trades']}")
 
-tot_bh_ret = ((tot_bh - 18000.0) / 18000.0) * 100.0
-tot_best_ret = ((tot_best - 18000.0) / 18000.0) * 100.0
-print("-" * 115)
-print(f"{'PORTFOLIO':<14} | {'INSTITUTIONAL ENSEMBLE':<28} | ${tot_best:<10.2f} | {tot_best_ret:>+9.2f}% | {tot_bh_ret:>+8.2f}% | {tot_best_ret - tot_bh_ret:>+7.2f}% | {'-':<8} | -")
+    tot_bh_ret = ((tot_bh - 18000.0) / 18000.0) * 100.0
+    tot_best_ret = ((tot_best - 18000.0) / 18000.0) * 100.0
+    print("-" * 115)
+    print(f"{'PORTFOLIO':<14} | {'INSTITUTIONAL ENSEMBLE':<28} | ${tot_best:<10.2f} | {tot_best_ret:>+9.2f}% | {tot_bh_ret:>+8.2f}% | {tot_best_ret - tot_bh_ret:>+7.2f}% | {'-':<8} | -")
 
-# Export champion configs
-with open("backend/scratch/optimized_champion_configs.json", "w") as f:
-    json.dump(best_configs, f, indent=2)
+    # Export champion configs
+    with open("backend/scratch/optimized_champion_configs.json", "w") as f:
+        json.dump(best_configs, f, indent=2)
 
-print("\nOptimized configurations saved to backend/scratch/optimized_champion_configs.json")
+    print("\nOptimized configurations saved to backend/scratch/optimized_champion_configs.json")
+
+if __name__ == '__main__':
+    run_grid()
