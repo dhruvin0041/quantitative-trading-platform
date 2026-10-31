@@ -22,26 +22,30 @@ from scripts.training.optimize import run_optuna_optimization
 from src.utils.date_window import resolve_training_dates
 
 INSTITUTIONAL_UNIVERSE = [
-    # Core US Mega-Cap Tech
+    # US Stable Champions & Mega-Cap Tech
     "AAPL",
-    "NVDA",
+    "JNJ",
+    "V",
+    "BRK-B",
+    "COST",
+    "JPM",
+    "WMT",
     "MSFT",
-    "AMZN",
-    "META",
     "GOOGL",
+    "META",
+    "NVDA",
+    "AMZN",
+    "LLY",
     "TSLA",
     "AMD",
-    # US Low-Beta / Defensives & Financials
-    "COST",
-    "WMT",
-    "JPM",
-    "LLY",
-    # India (NSE) Institutional Giants
+    # India (NSE) Institutional Giants & Stable Champions
+    "LT.NS",
+    "TITAN.NS",
+    "SUNPHARMA.NS",
     "RELIANCE.NS",
     "TCS.NS",
     "ICICIBANK.NS",
     "BHARTIARTL.NS",
-    "LT.NS",
     "ITC.NS",
 ]
 
