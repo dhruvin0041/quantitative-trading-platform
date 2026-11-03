@@ -793,7 +793,9 @@ def compute_shap_explanation(model, X_flat, signal_idx=2, feature_columns=None):
         X_array = np.array(X_flat).flatten()
 
         if feature_columns is None:
-            if len(X_array) == len(FEATURE_COLUMNS_V30):
+            if len(X_array) == len(FEATURE_COLUMNS_V40):
+                feature_columns = FEATURE_COLUMNS_V40
+            elif len(X_array) == len(FEATURE_COLUMNS_V30):
                 feature_columns = FEATURE_COLUMNS_V30
             else:
                 feature_columns = FEATURE_COLUMNS_V24

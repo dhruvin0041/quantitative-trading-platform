@@ -496,7 +496,8 @@ def add_advanced_features(
     # 2 * sqrt(-Cov(dP_t, dP_t-1))
     dp = df["Close"].diff()
     cov_dp = dp.rolling(20).cov(dp.shift(1))
-    df["Roll_Spread"] = np.where(cov_dp < 0, 2 * np.sqrt(-cov_dp), 0)
+    neg_cov = np.maximum(-cov_dp.fillna(0.0), 0.0)
+    df["Roll_Spread"] = np.where(cov_dp < 0, 2 * np.sqrt(neg_cov), 0.0)
 
     # Amihud Liquidity Proxy (Absolute return / Dollar Volume)
     # Add 1e-9 to prevent division by zero which causes inf/NaN and drops recent data
