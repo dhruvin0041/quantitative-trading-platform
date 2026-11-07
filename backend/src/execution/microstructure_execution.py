@@ -56,9 +56,10 @@ class MicrostructureExecutionModel:
         recent_momentum_pct : float
             Preceding return direction (e.g., +0.02 if market jumped +2%).
         """
-        if price <= 0:
+        price_val = float(price) if not np.isnan(price) else 0.0
+        if price_val <= 0:
             return {
-                "executed_price": price,
+                "executed_price": price_val,
                 "total_friction_bps": 0.0,
                 "spread_bps": 0.0,
                 "market_impact_bps": 0.0,
@@ -66,15 +67,22 @@ class MicrostructureExecutionModel:
                 "fill_ratio": 1.0,
             }
 
+        act = str(action).upper().strip()
+        vol = float(volatility_pct) if not np.isnan(volatility_pct) else 0.015
+        vol = max(vol, 0.001)
+
+        mom = float(recent_momentum_pct) if not np.isnan(recent_momentum_pct) else 0.0
+        shares_safe = max(int(order_shares), 1)
+
         # 1. Spread Model: Base half-spread scaled by relative volatility
         # During high volatility regimes (vol > 2%), spreads widen significantly
-        vol_scalar = max(volatility_pct / 0.015, 0.5)
+        vol_scalar = max(vol / 0.015, 0.5)
         spread_bps = (self.base_spread_bps / 2.0) * vol_scalar
 
         # 2. Market Impact Model: Almgren-Chriss Square-Root Law
         # Impact = eta * sigma * sqrt(Order_Size / Bar_Volume)
-        bar_volume_safe = max(bar_volume, 10_000.0)
-        participation = min(order_shares / bar_volume_safe, 1.0)
+        bar_volume_safe = max(float(bar_volume) if not np.isnan(bar_volume) else 10_000.0, 10_000.0)
+        participation = min(shares_safe / bar_volume_safe, 1.0)
 
         # Check volume participation cap
         fill_ratio = 1.0
@@ -82,27 +90,27 @@ class MicrostructureExecutionModel:
             fill_ratio = self.max_participation_rate / max(participation, 1e-6)
 
         market_impact_bps = (
-            self.impact_eta * volatility_pct * np.sqrt(max(participation, 1e-6)) * 10_000.0
+            self.impact_eta * vol * np.sqrt(max(participation, 1e-6)) * 10_000.0
         )
 
         # 3. Adverse Selection: Aggressive execution with the momentum costs extra
         # Buying after an upward surge pays extra liquidity premium
         adverse_selection_bps = 0.0
-        if action == "BUY" and recent_momentum_pct > 0:
-            adverse_selection_bps = min(recent_momentum_pct * 10_000.0 * 0.05, 15.0)
-        elif action == "SELL" and recent_momentum_pct < 0:
-            adverse_selection_bps = min(abs(recent_momentum_pct) * 10_000.0 * 0.05, 15.0)
+        if act == "BUY" and mom > 0:
+            adverse_selection_bps = min(mom * 10_000.0 * 0.05, 15.0)
+        elif act == "SELL" and mom < 0:
+            adverse_selection_bps = min(abs(mom) * 10_000.0 * 0.05, 15.0)
 
         # Total basis points of slippage
         total_friction_bps = spread_bps + market_impact_bps + adverse_selection_bps
-        friction_fraction = total_friction_bps / 10_000.0
+        friction_fraction = min(total_friction_bps / 10_000.0, 0.20)  # Capped at 20% max slippage
 
-        if action == "BUY":
-            executed_price = price * (1.0 + friction_fraction)
-        elif action == "SELL":
-            executed_price = price * (1.0 - friction_fraction)
+        if act == "BUY":
+            executed_price = price_val * (1.0 + friction_fraction)
+        elif act == "SELL":
+            executed_price = max(price_val * (1.0 - friction_fraction), 0.01)
         else:
-            executed_price = price
+            executed_price = price_val
 
         return {
             "executed_price": float(executed_price),
@@ -132,3 +140,4 @@ class MicrostructureExecutionModel:
             recent_momentum_pct=recent_momentum_pct,
         )
         return res["executed_price"]
+

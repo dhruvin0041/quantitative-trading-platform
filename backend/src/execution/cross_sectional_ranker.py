@@ -54,7 +54,7 @@ class CrossSectionalUniverseRanker:
             return {}
 
         # 1. Align and compute returns
-        df_prices = pd.DataFrame(universe_prices).dropna(how="all")
+        df_prices = pd.DataFrame(universe_prices).dropna(how="all").ffill().bfill()
         if len(df_prices) < lookback_days + 2:
             return {}
 
@@ -151,8 +151,9 @@ class CrossSectionalUniverseRanker:
         permitted = True
         status = "NEUTRAL"
         reasoning = f"Decile {decile} ({pct * 100:.1f}th percentile)."
+        sig_clean = str(signal).upper().strip()
 
-        if signal == "BUY":
+        if sig_clean == "BUY":
             if is_laggard:
                 status = "LAGGARD_SUPPRESSION"
                 # Penalize confidence by 25% for buying bottom-tier relative performers
@@ -177,7 +178,7 @@ class CrossSectionalUniverseRanker:
                     f"Strong relative strength confirms institutional accumulation."
                 )
 
-        elif signal == "SELL":
+        elif sig_clean == "SELL":
             if is_laggard:
                 status = "BEARISH_LEADERSHIP"
                 adjusted_conf = min(confidence * 1.10, 98.0)

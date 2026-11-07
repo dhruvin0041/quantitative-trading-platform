@@ -258,6 +258,45 @@ class TestInstitutionalUpgrades(unittest.TestCase):
         )
         self.assertIsInstance(dsr_obj, float)
 
+    def test_edge_cases_and_flawless_boundary_handling(self):
+        # 1. NaN and Inf in Sharpe calculation
+        psr_nan = calculate_probabilistic_sharpe_ratio(float("nan"))
+        self.assertEqual(psr_nan, 0.5)
+        psr_inf = calculate_probabilistic_sharpe_ratio(float("inf"))
+        self.assertEqual(psr_inf, 0.5)
+
+        # 2. All-zero returns (zero variance)
+        zero_returns = [0.0] * 100
+        engine = StatisticalSufficiencyEngine()
+        summary = {"total_return": 0.0, "sharpe": 0.0, "sortino": 0.0, "calmar": 0.0}
+        res = engine.validate_and_reconcile(summary, zero_returns, [])
+        self.assertIn("psr", res["validated_metrics"])
+        self.assertEqual(res["validated_metrics"]["psr"], "50.0%")
+
+        # 3. Microstructure execution with lowercase action and zero price
+        model = MicrostructureExecutionModel()
+        res_buy_lower = model.calculate_adverse_slippage(price=100.0, action="buy")
+        self.assertGreater(res_buy_lower["executed_price"], 100.0)
+        res_zero_price = model.calculate_adverse_slippage(price=0.0, action="BUY")
+        self.assertEqual(res_zero_price["executed_price"], 0.0)
+
+        # 4. Cross-Sectional Ranker with lowercase signals and mismatched dates
+        ranker = CrossSectionalUniverseRanker()
+        gated_lower = ranker.gate_signal_with_cross_sectional_rank(
+            "AAPL", "buy", 70.0, {"rank_percentile": 0.85, "decile": 9, "is_leader": True, "is_laggard": False}
+        )
+        self.assertEqual(gated_lower["cross_sectional_status"], "LEADER_CONFIRMED")
+        self.assertGreater(gated_lower["adjusted_confidence"], 70.0)
+
+        # 5. Objective functions with empty and mismatched arrays
+        empty_ret = simulate_strategy_returns(np.array([]), np.array([]), np.array([]))
+        self.assertEqual(len(empty_ret), 0)
+
+        mismatched_ret = simulate_strategy_returns(
+            np.array([2]), np.array([[0.1, 0.1, 0.8]]), np.array([0.02, 0.05])
+        )
+        self.assertEqual(len(mismatched_ret), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

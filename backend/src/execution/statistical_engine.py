@@ -22,6 +22,10 @@ def calculate_probabilistic_sharpe_ratio(
     Calculates the probability that the true Sharpe ratio exceeds benchmark_sr,
     accounting for sample size, skewness, and fat-tailed kurtosis.
     """
+    if np.isnan(observed_sr) or np.isinf(observed_sr):
+        return 0.5
+    if np.isnan(benchmark_sr) or np.isinf(benchmark_sr):
+        benchmark_sr = 0.0
     if n_samples < 5:
         return 0.5
 
@@ -206,8 +210,17 @@ class StatisticalSufficiencyEngine:
 
             # Compute higher moments for López de Prado PSR and DSR
             ret_arr = np.array(returns, dtype=float)
-            skew_val = float(stats.skew(ret_arr)) if len(ret_arr) >= 10 else 0.0
-            kurt_val = float(stats.kurtosis(ret_arr, fisher=False)) if len(ret_arr) >= 10 else 3.0
+            ret_clean = ret_arr[np.isfinite(ret_arr)]
+            if len(ret_clean) < 10 or np.std(ret_clean) < 1e-9:
+                skew_val = 0.0
+                kurt_val = 3.0
+            else:
+                skew_val = float(stats.skew(ret_clean))
+                kurt_val = float(stats.kurtosis(ret_clean, fisher=False))
+                if np.isnan(skew_val) or np.isinf(skew_val):
+                    skew_val = 0.0
+                if np.isnan(kurt_val) or np.isinf(kurt_val):
+                    kurt_val = 3.0
 
             n_trials = summary.get("trials_count", 250)
             dsr_metrics = calculate_deflated_sharpe_ratio(

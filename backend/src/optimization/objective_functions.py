@@ -122,7 +122,11 @@ def simulate_strategy_returns(
     prev_action = 1  # Neutral / HOLD
     friction_decimal = float(friction_bps) / 10000.0
 
-    for i in range(len(y_pred_probs)):
+    min_len = min(len(y_pred_probs), len(true_returns))
+    if min_len == 0:
+        return np.array([], dtype=float)
+
+    for i in range(min_len):
         probs = y_pred_probs[i]
         actual_ret = true_returns[i]
 
