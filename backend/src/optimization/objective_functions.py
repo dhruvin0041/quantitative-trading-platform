@@ -1,4 +1,7 @@
 import numpy as np
+import scipy.stats as stats
+
+from src.execution.statistical_engine import calculate_deflated_sharpe_ratio
 
 
 def calculate_sharpe_ratio(returns, risk_free_rate=0.0):
@@ -102,40 +105,102 @@ def calculate_calmar_ratio(returns, max_drawdown=None, sim_years=None):
     return float(ann_return / max_dd)
 
 
-def simulate_strategy_returns(y_true, y_pred_probs, true_returns, threshold=0.6):
+def simulate_strategy_returns(
+    y_true,
+    y_pred_probs,
+    true_returns,
+    threshold=0.6,
+    friction_bps=5.0,
+):
     """
-    Simulate trading returns based on model predictions.
+    Simulate trading returns based on model predictions with institutional friction.
     y_pred_probs: array of shape (n_samples, 3) where columns are [Sell, Hold, Buy]
     true_returns: actual forward returns for each sample
+    friction_bps: round-trip transaction friction in basis points (spread + slippage + commission)
     """
     strategy_returns = []
+    prev_action = 1  # Neutral / HOLD
+    friction_decimal = float(friction_bps) / 10000.0
 
     for i in range(len(y_pred_probs)):
         probs = y_pred_probs[i]
         actual_ret = true_returns[i]
 
         # Action selection with confidence threshold
-        action = np.argmax(probs)
+        action = int(np.argmax(probs))
         confidence = probs[action]
 
         if confidence < threshold:
             action = 1  # Force HOLD if not confident enough
 
+        period_ret = 0.0
         if action == 2:  # BUY
-            strategy_returns.append(actual_ret)
+            period_ret = actual_ret
         elif action == 0:  # SELL
-            strategy_returns.append(-actual_ret)  # Assuming short selling
+            period_ret = -actual_ret  # Short selling
         else:  # HOLD
-            strategy_returns.append(0.0)
+            period_ret = 0.0
+
+        # Apply transaction friction when changing positions
+        if action != prev_action:
+            period_ret -= friction_decimal
+
+        strategy_returns.append(period_ret)
+        prev_action = action
 
     return np.array(strategy_returns)
 
 
-def sharpe_objective(y_true, y_pred_probs, true_returns, threshold=0.6):
+def sharpe_objective(
+    y_true,
+    y_pred_probs,
+    true_returns,
+    threshold=0.6,
+    friction_bps=5.0,
+):
     """
-    Objective function that optimizes for Sharpe Ratio.
+    Objective function that optimizes for Cost-Adjusted Sharpe Ratio.
     """
     strategy_returns = simulate_strategy_returns(
-        y_true, y_pred_probs, true_returns, threshold
+        y_true,
+        y_pred_probs,
+        true_returns,
+        threshold=threshold,
+        friction_bps=friction_bps,
     )
     return calculate_sharpe_ratio(strategy_returns)
+
+
+def deflated_sharpe_objective(
+    y_true,
+    y_pred_probs,
+    true_returns,
+    threshold=0.6,
+    friction_bps=5.0,
+    n_trials=250,
+):
+    """
+    Objective function optimizing for Bailey & López de Prado's Deflated Sharpe Ratio.
+    Penalizes overfitting, multiple testing selection bias, and return non-normality.
+    """
+    strategy_returns = simulate_strategy_returns(
+        y_true,
+        y_pred_probs,
+        true_returns,
+        threshold=threshold,
+        friction_bps=friction_bps,
+    )
+    raw_sharpe = calculate_sharpe_ratio(strategy_returns)
+    if len(strategy_returns) < 10 or raw_sharpe <= 0:
+        return 0.0
+
+    skew_val = float(stats.skew(strategy_returns))
+    kurt_val = float(stats.kurtosis(strategy_returns, fisher=False))
+    dsr_dict = calculate_deflated_sharpe_ratio(
+        observed_sr=raw_sharpe,
+        n_trials=n_trials,
+        n_samples=len(strategy_returns),
+        skewness=skew_val,
+        kurtosis=kurt_val,
+    )
+    return float(dsr_dict["dsr"] * raw_sharpe)

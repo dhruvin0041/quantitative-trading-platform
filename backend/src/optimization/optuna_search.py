@@ -4,6 +4,7 @@ import optuna
 import xgboost as xgb
 from sklearn.model_selection import TimeSeriesSplit
 
+from src.execution.statistical_engine import calculate_deflated_sharpe_ratio
 from src.optimization.objective_functions import sharpe_objective
 from src.optimization.search_spaces import get_lgbm_search_space, get_xgb_search_space
 
@@ -65,6 +66,20 @@ def optimize_lgbm(X, y, forward_returns, n_trials=50):
     )
     study.optimize(objective, n_trials=n_trials)
 
+    trial_values = [float(t.value) for t in study.trials if t.value is not None]
+    if len(trial_values) > 1:
+        dsr_eval = calculate_deflated_sharpe_ratio(
+            observed_sr=float(study.best_trial.value),
+            trials_sr_list=trial_values,
+            n_samples=len(X),
+        )
+        print(
+            f"[LGBM DSR Audit] Raw Sharpe={dsr_eval['observed_sharpe']:.2f}, "
+            f"Hurdle={dsr_eval['expected_max_sharpe_null']:.2f}, "
+            f"DSR={dsr_eval['dsr'] * 100:.1f}%, "
+            f"Significant={dsr_eval['is_statistically_significant']}"
+        )
+
     print(f"Best trial: {study.best_trial.value}")
     print(f"Best params: {study.best_trial.params}")
     return study.best_trial.params
@@ -107,6 +122,20 @@ def optimize_xgb(X, y, forward_returns, n_trials=50):
         direction="maximize", sampler=optuna.samplers.TPESampler(seed=42)
     )
     study.optimize(objective, n_trials=n_trials)
+
+    trial_values = [float(t.value) for t in study.trials if t.value is not None]
+    if len(trial_values) > 1:
+        dsr_eval = calculate_deflated_sharpe_ratio(
+            observed_sr=float(study.best_trial.value),
+            trials_sr_list=trial_values,
+            n_samples=len(X),
+        )
+        print(
+            f"[XGB DSR Audit] Raw Sharpe={dsr_eval['observed_sharpe']:.2f}, "
+            f"Hurdle={dsr_eval['expected_max_sharpe_null']:.2f}, "
+            f"DSR={dsr_eval['dsr'] * 100:.1f}%, "
+            f"Significant={dsr_eval['is_statistically_significant']}"
+        )
 
     print(f"Best trial: {study.best_trial.value}")
     print(f"Best params: {study.best_trial.params}")

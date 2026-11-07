@@ -5,6 +5,7 @@ from datetime import datetime
 import numpy as np
 
 from src.execution.fx_engine import FXEngine
+from src.execution.microstructure_execution import MicrostructureExecutionModel
 
 
 class PaperTradingEngine:
@@ -23,6 +24,7 @@ class PaperTradingEngine:
         self.portfolio_snapshots = []  # List of {time, equity, cash, base_currency}
         self.db_path = db_path
         self.fx_engine = fx_engine if fx_engine else FXEngine()
+        self.exec_model = MicrostructureExecutionModel()
         self._load()
 
     def _load(self):
@@ -98,14 +100,24 @@ class PaperTradingEngine:
         self.base_currency = new_base
         self._save()
 
-    def _simulate_slippage(self, price, action):
-        """Institutional Slippage Simulation: 0.05% for Buy, -0.05% for Sell."""
-        slippage = 0.0005
-        if action == "BUY":
-            return price * (1 + slippage)
-        elif action == "SELL":
-            return price * (1 - slippage)
-        return price
+    def _simulate_slippage(
+        self,
+        price,
+        action,
+        volatility_pct=0.015,
+        order_shares=100,
+        bar_volume=1_000_000.0,
+        recent_momentum_pct=0.0,
+    ):
+        """Institutional Dynamic Microstructure Slippage Model."""
+        return self.exec_model.simulate_execution_price(
+            price=price,
+            action=action,
+            volatility_pct=volatility_pct,
+            order_shares=order_shares,
+            bar_volume=bar_volume,
+            recent_momentum_pct=recent_momentum_pct,
+        )
 
     def execute_trade(
         self,
