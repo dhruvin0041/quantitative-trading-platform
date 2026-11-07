@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from src.execution.consensus_engine import WeightedConsensusEngine
@@ -43,6 +44,8 @@ class TestAllModelsVerification:
         assert n_features in [len(FEATURE_COLUMNS), len(FEATURE_COLUMNS_V30)]
 
         dummy_x = np.zeros((1, n_features))
+        if hasattr(model, "feature_name_") and isinstance(model.feature_name_, (list, tuple, pd.Index)):
+            dummy_x = pd.DataFrame(dummy_x, columns=model.feature_name_)
         probs = model.predict_proba(dummy_x)[0]
         assert len(probs) == 3, "XGBoost must output [Sell, Hold, Buy] probabilities"
         assert abs(np.sum(probs) - 1.0) < 1e-4
@@ -57,6 +60,8 @@ class TestAllModelsVerification:
         assert n_features in [len(FEATURE_COLUMNS), len(FEATURE_COLUMNS_V30)]
 
         dummy_x = np.zeros((1, n_features))
+        if hasattr(model, "feature_name_") and isinstance(model.feature_name_, (list, tuple, pd.Index)):
+            dummy_x = pd.DataFrame(dummy_x, columns=model.feature_name_)
         probs = model.predict_proba(dummy_x)[0]
         assert len(probs) == 3, "LightGBM must output [Sell, Hold, Buy] probabilities"
         assert abs(np.sum(probs) - 1.0) < 1e-4
