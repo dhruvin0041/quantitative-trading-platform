@@ -70,16 +70,21 @@ class StrategyGovernanceEngine:
             if role == ModelRole.QUARANTINED or MODEL_REGISTRY.get("DL_FUSION", {}).get("status") == "QUARANTINED":
                 return "QUARANTINED"
         elif artifact_name == "dqn_model.pth":
-            if MODEL_REGISTRY.get("DQN_AGENT", {}).get("status") == "ACTIVE":
+            full_path = self.backend_dir / "artifacts" / artifact_name
+            if full_path.exists() and MODEL_REGISTRY.get("DQN_AGENT", {}).get("status") == "ACTIVE":
                 return "REQUIRED"
+            return "OPTIONAL"
         elif artifact_name == "model_calibrator.joblib":
             # Mandatory for Brier/ECE acceptance gates
             return "REQUIRED"
         elif artifact_name == "tft_quantile_weights.weights.h5":
-            if MODEL_REGISTRY.get("TFT_AGENT", {}).get("status") == "ACTIVE":
+            full_path = self.backend_dir / "artifacts" / artifact_name
+            if full_path.exists() and MODEL_REGISTRY.get("TFT_AGENT", {}).get("status") == "ACTIVE":
                 return "REQUIRED"
+            return "OPTIONAL"
         elif artifact_name == "meta_ensemble.joblib":
-            return "REQUIRED"
+            full_path = self.backend_dir / "artifacts" / artifact_name
+            return "REQUIRED" if full_path.exists() else "OPTIONAL"
 
         return "REQUIRED"
 

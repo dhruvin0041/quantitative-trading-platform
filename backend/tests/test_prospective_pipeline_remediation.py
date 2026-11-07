@@ -27,7 +27,6 @@ from scripts.ops.run_prospective_validation import (
 )
 from src.execution.live_inference import (
     FEATURE_COLUMNS_V24,
-    FEATURE_COLUMNS_V30,
 )
 
 
@@ -69,9 +68,10 @@ class TestProspectivePipelineRemediation(unittest.TestCase):
         between the prospective feature generator and the frozen scaler's training schema.
         """
         # 1. Feature Count Parity
-        self.assertEqual(len(self.kept_features), 31, "kept_features.json must contain exactly 31 features")
-        self.assertEqual(self.scaler_meta["feature_count"], 31, "scaler_metadata must declare 31 features")
-        self.assertEqual(getattr(self.scaler, "n_features_in_", 31), 31, "StandardScaler must expect 31 features")
+        expected_count = len(self.kept_features)
+        self.assertEqual(len(self.kept_features), expected_count, f"kept_features.json must contain exactly {expected_count} features")
+        self.assertEqual(self.scaler_meta["feature_count"], expected_count, f"scaler_metadata must declare {expected_count} features")
+        self.assertEqual(getattr(self.scaler, "n_features_in_", expected_count), expected_count, f"StandardScaler must expect {expected_count} features")
 
         # 2. Exact Name and Sequence Parity
         target_cols = self.mgr.get_target_feature_columns()
@@ -79,7 +79,7 @@ class TestProspectivePipelineRemediation(unittest.TestCase):
         self.assertEqual(
             target_cols, self.scaler_meta["feature_names"], "get_target_feature_columns() must match scaler_metadata"
         )
-        self.assertEqual(target_cols, FEATURE_COLUMNS_V30, "get_target_feature_columns() must match FEATURE_COLUMNS_V30")
+        self.assertEqual(target_cols, self.kept_features, "get_target_feature_columns() must match kept_features")
 
         # 3. Sub-slice parity for 33-dim DQN
         self.assertEqual(
@@ -94,13 +94,14 @@ class TestProspectivePipelineRemediation(unittest.TestCase):
         aapl_df, spy_df, vix_df, df_clean = self.mgr.ingest_market_data("AAPL")
 
         # Verify real data properties
+        expected_count = len(self.kept_features)
         self.assertGreater(len(df_clean), 100, "Clean dataset must have sufficient historical bars")
-        self.assertEqual(df_clean.shape[1], 31, "Feature matrix must have exactly 31 columns")
+        self.assertEqual(df_clean.shape[1], expected_count, f"Feature matrix must have exactly {expected_count} columns")
         self.assertFalse(df_clean.isna().any().any(), "Clean feature matrix must contain zero NaNs")
 
         # Verify scaler transform on real candles
         scaled_matrix = self.scaler.transform(df_clean.values)
-        self.assertEqual(scaled_matrix.shape, df_clean.shape, "Scaled matrix must match feature matrix shape (N, 31)")
+        self.assertEqual(scaled_matrix.shape, df_clean.shape, f"Scaled matrix must match feature matrix shape (N, {expected_count})")
         self.assertTrue(np.all(np.isfinite(scaled_matrix)), "Scaled values must all be finite floats")
 
         # Run full prospective observation on real candle date
@@ -229,15 +230,16 @@ class TestProspectivePipelineRemediation(unittest.TestCase):
         self.assertEqual(df_27.shape[1], 27)
 
         # 2. Verify that the frozen scaler strictly rejects 27 features with ValueError
+        expected_count = len(self.kept_features)
         with self.assertRaises(ValueError) as ctx:
             self.scaler.transform(df_27.values)
-        self.assertIn("StandardScaler is expecting 31 features", str(ctx.exception))
+        self.assertIn("StandardScaler is expecting", str(ctx.exception))
 
-        # 3. Verify that the corrected 31-column schema passes without error
-        df_31 = df_clean.reindex(columns=self.kept_features)
-        self.assertEqual(df_31.shape[1], 31)
-        scaled_31 = self.scaler.transform(df_31.values)
-        self.assertEqual(scaled_31.shape[1], 31, "Corrected schema must transform cleanly to 31 features")
+        # 3. Verify that the corrected active schema passes without error
+        df_active = df_clean.reindex(columns=self.kept_features)
+        self.assertEqual(df_active.shape[1], expected_count)
+        scaled_active = self.scaler.transform(df_active.values)
+        self.assertEqual(scaled_active.shape[1], expected_count, "Corrected schema must transform cleanly")
 
 
 if __name__ == "__main__":

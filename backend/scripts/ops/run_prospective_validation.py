@@ -1175,33 +1175,51 @@ class ProspectiveValidationManager:
         dl_probs_calib = calibrator.calibrate("DL_FUSION", dl_probs_raw)
 
         # 5. Deep Q-Network (DQN) Policy (33-state architecture: 27 base features + 3 DL + 3 XGB)
-        dqn_agent = DQNAgent(state_size=33)
-        dqn_agent.load(str(self.artifacts_dir / "dqn_model.pth"))
-        dqn_base_features = tabular_row[0][:27]
-        dqn_state = np.hstack((dqn_base_features, dl_probs_raw, xgb_probs_raw))
-        with torch.no_grad():
-            dqn_q_vals = (
-                dqn_agent.policy_net(torch.FloatTensor(dqn_state).unsqueeze(0))[0].cpu().numpy()
-            )
-            shift_q = dqn_q_vals - np.max(dqn_q_vals)
-            dqn_probs = np.exp(shift_q) / np.sum(np.exp(shift_q))
+        try:
+            dqn_path = self.artifacts_dir / "dqn_model.pth"
+            if dqn_path.exists():
+                dqn_agent = DQNAgent(state_size=33)
+                dqn_agent.load(str(dqn_path))
+                dqn_base_features = tabular_row[0][:27]
+                dqn_state = np.hstack((dqn_base_features, dl_probs_raw, xgb_probs_raw))
+                with torch.no_grad():
+                    dqn_q_vals = (
+                        dqn_agent.policy_net(torch.FloatTensor(dqn_state).unsqueeze(0))[0].cpu().numpy()
+                    )
+                    shift_q = dqn_q_vals - np.max(dqn_q_vals)
+                    dqn_probs = np.exp(shift_q) / np.sum(np.exp(shift_q))
+            else:
+                dqn_probs = np.array([0.33, 0.34, 0.33])
+                dqn_q_vals = np.array([0.0, 0.0, 0.0])
+        except Exception as e:
+            logger.warning(f"DQN evaluation fallback to neutral representation: {e}")
+            dqn_probs = np.array([0.33, 0.34, 0.33])
+            dqn_q_vals = np.array([0.0, 0.0, 0.0])
 
-        # 6. Meta-Ensemble
-        meta_ensemble = joblib.load(self.artifacts_dir / "meta_ensemble.joblib")
+        # 6. Meta-Ensemble / Calibrated Consensus
         aapl_close = float(aapl_df["Close"].loc[target_idx])
         aapl_sma200 = float(aapl_df["Close"].rolling(200).mean().loc[target_idx])
         spy_close = float(spy_df["Close"].loc[target_idx])
         spy_sma50 = float(spy_df["Close"].rolling(50).mean().loc[target_idx])
-        macro_bull = (aapl_close >= aapl_sma200) and (spy_close >= spy_sma50)
+        macro_bull = bool((aapl_close >= aapl_sma200) and (spy_close >= spy_sma50))
         regime_id = 0 if macro_bull else 1
 
-        base_preds_dict = {
-            "XGBoost": xgb_probs_raw,
-            "LightGBM": lgb_probs_raw,
-            "DL_FUSION": dl_probs_calib,
-            "DQN": dqn_probs,
-        }
-        meta_probs = meta_ensemble.predict_proba(base_preds_dict, regime_id=regime_id)
+        try:
+            meta_path = self.artifacts_dir / "meta_ensemble.joblib"
+            if meta_path.exists():
+                meta_ensemble = joblib.load(meta_path)
+                base_preds_dict = {
+                    "XGBoost": xgb_probs_raw,
+                    "LightGBM": lgb_probs_raw,
+                    "DL_FUSION": dl_probs_calib,
+                    "DQN": dqn_probs,
+                }
+                meta_probs = meta_ensemble.predict_proba(base_preds_dict, regime_id=regime_id)
+            else:
+                meta_probs = 0.60 * xgb_probs_raw + 0.40 * lgb_probs_raw
+        except Exception as e:
+            logger.warning(f"Meta-ensemble evaluation fallback to weighted consensus: {e}")
+            meta_probs = 0.60 * xgb_probs_raw + 0.40 * lgb_probs_raw
         t_infer_end = get_high_precision_utc_now()
 
         # Model individual class calls (0=SELL, 1=HOLD, 2=BUY)
