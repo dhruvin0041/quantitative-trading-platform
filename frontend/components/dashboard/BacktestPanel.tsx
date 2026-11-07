@@ -156,8 +156,7 @@ export function BacktestPanel({ isOpen, onClose, currentTicker }: BacktestPanelP
                           <Tooltip 
                             contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', fontSize: '12px', color: '#f8fafc' }}
                             itemStyle={{ color: '#f8fafc' }}
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            formatter={(value: any) => [`${value}%`, 'Win Rate']}
+                            formatter={(value: number | string | ReadonlyArray<number | string> | undefined) => [`${value ?? 0}%`, 'Win Rate']}
                           />
                           <Bar dataKey="win_rate" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                         </BarChart>

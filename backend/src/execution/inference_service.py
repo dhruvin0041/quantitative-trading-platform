@@ -2011,11 +2011,18 @@ class InferenceService:
             xgb_preds_raw = np.array([0.33, 0.34, 0.33])
 
         try:
-            lgbm_preds_raw = (
-                self.mm.lgbm_model.predict_proba(tabular_row)[0]
-                if self.mm.lgbm_model is not None
-                else np.array([0.33, 0.33, 0.33])
-            )
+            if self.mm.lgbm_model is not None:
+                lgbm_in = tabular_row
+                f_names = getattr(self.mm.lgbm_model, "feature_name_", None)
+                if (
+                    isinstance(tabular_row, np.ndarray)
+                    and isinstance(f_names, (list, tuple, pd.Index))
+                    and len(f_names) == tabular_row.shape[1]
+                ):
+                    lgbm_in = pd.DataFrame(tabular_row, columns=f_names)
+                lgbm_preds_raw = self.mm.lgbm_model.predict_proba(lgbm_in)[0]
+            else:
+                lgbm_preds_raw = np.array([0.33, 0.33, 0.33])
         except Exception as e:
             logger.warning("LGBM prediction failed: %s; using neutral baseline.", e)
             lgbm_preds_raw = np.array([0.33, 0.33, 0.33])

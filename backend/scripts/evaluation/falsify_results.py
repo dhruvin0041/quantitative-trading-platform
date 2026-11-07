@@ -14,8 +14,10 @@ from src.execution.live_inference import FEATURE_COLUMNS, add_upgraded_features
 
 
 def run_falsification_audit(
-    tickers=["AAPL", "MSFT", "NVDA"], randomize=False, sanitize=True
+    tickers=None, randomize=False, sanitize=True
 ):
+    if tickers is None:
+        tickers = ["AAPL", "MSFT", "NVDA"]
     print(
         f"--- STARTING ADVERSARIAL AUDIT (Actual Returns) (Sanitize: {sanitize}, Randomize: {randomize}) ---"
     )

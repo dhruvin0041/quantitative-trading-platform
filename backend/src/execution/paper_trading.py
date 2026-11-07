@@ -152,6 +152,8 @@ class PaperTradingEngine:
         if action == "BUY":
             if ticker in self.positions and self.positions[ticker]["shares"] > 0:
                 return None
+            if executed_price <= 0:
+                return None
 
             shares_to_buy = int(target_allocation_asset / executed_price)
             cost_asset = shares_to_buy * executed_price
@@ -337,12 +339,13 @@ class PaperTradingEngine:
                     "original_currency": pos.get("currency", "USD"),
                 }
 
+        safe_init = max(self.initial_capital, 1e-9)
         return {
             "cash": round(self.capital, 2),
             "equity": round(total_equity, 2),
             "base_currency": self.base_currency,
             "initial_capital": self.initial_capital,
-            "return_pct": round(((total_equity / self.initial_capital) - 1) * 100, 2),
+            "return_pct": round(((total_equity / safe_init) - 1) * 100, 2),
             "today_pnl": round(today_pnl, 2),
             "mtd_pnl": round(total_equity - self.initial_capital, 2),
             "ytd_pnl": round(total_equity - self.initial_capital, 2),

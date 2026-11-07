@@ -543,7 +543,12 @@ class DailyPaperRunner:
                     if not X_unscaled.empty:
                         latest_row = X_unscaled.iloc[[-1]]
                         if self.scaler is not None:
-                            scaled_vals = self.scaler.transform(latest_row)
+                            scaler_input = (
+                                latest_row
+                                if hasattr(self.scaler, "feature_names_in_")
+                                else latest_row.values
+                            )
+                            scaled_vals = self.scaler.transform(scaler_input)
                             X_input = pd.DataFrame(
                                 scaled_vals, columns=cols, index=latest_row.index
                             )
@@ -555,7 +560,13 @@ class DailyPaperRunner:
                         p_lgbm = np.array([0.20, 0.60, 0.20])
                         if self.lgbm_model is not None:
                             try:
-                                p_lgbm = self.lgbm_model.predict_proba(X_input)[0]
+                                lgbm_input = X_input
+                                if not isinstance(
+                                    getattr(self.lgbm_model, "feature_name_", None),
+                                    (list, tuple, pd.Index),
+                                ):
+                                    lgbm_input = X_input.values
+                                p_lgbm = self.lgbm_model.predict_proba(lgbm_input)[0]
                             except Exception as e:
                                 logger.debug("LGBM live prediction error for %s: %s", sym, e)
 

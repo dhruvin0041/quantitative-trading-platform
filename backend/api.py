@@ -4,6 +4,7 @@ import logging
 import os
 import re
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -123,7 +124,29 @@ except ValueError:
     REQUEST_COUNT = REGISTRY._names_to_collectors["api_requests_total"]
     REQUEST_LATENCY = REGISTRY._names_to_collectors["api_request_latency_seconds"]
 
-app = FastAPI(title="Hydra Terminal API", version="2.1.0")
+
+@asynccontextmanager
+async def lifespan(app_instance: FastAPI):
+    async def fx_refresh_loop():
+        while True:
+            try:
+                await fx_engine.update_rates()
+            except Exception as e:
+                logger.warning("FX refresh failed: %s", e)
+            await asyncio.sleep(300)
+
+    task = asyncio.create_task(fx_refresh_loop())
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except (asyncio.CancelledError, Exception):
+            pass
+
+
+app = FastAPI(title="Hydra Terminal API", version="2.1.0", lifespan=lifespan)
 
 # --- Security: Restricted CORS ---
 try:
@@ -259,16 +282,6 @@ def sanitize_ticker(ticker: str) -> str:
     if not re.match(r"^[A-Z0-9.-]{1,15}$", ticker.upper()):
         raise HTTPException(status_code=400, detail="Invalid Ticker Format")
     return ticker.upper()
-
-
-@app.on_event("startup")
-async def startup_event():
-    async def fx_refresh_loop():
-        while True:
-            await fx_engine.update_rates()
-            await asyncio.sleep(300)
-
-    asyncio.create_task(fx_refresh_loop())
 
 
 @app.get("/metrics")

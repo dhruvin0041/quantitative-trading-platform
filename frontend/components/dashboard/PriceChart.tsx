@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { createChart, ColorType, CrosshairMode, CandlestickSeries, LineSeries, HistogramSeries, createSeriesMarkers, IChartApi, ISeriesApi, Time, SeriesMarker, ISeriesMarkersPluginApi } from 'lightweight-charts';
+import { createChart, ColorType, CrosshairMode, CandlestickSeries, LineSeries, HistogramSeries, createSeriesMarkers, IChartApi, ISeriesApi, Time, SeriesMarker, ISeriesMarkersPluginApi, MouseEventParams } from 'lightweight-charts';
 import { ChartData } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTheme } from 'next-themes';
@@ -251,9 +251,8 @@ export function PriceChart({ data, loading }: PriceChartProps) {
       chartRef.current.timeScale().fitContent();
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handleCrosshairMove = (param: any) => {
-      if (!param.time || param.point.x < 0 || param.point.y < 0 || param.point.x > chartContainerRef.current!.clientWidth || param.point.y > chartContainerRef.current!.clientHeight) {
+    const handleCrosshairMove = (param: MouseEventParams<Time>) => {
+      if (!param.time || !param.point || param.point.x < 0 || param.point.y < 0 || (chartContainerRef.current && (param.point.x > chartContainerRef.current.clientWidth || param.point.y > chartContainerRef.current.clientHeight))) {
         setLegendContent(null);
         return;
       }

@@ -19,7 +19,7 @@ import math
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import lightgbm as lgb
 import numpy as np
@@ -437,8 +437,10 @@ def stress_test_regime_transitions(
 # ──────────────────────────────────────────────────────────────────────────────
 
 def evaluate_multi_asset_generalization(
-    tickers: List[str] = ["AAPL", "MSFT", "NVDA", "SPY"],
+    tickers: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
+    if tickers is None:
+        tickers = ["AAPL", "MSFT", "NVDA", "SPY"]
     logger.info(">>> PART 5: Evaluating Multi-Asset Generalization (AAPL, MSFT, NVDA, SPY)...")
     sim = InstitutionalPortfolioSimulator(initial_capital=1000.0, slippage_bps=5.0)
     multi_asset_results = {}

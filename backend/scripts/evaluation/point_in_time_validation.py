@@ -17,7 +17,7 @@ Adheres strictly to the Point-in-Time Walk-Forward protocol:
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 import joblib
@@ -304,7 +304,7 @@ def run_point_in_time_signal_generation(
 def calculate_horizon_performance(
     signals_list: List[Dict[str, Any]],
     ticker_df: pd.DataFrame,
-    horizons: List[int] = [1, 3, 5, 10],
+    horizons: Optional[List[int]] = None,
     slippage_bps: float = 0.0005,  # 5 bps each way
     commission_per_share: float = 0.005,  # $0.005 per share each way ($0.01 roundtrip)
 ) -> List[Dict[str, Any]]:
@@ -314,6 +314,8 @@ def calculate_horizon_performance(
     Exit occurs at Close[t+k] +/- slippage.
     Calculates gross return, net return, correctness, MAE, and MFE.
     """
+    if horizons is None:
+        horizons = [1, 3, 5, 10]
     evaluated_records: List[Dict[str, Any]] = []
 
     # Map dates to integer positional indices in ticker_df
@@ -416,7 +418,7 @@ def calculate_horizon_performance(
 def compute_aggregate_metrics(
     evaluated_records: List[Dict[str, Any]],
     total_eval_days: int,
-    horizons: List[int] = [1, 3, 5, 10],
+    horizons: Optional[List[int]] = None,
 ) -> Dict[str, Any]:
     """
     Computes all quantitative evaluation metrics:
@@ -426,6 +428,8 @@ def compute_aggregate_metrics(
     - MAE and MFE averages
     - confusion matrix
     """
+    if horizons is None:
+        horizons = [1, 3, 5, 10]
     total_buy = sum(1 for r in evaluated_records if r["signal"] == "BUY")
     total_sell = sum(1 for r in evaluated_records if r["signal"] == "SELL")
     total_trades = total_buy + total_sell

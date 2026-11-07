@@ -542,7 +542,7 @@ def add_advanced_features(
     # FINAL NUMERICAL STABILITY GUARD
     # ==========================================
     # Replace inf and -inf with NaN to prevent ML model crashes
-    df.replace([np.inf, -np.inf], np.nan, inplace=True)
+    df = df.replace([np.inf, -np.inf], np.nan)
     # Forward fill then zero fill for consistency
     df = df.ffill().fillna(0)
 

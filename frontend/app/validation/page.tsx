@@ -140,8 +140,7 @@ export default function ValidationDashboard() {
                 
                 <div className="space-y-4">
                   {c.reliability_curve && c.reliability_curve.length > 0 ? (
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    c.reliability_curve.map((bin: any, idx: number) => (
+                    c.reliability_curve.map((bin, idx: number) => (
                       <div key={idx} className="flex flex-col">
                         <div className="flex justify-between text-xs font-mono text-zinc-500 mb-1">
                           <span>BIN {bin.bin} (n={bin.count})</span>
@@ -192,10 +191,8 @@ export default function ValidationDashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-4 space-y-4">
-  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                {(data as any).market_segmentation && Object.keys((data as any).market_segmentation).length > 0 ? (
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  (Object.entries((data as any).market_segmentation) as any).map(([market, metrics]: [string, any]) => (
+                {data?.market_segmentation && Object.keys(data.market_segmentation).length > 0 ? (
+                  Object.entries(data.market_segmentation).map(([market, metrics]: [string, ValidationMetrics]) => (
                     <div key={market} className="flex justify-between items-center border-b border-zinc-800 pb-2 last:border-0">
                       <span className="text-xs font-mono text-zinc-400">{market.toUpperCase()}</span>
                       <div className="text-right">
@@ -219,10 +216,8 @@ export default function ValidationDashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-4 space-y-4">
-  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                {(data as any).regime_segmentation && Object.keys((data as any).regime_segmentation).length > 0 ? (
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  (Object.entries((data as any).regime_segmentation) as any).map(([regime, metrics]: [string, any]) => (
+                {data?.regime_segmentation && Object.keys(data.regime_segmentation).length > 0 ? (
+                  Object.entries(data.regime_segmentation).map(([regime, metrics]: [string, ValidationMetrics]) => (
                     <div key={regime} className="flex justify-between items-center border-b border-zinc-800 pb-2 last:border-0">
                       <span className="text-xs font-mono text-zinc-400">{regime}</span>
                       <div className="text-right">

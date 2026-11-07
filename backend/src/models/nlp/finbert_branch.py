@@ -1,7 +1,14 @@
 # src/models/finbert_branch.py
 import tensorflow as tf
 from keras.layers import Dense, Input, Lambda
-from transformers import TFBertModel
+
+try:
+    from transformers import TFBertModel
+except ImportError:
+    try:
+        from transformers import TFAutoModel as TFBertModel
+    except ImportError:
+        TFBertModel = None
 
 # Load pre-trained FinBERT ONCE at module level to save memory and speed up optimization
 _finbert_model = None
@@ -10,6 +17,10 @@ _finbert_model = None
 def get_finbert():
     global _finbert_model
     if _finbert_model is None:
+        if TFBertModel is None:
+            raise ImportError(
+                "TFBertModel is not available. Please ensure transformers with TensorFlow support is installed."
+            )
         print("Loading FinBERT into memory...")
         _finbert_model = TFBertModel.from_pretrained("ProsusAI/finbert", from_pt=True)
         _finbert_model.trainable = False

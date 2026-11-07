@@ -31,7 +31,9 @@ def calculate_ece(y_true, y_prob, n_bins=10):
     return ece
 
 
-def run_simulation(tickers=["AAPL", "MSFT", "NVDA"], cadence_weeks=1):
+def run_simulation(tickers=None, cadence_weeks=1):
+    if tickers is None:
+        tickers = ["AAPL", "MSFT", "NVDA"]
     print(f"--- STARTING SIMULATION (Cadence: {cadence_weeks} week(s)) ---")
 
     # 1. Fetch entire dataset first for speed

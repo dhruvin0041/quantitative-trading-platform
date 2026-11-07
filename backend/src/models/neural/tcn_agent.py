@@ -53,12 +53,14 @@ def build_tcn_branch(
     num_features,
     nb_filters=64,
     kernel_size=3,
-    dilations=[1, 2, 4, 8, 16],
+    dilations=None,
     dropout_rate=0.2,
 ):
     """
     Temporal Convolutional Network (TCN) branch for time series pattern extraction.
     """
+    if dilations is None:
+        dilations = [1, 2, 4, 8, 16]
     inputs = Input(shape=(time_steps, num_features), name="tcn_input")
     x = inputs
 
