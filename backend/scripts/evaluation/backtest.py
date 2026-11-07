@@ -439,8 +439,13 @@ def _run_rotation_simulation(
 
             scaled_features = sym_scaler.transform(row_features)
 
+            lgbm_input = (
+                pd.DataFrame(scaled_features, columns=kept_features)
+                if isinstance(getattr(sym_lgbm, "feature_name_", None), (list, tuple, pd.Index))
+                else scaled_features
+            )
             xgb_raw = sym_xgb.predict_proba(scaled_features)[0]
-            lgbm_raw = sym_lgbm.predict_proba(scaled_features)[0]
+            lgbm_raw = sym_lgbm.predict_proba(lgbm_input)[0]
 
             xgb_cal = sym_cal.calibrate("XGB", xgb_raw)
             lgbm_cal = sym_cal.calibrate("LGBM", lgbm_raw)
@@ -1291,8 +1296,13 @@ def _run_core_tactical_simulation(
 
                     row_feat = bar_today[kept_features].values.reshape(1, -1)
                     s_feat = sym_scaler.transform(row_feat)
+                    lgbm_in = (
+                        pd.DataFrame(s_feat, columns=kept_features)
+                        if isinstance(getattr(sym_lgbm, "feature_name_", None), (list, tuple, pd.Index))
+                        else s_feat
+                    )
                     px = sym_xgb.predict_proba(s_feat)[0]
-                    pl = sym_lgbm.predict_proba(s_feat)[0]
+                    pl = sym_lgbm.predict_proba(lgbm_in)[0]
                     xgb_cal = sym_cal.calibrate("XGB", px)
                     lgbm_cal = sym_cal.calibrate("LGBM", pl)
                     p_b, p_s = float(xgb_cal[2]), float(xgb_cal[0])

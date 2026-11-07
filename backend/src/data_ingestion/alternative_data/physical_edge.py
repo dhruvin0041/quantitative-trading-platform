@@ -65,3 +65,4 @@ class PhysicalEdgeAnalyzer:
             "macro_physical_impact": -disruption
             * 0.1,  # Negative alpha if ports are blocked
         }
+
